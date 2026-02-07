@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 
 [package]
 name = "poziomki-backend"
@@ -35,6 +36,9 @@ chrono = { version = "0.4" }
 validator = { version = "0.20" }
 uuid = { version = "1.6", features = ["v4"] }
 include_dir = { version = "0.7" }
+matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", default-features = false, features = ["e2e-encryption", "rustls-tls"] }
+ruma = { version = "0.14", features = ["client-api-c", "events"] }
+opendal = { version = "0.55", features = ["services-s3", "services-fs"] }
 
 [[bin]]
 name = "poziomki_backend-cli"
@@ -46,3 +50,8 @@ loco-rs = { workspace = true, features = ["testing"] }
 serial_test = { version = "3.1.1" }
 rstest = { version = "0.25" }
 insta = { version = "1.34", features = ["redactions", "yaml", "filters"] }
+
+# Stub out matrix-sdk-sqlite to avoid libsqlite3-sys links conflict with loco's sqlx-sqlite.
+# matrix-sdk is used without sqlite feature (server-side backend doesn't need local sqlite store).
+[patch."https://github.com/matrix-org/matrix-rust-sdk"]
+matrix-sdk-sqlite = { path = "stubs/matrix-sdk-sqlite" }
