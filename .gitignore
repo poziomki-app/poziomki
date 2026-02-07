@@ -1,0 +1,46 @@
+# Rust
+/target/
+backend/target/
+**/*.rs.bk
+Cargo.lock
+
+# Kotlin / Gradle
+mobile/build/
+mobile/**/build/
+mobile/.gradle/
+mobile/local.properties
+*.apk
+*.aab
+*.aar
+
+# iOS
+mobile/iosApp/Pods/
+mobile/iosApp/.build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
