@@ -1,0 +1,42 @@
+# Loco production configuration
+
+logger:
+  enable: true
+  pretty_backtrace: false
+  level: info
+  format: json
+
+server:
+  port: {{ get_env(name="PORT", default="5150") }}
+  binding: {{ get_env(name="SERVER_BINDING", default="0.0.0.0") }}
+  host: {{ get_env(name="SERVER_HOST", default="https://api.poziomki.app") }}
+  middlewares:
+
+workers:
+  mode: BackgroundAsync
+
+mailer:
+  smtp:
+    enable: {{ get_env(name="SMTP_ENABLE", default="false") }}
+    host: {{ get_env(name="SMTP_HOST", default="localhost") }}
+    port: {{ get_env(name="SMTP_PORT", default="587") }}
+    secure: true
+    auth:
+      user: {{ get_env(name="SMTP_USER", default="") }}
+      password: {{ get_env(name="SMTP_PASSWORD", default="") }}
+
+database:
+  uri: {{ get_env(name="DATABASE_URL", default="") }}
+  enable_logging: false
+  connect_timeout: {{ get_env(name="DB_CONNECT_TIMEOUT", default="5000") }}
+  idle_timeout: {{ get_env(name="DB_IDLE_TIMEOUT", default="10000") }}
+  min_connections: {{ get_env(name="DB_MIN_CONNECTIONS", default="5") }}
+  max_connections: {{ get_env(name="DB_MAX_CONNECTIONS", default="20") }}
+  auto_migrate: true
+  dangerously_truncate: false
+  dangerously_recreate: false
+
+auth:
+  jwt:
+    secret: {{ get_env(name="JWT_SECRET", default="") }}
+    expiration: 604800
