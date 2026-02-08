@@ -146,7 +146,6 @@ fn profiles_routes() -> Routes {
         .prefix("/api/v1/profiles")
         .add("/me", get(profiles::profile_me))
         .add("", post(profiles::profile_create))
-        .add("/", post(profiles::profile_create))
         .add("/{id}", get(profiles::profile_get))
         .add("/{id}", patch(profiles::profile_update))
         .add("/{id}", delete(profiles::profile_delete))
@@ -157,25 +156,20 @@ fn degrees_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/degrees")
         .add("", get(catalog::degrees_search))
-        .add("/", get(catalog::degrees_search))
 }
 
 fn tags_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/tags")
         .add("", get(catalog::tags_search))
-        .add("/", get(catalog::tags_search))
         .add("", post(catalog::tags_create))
-        .add("/", post(catalog::tags_create))
 }
 
 fn events_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/events")
         .add("", get(events::events_list))
-        .add("/", get(events::events_list))
         .add("", post(events::event_create))
-        .add("/", post(events::event_create))
         .add("/mine", get(events::events_mine))
         .add("/{id}", get(events::event_get))
         .add("/{id}", patch(events::event_update))
@@ -196,7 +190,6 @@ fn uploads_routes() -> Routes {
         .prefix("/api/v1/uploads")
         .add("/auth-check", get(uploads::auth_check))
         .add("", post(uploads::file_upload))
-        .add("/", post(uploads::file_upload))
         .add("/{filename}", get(uploads::file_get))
         .add("/{filename}", delete(uploads::file_delete))
 }
@@ -205,7 +198,6 @@ fn legacy_chat_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/chats")
         .add("", get(legacy_chat_gone))
-        .add("/", get(legacy_chat_gone))
         .add("/{id}", get(legacy_chat_gone))
         .add("/personal", post(legacy_chat_gone))
         .add("/group", post(legacy_chat_gone))
@@ -241,18 +233,24 @@ fn legacy_ws_routes() -> Routes {
     Routes::new().add("/ws/chat", get(legacy_chat_gone))
 }
 
-pub fn routes() -> Routes {
-    Routes::new()
-        .add("/health", get(health))
-        .add("/", get(root))
-        .merge(auth_routes())
-        .merge(profiles_routes())
-        .merge(degrees_routes())
-        .merge(tags_routes())
-        .merge(events_routes())
-        .merge(matching_routes())
-        .merge(uploads_routes())
-        .merge(legacy_chat_routes())
-        .merge(matrix_routes())
-        .merge(legacy_ws_routes())
+pub(crate) fn reset_state() {
+    state::reset_state();
+}
+
+pub fn routes() -> Vec<Routes> {
+    vec![
+        Routes::new()
+            .add("/health", get(health))
+            .add("/", get(root)),
+        auth_routes(),
+        profiles_routes(),
+        degrees_routes(),
+        tags_routes(),
+        events_routes(),
+        matching_routes(),
+        uploads_routes(),
+        legacy_chat_routes(),
+        matrix_routes(),
+        legacy_ws_routes(),
+    ]
 }

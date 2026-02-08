@@ -38,6 +38,7 @@ impl Hooks for App {
         environment: &Environment,
         config: Config,
     ) -> Result<BootResult> {
+        controllers::migration_api::reset_state();
         create_app::<Self, Migrator>(mode, environment, config).await
     }
 
@@ -46,8 +47,8 @@ impl Hooks for App {
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
-        AppRoutes::with_default_routes() // controller routes below
-            .add_route(controllers::migration_api::routes())
+        AppRoutes::empty() // controller routes below
+            .add_routes(controllers::migration_api::routes())
             .add_route(controllers::auth::routes())
     }
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
@@ -61,6 +62,7 @@ impl Hooks for App {
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
         truncate_table(&ctx.db, users::Entity).await?;
+        controllers::migration_api::reset_state();
         Ok(())
     }
     async fn seed(ctx: &AppContext, base: &Path) -> Result<()> {

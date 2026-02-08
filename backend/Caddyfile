@@ -1,0 +1,25 @@
+{
+	auto_https off
+}
+
+:8080 {
+	@uploads path /uploads/*
+	handle @uploads {
+		forward_auth {$CADDY_API_UPSTREAM} {
+			uri /api/v1/uploads/auth-check
+			header_up Authorization {http.request.header.Authorization}
+			header_up X-Original-URI {uri}
+		}
+
+		header {
+			X-Robots-Tag "noindex"
+			Cache-Control "private, no-store, max-age=0"
+		}
+
+		# Garage S3 path-style request: /<bucket>/<object-key>.
+		rewrite * /{$GARAGE_S3_BUCKET}{uri}
+		reverse_proxy {$CADDY_GARAGE_S3_UPSTREAM}
+	}
+
+	respond "Not Found" 404
+}
