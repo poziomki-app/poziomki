@@ -22,6 +22,60 @@ pub(super) use state_uploads::*;
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
 
+fn seed_tags() -> std::collections::HashMap<String, TagRecord> {
+    let entries: &[(&str, TagScope, &str, &str)] = &[
+        // Zainteresowania
+        ("Muzyka", TagScope::Interest, "hobby", "1"),
+        ("Sport", TagScope::Interest, "hobby", "2"),
+        ("Podróże", TagScope::Interest, "hobby", "3"),
+        ("Fotografia", TagScope::Interest, "hobby", "4"),
+        ("Gry", TagScope::Interest, "hobby", "5"),
+        ("Gotowanie", TagScope::Interest, "hobby", "6"),
+        ("Czytanie", TagScope::Interest, "hobby", "7"),
+        ("Sztuka", TagScope::Interest, "hobby", "8"),
+        ("Film", TagScope::Interest, "hobby", "9"),
+        ("Taniec", TagScope::Interest, "hobby", "10"),
+        ("Fitness", TagScope::Interest, "styl życia", "11"),
+        ("Joga", TagScope::Interest, "styl życia", "12"),
+        ("Góry", TagScope::Interest, "styl życia", "13"),
+        ("Rower", TagScope::Interest, "styl życia", "14"),
+        ("Bieganie", TagScope::Interest, "styl życia", "15"),
+        ("Programowanie", TagScope::Interest, "tech", "16"),
+        ("AI i ML", TagScope::Interest, "tech", "17"),
+        ("Startupy", TagScope::Interest, "tech", "18"),
+        ("Design", TagScope::Interest, "tech", "19"),
+        ("Nauka", TagScope::Interest, "akademickie", "20"),
+        ("Filozofia", TagScope::Interest, "akademickie", "21"),
+        ("Języki obce", TagScope::Interest, "akademickie", "22"),
+        ("Wolontariat", TagScope::Interest, "społeczne", "23"),
+        ("Gry planszowe", TagScope::Interest, "społeczne", "24"),
+        // Aktywności
+        ("Grupa naukowa", TagScope::Activity, "akademickie", "1"),
+        ("Kawa i rozmowa", TagScope::Activity, "społeczne", "2"),
+        ("Partner treningowy", TagScope::Activity, "fitness", "3"),
+        ("Wspólny projekt", TagScope::Activity, "tech", "4"),
+        ("Wymiana językowa", TagScope::Activity, "akademickie", "5"),
+    ];
+
+    entries
+        .iter()
+        .map(|(name, scope, category, order)| {
+            let id = Uuid::new_v4().to_string();
+            (
+                id.clone(),
+                TagRecord {
+                    id,
+                    name: (*name).to_string(),
+                    scope: *scope,
+                    category: Some((*category).to_string()),
+                    emoji: None,
+                    onboarding_order: Some((*order).to_string()),
+                },
+            )
+        })
+        .collect()
+}
+
 impl MigrationState {
     fn new() -> Self {
         Self {
@@ -30,7 +84,7 @@ impl MigrationState {
             sessions_by_token: std::collections::HashMap::new(),
             profiles: std::collections::HashMap::new(),
             profiles_by_user: std::collections::HashMap::new(),
-            tags: std::collections::HashMap::new(),
+            tags: seed_tags(),
             degrees: vec![
                 DegreeRecord {
                     id: Uuid::new_v4().to_string(),
@@ -49,6 +103,7 @@ impl MigrationState {
             event_attendees: std::collections::HashMap::new(),
             uploads: std::collections::HashMap::new(),
             otp_by_email: std::collections::HashMap::new(),
+            user_settings: std::collections::HashMap::new(),
         }
     }
 }

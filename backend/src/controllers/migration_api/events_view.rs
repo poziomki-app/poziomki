@@ -127,6 +127,7 @@ pub(in crate::controllers::migration_api) fn attendee_info(
         .into_iter()
         .map(|(profile, status)| AttendeeFullInfo {
             id: profile.id.clone(),
+            user_id: profile.user_id.clone(),
             name: profile.name.clone(),
             profile_picture: profile.profile_picture.clone(),
             status,

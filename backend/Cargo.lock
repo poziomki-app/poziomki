@@ -3941,6 +3941,7 @@ dependencies = [
  "migration",
  "opendal 0.55.0",
  "regex",
+ "reqwest",
  "rstest",
  "ruma 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sea-orm",

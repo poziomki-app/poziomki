@@ -7,7 +7,9 @@ mod auth;
 mod catalog;
 mod events;
 mod matching;
+mod matrix;
 mod profiles;
+mod settings;
 mod state;
 mod uploads;
 
@@ -194,6 +196,13 @@ fn uploads_routes() -> Routes {
         .add("/{filename}", delete(uploads::file_delete))
 }
 
+fn settings_routes() -> Routes {
+    Routes::new()
+        .prefix("/api/v1/settings")
+        .add("", get(settings::settings_get))
+        .add("", patch(settings::settings_update))
+}
+
 fn legacy_chat_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/chats")
@@ -225,7 +234,7 @@ fn matrix_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/matrix")
         .add("/config", get(matrix_config))
-        .add("/session", post(not_implemented))
+        .add("/session", post(matrix::create_session))
         .add("/events/{eventId}/room", get(not_implemented))
 }
 
@@ -249,6 +258,7 @@ pub fn routes() -> Vec<Routes> {
         events_routes(),
         matching_routes(),
         uploads_routes(),
+        settings_routes(),
         legacy_chat_routes(),
         matrix_routes(),
         legacy_ws_routes(),

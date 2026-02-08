@@ -15,8 +15,8 @@ use loco_rs::prelude::*;
 
 use super::state::{
     create_upload_filename, is_production_mode, lock_state, require_auth, require_profile,
-    validate_filename, AuthCheckResponse, SuccessResponse, UploadRecord, UploadResponse,
-    UploadUrlResponse,
+    validate_filename, AuthCheckResponse, DataResponse, SuccessResponse, UploadRecord,
+    UploadResponse, UploadUrlResponse,
 };
 use uploads_multipart::{read_multipart, HandlerError};
 use uploads_support::{
@@ -148,11 +148,13 @@ pub(super) async fn file_upload(headers: HeaderMap, multipart: Multipart) -> Res
             format!("/api/v1/uploads/{filename}")
         };
 
-        Ok(Json(UploadResponse {
-            url,
-            filename,
-            size: parsed.bytes.len(),
-            mime_type: parsed.mime_type,
+        Ok(Json(DataResponse {
+            data: UploadResponse {
+                url,
+                filename,
+                size: parsed.bytes.len(),
+                mime_type: parsed.mime_type,
+            },
         })
         .into_response())
     }

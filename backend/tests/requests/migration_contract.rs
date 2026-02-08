@@ -32,14 +32,13 @@ async fn root_endpoint_matches_contract() {
 
 #[tokio::test]
 #[serial]
-async fn non_chat_unimplemented_returns_compat_error_envelope() {
+async fn matrix_session_requires_auth() {
     request::<App, _, _>(|request, _ctx| async move {
         let response = request.post("/api/v1/matrix/session").await;
-        assert_eq!(response.status_code(), 501);
+        assert_eq!(response.status_code(), 401);
 
         let payload: serde_json::Value = response.json();
-        assert_eq!(payload["error"], "Endpoint is not implemented in Rust yet");
-        assert_eq!(payload["code"], "NOT_IMPLEMENTED");
+        assert_eq!(payload["code"], "UNAUTHORIZED");
         assert!(payload["requestId"].is_string());
     })
     .await;

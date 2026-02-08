@@ -72,7 +72,8 @@ pub(in crate::controllers::migration_api) struct CreateTagBody {
 
 #[derive(Clone, Debug, Deserialize)]
 pub(in crate::controllers::migration_api) struct TagsQuery {
-    pub(in crate::controllers::migration_api) scope: TagScope,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) scope: Option<TagScope>,
     #[serde(default)]
     pub(in crate::controllers::migration_api) search: Option<String>,
     #[serde(default)]
@@ -334,6 +335,8 @@ pub(in crate::controllers::migration_api) struct EventResponse {
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::controllers::migration_api) struct AttendeeFullInfo {
     pub(in crate::controllers::migration_api) id: String,
+    #[serde(rename = "userId")]
+    pub(in crate::controllers::migration_api) user_id: String,
     pub(in crate::controllers::migration_api) name: String,
     #[serde(rename = "profilePicture")]
     pub(in crate::controllers::migration_api) profile_picture: Option<String>,
@@ -486,4 +489,6 @@ pub(in crate::controllers::migration_api) struct MigrationState {
         HashMap<(String, String), AttendeeStatus>,
     pub(in crate::controllers::migration_api) uploads: HashMap<String, UploadRecord>,
     pub(in crate::controllers::migration_api) otp_by_email: HashMap<String, String>,
+    pub(in crate::controllers::migration_api) user_settings:
+        HashMap<String, crate::controllers::migration_api::settings::UserSettingsRecord>,
 }
