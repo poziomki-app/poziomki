@@ -1,0 +1,68 @@
+CREATE TABLE event (
+    id TEXT NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    cover_image TEXT,
+    location TEXT,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT,
+    creator_id TEXT,
+    creator_name TEXT,
+    creator_profile_picture TEXT,
+    attendees_count INTEGER NOT NULL DEFAULT 0,
+    is_attending INTEGER NOT NULL DEFAULT 0,
+    attendees_preview_json TEXT,
+    created_at TEXT,
+    conversation_id TEXT,
+    cached_at INTEGER NOT NULL DEFAULT 0,
+    is_dirty INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT *
+FROM event
+ORDER BY starts_at ASC;
+
+selectById:
+SELECT *
+FROM event
+WHERE id = ?;
+
+upsert:
+INSERT OR REPLACE INTO event(
+    id, title, description, cover_image, location,
+    starts_at, ends_at, creator_id, creator_name, creator_profile_picture,
+    attendees_count, is_attending, attendees_preview_json, created_at,
+    conversation_id, cached_at, is_dirty
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateAttendance:
+UPDATE event
+SET is_attending = ?, attendees_count = ?, is_dirty = 1
+WHERE id = ?;
+
+deleteById:
+DELETE FROM event
+WHERE id = ?;
+
+deleteAll:
+DELETE FROM event;
+
+selectDirty:
+SELECT *
+FROM event
+WHERE is_dirty = 1;
+
+clearDirty:
+UPDATE event
+SET is_dirty = 0
+WHERE id = ?;
+
+replaceId:
+UPDATE event
+SET id = ?
+WHERE id = ?;
+
+deleteStaleNonDirty:
+DELETE FROM event
+WHERE cached_at < ? AND is_dirty = 0;

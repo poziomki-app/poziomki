@@ -144,6 +144,37 @@ fun EventDetailScreen(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+                        OutlinedButton(
+                            onClick = { viewModel.openEventChat(onNavigateToChat) },
+                            enabled = !state.isOpeningChat,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (state.isOpeningChat) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Email,
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Czat wydarzenia")
+                            }
+                        }
+
+                        state.error?.let { error ->
+                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+
                         // Attendees
                         if (state.attendees.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))

@@ -1,0 +1,41 @@
+package com.poziomki.app.ui.screen.chat.model
+
+import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
+import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
+
+sealed interface ComposerMode {
+    data object NewMessage : ComposerMode
+
+    data class Reply(
+        val eventId: String,
+        val senderDisplayName: String?,
+        val bodyPreview: String,
+    ) : ComposerMode
+
+    data class Edit(
+        val eventOrTransactionId: String,
+        val originalBody: String,
+    ) : ComposerMode
+}
+
+data class ChatUiState(
+    val roomId: String = "",
+    val roomDisplayName: String = "",
+    val timelineMode: MatrixTimelineMode = MatrixTimelineMode.Live,
+    val timelineItems: List<MatrixTimelineItem> = emptyList(),
+    val isPaginatingBackwards: Boolean = false,
+    val hasMoreBackwards: Boolean = true,
+    val typingUserIds: List<String> = emptyList(),
+    val messageDraft: String = "",
+    val composerMode: ComposerMode = ComposerMode.NewMessage,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+)
+
+data class NewChatUiState(
+    val dmUserId: String = "",
+    val roomName: String = "",
+    val inviteUserIdsRaw: String = "",
+    val isSubmitting: Boolean = false,
+    val error: String? = null,
+)

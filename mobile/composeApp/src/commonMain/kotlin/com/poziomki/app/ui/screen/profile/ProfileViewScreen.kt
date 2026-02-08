@@ -42,7 +42,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ProfileViewScreen(
     onBack: () -> Unit,
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (String, String) -> Unit,
     viewModel: ProfileViewViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -76,7 +76,7 @@ fun ProfileViewScreen(
 
                 val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-                Surface(
+                if (!state.isOwnProfile) Surface(
                     modifier =
                         Modifier
                             .align(Alignment.BottomEnd)
@@ -99,7 +99,7 @@ fun ProfileViewScreen(
                                                 Color(0xFF161B22),
                                             ),
                                     ),
-                                ).clickable { onNavigateToChat(p.userId) }
+                                ).clickable { onNavigateToChat(p.userId, p.name) }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

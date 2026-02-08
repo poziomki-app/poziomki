@@ -1,0 +1,26 @@
+CREATE TABLE profile_tag (
+    profile_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    PRIMARY KEY (profile_id, tag_id)
+);
+
+selectByProfileId:
+SELECT tag.*
+FROM profile_tag
+JOIN tag ON tag.id = profile_tag.tag_id
+WHERE profile_tag.profile_id = ?;
+
+insertTag:
+INSERT OR IGNORE INTO profile_tag(profile_id, tag_id)
+VALUES (?, ?);
+
+deleteByProfileId:
+DELETE FROM profile_tag
+WHERE profile_id = ?;
+
+deleteOrphans:
+DELETE FROM profile_tag
+WHERE profile_id NOT IN (SELECT id FROM profile);
+
+deleteAll:
+DELETE FROM profile_tag;

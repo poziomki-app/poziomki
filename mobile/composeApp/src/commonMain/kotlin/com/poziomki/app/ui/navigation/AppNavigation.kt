@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -26,8 +27,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +53,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.ui.component.OfflineBanner
 import com.poziomki.app.ui.screen.auth.LoginScreen
 import com.poziomki.app.ui.screen.auth.RegisterScreen
 import com.poziomki.app.ui.screen.auth.VerifyScreen
@@ -69,6 +76,8 @@ import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
@@ -89,8 +98,44 @@ val bottomNavItems =
 @Composable
 fun AppNavigation(
     startDestination: Route,
+    isLoggedIn: Boolean,
     navController: NavHostController = rememberNavController(),
 ) {
+    val matrixClient = koinInject<MatrixClient>()
+    val navigationScope = rememberCoroutineScope()
+
+    // Navigate to auth screen only on actual logout (true → false), not on initial composition.
+    var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
+    LaunchedEffect(isLoggedIn) {
+        if (wasLoggedIn && !isLoggedIn) {
+            navController.navigate(Route.AuthGraph) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+        wasLoggedIn = isLoggedIn
+    }
+
+    val navigateToChat: (String) -> Unit = navigateToChat@{ chatTargetId ->
+        if (chatTargetId.isBlank()) return@navigateToChat
+        navigationScope.launch {
+            val roomId =
+                when {
+                    chatTargetId.startsWith("!") -> chatTargetId
+                    else -> matrixClient.createDM(chatTargetId).getOrNull()
+                } ?: return@launch
+
+            navController.navigate(Route.Chat(roomId))
+        }
+    }
+
+    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
+        if (userId.isBlank()) return@navigateToDm
+        navigationScope.launch {
+            val roomId = matrixClient.createDM(userId, displayName).getOrNull() ?: return@launch
+            navController.navigate(Route.Chat(roomId))
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -108,6 +153,11 @@ fun AppNavigation(
                     },
                     onNeedsVerification = { email ->
                         navController.navigate(Route.Verify(email))
+                    },
+                    onNeedsOnboarding = {
+                        navController.navigate(Route.OnboardingGraph) {
+                            popUpTo(Route.AuthGraph) { inclusive = true }
+                        }
                     },
                 )
             }
@@ -192,7 +242,7 @@ fun AppNavigation(
                 onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
                 onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
                 onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
-                onNavigateToChat = { id -> navController.navigate(Route.Chat(id)) },
+                onNavigateToChat = navigateToChat,
                 onNavigateToNewChat = { navController.navigate(Route.NewChat) },
                 onSignOut = {
                     navController.navigate(Route.AuthGraph) {
@@ -206,7 +256,7 @@ fun AppNavigation(
         composable<Route.EventDetail> {
             EventDetailScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToChat = { id -> navController.navigate(Route.Chat(id)) },
+                onNavigateToChat = navigateToChat,
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
         }
@@ -219,7 +269,7 @@ fun AppNavigation(
         composable<Route.ProfileView> {
             ProfileViewScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToChat = { id -> navController.navigate(Route.Chat(id)) },
+                onNavigateToChat = navigateToDm,
             )
         }
         composable<Route.ProfileEdit> {
@@ -232,8 +282,10 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<Route.Chat> {
+        composable<Route.Chat> { backStackEntry ->
+            val chat = backStackEntry.toRoute<Route.Chat>()
             ChatScreen(
+                chatId = chat.id,
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
@@ -272,129 +324,132 @@ fun MainScreen(
         containerColor = Background,
         bottomBar = {},
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            NavHost(
-                navController = tabNavController,
-                startDestination = Route.Explore,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(bottom = navBarHeight + bottomInsets + 24.dp),
-            ) {
-                composable<Route.Explore> {
-                    ExploreScreen(
-                        onNavigateToProfile = onNavigateToProfileView,
-                    )
-                }
-                composable<Route.Events> {
-                    EventsScreen(
-                        onNavigateToEventDetail = onNavigateToEventDetail,
-                        onNavigateToEventCreate = onNavigateToEventCreate,
-                    )
-                }
-                composable<Route.Messages> {
-                    MessagesScreen(
-                        onNavigateToChat = onNavigateToChat,
-                        onNavigateToNewChat = onNavigateToNewChat,
-                    )
-                }
-                composable<Route.ProfileTab> {
-                    ProfileScreen(
-                        onNavigateToEdit = onNavigateToProfileEdit,
-                        onNavigateToPrivacy = onNavigateToPrivacy,
-                        onNavigateToProfileView = onNavigateToProfileView,
-                        onSignOut = onSignOut,
-                    )
-                }
-            }
-
-            // Floating pill-shaped bottom navbar
-            val selectedIndex =
-                bottomNavItems
-                    .indexOfFirst { item ->
-                        currentDestination?.hasRoute(item.route::class) == true
-                    }.coerceAtLeast(0)
-            val glowFraction by animateFloatAsState(
-                targetValue = (selectedIndex + 0.5f) / bottomNavItems.size,
-                animationSpec = tween(durationMillis = 350),
-            )
-
-            Surface(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = bottomInsets + 8.dp,
-                        ),
-                shape = RoundedCornerShape(28.dp),
-                color = Color.Transparent,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Border),
-            ) {
-                Row(
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            OfflineBanner()
+            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                NavHost(
+                    navController = tabNavController,
+                    startDestination = Route.Explore,
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors =
-                                        listOf(
-                                            Color(0xFF1A2029),
-                                            Color(0xFF161B22),
-                                        ),
-                                ),
-                            ).drawBehind {
-                                // Subtle light shadow that follows the selected tab
-                                val centerX = size.width * glowFraction
-                                val centerY = size.height * 0.45f
-                                drawCircle(
-                                    brush =
-                                        Brush.radialGradient(
-                                            colors =
-                                                listOf(
-                                                    Color(0x0CFFFFFF),
-                                                    Color.Transparent,
-                                                ),
-                                            center = Offset(centerX, centerY),
-                                            radius = size.width * 0.18f,
-                                        ),
-                                    radius = size.width * 0.18f,
-                                    center = Offset(centerX, centerY),
-                                )
-                            }.padding(horizontal = 8.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
+                            .fillMaxSize()
+                            .padding(bottom = navBarHeight + bottomInsets + 24.dp),
                 ) {
-                    val haptic = LocalHapticFeedback.current
-                    bottomNavItems.forEachIndexed { index, item ->
-                        val selected = currentDestination?.hasRoute(item.route::class) == true
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        tabNavController.navigate(item.route) {
-                                            popUpTo(tabNavController.graph.findStartDestination().id) {
-                                                saveState = true
+                    composable<Route.Explore> {
+                        ExploreScreen(
+                            onNavigateToProfile = onNavigateToProfileView,
+                        )
+                    }
+                    composable<Route.Events> {
+                        EventsScreen(
+                            onNavigateToEventDetail = onNavigateToEventDetail,
+                            onNavigateToEventCreate = onNavigateToEventCreate,
+                        )
+                    }
+                    composable<Route.Messages> {
+                        MessagesScreen(
+                            onNavigateToChat = onNavigateToChat,
+                            onNavigateToNewChat = onNavigateToNewChat,
+                        )
+                    }
+                    composable<Route.ProfileTab> {
+                        ProfileScreen(
+                            onNavigateToEdit = onNavigateToProfileEdit,
+                            onNavigateToPrivacy = onNavigateToPrivacy,
+                            onNavigateToProfileView = onNavigateToProfileView,
+                            onSignOut = onSignOut,
+                        )
+                    }
+                }
+
+                // Floating pill-shaped bottom navbar
+                val selectedIndex =
+                    bottomNavItems
+                        .indexOfFirst { item ->
+                            currentDestination?.hasRoute(item.route::class) == true
+                        }.coerceAtLeast(0)
+                val glowFraction by animateFloatAsState(
+                    targetValue = (selectedIndex + 0.5f) / bottomNavItems.size,
+                    animationSpec = tween(durationMillis = 350),
+                )
+
+                Surface(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = bottomInsets + 8.dp,
+                            ),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color.Transparent,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+                ) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors =
+                                            listOf(
+                                                Color(0xFF1A2029),
+                                                Color(0xFF161B22),
+                                            ),
+                                    ),
+                                ).drawBehind {
+                                    // Subtle light shadow that follows the selected tab
+                                    val centerX = size.width * glowFraction
+                                    val centerY = size.height * 0.45f
+                                    drawCircle(
+                                        brush =
+                                            Brush.radialGradient(
+                                                colors =
+                                                    listOf(
+                                                        Color(0x0CFFFFFF),
+                                                        Color.Transparent,
+                                                    ),
+                                                center = Offset(centerX, centerY),
+                                                radius = size.width * 0.18f,
+                                            ),
+                                        radius = size.width * 0.18f,
+                                        center = Offset(centerX, centerY),
+                                    )
+                                }.padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val haptic = LocalHapticFeedback.current
+                        bottomNavItems.forEachIndexed { index, item ->
+                            val selected = currentDestination?.hasRoute(item.route::class) == true
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            tabNavController.navigate(item.route) {
+                                                popUpTo(tabNavController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                item.icon,
-                                contentDescription = item.label,
-                                modifier = Modifier.size(26.dp),
-                                tint = if (selected) Primary else TextMuted,
-                            )
+                                        },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = item.label,
+                                    modifier = Modifier.size(26.dp),
+                                    tint = if (selected) Primary else TextMuted,
+                                )
+                            }
                         }
                     }
                 }

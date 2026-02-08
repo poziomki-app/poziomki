@@ -42,6 +42,7 @@ fun LoginScreen(
     onNavigateToRegister: () -> Unit,
     onLoginSuccess: () -> Unit,
     onNeedsVerification: (String) -> Unit,
+    onNeedsOnboarding: () -> Unit,
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -111,7 +112,7 @@ fun LoginScreen(
         PoziomkiButton(
             text = "zaloguj si\u0119",
             onClick = {
-                viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification)
+                viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
             },
             enabled = email.isNotBlank() && password.isNotBlank(),
             loading = uiState.isLoading,

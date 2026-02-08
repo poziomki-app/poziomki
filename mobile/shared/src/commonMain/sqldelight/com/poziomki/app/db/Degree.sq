@@ -1,0 +1,15 @@
+CREATE TABLE degree (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+selectAll:
+SELECT *
+FROM degree;
+
+upsert:
+INSERT OR REPLACE INTO degree(id, name)
+VALUES (?, ?);
+
+deleteAll:
+DELETE FROM degree;

@@ -1,0 +1,30 @@
+CREATE TABLE event_attendee (
+    event_id TEXT NOT NULL,
+    profile_id TEXT NOT NULL,
+    user_id TEXT,
+    name TEXT NOT NULL,
+    profile_picture TEXT,
+    status TEXT NOT NULL,
+    PRIMARY KEY (event_id, profile_id)
+);
+
+selectByEventId:
+SELECT *
+FROM event_attendee
+WHERE event_id = ?;
+
+upsert:
+INSERT OR REPLACE INTO event_attendee(
+    event_id, profile_id, user_id, name, profile_picture, status
+) VALUES (?, ?, ?, ?, ?, ?);
+
+deleteByEventId:
+DELETE FROM event_attendee
+WHERE event_id = ?;
+
+deleteOrphans:
+DELETE FROM event_attendee
+WHERE event_id NOT IN (SELECT id FROM event);
+
+deleteAll:
+DELETE FROM event_attendee;

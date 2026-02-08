@@ -4,10 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
-import com.poziomki.app.api.ApiResult
-import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.Event
 import com.poziomki.app.api.EventAttendee
+import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.ui.navigation.Route
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,12 +17,13 @@ data class EventDetailState(
     val event: Event? = null,
     val attendees: List<EventAttendee> = emptyList(),
     val isLoading: Boolean = false,
+    val isOpeningChat: Boolean = false,
     val error: String? = null,
 )
 
 class EventDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val apiService: ApiService,
+    private val eventRepository: EventRepository,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Route.EventDetail>()
     private val eventId = route.id
@@ -32,58 +32,72 @@ class EventDetailViewModel(
     val state: StateFlow<EventDetailState> = _state.asStateFlow()
 
     init {
-        loadEvent()
+        observeEvent()
+        observeAttendees()
+        refreshData()
     }
 
-    private fun loadEvent() {
+    private fun observeEvent() {
         viewModelScope.launch {
-            _state.value = EventDetailState(isLoading = true)
-            when (val result = apiService.getEvent(eventId)) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(event = result.data, isLoading = false)
-                    loadAttendees()
-                }
-
-                is ApiResult.Error -> {
-                    _state.value = EventDetailState(error = result.message)
-                }
+            eventRepository.observeEvent(eventId).collect { event ->
+                _state.value = _state.value.copy(event = event, isLoading = false)
             }
         }
     }
 
-    private fun loadAttendees() {
+    private fun observeAttendees() {
         viewModelScope.launch {
-            when (val result = apiService.getEventAttendees(eventId)) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(attendees = result.data)
-                }
-
-                is ApiResult.Error -> {}
+            eventRepository.observeAttendees(eventId).collect { attendees ->
+                _state.value = _state.value.copy(attendees = attendees)
             }
+        }
+    }
+
+    private fun refreshData() {
+        viewModelScope.launch {
+            _state.value = EventDetailState(isLoading = true)
+            eventRepository.refreshEvent(eventId)
+            eventRepository.refreshAttendees(eventId)
         }
     }
 
     fun attendEvent() {
         viewModelScope.launch {
-            when (apiService.attendEvent(eventId)) {
-                is ApiResult.Success -> {
-                    loadEvent()
-                }
-
-                is ApiResult.Error -> {}
-            }
+            eventRepository.attendEvent(eventId)
         }
     }
 
     fun leaveEvent() {
         viewModelScope.launch {
-            when (apiService.leaveEvent(eventId)) {
-                is ApiResult.Success -> {
-                    loadEvent()
-                }
+            eventRepository.leaveEvent(eventId)
+        }
+    }
 
-                is ApiResult.Error -> {}
-            }
+    fun openEventChat(onNavigateToChat: (String) -> Unit) {
+        val currentEvent = _state.value.event ?: return
+        if (_state.value.isOpeningChat) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isOpeningChat = true, error = null)
+
+            val roomResult =
+                eventRepository.ensureEventRoom(
+                    eventId = eventId,
+                    fallbackName = currentEvent.title,
+                    attendeeUserIds = _state.value.attendees.mapNotNull { it.userId },
+                )
+
+            roomResult
+                .onSuccess { roomId ->
+                    _state.value = _state.value.copy(isOpeningChat = false)
+                    onNavigateToChat(roomId)
+                }.onFailure { throwable ->
+                    _state.value =
+                        _state.value.copy(
+                            isOpeningChat = false,
+                            error = throwable.message ?: "Nie udalo sie otworzyc czatu wydarzenia",
+                        )
+                }
         }
     }
 }

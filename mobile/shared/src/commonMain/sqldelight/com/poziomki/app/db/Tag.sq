@@ -1,0 +1,28 @@
+CREATE TABLE tag (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    category TEXT,
+    emoji TEXT
+);
+
+selectAll:
+SELECT *
+FROM tag;
+
+selectByScope:
+SELECT *
+FROM tag
+WHERE scope = ?;
+
+selectById:
+SELECT *
+FROM tag
+WHERE id = ?;
+
+upsert:
+INSERT OR REPLACE INTO tag(id, name, scope, category, emoji)
+VALUES (?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM tag;

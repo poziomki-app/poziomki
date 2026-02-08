@@ -2,9 +2,8 @@ package com.poziomki.app.ui.screen.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.poziomki.app.api.ApiResult
-import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.Event
+import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.util.TimeFilter
 import com.poziomki.app.util.matchesTimeFilter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,37 +21,34 @@ data class EventsState(
 )
 
 class EventsViewModel(
-    private val apiService: ApiService,
+    private val eventRepository: EventRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EventsState())
     val state: StateFlow<EventsState> = _state.asStateFlow()
 
     init {
-        loadEvents()
+        observeEvents()
+        refreshEvents()
     }
 
-    fun loadEvents() {
+    private fun observeEvents() {
+        viewModelScope.launch {
+            eventRepository.observeEvents().collect { events ->
+                _state.value =
+                    _state.value.copy(
+                        allEvents = events,
+                        isLoading = false,
+                        error = null,
+                    )
+                filterEvents()
+            }
+        }
+    }
+
+    fun refreshEvents() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true)
-            when (val result = apiService.getEvents()) {
-                is ApiResult.Success -> {
-                    _state.value =
-                        _state.value.copy(
-                            allEvents = result.data,
-                            isLoading = false,
-                            error = null,
-                        )
-                    filterEvents()
-                }
-
-                is ApiResult.Error -> {
-                    _state.value =
-                        _state.value.copy(
-                            isLoading = false,
-                            error = result.message,
-                        )
-                }
-            }
+            eventRepository.refreshEvents()
         }
     }
 

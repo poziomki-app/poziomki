@@ -27,6 +27,7 @@ class AuthViewModel(
         password: String,
         onSuccess: () -> Unit,
         onNeedsVerification: (String) -> Unit,
+        onNeedsOnboarding: () -> Unit,
     ) {
         viewModelScope.launch {
             _uiState.value = AuthUiState(isLoading = true)
@@ -40,8 +41,18 @@ class AuthViewModel(
                             email = user.email,
                             name = user.name,
                         )
-                        _uiState.value = AuthUiState()
-                        onSuccess()
+                        // Check if user has completed onboarding (has a profile)
+                        when (val profileResult = apiService.getMyProfile()) {
+                            is ApiResult.Success -> {
+                                sessionManager.saveProfileId(profileResult.data.id)
+                                _uiState.value = AuthUiState()
+                                onSuccess()
+                            }
+                            is ApiResult.Error -> {
+                                _uiState.value = AuthUiState()
+                                onNeedsOnboarding()
+                            }
+                        }
                     } else {
                         _uiState.value = AuthUiState(error = "No user data in response")
                     }

@@ -1,6 +1,6 @@
 package com.poziomki.app.util
 
-private const val API_BASE_URL = "http://localhost:3000"
+private const val API_BASE_URL = "http://localhost:5150"
 
 fun resolveImageUrl(url: String): String = if (url.startsWith("/")) "$API_BASE_URL$url" else url
 

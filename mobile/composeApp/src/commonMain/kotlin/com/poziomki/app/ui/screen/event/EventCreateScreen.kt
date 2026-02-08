@@ -18,18 +18,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.poziomki.app.api.ApiResult
-import com.poziomki.app.api.ApiService
-import com.poziomki.app.api.CreateEventRequest
 import com.poziomki.app.ui.theme.PoziomkiTheme
-import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,14 +30,8 @@ fun EventCreateScreen(
     onBack: () -> Unit,
     onCreated: () -> Unit,
 ) {
-    val apiService = koinInject<ApiService>()
-    val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var startsAt by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val viewModel = koinViewModel<EventCreateViewModel>()
+    val state by viewModel.state.collectAsState()
 
     Scaffold(
         topBar = {
@@ -66,8 +53,8 @@ fun EventCreateScreen(
                     .padding(PoziomkiTheme.spacing.lg),
         ) {
             OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
+                value = state.title,
+                onValueChange = viewModel::updateTitle,
                 label = { Text("Title") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -76,8 +63,8 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
+                value = state.description,
+                onValueChange = viewModel::updateDescription,
                 label = { Text("Description") },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
@@ -86,8 +73,8 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             OutlinedTextField(
-                value = location,
-                onValueChange = { location = it },
+                value = state.location,
+                onValueChange = viewModel::updateLocation,
                 label = { Text("Location") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -96,14 +83,14 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             OutlinedTextField(
-                value = startsAt,
-                onValueChange = { startsAt = it },
+                value = state.startsAt,
+                onValueChange = viewModel::updateStartsAt,
                 label = { Text("Start date (YYYY-MM-DD HH:mm)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
 
-            error?.let {
+            state.error?.let {
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
                 Text(text = it, color = androidx.compose.material3.MaterialTheme.colorScheme.error)
             }
@@ -111,30 +98,14 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = {
-                    scope.launch {
-                        isLoading = true
-                        val request =
-                            CreateEventRequest(
-                                title = title,
-                                description = description.ifBlank { null },
-                                location = location.ifBlank { null },
-                                startsAt = startsAt,
-                            )
-                        when (val result = apiService.createEvent(request)) {
-                            is ApiResult.Success -> onCreated()
-                            is ApiResult.Error -> error = result.message
-                        }
-                        isLoading = false
-                    }
-                },
+                onClick = { viewModel.createEvent(onCreated) },
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(PoziomkiTheme.componentSizes.buttonHeight),
-                enabled = !isLoading && title.isNotBlank() && startsAt.isNotBlank(),
+                enabled = !state.isLoading && state.title.isNotBlank() && state.startsAt.isNotBlank(),
             ) {
-                if (isLoading) CircularProgressIndicator() else Text("Create Event")
+                if (state.isLoading) CircularProgressIndicator() else Text("Create Event")
             }
         }
     }

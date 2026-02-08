@@ -8,6 +8,8 @@ import com.poziomki.app.api.CreateProfileRequest
 import com.poziomki.app.api.Degree
 import com.poziomki.app.api.Tag
 import com.poziomki.app.api.UpdateProfileRequest
+import com.poziomki.app.data.repository.DegreeRepository
+import com.poziomki.app.data.repository.TagRepository
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,8 @@ data class OnboardingState(
 class OnboardingViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
+    private val tagRepository: TagRepository,
+    private val degreeRepository: DegreeRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
@@ -43,25 +47,27 @@ class OnboardingViewModel(
 
     private fun loadTags() {
         viewModelScope.launch {
-            when (val result = apiService.getTags("interest")) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(availableTags = result.data)
+            // Observe cached tags
+            launch {
+                tagRepository.observeTags("interest").collect { tags ->
+                    _state.value = _state.value.copy(availableTags = tags)
                 }
-
-                is ApiResult.Error -> {}
             }
+            // Refresh from network
+            tagRepository.refreshTags("interest")
         }
     }
 
     private fun loadDegrees() {
         viewModelScope.launch {
-            when (val result = apiService.getDegrees()) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(degrees = result.data)
+            // Observe cached degrees
+            launch {
+                degreeRepository.observeDegrees().collect { degrees ->
+                    _state.value = _state.value.copy(degrees = degrees)
                 }
-
-                is ApiResult.Error -> {}
             }
+            // Refresh from network
+            degreeRepository.refreshDegrees()
         }
     }
 

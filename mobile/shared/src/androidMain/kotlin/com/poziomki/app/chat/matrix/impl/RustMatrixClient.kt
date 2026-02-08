@@ -1,0 +1,484 @@
+/*
+ * NOTICE: Portions of this implementation are adapted from Element X Android Matrix client wrappers.
+ * Copyright (c) 2025 Element Creations Ltd.
+ * Copyright 2023-2025 New Vector Ltd.
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ */
+package com.poziomki.app.chat.matrix.impl
+
+import android.content.Context
+import com.poziomki.app.api.ApiResult
+import com.poziomki.app.api.ApiService
+import com.poziomki.app.chat.matrix.api.JoinedRoom
+import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.matrix.api.MatrixClientState
+import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
+import com.poziomki.app.session.SessionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.matrix.rustcomponents.sdk.ClientBuilder
+import org.matrix.rustcomponents.sdk.CreateRoomParameters
+import org.matrix.rustcomponents.sdk.LatestEventValue
+import org.matrix.rustcomponents.sdk.Membership
+import org.matrix.rustcomponents.sdk.Room
+import org.matrix.rustcomponents.sdk.RoomListDynamicEntriesController
+import org.matrix.rustcomponents.sdk.RoomListEntriesListener
+import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
+import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
+import org.matrix.rustcomponents.sdk.RoomPreset
+import org.matrix.rustcomponents.sdk.RoomVisibility
+import org.matrix.rustcomponents.sdk.SlidingSyncVersion
+import org.matrix.rustcomponents.sdk.TimelineItemContent
+import java.io.File
+import java.net.URI
+
+class RustMatrixClient(
+    private val apiService: ApiService,
+    private val sessionManager: SessionManager,
+    private val appContext: Context,
+) : MatrixClient {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val startStopMutex = Mutex()
+
+    private val _state = MutableStateFlow<MatrixClientState>(MatrixClientState.Idle)
+    override val state: StateFlow<MatrixClientState> = _state
+
+    private val _rooms = MutableStateFlow<List<MatrixRoomSummary>>(emptyList())
+    override val rooms: StateFlow<List<MatrixRoomSummary>> = _rooms
+
+    private var client: org.matrix.rustcomponents.sdk.Client? = null
+    private var syncService: org.matrix.rustcomponents.sdk.SyncService? = null
+    private var roomListSubscription: RoomListSubscription? = null
+
+    private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
+
+    override suspend fun ensureStarted(): Result<Unit> =
+        startStopMutex.withLock {
+            if (client != null && state.value is MatrixClientState.Ready) {
+                return@withLock Result.success(Unit)
+            }
+
+            _state.value = MatrixClientState.Connecting
+
+            val config =
+                when (val configResult = apiService.getMatrixConfig()) {
+                    is ApiResult.Success -> {
+                        configResult.data
+                    }
+
+                    is ApiResult.Error -> {
+                        val message = "Failed to load Matrix config: ${configResult.message}"
+                        _state.value = MatrixClientState.Error(message)
+                        return@withLock Result.failure(IllegalStateException(message))
+                    }
+                }
+
+            val homeserver = config.homeserver
+            if (homeserver.isNullOrBlank()) {
+                val message = "Matrix homeserver is not configured"
+                _state.value = MatrixClientState.Error(message)
+                return@withLock Result.failure(IllegalStateException(message))
+            }
+
+            val jwt = sessionManager.getToken()
+            if (jwt.isNullOrBlank()) {
+                val message = "User session token is missing"
+                _state.value = MatrixClientState.Error(message)
+                return@withLock Result.failure(IllegalStateException(message))
+            }
+
+            runCatching {
+                val storeNamespace = matrixStoreNamespace()
+                val dataPath = File(appContext.filesDir, "matrix-sdk/$storeNamespace/data").apply { mkdirs() }
+                val cachePath = File(appContext.cacheDir, "matrix-sdk/$storeNamespace/cache").apply { mkdirs() }
+
+                val newClient =
+                    ClientBuilder()
+                        .homeserverUrl(homeserver)
+                        .sessionPaths(dataPath.absolutePath, cachePath.absolutePath)
+                        .build()
+
+                val matrixSession =
+                    when (val sessionResult = apiService.createMatrixSession(deviceName = "Poziomki Mobile")) {
+                        is ApiResult.Success -> {
+                            sessionResult.data
+                        }
+
+                        is ApiResult.Error -> {
+                            val message = "Failed to initialize secure messaging: ${sessionResult.message}"
+                            _state.value = MatrixClientState.Error(message)
+                            return@withLock Result.failure(IllegalStateException(message))
+                        }
+                    }
+
+                val accessToken = matrixSession.accessToken
+                val refreshToken = matrixSession.refreshToken
+                val userId = matrixSession.userId
+                val deviceId = matrixSession.deviceId
+
+                if (
+                    accessToken.isNullOrBlank() ||
+                    refreshToken.isNullOrBlank() ||
+                    userId.isNullOrBlank() ||
+                    deviceId.isNullOrBlank()
+                ) {
+                    val message = "Failed to initialize secure messaging session"
+                    _state.value = MatrixClientState.Error(message)
+                    return@withLock Result.failure(IllegalStateException(message))
+                }
+
+                newClient.restoreSession(
+                    org.matrix.rustcomponents.sdk.Session(
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
+                        userId = userId,
+                        deviceId = deviceId,
+                        homeserverUrl = homeserver,
+                        oidcData = null,
+                        slidingSyncVersion = SlidingSyncVersion.NATIVE,
+                    ),
+                )
+
+                val newSyncService = newClient.syncService().finish()
+                newSyncService.start()
+
+                subscribeRoomList(newSyncService)
+
+                client = newClient
+                syncService = newSyncService
+                _state.value = MatrixClientState.Ready(newClient.userId(), homeserver)
+            }.onFailure { throwable ->
+                cleanupInternal()
+                // Wipe crypto store so the next attempt starts fresh (avoids
+                // "account in the store doesn't match" after backend restarts).
+                val storeNamespace = matrixStoreNamespace()
+                File(appContext.filesDir, "matrix-sdk/$storeNamespace").deleteRecursively()
+                File(appContext.cacheDir, "matrix-sdk/$storeNamespace").deleteRecursively()
+                _state.value = MatrixClientState.Error(throwable.message ?: "Failed to initialize Matrix")
+            }
+
+            if (_state.value is MatrixClientState.Ready) {
+                Result.success(Unit)
+            } else {
+                Result.failure(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: "Failed to initialize Matrix"))
+            }
+        }
+
+    override suspend fun refreshRooms(): Result<Unit> =
+        runCatching {
+            ensureStarted().getOrThrow()
+            roomListSubscription?.controller?.setFilter(org.matrix.rustcomponents.sdk.RoomListEntriesDynamicFilterKind.NonLeft)
+            Unit
+        }
+
+    override suspend fun getJoinedRoom(roomId: String): JoinedRoom? {
+        ensureStarted().getOrElse { return null }
+
+        openedRooms[roomId]?.let { return it }
+
+        val innerClient = client ?: return null
+        val room = innerClient.getRoom(roomId) ?: return null
+        if (room.membership() != Membership.JOINED) return null
+
+        val liveTimeline = runCatching { room.timeline() }.getOrElse { return null }
+        val wrappedRoom =
+            JoinedRustRoom(
+                innerRoom = room,
+                liveTimeline = RustTimeline(liveTimeline, MatrixTimelineMode.Live, room.ownUserId(), scope),
+                coroutineScope = scope,
+            )
+        openedRooms[roomId] = wrappedRoom
+        return wrappedRoom
+    }
+
+    override suspend fun createDM(
+        userId: String,
+        displayName: String?,
+    ): Result<String> =
+        runCatching {
+            ensureStarted().getOrThrow()
+            val innerClient = client ?: error("Matrix client is not initialized")
+            val normalizedUserId = normalizeUserId(userId)
+            val existing = innerClient.getDmRoom(normalizedUserId)
+            if (existing != null) return@runCatching existing.id()
+            createRoomInternal(
+                name = displayName,
+                invitedUserIds = listOf(normalizedUserId),
+                isDirect = true,
+                preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
+            )
+        }
+
+    override suspend fun createRoom(
+        name: String,
+        invitedUserIds: List<String>,
+    ): Result<String> =
+        runCatching {
+            ensureStarted().getOrThrow()
+            createRoomInternal(
+                name = name.ifBlank { null },
+                invitedUserIds = invitedUserIds.map(::normalizeUserId),
+                isDirect = false,
+                preset = RoomPreset.PRIVATE_CHAT,
+            )
+        }
+
+    override suspend fun stop() {
+        startStopMutex.withLock {
+            cleanupInternal()
+            _rooms.value = emptyList()
+            _state.value = MatrixClientState.Idle
+        }
+    }
+
+    private suspend fun subscribeRoomList(sync: org.matrix.rustcomponents.sdk.SyncService) {
+        val roomListService = sync.roomListService()
+        val roomList = roomListService.allRooms()
+        val roomBuffer = mutableListOf<Room>()
+
+        val result =
+            roomList.entriesWithDynamicAdapters(
+                200u,
+                object : RoomListEntriesListener {
+                    override fun onUpdate(roomEntriesUpdate: List<RoomListEntriesUpdate>) {
+                        synchronized(roomBuffer) {
+                            applyRoomListUpdates(roomBuffer, roomEntriesUpdate)
+                        }
+                        val snapshot = synchronized(roomBuffer) { roomBuffer.toList() }
+                        publishRoomSummaries(snapshot)
+                    }
+                },
+            )
+
+        val controller = result.controller()
+        controller.setFilter(org.matrix.rustcomponents.sdk.RoomListEntriesDynamicFilterKind.NonLeft)
+        val streamHandle = result.entriesStream()
+
+        roomListSubscription =
+            RoomListSubscription(
+                roomListResult = result,
+                streamHandle = streamHandle,
+                controller = controller,
+            )
+    }
+
+    private fun publishRoomSummaries(roomsSnapshot: List<Room>) {
+        scope.launch(Dispatchers.Default) {
+            val mappedRooms =
+                roomsSnapshot.mapNotNull { room ->
+                    runCatching {
+                        val info = room.roomInfo()
+                        val latest = room.latestEvent()
+
+                        MatrixRoomSummary(
+                            roomId = info.id,
+                            displayName = info.displayName ?: room.displayName() ?: info.id,
+                            avatarUrl = info.avatarUrl,
+                            isDirect = info.isDirect,
+                            unreadCount =
+                                info.numUnreadNotifications
+                                    .toLong()
+                                    .coerceAtMost(Int.MAX_VALUE.toLong())
+                                    .toInt(),
+                            latestMessage = latest.previewText(),
+                            latestTimestampMillis = latest.timestampMillis(),
+                        )
+                    }.getOrNull()
+                }
+
+            _rooms.value = mappedRooms.sortedByDescending { it.latestTimestampMillis ?: Long.MIN_VALUE }
+        }
+    }
+
+    private fun cleanupInternal() {
+        openedRooms.values.forEach { room -> room.close() }
+        openedRooms.clear()
+
+        roomListSubscription?.streamHandle?.cancel()
+        roomListSubscription?.roomListResult?.close()
+        roomListSubscription = null
+
+        runBlocking {
+            runCatching { syncService?.stop() }
+        }
+        syncService?.close()
+        syncService = null
+
+        client?.close()
+        client = null
+    }
+
+    private suspend fun matrixStoreNamespace(): String =
+        sessionManager
+            .userId
+            .first()
+            ?.replace(Regex("[^A-Za-z0-9_.-]"), "_")
+            ?.ifBlank { null }
+            ?: "default"
+
+    private suspend fun createRoomInternal(
+        name: String?,
+        invitedUserIds: List<String>,
+        isDirect: Boolean,
+        preset: RoomPreset,
+    ): String {
+        val innerClient = client ?: error("Matrix client is not initialized")
+        return innerClient.createRoom(
+            CreateRoomParameters(
+                name = name,
+                topic = null,
+                isEncrypted = true,
+                isDirect = isDirect,
+                visibility = RoomVisibility.Private,
+                preset = preset,
+                invite = invitedUserIds.takeIf { it.isNotEmpty() },
+                avatar = null,
+                powerLevelContentOverride = null,
+                joinRuleOverride = null,
+                historyVisibilityOverride = null,
+                canonicalAlias = null,
+                isSpace = false,
+            ),
+        )
+    }
+
+    private fun normalizeUserId(rawValue: String): String {
+        val value = rawValue.trim()
+        if (value.isEmpty()) return value
+        if (value.startsWith("@")) return value
+
+        val homeserver =
+            (state.value as? MatrixClientState.Ready)
+                ?.homeserver
+                ?.let(::extractServerNameFromHomeserver)
+                ?: return value
+        return "@$value:$homeserver"
+    }
+
+    private fun extractServerNameFromHomeserver(homeserver: String): String? {
+        val normalized = if (homeserver.contains("://")) homeserver else "https://$homeserver"
+        return runCatching {
+            val uri = URI(normalized)
+            uri.authority
+        }.getOrNull()?.ifBlank { null }
+    }
+}
+
+private data class RoomListSubscription(
+    val roomListResult: RoomListEntriesWithDynamicAdaptersResult,
+    val streamHandle: org.matrix.rustcomponents.sdk.TaskHandle,
+    val controller: RoomListDynamicEntriesController,
+)
+
+private fun applyRoomListUpdates(
+    roomBuffer: MutableList<Room>,
+    updates: List<RoomListEntriesUpdate>,
+) {
+    updates.forEach { update ->
+        when (update) {
+            is RoomListEntriesUpdate.Append -> {
+                roomBuffer.addAll(update.values)
+            }
+
+            is RoomListEntriesUpdate.Clear -> {
+                roomBuffer.clear()
+            }
+
+            is RoomListEntriesUpdate.PushFront -> {
+                roomBuffer.add(0, update.value)
+            }
+
+            is RoomListEntriesUpdate.PushBack -> {
+                roomBuffer.add(update.value)
+            }
+
+            RoomListEntriesUpdate.PopFront -> {
+                if (roomBuffer.isNotEmpty()) roomBuffer.removeAt(0)
+            }
+
+            RoomListEntriesUpdate.PopBack -> {
+                if (roomBuffer.isNotEmpty()) roomBuffer.removeAt(roomBuffer.lastIndex)
+            }
+
+            is RoomListEntriesUpdate.Insert -> {
+                val index = update.index.toInt().coerceIn(0, roomBuffer.size)
+                roomBuffer.add(index, update.value)
+            }
+
+            is RoomListEntriesUpdate.Set -> {
+                val index = update.index.toInt()
+                if (index in roomBuffer.indices) {
+                    roomBuffer[index] = update.value
+                }
+            }
+
+            is RoomListEntriesUpdate.Remove -> {
+                val index = update.index.toInt()
+                if (index in roomBuffer.indices) {
+                    roomBuffer.removeAt(index)
+                }
+            }
+
+            is RoomListEntriesUpdate.Truncate -> {
+                val newSize = update.length.toInt().coerceAtLeast(0)
+                if (newSize < roomBuffer.size) {
+                    roomBuffer.subList(newSize, roomBuffer.size).clear()
+                }
+            }
+
+            is RoomListEntriesUpdate.Reset -> {
+                roomBuffer.clear()
+                roomBuffer.addAll(update.values)
+            }
+        }
+    }
+}
+
+private fun LatestEventValue.previewText(): String? =
+    when (this) {
+        LatestEventValue.None -> null
+        is LatestEventValue.Remote -> this.content.toPreviewText()
+        is LatestEventValue.Local -> this.content.toPreviewText()
+        is LatestEventValue.RemoteInvite -> "Room invite"
+    }
+
+private fun LatestEventValue.timestampMillis(): Long? =
+    when (this) {
+        LatestEventValue.None -> null
+        is LatestEventValue.Remote -> this.timestamp.toLong()
+        is LatestEventValue.Local -> this.timestamp.toLong()
+        is LatestEventValue.RemoteInvite -> this.timestamp.toLong()
+    }
+
+private fun TimelineItemContent.toPreviewText(): String? =
+    when (this) {
+        is TimelineItemContent.MsgLike -> {
+            when (val kind = this.content.kind) {
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Message -> kind.content.body
+                org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Message removed"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Poll: ${kind.question}"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Unable to decrypt message"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> "Unsupported message"
+            }
+        }
+
+        // State events should not appear as room preview text
+        TimelineItemContent.CallInvite,
+        TimelineItemContent.RtcNotification,
+        is TimelineItemContent.ProfileChange,
+        is TimelineItemContent.RoomMembership,
+        is TimelineItemContent.State,
+        is TimelineItemContent.FailedToParseMessageLike,
+        is TimelineItemContent.FailedToParseState,
+        -> null
+    }

@@ -85,4 +85,11 @@ class ApiService(
     // Matching
 
     suspend fun getMatchingProfiles(): ApiResult<List<MatchProfile>> = client.get("/api/v1/matching/profiles")
+
+    // Matrix bootstrap
+
+    suspend fun getMatrixConfig(): ApiResult<MatrixConfigData> = client.get("/api/v1/matrix/config")
+
+    suspend fun createMatrixSession(deviceName: String = "Poziomki Mobile"): ApiResult<MatrixSessionData> =
+        client.post("/api/v1/matrix/session", MatrixSessionRequest(deviceName = deviceName))
 }

@@ -1,6 +1,13 @@
 package com.poziomki.app.di
 
 import android.content.Context
+import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.matrix.impl.RustMatrixClient
+import com.poziomki.app.data.connectivity.AndroidConnectivityMonitor
+import com.poziomki.app.data.connectivity.ConnectivityMonitor
+import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.session.createDataStore
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -16,11 +23,16 @@ actual fun platformModule(): Module =
                         chain
                             .request()
                             .newBuilder()
-                            .header("Origin", "http://localhost:3000")
+                            .header("Origin", "http://localhost:5150")
                             .build()
                     chain.proceed(request)
                 }
             }
         }
         single { createDataStore(get<Context>()) }
+        single<MatrixClient> { RustMatrixClient(get(), get(), get()) }
+        single<SqlDriver> {
+            AndroidSqliteDriver(PoziomkiDatabase.Schema, get<Context>(), "poziomki.db")
+        }
+        single<ConnectivityMonitor> { AndroidConnectivityMonitor(get<Context>()) }
     }

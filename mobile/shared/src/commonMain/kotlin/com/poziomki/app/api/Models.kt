@@ -1,5 +1,6 @@
 package com.poziomki.app.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -158,6 +159,7 @@ data class Event(
     val isAttending: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
+    val conversationId: String? = null,
 )
 
 @Serializable
@@ -182,6 +184,7 @@ data class UpdateEventRequest(
 @Serializable
 data class EventAttendee(
     val profileId: String,
+    val userId: String? = null,
     val name: String,
     val profilePicture: String? = null,
     val status: String,
@@ -229,4 +232,38 @@ data class MatchProfile(
     val program: String? = null,
     val tags: List<Tag> = emptyList(),
     val score: Double = 0.0,
+)
+
+// Matrix bootstrap models
+
+@Serializable
+data class MatrixConfigEnvelope(
+    val data: MatrixConfigData,
+)
+
+@Serializable
+data class MatrixConfigData(
+    val homeserver: String? = null,
+    @SerialName("chat_mode")
+    val chatMode: String = "matrix-native",
+)
+
+@Serializable
+data class MatrixSessionRequest(
+    val deviceName: String = "Poziomki Mobile",
+)
+
+@Serializable
+data class MatrixSessionEnvelope(
+    val data: MatrixSessionData? = null,
+)
+
+@Serializable
+data class MatrixSessionData(
+    val homeserver: String? = null,
+    val accessToken: String? = null,
+    val refreshToken: String? = null,
+    val userId: String? = null,
+    val deviceId: String? = null,
+    val expiresAt: Long? = null,
 )

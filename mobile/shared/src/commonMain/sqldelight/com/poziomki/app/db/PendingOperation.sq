@@ -1,0 +1,56 @@
+CREATE TABLE pending_operation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    entity_id TEXT,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending'
+);
+
+selectPending:
+SELECT *
+FROM pending_operation
+WHERE status = 'pending'
+ORDER BY created_at ASC;
+
+selectAll:
+SELECT *
+FROM pending_operation
+ORDER BY created_at ASC;
+
+insert:
+INSERT INTO pending_operation(type, entity_id, payload_json, created_at, retry_count, status)
+VALUES (?, ?, ?, ?, 0, 'pending');
+
+markCompleted:
+UPDATE pending_operation
+SET status = 'completed'
+WHERE id = ?;
+
+markFailed:
+UPDATE pending_operation
+SET status = 'failed', retry_count = retry_count + 1
+WHERE id = ?;
+
+resetForRetry:
+UPDATE pending_operation
+SET status = 'pending'
+WHERE id = ? AND retry_count < 5;
+
+deleteCompleted:
+DELETE FROM pending_operation
+WHERE status = 'completed';
+
+deleteAll:
+DELETE FROM pending_operation;
+
+countPending:
+SELECT COUNT(*)
+FROM pending_operation
+WHERE status = 'pending';
+
+updateEntityId:
+UPDATE pending_operation
+SET entity_id = ?
+WHERE entity_id = ? AND status = 'pending';

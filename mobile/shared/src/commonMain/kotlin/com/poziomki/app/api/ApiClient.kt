@@ -28,6 +28,7 @@ class ApiClient(
     baseUrl: String,
     engine: io.ktor.client.engine.HttpClientEngine,
     @PublishedApi internal val tokenProvider: suspend () -> String?,
+    @PublishedApi internal val onUnauthorized: (suspend () -> Unit)? = null,
 ) {
     private val json =
         Json {
@@ -126,6 +127,9 @@ class ApiClient(
                     ApiResult.Error("No data", "NOT_FOUND", 404)
                 }
             } else {
+                if (response.status.value == 401) {
+                    onUnauthorized?.invoke()
+                }
                 val error =
                     try {
                         response.body<ApiErrorResponse>()
@@ -164,6 +168,9 @@ class ApiClient(
                     ApiResult.Error("No data", "NOT_FOUND", 404)
                 }
             } else {
+                if (response.status.value == 401) {
+                    onUnauthorized?.invoke()
+                }
                 val error =
                     try {
                         response.body<ApiErrorResponse>()
