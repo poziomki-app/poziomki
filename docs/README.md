@@ -17,5 +17,5 @@ projekt udostępniany jest na warunkach licencji AGPLv3
 ## finansowanie
 
 <p align="left">
-  <img src="../apps/mobile/assets/funding.png" />
+  <img src="./assets/funding.png" />
 </p>
