@@ -20,3 +20,6 @@ features = [
   # e.g.
   "runtime-tokio-rustls", # `ASYNC_RUNTIME` feature
 ]
+
+[lints]
+workspace = true

@@ -1,20 +1,36 @@
 package com.poziomki.app
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
+import com.poziomki.app.session.SessionManager
+import com.poziomki.app.ui.navigation.AppNavigation
+import com.poziomki.app.ui.navigation.Route
+import com.poziomki.app.ui.theme.PoziomkiTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.koin.compose.koinInject
 
 @Composable
 fun App() {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-    ) {
-        Surface {
-            Text("Poziomki")
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader
+            .Builder(context)
+            .components {
+                add(KtorNetworkFetcherFactory())
+            }.build()
+    }
+
+    val sessionManager = koinInject<SessionManager>()
+    val startDestination =
+        remember {
+            val loggedIn = runBlocking { sessionManager.isLoggedIn.first() }
+            if (loggedIn) Route.MainGraph else Route.AuthGraph
         }
+
+    PoziomkiTheme {
+        AppNavigation(startDestination = startDestination)
     }
 }
