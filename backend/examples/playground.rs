@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 #[allow(unused_imports)]
 use loco_rs::{cli::playground, prelude::*};
 use poziomki_backend::app::App;

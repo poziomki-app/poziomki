@@ -52,6 +52,25 @@ listening on http://localhost:5150
 
 You can check your [configuration](config/development.yaml) to pick either frontend setup or server-side rendered template, and activate the relevant configuration sections.
 
+## Quality Gates
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+Additional static quality gate using [rust-code-analysis](https://github.com/mozilla/rust-code-analysis):
+
+```sh
+cargo install --locked rust-code-analysis-cli
+./scripts/rust-code-analysis.sh
+```
+
+Thresholds can be tuned with env vars:
+
+```sh
+RCA_MIN_MI_VISUAL_STUDIO=12 RCA_MAX_CYCLOMATIC=6 ./scripts/rust-code-analysis.sh
+```
 
 ## Getting help
 

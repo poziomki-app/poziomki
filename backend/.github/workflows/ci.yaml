@@ -52,6 +52,26 @@ jobs:
           command: clippy
           args: --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W rust-2018-idioms
 
+  rust-code-analysis:
+    name: Rust Code Analysis
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+      - name: Install rust-code-analysis-cli
+        run: cargo install --locked rust-code-analysis-cli
+      - name: Run rust-code-analysis quality gate
+        run: ./scripts/rust-code-analysis.sh
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest

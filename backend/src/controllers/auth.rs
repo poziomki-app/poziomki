@@ -7,16 +7,11 @@ use crate::{
     views::auth::{CurrentResponse, LoginResponse},
 };
 use loco_rs::prelude::*;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 
-pub static EMAIL_DOMAIN_RE: OnceLock<Regex> = OnceLock::new();
-
-fn get_allow_email_domain_re() -> &'static Regex {
-    EMAIL_DOMAIN_RE.get_or_init(|| {
-        Regex::new(r"@example\.com$|@gmail\.com$").expect("Failed to compile regex")
-    })
+fn is_allowed_email_domain(email: &str) -> bool {
+    let email = email.to_ascii_lowercase();
+    email.ends_with("@example.com") || email.ends_with("@gmail.com")
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -42,7 +37,6 @@ pub struct ResendVerificationParams {
 
 /// Register function creates a new user with the given parameters and sends a
 /// welcome email to the user
-#[debug_handler]
 async fn register(
     State(ctx): State<AppContext>,
     Json(params): Json<RegisterParams>,
@@ -73,7 +67,6 @@ async fn register(
 
 /// Verify register user. if the user not verified his email, he can't login to
 /// the system.
-#[debug_handler]
 async fn verify(State(ctx): State<AppContext>, Path(token): Path<String>) -> Result<Response> {
     let Ok(user) = users::Model::find_by_verification_token(&ctx.db, &token).await else {
         return unauthorized("invalid token");
@@ -94,7 +87,6 @@ async fn verify(State(ctx): State<AppContext>, Path(token): Path<String>) -> Res
 /// and send email to the user. In case the email not found in our DB, we are
 /// returning a valid request for for security reasons (not exposing users DB
 /// list).
-#[debug_handler]
 async fn forgot(
     State(ctx): State<AppContext>,
     Json(params): Json<ForgotParams>,
@@ -116,7 +108,6 @@ async fn forgot(
 }
 
 /// reset user password by the given parameters
-#[debug_handler]
 async fn reset(State(ctx): State<AppContext>, Json(params): Json<ResetParams>) -> Result<Response> {
     let Ok(user) = users::Model::find_by_reset_token(&ctx.db, &params.token).await else {
         // we don't want to expose our users email. if the email is invalid we still
@@ -133,7 +124,6 @@ async fn reset(State(ctx): State<AppContext>, Json(params): Json<ResetParams>) -
 }
 
 /// Creates a user login and returns a token
-#[debug_handler]
 async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {
     let Ok(user) = users::Model::find_by_email(&ctx.db, &params.email).await else {
         tracing::debug!(
@@ -158,7 +148,6 @@ async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -
     format::json(LoginResponse::new(&user, &token))
 }
 
-#[debug_handler]
 async fn current(auth: auth::JWT, State(ctx): State<AppContext>) -> Result<Response> {
     let user = users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
     format::json(CurrentResponse::new(&user))
@@ -182,8 +171,7 @@ async fn magic_link(
     State(ctx): State<AppContext>,
     Json(params): Json<MagicLinkParams>,
 ) -> Result<Response> {
-    let email_regex = get_allow_email_domain_re();
-    if !email_regex.is_match(&params.email) {
+    if !is_allowed_email_domain(&params.email) {
         tracing::debug!(
             email = params.email,
             "The provided email is invalid or does not match the allowed domains"
@@ -226,7 +214,6 @@ async fn magic_link_verify(
     format::json(LoginResponse::new(&user, &token))
 }
 
-#[debug_handler]
 async fn resend_verification_email(
     State(ctx): State<AppContext>,
     Json(params): Json<ResendVerificationParams>,
