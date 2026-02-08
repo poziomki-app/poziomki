@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loco}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loco}
+      POSTGRES_DB: ${POSTGRES_DB:-poziomki-backend_development}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loco} -d ${POSTGRES_DB:-poziomki-backend_development}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5150:5150"
+    environment:
+      NODE_ENV: production
+      PORT: 5150
+      SERVER_BINDING: 0.0.0.0
+      SERVER_HOST: ${SERVER_HOST:-http://localhost:5150}
+      DATABASE_URL: postgres://${POSTGRES_USER:-loco}:${POSTGRES_PASSWORD:-loco}@postgres:5432/${POSTGRES_DB:-poziomki-backend_development}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      GARAGE_S3_ENDPOINT: ${GARAGE_S3_ENDPOINT:-http://host.docker.internal:3900}
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
+      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY:-garage-access-key}
+      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY:-garage-secret-key}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-us-east-1}
+      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      CADDY_API_UPSTREAM: api:5150
+      CADDY_GARAGE_S3_UPSTREAM: ${CADDY_GARAGE_S3_UPSTREAM:-host.docker.internal:3900}
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/Caddyfile:/etc/caddy/Caddyfile:ro
+
+  tuwunel:
+    image: jevolk/tuwunel:latest
+    restart: unless-stopped
+    ports:
+      - "6167:6167"
+    environment:
+      TUWUNEL_SERVER_NAME: "localhost"
+      TUWUNEL_PORT: "6167"
+      TUWUNEL_ADDRESS: "0.0.0.0"
+      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
+      TUWUNEL_ALLOW_REGISTRATION: "true"
+      TUWUNEL_REGISTRATION_TOKEN: "poziomki-dev-token"
+      TUWUNEL_ALLOW_FEDERATION: "false"
+      TUWUNEL_CREATE_ADMIN_ROOM: "true"
+      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
+      TUWUNEL_LOG: "info"
+    volumes:
+      - tuwunel_data:/var/lib/tuwunel
+
+volumes:
+  postgres_data:
+  tuwunel_data:

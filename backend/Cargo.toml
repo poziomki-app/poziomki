@@ -66,6 +66,7 @@ include_dir = { version = "0.7" }
 matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", default-features = false, features = ["e2e-encryption", "rustls-tls"] }
 ruma = { version = "0.14", features = ["client-api-c", "events"] }
 opendal = { version = "0.55", features = ["services-s3", "services-fs"] }
+url = { version = "2.5" }
 
 [[bin]]
 name = "poziomki_backend-cli"

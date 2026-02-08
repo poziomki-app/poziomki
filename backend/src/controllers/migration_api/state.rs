@@ -48,7 +48,6 @@ impl MigrationState {
             events: std::collections::HashMap::new(),
             event_attendees: std::collections::HashMap::new(),
             uploads: std::collections::HashMap::new(),
-            upload_blobs: std::collections::HashMap::new(),
             otp_by_email: std::collections::HashMap::new(),
         }
     }
@@ -60,6 +59,11 @@ pub(super) fn lock_state() -> MutexGuard<'static, MigrationState> {
     STATE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub(super) fn reset_state() {
+    let mut state = lock_state();
+    *state = MigrationState::new();
 }
 
 pub(super) fn normalize_email(email: &str) -> String {
@@ -86,9 +90,9 @@ pub(super) fn validate_signup_payload(payload: &SignUpBody) -> std::result::Resu
         error = Some(validation_error("Email is required"));
     } else if !is_valid_email(&email) {
         error = Some(validation_error("Invalid email address"));
-    } else if !(2..=100).contains(&payload.name.trim().len()) {
+    } else if !(1..=100).contains(&payload.name.trim().chars().count()) {
         error = Some(validation_error(
-            "Name must be between 2 and 100 characters",
+            "Name must be between 1 and 100 characters",
         ));
     } else if !(8..=128).contains(&payload.password.len()) {
         error = Some(validation_error(

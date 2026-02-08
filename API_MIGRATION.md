@@ -120,6 +120,8 @@ Upload details to preserve:
 - 10MB limit.
 - MIME + magic-byte validation.
 - Context rules (`chat_*` requires `contextId`).
+- Storage backend: Garage S3 (S3-compatible) for upload object storage.
+- Use presigned URLs for prod download/upload flows, keep API response contract unchanged.
 
 ## Legacy Chat API Inventory (Do Not Port)
 These endpoints are mapped for migration completeness, but should not be implemented in Rust as compatibility facades.
@@ -237,9 +239,11 @@ Exit criteria:
 - Implement events, attendance, and upload context access rules.
 - Keep current matching logic first (newest profiles placeholder) for parity.
 - Preserve upload validation and signed URL behavior.
+- Integrate uploads with Garage S3 (bucket, object key strategy, presign, delete, access checks).
 
 Exit criteria:
 - Kotlin event and upload flows run against Rust backend.
+- Upload objects are stored in Garage S3 in staging with successful upload/download/delete parity tests.
 
 ### Phase 4 - Matrix Chat Integration (No Legacy Chat API)
 - Implement Matrix provisioning and domain mappings needed by product flows.
@@ -288,9 +292,10 @@ Exit criteria:
 - `Link: <migration-doc-url>; rel=\"deprecation\"`
 3. Normalize `tags` payload naming to one canonical input (`tagIds`), while still accepting `tags` alias during deprecation window.
 4. Make upload download behavior consistent across environments by converging on one mode (redirect or proxy), controlled by feature flag during rollout.
-5. Publish a stable error code catalog (domain + reason), and guarantee machine-readable error bodies for every non-2xx response.
-6. Add idempotency-key support for critical create/mutate endpoints (`sign-up`, event create, room provisioning) to protect clients from retries.
-7. Keep chat transport exclusively Matrix-native; no reintroduction of custom chat WS protocol.
+5. Keep S3 implementation vendor-neutral (AWS SDK-compatible API surface) while targeting Garage S3 in infra.
+6. Publish a stable error code catalog (domain + reason), and guarantee machine-readable error bodies for every non-2xx response.
+7. Add idempotency-key support for critical create/mutate endpoints (`sign-up`, event create, room provisioning) to protect clients from retries.
+8. Keep chat transport exclusively Matrix-native; no reintroduction of custom chat WS protocol.
 
 ## API Quality Guardrails (Recommended)
 1. Pagination: prefer opaque cursor tokens over mixed `before` semantics for new list endpoints in `/api/v1`.
@@ -316,4 +321,5 @@ Exit criteria:
 1. Generate machine-readable non-chat contract fixtures from Elysia routes/models.
 2. Implement Rust middleware stack for requestId/error/auth/rate-limit parity.
 3. Define Matrix bootstrap/provisioning contract needed by app auth model.
-4. Start Phase 2 with Auth + Profiles as first production slice.
+4. Finalize Garage S3 upload design (bucket naming, presign TTLs, ACL model, local/dev fallback).
+5. Start Phase 2 with Auth + Profiles as first production slice.

@@ -485,6 +485,5 @@ pub(in crate::controllers::migration_api) struct MigrationState {
     pub(in crate::controllers::migration_api) event_attendees:
         HashMap<(String, String), AttendeeStatus>,
     pub(in crate::controllers::migration_api) uploads: HashMap<String, UploadRecord>,
-    pub(in crate::controllers::migration_api) upload_blobs: HashMap<String, Vec<u8>>,
     pub(in crate::controllers::migration_api) otp_by_email: HashMap<String, String>,
 }

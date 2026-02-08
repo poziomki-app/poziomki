@@ -52,6 +52,39 @@ listening on http://localhost:5150
 
 You can check your [configuration](config/development.yaml) to pick either frontend setup or server-side rendered template, and activate the relevant configuration sections.
 
+## Local Infra (Postgres 18 + Caddy Upload Auth)
+
+Start full local stack from repository root `docker-compose.yml`:
+
+```sh
+cd ..
+docker compose -f docker-compose.yml up -d --build
+```
+
+`Caddyfile` is configured for upload auth flow targeting Garage S3:
+- `GET /uploads/{file}` goes through Caddy.
+- Caddy calls API `GET /api/v1/uploads/auth-check` via `forward_auth`.
+- On success, Caddy proxies to Garage S3 path-style object endpoint (`/<bucket>/<key>`).
+
+Use a custom Garage endpoint if needed:
+
+```sh
+GARAGE_S3_ENDPOINT=http://host.docker.internal:3900 \
+GARAGE_S3_ACCESS_KEY=... \
+GARAGE_S3_SECRET_KEY=... \
+CADDY_GARAGE_S3_UPSTREAM=host.docker.internal:3900 \
+GARAGE_S3_BUCKET=poziomki-uploads \
+cd ..
+docker compose -f docker-compose.yml up -d --build
+```
+
+Backend Garage env vars (production mode):
+- `GARAGE_S3_ENDPOINT`
+- `GARAGE_S3_BUCKET`
+- `GARAGE_S3_ACCESS_KEY`
+- `GARAGE_S3_SECRET_KEY`
+- Optional: `GARAGE_S3_REGION`, `GARAGE_S3_URL_EXPIRY`, `GARAGE_S3_PUBLIC_URL`, `GARAGE_S3_VIRTUAL_HOST_STYLE`
+
 ## Quality Gates
 
 ```sh
