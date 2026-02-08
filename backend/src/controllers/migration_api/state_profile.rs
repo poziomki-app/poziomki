@@ -89,7 +89,11 @@ pub(in crate::controllers::migration_api) fn validate_profile_name(
         Err("Name is required")
     } else if name.chars().count() > 100 {
         Err("Name must be at most 100 characters")
-    } else if name.contains("http://") || name.contains("https://") || name.contains("www.") {
+    } else if name.contains("http://")
+        || name.contains("https://")
+        || name.contains("www.")
+        || name.contains('@')
+    {
         Err("Imie nie moze zawierac linkow ani adresow email")
     } else {
         Ok(())
