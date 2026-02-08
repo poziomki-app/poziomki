@@ -38,6 +38,9 @@ DerivedData/
 *.swo
 *~
 
+# Runtime data
+data/
+
 # Environment
 .env
 

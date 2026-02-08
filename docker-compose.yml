@@ -3,7 +3,7 @@ services:
     image: postgres:18-alpine
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-loco}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loco}
@@ -33,7 +33,7 @@ services:
       SERVER_HOST: ${SERVER_HOST:-http://localhost:5150}
       DATABASE_URL: postgres://${POSTGRES_USER:-loco}:${POSTGRES_PASSWORD:-loco}@postgres:5432/${POSTGRES_DB:-poziomki-backend_development}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      GARAGE_S3_ENDPOINT: ${GARAGE_S3_ENDPOINT:-http://host.docker.internal:3900}
+      GARAGE_S3_ENDPOINT: ${GARAGE_S3_ENDPOINT:-http://garage:3900}
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
       GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY:-garage-access-key}
       GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY:-garage-secret-key}
@@ -58,12 +58,28 @@ services:
       - "8080:8080"
     environment:
       CADDY_API_UPSTREAM: api:5150
-      CADDY_GARAGE_S3_UPSTREAM: ${CADDY_GARAGE_S3_UPSTREAM:-host.docker.internal:3900}
+      CADDY_GARAGE_S3_UPSTREAM: ${CADDY_GARAGE_S3_UPSTREAM:-garage:3900}
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./backend/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./backend/Caddyfile:/etc/caddy/Caddyfile:ro,z
+
+  garage:
+    image: dxflrs/garage:v1.1.0
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3902:3902"
+      - "3903:3903"
+    environment:
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+    volumes:
+      - garage_data:/var/lib/garage/data
+      - garage_meta:/var/lib/garage/meta
+      - ./garage.toml:/etc/garage.toml:ro,z
 
   tuwunel:
     image: jevolk/tuwunel:latest
@@ -86,4 +102,6 @@ services:
 
 volumes:
   postgres_data:
+  garage_data:
+  garage_meta:
   tuwunel_data:
