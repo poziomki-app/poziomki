@@ -8,6 +8,7 @@ mod catalog;
 mod events;
 mod matching;
 mod matrix;
+mod matrix_support;
 mod profiles;
 mod settings;
 mod state;
