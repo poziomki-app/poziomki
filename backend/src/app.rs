@@ -14,7 +14,15 @@ use migration::Migrator;
 use std::path::Path;
 
 #[allow(unused_imports)]
-use crate::{controllers, models::_entities::users, tasks, workers::downloader::DownloadWorker};
+use crate::{
+    controllers,
+    models::_entities::{
+        degrees, event_attendees, event_tags, events, profile_tags, profiles, sessions, tags,
+        uploads, user_settings, users,
+    },
+    tasks,
+    workers::downloader::DownloadWorker,
+};
 
 pub struct App;
 #[async_trait]
@@ -61,6 +69,17 @@ impl Hooks for App {
         // tasks-inject (do not remove)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
+        // Truncate in FK-safe order: children first, parents last
+        truncate_table(&ctx.db, event_attendees::Entity).await?;
+        truncate_table(&ctx.db, event_tags::Entity).await?;
+        truncate_table(&ctx.db, profile_tags::Entity).await?;
+        truncate_table(&ctx.db, events::Entity).await?;
+        truncate_table(&ctx.db, uploads::Entity).await?;
+        truncate_table(&ctx.db, user_settings::Entity).await?;
+        truncate_table(&ctx.db, sessions::Entity).await?;
+        truncate_table(&ctx.db, profiles::Entity).await?;
+        truncate_table(&ctx.db, degrees::Entity).await?;
+        truncate_table(&ctx.db, tags::Entity).await?;
         truncate_table(&ctx.db, users::Entity).await?;
         controllers::migration_api::reset_state();
         Ok(())

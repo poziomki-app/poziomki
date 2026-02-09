@@ -1,2 +1,12 @@
 pub mod _entities;
+pub mod degrees;
+pub mod event_attendees;
+pub mod event_tags;
+pub mod events;
+pub mod profile_tags;
+pub mod profiles;
+pub mod sessions;
+pub mod tags;
+pub mod uploads;
+pub mod user_settings;
 pub mod users;
