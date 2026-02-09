@@ -39,7 +39,7 @@ DerivedData/
 *~
 
 # Runtime data
-data/
+/data/
 
 # Environment
 .env
