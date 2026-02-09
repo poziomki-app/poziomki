@@ -64,7 +64,6 @@ import com.poziomki.app.util.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
 import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileEditScreen(
     onBack: () -> Unit,
@@ -334,124 +333,36 @@ fun ProfileEditScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
             // --- zainteresowania ---
-            val interestTags = state.allTags.filter { it.scope == "interest" }
-            val selectedInterests = state.selectedTags.filter { it.scope == "interest" }
-            val filteredInterests =
-                interestTags.filter { tag ->
-                    selectedInterests.none { it.id == tag.id } &&
-                        (state.interestQuery.isBlank() || tag.name.contains(state.interestQuery, ignoreCase = true))
-                }
-
-            Text(
-                text = "zainteresowania",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-
-            TagSearchBar(
+            TagSection(
+                label = "zainteresowania",
                 query = state.interestQuery,
                 onQueryChange = { viewModel.updateInterestQuery(it) },
-                placeholder = "szukaj zainteresowań...",
+                searchPlaceholder = "szukaj zainteresowań...",
+                allTags = state.allTags.filter { it.scope == "interest" },
+                selectedTags = state.selectedTags.filter { it.scope == "interest" },
+                onAddTag = {
+                    viewModel.addTag(it)
+                    viewModel.updateInterestQuery("")
+                },
+                onRemoveTag = { viewModel.removeTag(it) },
             )
-
-            if (state.interestQuery.isNotBlank() && filteredInterests.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                ) {
-                    filteredInterests.take(10).forEach { tag ->
-                        TagChip(
-                            tag = tag,
-                            selected = false,
-                            onClick = {
-                                viewModel.addTag(tag)
-                                viewModel.updateInterestQuery("")
-                            },
-                        )
-                    }
-                }
-            }
-
-            if (selectedInterests.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                ) {
-                    selectedInterests.forEach { tag ->
-                        TagChip(
-                            tag = tag,
-                            selected = true,
-                            onClick = { viewModel.removeTag(tag) },
-                        )
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
             // --- aktywności ---
-            val activityTags = state.allTags.filter { it.scope == "activity" }
-            val selectedActivities = state.selectedTags.filter { it.scope == "activity" }
-            val filteredActivities =
-                activityTags.filter { tag ->
-                    selectedActivities.none { it.id == tag.id } &&
-                        (state.activityQuery.isBlank() || tag.name.contains(state.activityQuery, ignoreCase = true))
-                }
-
-            Text(
-                text = "aktywności",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-
-            TagSearchBar(
+            TagSection(
+                label = "aktywności",
                 query = state.activityQuery,
                 onQueryChange = { viewModel.updateActivityQuery(it) },
-                placeholder = "szukaj aktywności...",
+                searchPlaceholder = "szukaj aktywności...",
+                allTags = state.allTags.filter { it.scope == "activity" },
+                selectedTags = state.selectedTags.filter { it.scope == "activity" },
+                onAddTag = {
+                    viewModel.addTag(it)
+                    viewModel.updateActivityQuery("")
+                },
+                onRemoveTag = { viewModel.removeTag(it) },
             )
-
-            if (state.activityQuery.isNotBlank() && filteredActivities.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                ) {
-                    filteredActivities.take(10).forEach { tag ->
-                        TagChip(
-                            tag = tag,
-                            selected = false,
-                            onClick = {
-                                viewModel.addTag(tag)
-                                viewModel.updateActivityQuery("")
-                            },
-                        )
-                    }
-                }
-            }
-
-            if (selectedActivities.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                ) {
-                    selectedActivities.forEach { tag ->
-                        TagChip(
-                            tag = tag,
-                            selected = true,
-                            onClick = { viewModel.removeTag(tag) },
-                        )
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
@@ -491,6 +402,73 @@ fun ProfileEditScreen(
             }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagSection(
+    label: String,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searchPlaceholder: String,
+    allTags: List<Tag>,
+    selectedTags: List<Tag>,
+    onAddTag: (Tag) -> Unit,
+    onRemoveTag: (Tag) -> Unit,
+) {
+    val nunito = NunitoFamily
+    val filtered =
+        allTags.filter { tag ->
+            selectedTags.none { it.id == tag.id } &&
+                (query.isBlank() || tag.name.contains(query, ignoreCase = true))
+        }
+
+    Text(
+        text = label,
+        fontFamily = nunito,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        color = Primary,
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+    TagSearchBar(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = searchPlaceholder,
+    )
+
+    if (query.isNotBlank() && filtered.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+        ) {
+            filtered.take(10).forEach { tag ->
+                TagChip(
+                    tag = tag,
+                    selected = false,
+                    onClick = { onAddTag(tag) },
+                )
+            }
+        }
+    }
+
+    if (selectedTags.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+        ) {
+            selectedTags.forEach { tag ->
+                TagChip(
+                    tag = tag,
+                    selected = true,
+                    onClick = { onRemoveTag(tag) },
+                )
+            }
         }
     }
 }
