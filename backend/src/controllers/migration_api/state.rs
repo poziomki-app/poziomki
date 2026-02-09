@@ -8,12 +8,15 @@ mod state_types;
 mod state_uploads;
 
 use axum::http::HeaderMap;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use loco_rs::prelude::*;
+use sea_orm::ActiveValue;
+use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use uuid::Uuid;
 
 use super::{error_response, ErrorSpec};
+use crate::models::_entities::{sessions, users};
 pub(super) use state_events::*;
 pub(super) use state_profile::*;
 pub(super) use state_types::*;
@@ -22,12 +25,33 @@ pub(super) use state_uploads::*;
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
 
-fn seed_tags() -> std::collections::HashMap<String, TagRecord> {
+// --- OTP in-memory state (sole remaining in-memory data) ---
+
+#[derive(Default)]
+pub(super) struct OtpState {
+    pub(super) otp_by_email: HashMap<String, String>,
+}
+
+static OTP_STATE: LazyLock<Mutex<OtpState>> = LazyLock::new(|| Mutex::new(OtpState::default()));
+
+pub(super) fn lock_otp_state() -> MutexGuard<'static, OtpState> {
+    OTP_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub(super) fn reset_otp_state() {
+    let mut state = lock_otp_state();
+    *state = OtpState::default();
+}
+
+// --- Legacy in-memory state (kept during migration, will be removed) ---
+
+fn seed_tags() -> HashMap<String, TagRecord> {
     let entries: &[(&str, TagScope, &str, &str)] = &[
-        // Zainteresowania
         ("Muzyka", TagScope::Interest, "hobby", "1"),
         ("Sport", TagScope::Interest, "hobby", "2"),
-        ("Podróże", TagScope::Interest, "hobby", "3"),
+        ("Podroze", TagScope::Interest, "hobby", "3"),
         ("Fotografia", TagScope::Interest, "hobby", "4"),
         ("Gry", TagScope::Interest, "hobby", "5"),
         ("Gotowanie", TagScope::Interest, "hobby", "6"),
@@ -35,26 +59,25 @@ fn seed_tags() -> std::collections::HashMap<String, TagRecord> {
         ("Sztuka", TagScope::Interest, "hobby", "8"),
         ("Film", TagScope::Interest, "hobby", "9"),
         ("Taniec", TagScope::Interest, "hobby", "10"),
-        ("Fitness", TagScope::Interest, "styl życia", "11"),
-        ("Joga", TagScope::Interest, "styl życia", "12"),
-        ("Góry", TagScope::Interest, "styl życia", "13"),
-        ("Rower", TagScope::Interest, "styl życia", "14"),
-        ("Bieganie", TagScope::Interest, "styl życia", "15"),
+        ("Fitness", TagScope::Interest, "styl zycia", "11"),
+        ("Joga", TagScope::Interest, "styl zycia", "12"),
+        ("Gory", TagScope::Interest, "styl zycia", "13"),
+        ("Rower", TagScope::Interest, "styl zycia", "14"),
+        ("Bieganie", TagScope::Interest, "styl zycia", "15"),
         ("Programowanie", TagScope::Interest, "tech", "16"),
         ("AI i ML", TagScope::Interest, "tech", "17"),
         ("Startupy", TagScope::Interest, "tech", "18"),
         ("Design", TagScope::Interest, "tech", "19"),
         ("Nauka", TagScope::Interest, "akademickie", "20"),
         ("Filozofia", TagScope::Interest, "akademickie", "21"),
-        ("Języki obce", TagScope::Interest, "akademickie", "22"),
-        ("Wolontariat", TagScope::Interest, "społeczne", "23"),
-        ("Gry planszowe", TagScope::Interest, "społeczne", "24"),
-        // Aktywności
+        ("Jezyki obce", TagScope::Interest, "akademickie", "22"),
+        ("Wolontariat", TagScope::Interest, "spoleczne", "23"),
+        ("Gry planszowe", TagScope::Interest, "spoleczne", "24"),
         ("Grupa naukowa", TagScope::Activity, "akademickie", "1"),
-        ("Kawa i rozmowa", TagScope::Activity, "społeczne", "2"),
+        ("Kawa i rozmowa", TagScope::Activity, "spoleczne", "2"),
         ("Partner treningowy", TagScope::Activity, "fitness", "3"),
-        ("Wspólny projekt", TagScope::Activity, "tech", "4"),
-        ("Wymiana językowa", TagScope::Activity, "akademickie", "5"),
+        ("Wspolny projekt", TagScope::Activity, "tech", "4"),
+        ("Wymiana jezykowa", TagScope::Activity, "akademickie", "5"),
     ];
 
     entries
@@ -79,11 +102,11 @@ fn seed_tags() -> std::collections::HashMap<String, TagRecord> {
 impl MigrationState {
     fn new() -> Self {
         Self {
-            users: std::collections::HashMap::new(),
-            users_by_email: std::collections::HashMap::new(),
-            sessions_by_token: std::collections::HashMap::new(),
-            profiles: std::collections::HashMap::new(),
-            profiles_by_user: std::collections::HashMap::new(),
+            users: HashMap::new(),
+            users_by_email: HashMap::new(),
+            sessions_by_token: HashMap::new(),
+            profiles: HashMap::new(),
+            profiles_by_user: HashMap::new(),
             tags: seed_tags(),
             degrees: vec![
                 DegreeRecord {
@@ -99,16 +122,17 @@ impl MigrationState {
                     name: "Psychology".to_string(),
                 },
             ],
-            events: std::collections::HashMap::new(),
-            event_attendees: std::collections::HashMap::new(),
-            uploads: std::collections::HashMap::new(),
-            otp_by_email: std::collections::HashMap::new(),
-            user_settings: std::collections::HashMap::new(),
+            events: HashMap::new(),
+            event_attendees: HashMap::new(),
+            uploads: HashMap::new(),
+            otp_by_email: HashMap::new(),
+            user_settings: HashMap::new(),
         }
     }
 }
 
-static STATE: LazyLock<Mutex<MigrationState>> = LazyLock::new(|| Mutex::new(MigrationState::new()));
+static STATE: LazyLock<Mutex<MigrationState>> =
+    LazyLock::new(|| Mutex::new(MigrationState::new()));
 
 pub(super) fn lock_state() -> MutexGuard<'static, MigrationState> {
     STATE
@@ -119,7 +143,114 @@ pub(super) fn lock_state() -> MutexGuard<'static, MigrationState> {
 pub(super) fn reset_state() {
     let mut state = lock_state();
     *state = MigrationState::new();
+    reset_otp_state();
 }
+
+// --- DB-backed auth helpers ---
+
+pub(super) fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    let header = headers.get("authorization")?.to_str().ok()?;
+    let token = header.strip_prefix("Bearer ")?;
+    Some(token.to_string())
+}
+
+pub(super) async fn require_auth_db(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+) -> std::result::Result<(sessions::Model, users::Model), Box<Response>> {
+    let token =
+        extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+
+    let session = sessions::Entity::find()
+        .filter(sessions::Column::Token.eq(&token))
+        .one(db)
+        .await
+        .map_err(|_| Box::new(unauthorized_response(headers)))?
+        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+
+    let now = Utc::now();
+    if session.expires_at.with_timezone(&Utc) <= now {
+        let _ = sessions::Entity::delete_by_id(session.id).exec(db).await;
+        return Err(Box::new(unauthorized_response(headers)));
+    }
+
+    // Refresh session if stale
+    let elapsed = now - session.updated_at.with_timezone(&Utc);
+    if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
+        let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
+        let mut active: sessions::ActiveModel = session.clone().into();
+        active.updated_at = ActiveValue::Set(now.into());
+        active.expires_at = ActiveValue::Set(new_expires.into());
+        let _ = active.update(db).await;
+    }
+
+    let user = users::Entity::find_by_id(session.user_id)
+        .one(db)
+        .await
+        .map_err(|_| Box::new(unauthorized_response(headers)))?
+        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+
+    Ok((session, user))
+}
+
+pub(super) async fn create_session_db(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    user_id: i32,
+) -> std::result::Result<sessions::Model, loco_rs::Error> {
+    let now = Utc::now();
+    let token = Uuid::new_v4().to_string();
+    let session = sessions::ActiveModel {
+        id: ActiveValue::Set(Uuid::new_v4()),
+        user_id: ActiveValue::Set(user_id),
+        token: ActiveValue::Set(token),
+        ip_address: ActiveValue::Set(
+            headers
+                .get("x-forwarded-for")
+                .and_then(|v| v.to_str().ok())
+                .map(ToOwned::to_owned),
+        ),
+        user_agent: ActiveValue::Set(
+            headers
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok())
+                .map(ToOwned::to_owned),
+        ),
+        expires_at: ActiveValue::Set((now + Duration::seconds(SESSION_DURATION_SECS)).into()),
+        created_at: ActiveValue::Set(now.into()),
+        updated_at: ActiveValue::Set(now.into()),
+    };
+    session
+        .insert(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))
+}
+
+// --- View helpers ---
+
+pub(super) fn session_model_to_view(session: &sessions::Model) -> SessionView {
+    SessionView {
+        id: session.id.to_string(),
+        user_id: session.user_id.to_string(),
+        token: session.token.clone(),
+        expires_at: session.expires_at.to_rfc3339(),
+        created_at: session.created_at.to_rfc3339(),
+        updated_at: session.updated_at.to_rfc3339(),
+        ip_address: session.ip_address.clone(),
+        user_agent: session.user_agent.clone(),
+    }
+}
+
+pub(super) fn user_model_to_view(user: &users::Model) -> UserView {
+    UserView {
+        id: user.pid.to_string(),
+        email: user.email.clone(),
+        name: user.name.clone(),
+        email_verified: user.email_verified_at.is_some(),
+    }
+}
+
+// --- Legacy in-memory helpers ---
 
 pub(super) fn normalize_email(email: &str) -> String {
     email.trim().to_lowercase()
@@ -142,39 +273,33 @@ pub(super) fn validate_signup_payload(payload: &SignUpBody) -> std::result::Resu
     let email = normalize_email(&payload.email);
     let mut error: Option<ErrorSpec> = None;
     if email.is_empty() {
-        error = Some(validation_error("Email is required"));
+        error = Some(validation_error_spec("Email is required"));
     } else if !is_valid_email(&email) {
-        error = Some(validation_error("Invalid email address"));
+        error = Some(validation_error_spec("Invalid email address"));
     } else if !(1..=100).contains(&payload.name.trim().chars().count()) {
-        error = Some(validation_error(
+        error = Some(validation_error_spec(
             "Name must be between 1 and 100 characters",
         ));
     } else if !(8..=128).contains(&payload.password.len()) {
-        error = Some(validation_error(
+        error = Some(validation_error_spec(
             "Password must be between 8 and 128 characters",
         ));
     }
     let domain = allowed_email_domain();
     if error.is_none() && !email.ends_with(&format!("@{domain}")) {
-        error = Some(validation_error(&format!(
+        error = Some(validation_error_spec(&format!(
             "Only @{domain} emails are allowed"
         )));
     }
     error.map_or(Ok(()), Err)
 }
 
-fn validation_error(message: &str) -> ErrorSpec {
+fn validation_error_spec(message: &str) -> ErrorSpec {
     ErrorSpec {
         error: message.to_string(),
         code: "VALIDATION_ERROR",
         details: None,
     }
-}
-
-pub(super) fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
-    let header = headers.get("authorization")?.to_str().ok()?;
-    let token = header.strip_prefix("Bearer ")?;
-    Some(token.to_string())
 }
 
 pub(super) fn session_to_view(session: &SessionRecord) -> SessionView {
@@ -202,7 +327,7 @@ pub(super) fn user_to_view(user: &UserRecord) -> UserView {
 pub(super) fn resolve_session(
     state: &mut MigrationState,
     token: &str,
-    now: DateTime<Utc>,
+    now: chrono::DateTime<Utc>,
 ) -> Option<SessionRecord> {
     let maybe_session = state.sessions_by_token.get(token)?.clone();
     if maybe_session.expires_at <= now {
