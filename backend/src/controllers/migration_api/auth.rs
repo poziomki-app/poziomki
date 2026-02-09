@@ -1,3 +1,8 @@
+#[path = "auth_account.rs"]
+mod auth_account;
+#[path = "auth_session.rs"]
+mod auth_session;
+
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use loco_rs::{app::AppContext, hash, prelude::*};
@@ -7,15 +12,18 @@ use super::{
     state::{
         create_session_db, extract_bearer_token, is_valid_email, lock_otp_state, normalize_email,
         require_auth_db, session_model_to_view, user_model_to_view, validate_signup_payload,
-        DataResponse, DeleteAccountBody, ResendOtpBody, SessionListItem, SessionResponse,
-        SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
+        DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse,
+        VerifyOtpBody,
     },
     ErrorSpec,
 };
 use crate::models::{
-    _entities::{profiles, sessions, users},
+    _entities::{sessions, users},
     users::{Model as UserModel, RegisterParams},
 };
+
+pub(super) use auth_account::{delete_account, export_data};
+pub(super) use auth_session::get_session;
 
 fn unauthorized_error(headers: &HeaderMap, message: &str) -> Response {
     error_response(
@@ -29,66 +37,15 @@ fn unauthorized_error(headers: &HeaderMap, message: &str) -> Response {
     )
 }
 
-fn empty_session_response() -> Response {
-    Json(SessionResponse {
-        session: None,
-        user: None,
-    })
-    .into_response()
-}
-
-pub(super) async fn get_session(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-) -> Result<Response> {
-    let token = extract_bearer_token(&headers);
-    let Some(token) = token else {
-        return Ok(empty_session_response());
-    };
-
-    let session = sessions::Entity::find()
-        .filter(sessions::Column::Token.eq(&token))
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let Some(session) = session else {
-        return Ok(empty_session_response());
-    };
-
-    let now = Utc::now();
-    if session.expires_at.with_timezone(&Utc) <= now {
-        let _ = sessions::Entity::delete_by_id(session.id)
-            .exec(&ctx.db)
-            .await;
-        return Ok(empty_session_response());
-    }
-
-    let user = users::Entity::find_by_id(session.user_id)
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let Some(user) = user else {
-        return Ok(empty_session_response());
-    };
-
-    Ok(Json(SessionResponse {
-        session: Some(session_model_to_view(&session)),
-        user: Some(user_model_to_view(&user)),
-    })
-    .into_response())
-}
-
-pub(super) async fn sign_up(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-    Json(payload): Json<SignUpBody>,
-) -> Result<Response> {
-    if let Err(spec) = validate_signup_payload(&payload) {
-        return Ok(error_response(
+async fn create_user_or_error(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    payload: &SignUpBody,
+) -> std::result::Result<users::Model, Response> {
+    if let Err(spec) = validate_signup_payload(payload) {
+        return Err(error_response(
             axum::http::StatusCode::BAD_REQUEST,
-            &headers,
+            headers,
             spec,
         ));
     }
@@ -96,32 +53,50 @@ pub(super) async fn sign_up(
     let email = normalize_email(&payload.email);
     let name = payload.name.trim().to_string();
 
-    let user = match UserModel::create_with_password(
-        &ctx.db,
+    UserModel::create_with_password(
+        db,
         &RegisterParams {
             email,
-            password: payload.password,
+            password: payload.password.clone(),
             name,
         },
     )
     .await
-    {
+    .map_err(|err| match err {
+        ModelError::EntityAlreadyExists => error_response(
+            axum::http::StatusCode::CONFLICT,
+            headers,
+            ErrorSpec {
+                error: "User already exists".to_string(),
+                code: "CONFLICT",
+                details: None,
+            },
+        ),
+        other => error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: other.to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        ),
+    })
+}
+
+pub(super) async fn sign_up(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<SignUpBody>,
+) -> Result<Response> {
+    let user = match create_user_or_error(&ctx.db, &headers, &payload).await {
         Ok(user) => user,
-        Err(ModelError::EntityAlreadyExists) => {
-            return Ok(error_response(
-                axum::http::StatusCode::CONFLICT,
-                &headers,
-                ErrorSpec {
-                    error: "User already exists".to_string(),
-                    code: "CONFLICT",
-                    details: None,
-                },
-            ));
-        }
-        Err(err) => return Err(loco_rs::Error::Any(err.into())),
+        Err(response) => return Ok(response),
     };
 
-    let session = create_session_db(&ctx.db, &headers, user.id).await?;
+    let session = create_session_db(&ctx.db, &headers, user.id)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
     let data = serde_json::json!({
         "user": user_model_to_view(&user),
@@ -129,6 +104,20 @@ pub(super) async fn sign_up(
         "session": session_model_to_view(&session),
     });
     Ok((axum::http::StatusCode::OK, Json(DataResponse { data })).into_response())
+}
+
+async fn find_authenticated_user(
+    db: &DatabaseConnection,
+    email: &str,
+    password: &str,
+) -> std::result::Result<Option<users::Model>, loco_rs::Error> {
+    let user = users::Entity::find()
+        .filter(users::Column::Email.eq(email))
+        .one(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    Ok(user.filter(|u| hash::verify_password(password, &u.password)))
 }
 
 pub(super) async fn sign_in(
@@ -150,15 +139,7 @@ pub(super) async fn sign_in(
         ));
     }
 
-    let user = users::Entity::find()
-        .filter(users::Column::Email.eq(&email))
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let user = user.filter(|u| hash::verify_password(&payload.password, &u.password));
-
-    let Some(user) = user else {
+    let Some(user) = find_authenticated_user(&ctx.db, &email, &payload.password).await? else {
         return Ok(unauthorized_error(&headers, "Authentication failed"));
     };
 
@@ -172,6 +153,17 @@ pub(super) async fn sign_in(
     Ok(Json(DataResponse { data }).into_response())
 }
 
+async fn find_user_by_email(
+    db: &DatabaseConnection,
+    email: &str,
+) -> std::result::Result<Option<users::Model>, loco_rs::Error> {
+    users::Entity::find()
+        .filter(users::Column::Email.eq(email))
+        .one(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))
+}
+
 pub(super) async fn verify_otp(
     State(ctx): State<AppContext>,
     headers: HeaderMap,
@@ -179,13 +171,7 @@ pub(super) async fn verify_otp(
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
 
-    let user = users::Entity::find()
-        .filter(users::Column::Email.eq(&email))
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let Some(user) = user else {
+    let Some(user) = find_user_by_email(&ctx.db, &email).await? else {
         return Ok(error_response(
             axum::http::StatusCode::NOT_FOUND,
             &headers,
@@ -216,7 +202,6 @@ pub(super) async fn verify_otp(
         ));
     }
 
-    // Mark email as verified
     if user.email_verified_at.is_none() {
         let mut active: users::ActiveModel = user.clone().into();
         active.email_verified_at =
@@ -240,12 +225,7 @@ pub(super) async fn resend_otp(
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
 
-    let exists = users::Entity::find()
-        .filter(users::Column::Email.eq(&email))
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?
-        .is_some();
+    let exists = find_user_by_email(&ctx.db, &email).await?.is_some();
 
     if exists {
         lock_otp_state()
@@ -299,87 +279,4 @@ pub(super) async fn sessions(
         .collect::<Vec<_>>();
 
     Ok(Json(DataResponse { data }).into_response())
-}
-
-pub(super) async fn delete_account(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-    Json(payload): Json<DeleteAccountBody>,
-) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
-
-    if payload.password.is_empty() || !hash::verify_password(&payload.password, &user.password) {
-        return Ok(unauthorized_error(&headers, "Invalid password"));
-    }
-
-    // Delete profile if exists
-    let _ = profiles::Entity::delete_many()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .exec(&ctx.db)
-        .await;
-
-    // Delete all sessions
-    let _ = sessions::Entity::delete_many()
-        .filter(sessions::Column::UserId.eq(user.id))
-        .exec(&ctx.db)
-        .await;
-
-    // Delete user
-    let _ = users::Entity::delete_by_id(user.id).exec(&ctx.db).await;
-
-    Ok(Json(SuccessResponse { success: true }).into_response())
-}
-
-pub(super) async fn export_data(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
-
-    let profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(&ctx.db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let profile_view: Option<serde_json::Value> = profile.map(|p| {
-        serde_json::json!({
-            "id": p.id.to_string(),
-            "userId": user.pid.to_string(),
-            "name": p.name,
-            "bio": p.bio,
-            "age": p.age,
-            "profilePicture": p.profile_picture,
-            "images": p.images,
-            "program": p.program,
-            "createdAt": p.created_at.to_rfc3339(),
-            "updatedAt": p.updated_at.to_rfc3339(),
-        })
-    });
-
-    let export = serde_json::json!({
-        "user": {
-            "id": user.pid.to_string(),
-            "email": user.email,
-            "name": user.name,
-            "emailVerified": user.email_verified_at.is_some(),
-            "createdAt": user.created_at.to_rfc3339(),
-        },
-        "profile": profile_view,
-        "tags": [],
-        "events": [],
-        "eventsAttended": [],
-        "conversations": [],
-        "messages": [],
-        "sessions": [],
-        "exportedAt": Utc::now().to_rfc3339(),
-    });
-
-    Ok(Json(DataResponse { data: export }).into_response())
 }
