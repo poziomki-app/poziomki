@@ -1,3 +1,6 @@
+#[path = "auth_export_queries.rs"]
+mod auth_export_queries;
+
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use loco_rs::{app::AppContext, hash, prelude::*};
@@ -71,6 +74,8 @@ pub(in crate::controllers::migration_api) async fn export_data(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
+    let profile_id = profile.as_ref().map(|p| p.id);
+
     let profile_view: Option<serde_json::Value> = profile.map(|p| {
         serde_json::json!({
             "id": p.id.to_string(),
@@ -86,6 +91,12 @@ pub(in crate::controllers::migration_api) async fn export_data(
         })
     });
 
+    let (tags, created_events, attended_events, user_uploads) =
+        load_profile_data(&ctx.db, profile_id).await?;
+
+    let user_sessions = auth_export_queries::load_user_sessions(&ctx.db, user.id).await?;
+    let settings = auth_export_queries::load_user_settings(&ctx.db, user.id).await?;
+
     let export = serde_json::json!({
         "user": {
             "id": user.pid.to_string(),
@@ -95,14 +106,40 @@ pub(in crate::controllers::migration_api) async fn export_data(
             "createdAt": user.created_at.to_rfc3339(),
         },
         "profile": profile_view,
-        "tags": [],
-        "events": [],
-        "eventsAttended": [],
+        "tags": tags,
+        "events": created_events,
+        "eventsAttended": attended_events,
+        "uploads": user_uploads,
+        "sessions": user_sessions,
+        "settings": settings,
         "conversations": [],
         "messages": [],
-        "sessions": [],
         "exportedAt": Utc::now().to_rfc3339(),
     });
 
     Ok(Json(DataResponse { data: export }).into_response())
+}
+
+async fn load_profile_data(
+    db: &DatabaseConnection,
+    profile_id: Option<uuid::Uuid>,
+) -> std::result::Result<
+    (
+        Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
+    ),
+    loco_rs::Error,
+> {
+    let Some(pid) = profile_id else {
+        return Ok((vec![], vec![], vec![], vec![]));
+    };
+
+    let tags = auth_export_queries::load_user_tags(db, pid).await?;
+    let created = auth_export_queries::load_created_events(db, pid).await?;
+    let attended = auth_export_queries::load_attended_events(db, pid).await?;
+    let uploads = auth_export_queries::load_user_uploads(db, pid).await?;
+
+    Ok((tags, created, attended, uploads))
 }
