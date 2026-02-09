@@ -137,22 +137,20 @@ pub(super) async fn auth_check(
     Ok(response.unwrap_or_else(|r| *r))
 }
 
-pub(super) fn file_get(
+pub(super) async fn file_get(
     State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(filename): Path<String>,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response>> + Send>> {
-    Box::pin(async move {
-        if let Err(message) = validate_filename(&filename) {
-            return Ok(bad_request(&headers, "INVALID_FILENAME", message));
-        }
+) -> Result<Response> {
+    if let Err(message) = validate_filename(&filename) {
+        return Ok(bad_request(&headers, "INVALID_FILENAME", message));
+    }
 
-        if is_production_mode() {
-            Ok(production_file_get(&ctx.db, headers, filename).await)
-        } else {
-            Ok(development_file_get(&ctx.db, filename, headers).await)
-        }
-    })
+    if is_production_mode() {
+        Ok(production_file_get(&ctx.db, headers, filename).await)
+    } else {
+        Ok(development_file_get(&ctx.db, filename, headers).await)
+    }
 }
 
 pub(super) async fn file_upload(
