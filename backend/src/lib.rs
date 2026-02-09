@@ -1,4 +1,5 @@
 pub mod app;
+mod app_support;
 pub mod controllers;
 pub mod data;
 pub mod initializers;
