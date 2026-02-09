@@ -1,0 +1,256 @@
+use sea_orm_migration::prelude::*;
+
+use super::{EventAttendees, EventTags, Events, Profiles, Tags, Uploads, UserSettings, Users};
+
+pub(super) async fn create_events_schema(m: &SchemaManager<'_>) -> Result<(), DbErr> {
+    m.create_table(
+        Table::create()
+            .table(Events::Table)
+            .if_not_exists()
+            .col(ColumnDef::new(Events::Id).uuid().not_null().primary_key())
+            .col(ColumnDef::new(Events::Title).string().not_null())
+            .col(ColumnDef::new(Events::Description).text().null())
+            .col(ColumnDef::new(Events::CoverImage).string().null())
+            .col(ColumnDef::new(Events::Location).string().null())
+            .col(
+                ColumnDef::new(Events::StartsAt)
+                    .timestamp_with_time_zone()
+                    .not_null(),
+            )
+            .col(
+                ColumnDef::new(Events::EndsAt)
+                    .timestamp_with_time_zone()
+                    .null(),
+            )
+            .col(ColumnDef::new(Events::CreatorId).uuid().not_null())
+            .col(ColumnDef::new(Events::ConversationId).string().null())
+            .col(
+                ColumnDef::new(Events::CreatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .col(
+                ColumnDef::new(Events::UpdatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_events_creator_id")
+            .from(Events::Table, Events::CreatorId)
+            .to(Profiles::Table, Profiles::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await
+}
+
+pub(super) async fn create_event_tags_schema(m: &SchemaManager<'_>) -> Result<(), DbErr> {
+    m.create_table(
+        Table::create()
+            .table(EventTags::Table)
+            .if_not_exists()
+            .col(ColumnDef::new(EventTags::EventId).uuid().not_null())
+            .col(ColumnDef::new(EventTags::TagId).uuid().not_null())
+            .primary_key(
+                Index::create()
+                    .col(EventTags::EventId)
+                    .col(EventTags::TagId),
+            )
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_event_tags_event_id")
+            .from(EventTags::Table, EventTags::EventId)
+            .to(Events::Table, Events::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_event_tags_tag_id")
+            .from(EventTags::Table, EventTags::TagId)
+            .to(Tags::Table, Tags::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await
+}
+
+pub(super) async fn create_event_attendees_schema(m: &SchemaManager<'_>) -> Result<(), DbErr> {
+    m.create_table(
+        Table::create()
+            .table(EventAttendees::Table)
+            .if_not_exists()
+            .col(ColumnDef::new(EventAttendees::EventId).uuid().not_null())
+            .col(ColumnDef::new(EventAttendees::ProfileId).uuid().not_null())
+            .col(
+                ColumnDef::new(EventAttendees::Status)
+                    .string()
+                    .not_null()
+                    .default("going"),
+            )
+            .primary_key(
+                Index::create()
+                    .col(EventAttendees::EventId)
+                    .col(EventAttendees::ProfileId),
+            )
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_event_attendees_event_id")
+            .from(EventAttendees::Table, EventAttendees::EventId)
+            .to(Events::Table, Events::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_event_attendees_profile_id")
+            .from(EventAttendees::Table, EventAttendees::ProfileId)
+            .to(Profiles::Table, Profiles::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await
+}
+
+pub(super) async fn create_uploads_table(m: &SchemaManager<'_>) -> Result<(), DbErr> {
+    m.create_table(
+        Table::create()
+            .table(Uploads::Table)
+            .if_not_exists()
+            .col(ColumnDef::new(Uploads::Id).uuid().not_null().primary_key())
+            .col(
+                ColumnDef::new(Uploads::Filename)
+                    .string()
+                    .not_null()
+                    .unique_key(),
+            )
+            .col(ColumnDef::new(Uploads::OwnerId).uuid().null())
+            .col(ColumnDef::new(Uploads::Context).string().not_null())
+            .col(ColumnDef::new(Uploads::ContextId).string().null())
+            .col(ColumnDef::new(Uploads::MimeType).string().not_null())
+            .col(
+                ColumnDef::new(Uploads::Deleted)
+                    .boolean()
+                    .not_null()
+                    .default(false),
+            )
+            .col(
+                ColumnDef::new(Uploads::CreatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .col(
+                ColumnDef::new(Uploads::UpdatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .to_owned(),
+    )
+    .await
+}
+
+pub(super) async fn create_user_settings_schema(m: &SchemaManager<'_>) -> Result<(), DbErr> {
+    m.create_table(
+        Table::create()
+            .table(UserSettings::Table)
+            .if_not_exists()
+            .col(
+                ColumnDef::new(UserSettings::Id)
+                    .uuid()
+                    .not_null()
+                    .primary_key(),
+            )
+            .col(ColumnDef::new(UserSettings::UserId).integer().not_null())
+            .col(
+                ColumnDef::new(UserSettings::Theme)
+                    .string()
+                    .not_null()
+                    .default("system"),
+            )
+            .col(
+                ColumnDef::new(UserSettings::Language)
+                    .string()
+                    .not_null()
+                    .default("system"),
+            )
+            .col(
+                ColumnDef::new(UserSettings::NotificationsEnabled)
+                    .boolean()
+                    .not_null()
+                    .default(true),
+            )
+            .col(
+                ColumnDef::new(UserSettings::PrivacyShowAge)
+                    .boolean()
+                    .not_null()
+                    .default(true),
+            )
+            .col(
+                ColumnDef::new(UserSettings::PrivacyShowProgram)
+                    .boolean()
+                    .not_null()
+                    .default(true),
+            )
+            .col(
+                ColumnDef::new(UserSettings::PrivacyDiscoverable)
+                    .boolean()
+                    .not_null()
+                    .default(true),
+            )
+            .col(
+                ColumnDef::new(UserSettings::CreatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .col(
+                ColumnDef::new(UserSettings::UpdatedAt)
+                    .timestamp_with_time_zone()
+                    .not_null()
+                    .default(Expr::current_timestamp()),
+            )
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_foreign_key(
+        ForeignKey::create()
+            .name("fk_user_settings_user_id")
+            .from(UserSettings::Table, UserSettings::UserId)
+            .to(Users::Table, Users::Id)
+            .on_delete(ForeignKeyAction::Cascade)
+            .to_owned(),
+    )
+    .await?;
+
+    m.create_index(
+        Index::create()
+            .name("idx_user_settings_user_id_unique")
+            .table(UserSettings::Table)
+            .col(UserSettings::UserId)
+            .unique()
+            .to_owned(),
+    )
+    .await
+}
