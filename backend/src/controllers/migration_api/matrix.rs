@@ -1,15 +1,11 @@
-use axum::{http::HeaderMap, response::IntoResponse, Json};
+use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use loco_rs::prelude::*;
+use loco_rs::{app::AppContext, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
 
-use super::{
-    error_response,
-    state::{lock_state, require_auth},
-    ErrorSpec,
-};
+use super::{error_response, state::require_auth_db, ErrorSpec};
 
 const DEFAULT_DEVICE_NAME: &str = "Poziomki Mobile";
 const DEFAULT_PASSWORD_PEPPER: &str = "poziomki-dev-matrix-pepper";
@@ -75,16 +71,16 @@ impl MatrixRequestError {
 }
 
 pub(super) async fn create_session(
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<MatrixSessionRequest>,
 ) -> Result<Response> {
-    let user_id = {
-        let mut state = lock_state();
-        let (_session, user) = match require_auth(&headers, &mut state) {
+    let user_pid = {
+        let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
             Ok(auth) => auth,
             Err(response) => return Ok(*response),
         };
-        user.id
+        user.pid.to_string()
     };
 
     let Some(homeserver) = matrix_homeserver() else {
@@ -98,8 +94,8 @@ pub(super) async fn create_session(
     };
 
     let device_name = normalize_device_name(payload.device_name.as_deref());
-    let matrix_localpart = matrix_localpart_from_user_id(&user_id);
-    let matrix_password = matrix_password_from_user_id(&user_id);
+    let matrix_localpart = matrix_localpart_from_user_id(&user_pid);
+    let matrix_password = matrix_password_from_user_id(&user_pid);
 
     let http_client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(10))

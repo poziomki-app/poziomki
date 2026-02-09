@@ -1,7 +1,3 @@
-#[path = "state_events.rs"]
-mod state_events;
-#[path = "state_profile.rs"]
-mod state_profile;
 #[path = "state_types.rs"]
 mod state_types;
 #[path = "state_uploads.rs"]
@@ -17,8 +13,6 @@ use uuid::Uuid;
 
 use super::{error_response, ErrorSpec};
 use crate::models::_entities::{sessions, users};
-pub(super) use state_events::*;
-pub(super) use state_profile::*;
 pub(super) use state_types::*;
 pub(super) use state_uploads::*;
 
@@ -45,104 +39,7 @@ pub(super) fn reset_otp_state() {
     *state = OtpState::default();
 }
 
-// --- Legacy in-memory state (kept during migration, will be removed) ---
-
-fn seed_tags() -> HashMap<String, TagRecord> {
-    let entries: &[(&str, TagScope, &str, &str)] = &[
-        ("Muzyka", TagScope::Interest, "hobby", "1"),
-        ("Sport", TagScope::Interest, "hobby", "2"),
-        ("Podroze", TagScope::Interest, "hobby", "3"),
-        ("Fotografia", TagScope::Interest, "hobby", "4"),
-        ("Gry", TagScope::Interest, "hobby", "5"),
-        ("Gotowanie", TagScope::Interest, "hobby", "6"),
-        ("Czytanie", TagScope::Interest, "hobby", "7"),
-        ("Sztuka", TagScope::Interest, "hobby", "8"),
-        ("Film", TagScope::Interest, "hobby", "9"),
-        ("Taniec", TagScope::Interest, "hobby", "10"),
-        ("Fitness", TagScope::Interest, "styl zycia", "11"),
-        ("Joga", TagScope::Interest, "styl zycia", "12"),
-        ("Gory", TagScope::Interest, "styl zycia", "13"),
-        ("Rower", TagScope::Interest, "styl zycia", "14"),
-        ("Bieganie", TagScope::Interest, "styl zycia", "15"),
-        ("Programowanie", TagScope::Interest, "tech", "16"),
-        ("AI i ML", TagScope::Interest, "tech", "17"),
-        ("Startupy", TagScope::Interest, "tech", "18"),
-        ("Design", TagScope::Interest, "tech", "19"),
-        ("Nauka", TagScope::Interest, "akademickie", "20"),
-        ("Filozofia", TagScope::Interest, "akademickie", "21"),
-        ("Jezyki obce", TagScope::Interest, "akademickie", "22"),
-        ("Wolontariat", TagScope::Interest, "spoleczne", "23"),
-        ("Gry planszowe", TagScope::Interest, "spoleczne", "24"),
-        ("Grupa naukowa", TagScope::Activity, "akademickie", "1"),
-        ("Kawa i rozmowa", TagScope::Activity, "spoleczne", "2"),
-        ("Partner treningowy", TagScope::Activity, "fitness", "3"),
-        ("Wspolny projekt", TagScope::Activity, "tech", "4"),
-        ("Wymiana jezykowa", TagScope::Activity, "akademickie", "5"),
-    ];
-
-    entries
-        .iter()
-        .map(|(name, scope, category, order)| {
-            let id = Uuid::new_v4().to_string();
-            (
-                id.clone(),
-                TagRecord {
-                    id,
-                    name: (*name).to_string(),
-                    scope: *scope,
-                    category: Some((*category).to_string()),
-                    emoji: None,
-                    onboarding_order: Some((*order).to_string()),
-                },
-            )
-        })
-        .collect()
-}
-
-impl MigrationState {
-    fn new() -> Self {
-        Self {
-            users: HashMap::new(),
-            users_by_email: HashMap::new(),
-            sessions_by_token: HashMap::new(),
-            profiles: HashMap::new(),
-            profiles_by_user: HashMap::new(),
-            tags: seed_tags(),
-            degrees: vec![
-                DegreeRecord {
-                    id: Uuid::new_v4().to_string(),
-                    name: "Computer Science".to_string(),
-                },
-                DegreeRecord {
-                    id: Uuid::new_v4().to_string(),
-                    name: "Data Science".to_string(),
-                },
-                DegreeRecord {
-                    id: Uuid::new_v4().to_string(),
-                    name: "Psychology".to_string(),
-                },
-            ],
-            events: HashMap::new(),
-            event_attendees: HashMap::new(),
-            uploads: HashMap::new(),
-            otp_by_email: HashMap::new(),
-            user_settings: HashMap::new(),
-        }
-    }
-}
-
-static STATE: LazyLock<Mutex<MigrationState>> =
-    LazyLock::new(|| Mutex::new(MigrationState::new()));
-
-pub(super) fn lock_state() -> MutexGuard<'static, MigrationState> {
-    STATE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
 pub(super) fn reset_state() {
-    let mut state = lock_state();
-    *state = MigrationState::new();
     reset_otp_state();
 }
 
@@ -250,7 +147,7 @@ pub(super) fn user_model_to_view(user: &users::Model) -> UserView {
     }
 }
 
-// --- Legacy in-memory helpers ---
+// --- Auth validation helpers ---
 
 pub(super) fn normalize_email(email: &str) -> String {
     email.trim().to_lowercase()
@@ -302,109 +199,23 @@ fn validation_error_spec(message: &str) -> ErrorSpec {
     }
 }
 
-pub(super) fn session_to_view(session: &SessionRecord) -> SessionView {
-    SessionView {
-        id: session.id.clone(),
-        user_id: session.user_id.clone(),
-        token: session.token.clone(),
-        expires_at: session.expires_at.to_rfc3339(),
-        created_at: session.created_at.to_rfc3339(),
-        updated_at: session.updated_at.to_rfc3339(),
-        ip_address: session.ip_address.clone(),
-        user_agent: session.user_agent.clone(),
+pub(super) fn validate_profile_name(name: &str) -> std::result::Result<(), &'static str> {
+    if name.trim().is_empty() {
+        Err("Name is required")
+    } else if name.chars().count() > 100 {
+        Err("Name must be at most 100 characters")
+    } else if name.contains("http://") || name.contains("https://") || name.contains("www.") {
+        Err("Imie nie moze zawierac linkow ani adresow email")
+    } else {
+        Ok(())
     }
 }
 
-pub(super) fn user_to_view(user: &UserRecord) -> UserView {
-    UserView {
-        id: user.id.clone(),
-        email: user.email.clone(),
-        name: user.name.clone(),
-        email_verified: user.email_verified,
+pub(super) fn validate_profile_age(age: u8) -> std::result::Result<(), &'static str> {
+    if !(15..=67).contains(&age) {
+        return Err("Age must be between 15 and 67");
     }
-}
-
-pub(super) fn resolve_session(
-    state: &mut MigrationState,
-    token: &str,
-    now: chrono::DateTime<Utc>,
-) -> Option<SessionRecord> {
-    let maybe_session = state.sessions_by_token.get(token)?.clone();
-    if maybe_session.expires_at <= now {
-        state.sessions_by_token.remove(token);
-        return None;
-    }
-
-    let mut session = maybe_session;
-    let elapsed = now - session.updated_at;
-    if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
-        session.updated_at = now;
-        session.expires_at = now + Duration::seconds(SESSION_DURATION_SECS);
-        state
-            .sessions_by_token
-            .insert(token.to_string(), session.clone());
-    }
-    Some(session)
-}
-
-pub(super) fn make_session(headers: &HeaderMap, user_id: &str) -> SessionRecord {
-    let now = Utc::now();
-    let token = Uuid::new_v4().to_string();
-    SessionRecord {
-        id: Uuid::new_v4().to_string(),
-        user_id: user_id.to_string(),
-        token,
-        created_at: now,
-        updated_at: now,
-        expires_at: now + Duration::seconds(SESSION_DURATION_SECS),
-        ip_address: headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .map(ToOwned::to_owned),
-        user_agent: headers
-            .get("user-agent")
-            .and_then(|v| v.to_str().ok())
-            .map(ToOwned::to_owned),
-    }
-}
-
-pub(super) fn require_auth(
-    headers: &HeaderMap,
-    state: &mut MigrationState,
-) -> std::result::Result<(SessionRecord, UserRecord), Box<Response>> {
-    extract_bearer_token(headers)
-        .and_then(|token| resolve_session(state, &token, Utc::now()))
-        .and_then(|session| {
-            state
-                .users
-                .get(&session.user_id)
-                .cloned()
-                .map(|user| (session, user))
-        })
-        .ok_or_else(|| Box::new(unauthorized_response(headers)))
-}
-
-pub(super) fn require_profile(
-    headers: &HeaderMap,
-    state: &MigrationState,
-    user_id: &str,
-) -> std::result::Result<ProfileRecord, Box<Response>> {
-    state
-        .profiles_by_user
-        .get(user_id)
-        .and_then(|profile_id| state.profiles.get(profile_id))
-        .cloned()
-        .ok_or_else(|| {
-            Box::new(error_response(
-                axum::http::StatusCode::NOT_FOUND,
-                headers,
-                ErrorSpec {
-                    error: "Profile not found. Create a profile first.".to_string(),
-                    code: "NOT_FOUND",
-                    details: None,
-                },
-            ))
-        })
+    Ok(())
 }
 
 fn unauthorized_response(headers: &HeaderMap) -> Response {

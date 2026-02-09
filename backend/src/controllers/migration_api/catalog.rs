@@ -18,7 +18,7 @@ use super::{
 };
 use crate::models::_entities::{degrees, tags};
 
-fn scope_to_str(scope: TagScope) -> &'static str {
+const fn scope_to_str(scope: TagScope) -> &'static str {
     match scope {
         TagScope::Interest => "interest",
         TagScope::Activity => "activity",
@@ -72,7 +72,10 @@ pub(super) async fn tags_search(
         .await
         .map_err(|e: sea_orm::DbErr| loco_rs::Error::Any(e.into()))?;
 
-    let data = all_tags.iter().map(tag_model_to_response).collect::<Vec<_>>();
+    let data = all_tags
+        .iter()
+        .map(tag_model_to_response)
+        .collect::<Vec<_>>();
 
     Ok(Json(DataResponse { data }).into_response())
 }

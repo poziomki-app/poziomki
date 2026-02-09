@@ -1,271 +1,135 @@
+#[path = "events_mutations.rs"]
+mod events_mutations;
 #[path = "events_support.rs"]
 mod events_support;
+#[path = "events_tags.rs"]
+mod events_tags;
+#[path = "events_update.rs"]
+mod events_update;
 #[path = "events_view.rs"]
 mod events_view;
 
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::HeaderMap,
     response::IntoResponse,
     Json,
 };
 use chrono::Utc;
-use loco_rs::prelude::*;
-use std::cmp::Reverse;
+use loco_rs::{app::AppContext, prelude::*};
+use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
 use uuid::Uuid;
 
-use super::state::{
-    bounded_limit, lock_state, resolve_event_tag_ids, AttendEventBody, AttendeeStatus,
-    CreateEventBody, DataResponse, EventRecord, EventsQuery, SuccessResponse, UpdateEventBody,
+use super::state::{DataResponse, EventsQuery};
+use crate::models::_entities::events;
+use events_support::{not_found_event, require_auth_profile};
+use events_view::{attendee_info, build_event_response};
+
+pub(super) use events_mutations::{
+    event_attend, event_create, event_delete, event_leave, event_update,
 };
-use events_support::{
-    apply_event_update, auth_profile, build_update_input, ensure_event_exists_for_update,
-    ensure_update_permission, forbidden, internal_error, not_found_event, parse_create_dates,
-    HandlerError,
-};
-use events_view::{attendee_info, created_event_response, event_response, sorted_event_ids};
 
 pub(super) async fn events_list(
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Query(query): Query<EventsQuery>,
 ) -> Result<Response> {
-    let mut state = lock_state();
-    let profile = match auth_profile(&headers, &mut state) {
-        Ok(profile) => profile,
+    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let limit = bounded_limit(query.limit);
-    let data = sorted_event_ids(&state, false)
-        .into_iter()
-        .take(limit)
-        .filter_map(|id| state.events.get(&id))
-        .map(|event| event_response(&state, event, &profile.id))
-        .collect::<Vec<_>>();
-    drop(state);
+    let limit = u64::from(query.limit.unwrap_or(20).clamp(1, 100));
+    let now = Utc::now();
+
+    let all_events = events::Entity::find()
+        .filter(events::Column::StartsAt.gte(now))
+        .order_by_asc(events::Column::StartsAt)
+        .limit(limit)
+        .all(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let mut data = Vec::new();
+    for event in &all_events {
+        data.push(build_event_response(&ctx.db, event, &profile.id).await?);
+    }
 
     Ok(Json(DataResponse { data }).into_response())
 }
 
-pub(super) async fn events_mine(headers: HeaderMap) -> Result<Response> {
-    let mut state = lock_state();
-    let profile = match auth_profile(&headers, &mut state) {
-        Ok(profile) => profile,
+pub(super) async fn events_mine(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let mut events = state
-        .events
-        .values()
-        .filter(|event| event.creator_id == profile.id)
-        .collect::<Vec<_>>();
-    events.sort_by_key(|event| Reverse(event.starts_at));
+    let my_events = events::Entity::find()
+        .filter(events::Column::CreatorId.eq(profile.id))
+        .order_by_desc(events::Column::StartsAt)
+        .all(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    let data = events
-        .into_iter()
-        .map(|event| event_response(&state, event, &profile.id))
-        .collect::<Vec<_>>();
-    drop(state);
+    let mut data = Vec::new();
+    for event in &my_events {
+        data.push(build_event_response(&ctx.db, event, &profile.id).await?);
+    }
 
     Ok(Json(DataResponse { data }).into_response())
 }
 
-pub(super) async fn event_get(headers: HeaderMap, Path(id): Path<String>) -> Result<Response> {
-    let mut state = lock_state();
-    let profile = match auth_profile(&headers, &mut state) {
-        Ok(profile) => profile,
+pub(super) async fn event_get(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let Some(event) = state.events.get(&id) else {
+    let event_uuid = Uuid::parse_str(&id)
+        .map_err(|_| loco_rs::Error::Message("Invalid event ID".to_string()))?;
+
+    let Some(event) = events::Entity::find_by_id(event_uuid)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?
+    else {
         return Ok(not_found_event(&headers, &id));
     };
-    let data = event_response(&state, event, &profile.id);
-    drop(state);
 
+    let data = build_event_response(&ctx.db, &event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 
 pub(super) async fn event_attendees(
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let mut state = lock_state();
-    let _profile = match auth_profile(&headers, &mut state) {
-        Ok(profile) => profile,
+    let (_profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    if !state.events.contains_key(&id) {
+    let event_uuid = Uuid::parse_str(&id)
+        .map_err(|_| loco_rs::Error::Message("Invalid event ID".to_string()))?;
+
+    let exists = events::Entity::find_by_id(event_uuid)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?
+        .is_some();
+
+    if !exists {
         return Ok(not_found_event(&headers, &id));
     }
 
-    let data = attendee_info(&state, &id);
-    drop(state);
-
+    let data = attendee_info(&ctx.db, event_uuid).await?;
     Ok(Json(DataResponse { data }).into_response())
-}
-
-pub(super) async fn event_create(
-    headers: HeaderMap,
-    Json(payload): Json<CreateEventBody>,
-) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let profile = auth_profile(&headers, &mut state)?;
-        let (title, starts_at, ends_at) = parse_create_dates(&headers, &payload)?;
-
-        let now = Utc::now();
-        let event = EventRecord {
-            id: Uuid::new_v4().to_string(),
-            title,
-            description: payload.description,
-            cover_image: payload.cover_image,
-            location: payload.location,
-            starts_at,
-            ends_at,
-            creator_id: profile.id.clone(),
-            conversation_id: None,
-            tag_ids: resolve_event_tag_ids(&mut state, payload.tags, payload.tag_ids),
-            created_at: now,
-            updated_at: now,
-        };
-
-        let event_id = event.id.clone();
-        state.events.insert(event_id.clone(), event);
-        state.event_attendees.insert(
-            (event_id.clone(), profile.id.clone()),
-            AttendeeStatus::Going,
-        );
-
-        let saved_event = state
-            .events
-            .get(&event_id)
-            .ok_or_else(|| Box::new(internal_error(&headers, "Failed to persist created event")))?;
-        let data = event_response(&state, saved_event, &profile.id);
-        Ok(created_event_response(data))
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-
-    Ok(response)
-}
-
-pub(super) async fn event_update(
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Json(payload): Json<UpdateEventBody>,
-) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let profile = auth_profile(&headers, &mut state)?;
-        let existing = ensure_event_exists_for_update(&headers, &state, &id)?;
-        ensure_update_permission(&headers, &existing, &profile.id)?;
-
-        let input = build_update_input(&headers, &existing, &payload)?;
-        let updated = apply_event_update(&mut state, existing, payload, input);
-
-        state.events.insert(id.clone(), updated);
-        let event = state
-            .events
-            .get(&id)
-            .ok_or_else(|| Box::new(internal_error(&headers, "Failed to persist event update")))?;
-        let data = event_response(&state, event, &profile.id);
-        Ok(Json(DataResponse { data }).into_response())
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-
-    Ok(response)
-}
-
-pub(super) async fn event_delete(headers: HeaderMap, Path(id): Path<String>) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let profile = auth_profile(&headers, &mut state)?;
-        let event = state
-            .events
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| Box::new(not_found_event(&headers, &id)))?;
-
-        if event.creator_id != profile.id {
-            return Ok(forbidden(
-                &headers,
-                "Only the creator can delete this event",
-            ));
-        }
-
-        state.events.remove(&id);
-        state
-            .event_attendees
-            .retain(|(event_id, _), _| event_id != &id);
-
-        Ok(Json(SuccessResponse { success: true }).into_response())
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-
-    Ok(response)
-}
-
-pub(super) async fn event_attend(
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Json(payload): Json<AttendEventBody>,
-) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let profile = auth_profile(&headers, &mut state)?;
-
-        if !state.events.contains_key(&id) {
-            return Ok(not_found_event(&headers, &id));
-        }
-
-        state.event_attendees.insert(
-            (id.clone(), profile.id.clone()),
-            payload.status.unwrap_or(AttendeeStatus::Going),
-        );
-
-        let event = state
-            .events
-            .get(&id)
-            .ok_or_else(|| Box::new(internal_error(&headers, "Failed to persist attendance")))?;
-        let data = event_response(&state, event, &profile.id);
-        Ok(Json(DataResponse { data }).into_response())
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-
-    Ok(response)
-}
-
-pub(super) async fn event_leave(headers: HeaderMap, Path(id): Path<String>) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let profile = auth_profile(&headers, &mut state)?;
-
-        let event = state
-            .events
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| Box::new(not_found_event(&headers, &id)))?;
-        if event.creator_id == profile.id {
-            return Ok(forbidden(&headers, "Event creator cannot leave the event"));
-        }
-
-        state
-            .event_attendees
-            .remove(&(id.clone(), profile.id.clone()));
-
-        let saved_event = state.events.get(&id).ok_or_else(|| {
-            Box::new(internal_error(&headers, "Failed to load event after leave"))
-        })?;
-        let data = event_response(&state, saved_event, &profile.id);
-        Ok(Json(DataResponse { data }).into_response())
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-
-    Ok(response)
 }

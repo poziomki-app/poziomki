@@ -137,12 +137,7 @@ impl MigrationTrait for Migration {
             Table::create()
                 .table(Uploads::Table)
                 .if_not_exists()
-                .col(
-                    ColumnDef::new(Uploads::Id)
-                        .uuid()
-                        .not_null()
-                        .primary_key(),
-                )
+                .col(ColumnDef::new(Uploads::Id).uuid().not_null().primary_key())
                 .col(
                     ColumnDef::new(Uploads::Filename)
                         .string()
@@ -186,11 +181,7 @@ impl MigrationTrait for Migration {
                         .not_null()
                         .primary_key(),
                 )
-                .col(
-                    ColumnDef::new(UserSettings::UserId)
-                        .integer()
-                        .not_null(),
-                )
+                .col(ColumnDef::new(UserSettings::UserId).integer().not_null())
                 .col(
                     ColumnDef::new(UserSettings::Theme)
                         .string()
@@ -271,12 +262,8 @@ impl MigrationTrait for Migration {
             .await?;
         m.drop_table(Table::drop().table(Uploads::Table).to_owned())
             .await?;
-        m.drop_table(
-            Table::drop()
-                .table(EventAttendees::Table)
-                .to_owned(),
-        )
-        .await?;
+        m.drop_table(Table::drop().table(EventAttendees::Table).to_owned())
+            .await?;
         m.drop_table(Table::drop().table(EventTags::Table).to_owned())
             .await?;
         m.drop_table(Table::drop().table(Events::Table).to_owned())

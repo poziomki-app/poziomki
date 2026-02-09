@@ -1,20 +1,34 @@
-use axum::{extract::Path, http::HeaderMap, response::IntoResponse, Json};
-use chrono::Utc;
-use loco_rs::prelude::*;
+#[path = "profiles_mutations.rs"]
+mod profiles_mutations;
+
+use axum::{
+    extract::{Path, State},
+    http::HeaderMap,
+    response::IntoResponse,
+    Json,
+};
+use loco_rs::{app::AppContext, prelude::*};
+use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
 use super::{
     error_response,
     state::{
-        lock_state, normalized_tag_ids, require_auth, to_full_profile_response,
-        to_profile_response, validate_profile_age, validate_profile_name, CreateProfileBody,
-        DataResponse, MigrationState, ProfileRecord, SuccessResponse, UpdateProfileBody,
-        UserRecord,
+        require_auth_db, DataResponse, FullProfileResponse, ProfileResponse, TagResponse, TagScope,
     },
     ErrorSpec,
 };
+use crate::models::_entities::{profile_tags, profiles, tags};
 
-type HandlerError = Box<Response>;
+pub(super) use profiles_mutations::{profile_create, profile_delete, profile_update};
+
+fn scope_from_str(s: &str) -> TagScope {
+    match s {
+        "activity" => TagScope::Activity,
+        "event" => TagScope::Event,
+        _ => TagScope::Interest,
+    }
+}
 
 fn not_found_profile(headers: &HeaderMap, id: &str) -> Response {
     error_response(
@@ -40,274 +54,198 @@ fn validation_error(headers: &HeaderMap, message: &str) -> Response {
     )
 }
 
-fn forbidden_error(headers: &HeaderMap) -> Response {
-    error_response(
-        axum::http::StatusCode::FORBIDDEN,
-        headers,
-        ErrorSpec {
-            error: "You can only access your own profile".to_string(),
-            code: "FORBIDDEN",
-            details: None,
-        },
-    )
-}
-
-fn apply_name_update(
-    headers: &HeaderMap,
-    profile: &mut ProfileRecord,
-    name: Option<String>,
-) -> std::result::Result<(), HandlerError> {
-    if let Some(next_name) = name {
-        if let Err(msg) = validate_profile_name(&next_name) {
-            return Err(Box::new(validation_error(headers, msg)));
-        }
-        profile.name = next_name.trim().to_string();
-    }
-    Ok(())
-}
-
-fn apply_age_update(
-    headers: &HeaderMap,
-    profile: &mut ProfileRecord,
-    age: Option<u8>,
-) -> std::result::Result<(), HandlerError> {
-    if let Some(next_age) = age {
-        if let Err(msg) = validate_profile_age(next_age) {
-            return Err(Box::new(validation_error(headers, msg)));
-        }
-        profile.age = next_age;
-    }
-    Ok(())
-}
-
-fn validate_create_payload(headers: &HeaderMap, payload: &CreateProfileBody) -> Option<Response> {
-    if let Err(msg) = validate_profile_name(&payload.name) {
-        Some(validation_error(headers, msg))
-    } else if let Err(msg) = validate_profile_age(payload.age) {
-        Some(validation_error(headers, msg))
-    } else {
-        None
+fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> ProfileResponse {
+    ProfileResponse {
+        id: profile.id.to_string(),
+        user_id: user_pid.to_string(),
+        name: profile.name.clone(),
+        bio: profile.bio.clone(),
+        age: u8::try_from(profile.age).unwrap_or(0),
+        profile_picture: profile.profile_picture.clone(),
+        images: profile
+            .images
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+            .unwrap_or_default(),
+        program: profile.program.clone(),
+        created_at: profile.created_at.to_rfc3339(),
+        updated_at: profile.updated_at.to_rfc3339(),
     }
 }
 
-fn resolve_user(
-    headers: &HeaderMap,
-    state: &mut MigrationState,
-) -> std::result::Result<UserRecord, HandlerError> {
-    require_auth(headers, state).map(|(_session, user)| user)
-}
+async fn load_profile_tags(
+    db: &DatabaseConnection,
+    profile_id: Uuid,
+) -> std::result::Result<Vec<TagResponse>, loco_rs::Error> {
+    let tag_links = profile_tags::Entity::find()
+        .filter(profile_tags::Column::ProfileId.eq(profile_id))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-fn load_owned_profile(
-    headers: &HeaderMap,
-    state: &MigrationState,
-    profile_id: &str,
-    user_id: &str,
-) -> std::result::Result<ProfileRecord, HandlerError> {
-    state
-        .profiles
-        .get(profile_id)
-        .cloned()
-        .ok_or_else(|| Box::new(not_found_profile(headers, profile_id)))
-        .and_then(|profile| {
-            if profile.user_id == user_id {
-                Ok(profile)
-            } else {
-                Err(Box::new(forbidden_error(headers)))
-            }
+    let tag_ids: Vec<Uuid> = tag_links.iter().map(|link| link.tag_id).collect();
+    if tag_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let tag_models = tags::Entity::find()
+        .filter(tags::Column::Id.is_in(tag_ids))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    Ok(tag_models
+        .iter()
+        .map(|t| TagResponse {
+            id: t.id.to_string(),
+            name: t.name.clone(),
+            scope: scope_from_str(&t.scope),
+            category: t.category.clone(),
+            emoji: t.emoji.clone(),
+            onboarding_order: t.onboarding_order.clone(),
         })
+        .collect())
 }
 
-fn apply_update_payload(
-    headers: &HeaderMap,
-    state: &MigrationState,
-    profile: &mut ProfileRecord,
-    payload: UpdateProfileBody,
-) -> std::result::Result<(), HandlerError> {
-    let UpdateProfileBody {
-        name,
-        age,
-        bio,
-        program,
-        profile_picture,
-        images,
-        tags,
-        tag_ids,
-    } = payload;
+async fn full_profile_response(
+    db: &DatabaseConnection,
+    profile: &profiles::Model,
+    user_pid: &Uuid,
+) -> std::result::Result<FullProfileResponse, loco_rs::Error> {
+    let profile_tags = load_profile_tags(db, profile.id).await?;
+    Ok(FullProfileResponse {
+        id: profile.id.to_string(),
+        user_id: user_pid.to_string(),
+        name: profile.name.clone(),
+        bio: profile.bio.clone(),
+        age: u8::try_from(profile.age).unwrap_or(0),
+        profile_picture: profile.profile_picture.clone(),
+        images: profile
+            .images
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+            .unwrap_or_default(),
+        program: profile.program.clone(),
+        tags: profile_tags,
+        created_at: profile.created_at.to_rfc3339(),
+        updated_at: profile.updated_at.to_rfc3339(),
+    })
+}
 
-    apply_name_update(headers, profile, name)?;
-    apply_age_update(headers, profile, age)?;
-    apply_optional_scalar_updates(
-        profile,
-        OptionalScalarUpdates {
-            bio,
-            program,
-            profile_picture,
-            images,
-        },
-    );
-    if tags.is_some() || tag_ids.is_some() {
-        profile.tag_ids = normalized_tag_ids(state, tags, tag_ids);
+async fn sync_profile_tags(
+    db: &DatabaseConnection,
+    profile_id: Uuid,
+    tag_ids: &[Uuid],
+) -> std::result::Result<(), loco_rs::Error> {
+    profile_tags::Entity::delete_many()
+        .filter(profile_tags::Column::ProfileId.eq(profile_id))
+        .exec(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    for tag_id in tag_ids {
+        let link = profile_tags::ActiveModel {
+            profile_id: ActiveValue::Set(profile_id),
+            tag_id: ActiveValue::Set(*tag_id),
+        };
+        link.insert(db)
+            .await
+            .map_err(|e| loco_rs::Error::Any(e.into()))?;
     }
-    profile.updated_at = Utc::now();
+
     Ok(())
 }
 
-struct OptionalScalarUpdates {
-    bio: Option<String>,
-    program: Option<String>,
-    profile_picture: Option<String>,
-    images: Option<Vec<String>>,
+fn parse_tag_uuids(raw: Option<Vec<String>>) -> Vec<Uuid> {
+    raw.unwrap_or_default()
+        .into_iter()
+        .filter_map(|s| Uuid::parse_str(&s).ok())
+        .collect()
 }
 
-fn apply_optional_scalar_updates(profile: &mut ProfileRecord, updates: OptionalScalarUpdates) {
-    if let Some(value) = updates.bio {
-        profile.bio = Some(value);
-    }
-    if let Some(value) = updates.program {
-        profile.program = Some(value);
-    }
-    if let Some(value) = updates.profile_picture {
-        profile.profile_picture = Some(value);
-    }
-    if let Some(value) = updates.images {
-        profile.images = value;
-    }
-}
-
-pub(super) async fn profile_me(headers: HeaderMap) -> Result<Response> {
-    let response = {
-        let mut state = lock_state();
-        let (_session, user) = match require_auth(&headers, &mut state) {
-            Ok(auth) => auth,
-            Err(response) => return Ok(*response),
-        };
-        state
-            .profiles_by_user
-            .get(&user.id)
-            .and_then(|id| state.profiles.get(id))
-            .map(|profile| to_full_profile_response(&state, profile))
-    };
-
-    Ok(Json(DataResponse { data: response }).into_response())
-}
-
-pub(super) async fn profile_get(headers: HeaderMap, Path(id): Path<String>) -> Result<Response> {
-    let mut state = lock_state();
-    let _auth = match require_auth(&headers, &mut state) {
+pub(super) async fn profile_me(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let Some(profile) = state.profiles.get(&id) else {
+    let profile = profiles::Entity::find()
+        .filter(profiles::Column::UserId.eq(user.id))
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let data = match profile {
+        Some(ref p) => Some(full_profile_response(&ctx.db, p, &user.pid).await?),
+        None => None,
+    };
+
+    Ok(Json(DataResponse { data }).into_response())
+}
+
+pub(super) async fn profile_get(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+        Ok(auth) => auth,
+        Err(response) => return Ok(*response),
+    };
+
+    let profile_uuid = Uuid::parse_str(&id)
+        .map_err(|_| loco_rs::Error::Message("Invalid profile ID".to_string()))?;
+
+    let profile = profiles::Entity::find_by_id(profile_uuid)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
     };
-    let data = to_profile_response(profile);
-    drop(state);
 
+    let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+    let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
+
+    let data = profile_to_response(&profile, &user_pid);
     Ok(Json(DataResponse { data }).into_response())
 }
 
 pub(super) async fn profile_get_full(
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let mut state = lock_state();
-    let _auth = match require_auth(&headers, &mut state) {
+    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let Some(profile) = state.profiles.get(&id) else {
+    let profile_uuid = Uuid::parse_str(&id)
+        .map_err(|_| loco_rs::Error::Message("Invalid profile ID".to_string()))?;
+
+    let profile = profiles::Entity::find_by_id(profile_uuid)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
     };
-    let data = to_full_profile_response(&state, profile);
-    drop(state);
 
+    let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
+        .one(&ctx.db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+    let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
+
+    let data = full_profile_response(&ctx.db, &profile, &user_pid).await?;
     Ok(Json(DataResponse { data }).into_response())
-}
-
-pub(super) async fn profile_create(
-    headers: HeaderMap,
-    Json(payload): Json<CreateProfileBody>,
-) -> Result<Response> {
-    let mut state = lock_state();
-    let response = match resolve_user(&headers, &mut state) {
-        Err(response) => *response,
-        Ok(user) => {
-            if let Some(validation_response) = validate_create_payload(&headers, &payload) {
-                validation_response
-            } else if state.profiles_by_user.contains_key(&user.id) {
-                error_response(
-                    axum::http::StatusCode::CONFLICT,
-                    &headers,
-                    ErrorSpec {
-                        error: "Profile already exists".to_string(),
-                        code: "CONFLICT",
-                        details: None,
-                    },
-                )
-            } else {
-                let now = Utc::now();
-                let profile = ProfileRecord {
-                    id: Uuid::new_v4().to_string(),
-                    user_id: user.id,
-                    name: payload.name.trim().to_string(),
-                    bio: payload.bio,
-                    age: payload.age,
-                    profile_picture: payload.profile_picture,
-                    images: payload.images.unwrap_or_default(),
-                    program: payload.program,
-                    tag_ids: normalized_tag_ids(&state, payload.tags, payload.tag_ids),
-                    created_at: now,
-                    updated_at: now,
-                };
-
-                let profile_id = profile.id.clone();
-                state
-                    .profiles_by_user
-                    .insert(profile.user_id.clone(), profile_id.clone());
-                state.profiles.insert(profile_id, profile.clone());
-                let data = to_full_profile_response(&state, &profile);
-                drop(state);
-
-                (axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response()
-            }
-        }
-    };
-    Ok(response)
-}
-
-pub(super) async fn profile_update(
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Json(payload): Json<UpdateProfileBody>,
-) -> Result<Response> {
-    let mut state = lock_state();
-    let response = (|| -> std::result::Result<Response, HandlerError> {
-        let user = resolve_user(&headers, &mut state)?;
-        let mut profile = load_owned_profile(&headers, &state, &id, &user.id)?;
-        apply_update_payload(&headers, &state, &mut profile, payload)?;
-        state.profiles.insert(id, profile.clone());
-        let data = to_full_profile_response(&state, &profile);
-        Ok(Json(DataResponse { data }).into_response())
-    })()
-    .unwrap_or_else(|response| *response);
-    drop(state);
-    Ok(response)
-}
-
-pub(super) async fn profile_delete(headers: HeaderMap, Path(id): Path<String>) -> Result<Response> {
-    let mut state = lock_state();
-    let response = match resolve_user(&headers, &mut state)
-        .and_then(|user| load_owned_profile(&headers, &state, &id, &user.id).map(|_profile| user))
-    {
-        Ok(user) => {
-            state.profiles.remove(&id);
-            state.profiles_by_user.remove(&user.id);
-            drop(state);
-            Json(SuccessResponse { success: true }).into_response()
-        }
-        Err(response) => *response,
-    };
-    Ok(response)
 }

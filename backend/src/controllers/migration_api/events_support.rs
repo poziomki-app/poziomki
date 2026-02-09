@@ -1,28 +1,15 @@
 use axum::http::HeaderMap;
 use chrono::{DateTime, Utc};
 use loco_rs::prelude::*;
+use sea_orm::QueryFilter;
+use uuid::Uuid;
 
-use crate::controllers::migration_api::{
-    error_response,
-    state::{
-        ensure_valid_event_range, parse_timestamp, require_auth, require_profile,
-        resolve_event_tag_ids, validate_event_description, validate_event_location,
-        validate_event_title, CreateEventBody, EventRecord, MigrationState, ProfileRecord,
-        UpdateEventBody,
-    },
-    ErrorSpec,
-};
+use crate::controllers::migration_api::{error_response, state::CreateEventBody, ErrorSpec};
+use crate::models::_entities::{events, profiles};
 
 pub(in crate::controllers::migration_api) type EventDates =
     (String, DateTime<Utc>, Option<DateTime<Utc>>);
 pub(in crate::controllers::migration_api) type HandlerError = Box<Response>;
-
-pub(in crate::controllers::migration_api) struct EventUpdateInput {
-    pub(in crate::controllers::migration_api) starts_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) ends_at: Option<DateTime<Utc>>,
-    pub(in crate::controllers::migration_api) description: Option<String>,
-    pub(in crate::controllers::migration_api) location: Option<String>,
-}
 
 pub(in crate::controllers::migration_api) fn validation_error(
     headers: &HeaderMap,
@@ -69,27 +56,105 @@ pub(in crate::controllers::migration_api) fn forbidden(
     )
 }
 
-pub(in crate::controllers::migration_api) fn internal_error(
+pub(in crate::controllers::migration_api) async fn require_auth_profile(
+    db: &DatabaseConnection,
     headers: &HeaderMap,
-    message: &str,
-) -> Response {
-    error_response(
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        headers,
-        ErrorSpec {
-            error: message.to_string(),
-            code: "INTERNAL_ERROR",
-            details: None,
-        },
-    )
+) -> std::result::Result<(profiles::Model, Uuid), HandlerError> {
+    let (_session, user) =
+        crate::controllers::migration_api::state::require_auth_db(db, headers).await?;
+    let profile = profiles::Entity::find()
+        .filter(profiles::Column::UserId.eq(user.id))
+        .one(db)
+        .await
+        .map_err(|_| {
+            Box::new(error_response(
+                axum::http::StatusCode::NOT_FOUND,
+                headers,
+                ErrorSpec {
+                    error: "Profile not found. Create a profile first.".to_string(),
+                    code: "NOT_FOUND",
+                    details: None,
+                },
+            ))
+        })?
+        .ok_or_else(|| {
+            Box::new(error_response(
+                axum::http::StatusCode::NOT_FOUND,
+                headers,
+                ErrorSpec {
+                    error: "Profile not found. Create a profile first.".to_string(),
+                    code: "NOT_FOUND",
+                    details: None,
+                },
+            ))
+        })?;
+    Ok((profile, user.pid))
 }
 
-pub(in crate::controllers::migration_api) fn auth_profile(
+pub(in crate::controllers::migration_api) async fn load_event(
+    db: &DatabaseConnection,
     headers: &HeaderMap,
-    state: &mut MigrationState,
-) -> std::result::Result<ProfileRecord, HandlerError> {
-    let (_session, user) = require_auth(headers, state)?;
-    require_profile(headers, state, &user.id)
+    id: &str,
+) -> std::result::Result<(events::Model, Uuid), HandlerError> {
+    let event_uuid = Uuid::parse_str(id).map_err(|_| {
+        Box::new(error_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            headers,
+            ErrorSpec {
+                error: "Invalid event ID".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        ))
+    })?;
+
+    let event = events::Entity::find_by_id(event_uuid)
+        .one(db)
+        .await
+        .map_err(|_| Box::new(not_found_event(headers, id)))?
+        .ok_or_else(|| Box::new(not_found_event(headers, id)))?;
+
+    Ok((event, event_uuid))
+}
+
+pub(in crate::controllers::migration_api) fn parse_timestamp(
+    value: &str,
+) -> std::result::Result<DateTime<Utc>, &'static str> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|_| "Invalid date-time format")
+}
+
+pub(in crate::controllers::migration_api) fn validate_event_description(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 2_000) {
+        Err("Description must be at most 2000 characters")
+    } else {
+        Ok(())
+    }
+}
+
+pub(in crate::controllers::migration_api) fn validate_event_location(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 500) {
+        Err("Location must be at most 500 characters")
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_event_title(value: &str) -> std::result::Result<String, &'static str> {
+    let normalized = value.trim();
+    let length = normalized.chars().count();
+    if length == 0 {
+        Err("Title is required")
+    } else if length > 200 {
+        Err("Title must be at most 200 characters")
+    } else {
+        Ok(normalized.to_string())
+    }
 }
 
 fn parse_valid_title(
@@ -115,15 +180,19 @@ fn parse_optional_timestamp(
         .transpose()
 }
 
-fn validate_create_text_fields(
-    headers: &HeaderMap,
-    payload: &CreateEventBody,
-) -> std::result::Result<(), HandlerError> {
-    validate_event_description(payload.description.as_ref())
-        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
-    validate_event_location(payload.location.as_ref())
-        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
-    Ok(())
+fn ensure_valid_event_range(
+    starts_at: DateTime<Utc>,
+    ends_at: Option<DateTime<Utc>>,
+) -> std::result::Result<(), ErrorSpec> {
+    if ends_at.is_some_and(|end| end <= starts_at) {
+        Err(ErrorSpec {
+            error: "Event end time must be after start time".to_string(),
+            code: "INVALID_DATE_RANGE",
+            details: None,
+        })
+    } else {
+        Ok(())
+    }
 }
 
 pub(in crate::controllers::migration_api) fn parse_create_dates(
@@ -131,7 +200,12 @@ pub(in crate::controllers::migration_api) fn parse_create_dates(
     payload: &CreateEventBody,
 ) -> std::result::Result<EventDates, HandlerError> {
     let title = parse_valid_title(headers, &payload.title)?;
-    validate_create_text_fields(headers, payload)?;
+
+    validate_event_description(payload.description.as_ref())
+        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
+    validate_event_location(payload.location.as_ref())
+        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
+
     let starts_at = parse_required_timestamp(headers, &payload.starts_at)?;
     let ends_at = parse_optional_timestamp(headers, payload.ends_at.as_deref())?;
 
@@ -144,131 +218,4 @@ pub(in crate::controllers::migration_api) fn parse_create_dates(
     })?;
 
     Ok((title, starts_at, ends_at))
-}
-
-fn ensure_event_owner(
-    headers: &HeaderMap,
-    event: &EventRecord,
-    profile_id: &str,
-) -> Option<Response> {
-    (event.creator_id != profile_id)
-        .then(|| forbidden(headers, "Only the creator can update this event"))
-}
-
-pub(in crate::controllers::migration_api) fn ensure_event_exists_for_update(
-    headers: &HeaderMap,
-    state: &MigrationState,
-    id: &str,
-) -> std::result::Result<EventRecord, HandlerError> {
-    state
-        .events
-        .get(id)
-        .cloned()
-        .ok_or_else(|| Box::new(not_found_event(headers, id)))
-}
-
-pub(in crate::controllers::migration_api) fn ensure_update_permission(
-    headers: &HeaderMap,
-    event: &EventRecord,
-    profile_id: &str,
-) -> std::result::Result<(), HandlerError> {
-    ensure_event_owner(headers, event, profile_id)
-        .map_or(Ok(()), |response| Err(Box::new(response)))
-}
-
-pub(in crate::controllers::migration_api) fn update_dates(
-    headers: &HeaderMap,
-    existing: &EventRecord,
-    payload: &UpdateEventBody,
-) -> std::result::Result<(DateTime<Utc>, Option<DateTime<Utc>>), HandlerError> {
-    let starts_at = payload
-        .starts_at
-        .as_deref()
-        .map(|value| parse_required_timestamp(headers, value))
-        .transpose()?
-        .unwrap_or(existing.starts_at);
-
-    let ends_at = match payload.ends_at.as_ref() {
-        Some(value) => parse_optional_timestamp(headers, value.as_ref().map(String::as_str))?,
-        None => existing.ends_at,
-    };
-
-    ensure_valid_event_range(starts_at, ends_at).map_err(|spec| {
-        Box::new(error_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            headers,
-            spec,
-        ))
-    })?;
-
-    Ok((starts_at, ends_at))
-}
-
-fn merged_description(
-    headers: &HeaderMap,
-    payload: &UpdateEventBody,
-    existing: &EventRecord,
-) -> std::result::Result<Option<String>, HandlerError> {
-    let description = payload
-        .description
-        .clone()
-        .unwrap_or_else(|| existing.description.clone());
-    validate_event_description(description.as_ref())
-        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
-    Ok(description)
-}
-
-fn merged_location(
-    headers: &HeaderMap,
-    payload: &UpdateEventBody,
-    existing: &EventRecord,
-) -> std::result::Result<Option<String>, HandlerError> {
-    let location = payload
-        .location
-        .clone()
-        .unwrap_or_else(|| existing.location.clone());
-    validate_event_location(location.as_ref())
-        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
-    Ok(location)
-}
-
-pub(in crate::controllers::migration_api) fn build_update_input(
-    headers: &HeaderMap,
-    existing: &EventRecord,
-    payload: &UpdateEventBody,
-) -> std::result::Result<EventUpdateInput, HandlerError> {
-    let (starts_at, ends_at) = update_dates(headers, existing, payload)?;
-    let description = merged_description(headers, payload, existing)?;
-    let location = merged_location(headers, payload, existing)?;
-
-    Ok(EventUpdateInput {
-        starts_at,
-        ends_at,
-        description,
-        location,
-    })
-}
-
-pub(in crate::controllers::migration_api) fn apply_event_update(
-    state: &mut MigrationState,
-    existing: EventRecord,
-    payload: UpdateEventBody,
-    input: EventUpdateInput,
-) -> EventRecord {
-    let mut updated = existing;
-    updated.title = payload
-        .title
-        .map_or_else(|| updated.title.clone(), |value| value.trim().to_string());
-    updated.description = input.description;
-    updated.cover_image = payload
-        .cover_image
-        .unwrap_or_else(|| updated.cover_image.clone());
-    updated.location = input.location;
-    updated.starts_at = input.starts_at;
-    updated.ends_at = input.ends_at;
-    updated.updated_at = Utc::now();
-    if payload.tags.is_some() || payload.tag_ids.is_some() {
-        updated.tag_ids = resolve_event_tag_ids(state, payload.tags, payload.tag_ids);
-    }
-    updated
 }

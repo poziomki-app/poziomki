@@ -1,6 +1,4 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, Deserialize)]
 pub(in crate::controllers::migration_api) struct SignUpBody {
@@ -190,11 +188,6 @@ pub(in crate::controllers::migration_api) struct AttendEventBody {
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::controllers::migration_api) struct SuccessResponse {
     pub(in crate::controllers::migration_api) success: bool,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub(in crate::controllers::migration_api) struct AuthCheckResponse {
-    pub(in crate::controllers::migration_api) ok: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -395,100 +388,4 @@ pub(in crate::controllers::migration_api) struct SessionListItem {
     pub(in crate::controllers::migration_api) ip_address: Option<String>,
     #[serde(rename = "userAgent")]
     pub(in crate::controllers::migration_api) user_agent: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct UserRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) email: String,
-    pub(in crate::controllers::migration_api) name: String,
-    pub(in crate::controllers::migration_api) password: String,
-    pub(in crate::controllers::migration_api) email_verified: bool,
-    pub(in crate::controllers::migration_api) created_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct SessionRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) user_id: String,
-    pub(in crate::controllers::migration_api) token: String,
-    pub(in crate::controllers::migration_api) created_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) updated_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) expires_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) ip_address: Option<String>,
-    pub(in crate::controllers::migration_api) user_agent: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct TagRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) name: String,
-    pub(in crate::controllers::migration_api) scope: TagScope,
-    pub(in crate::controllers::migration_api) category: Option<String>,
-    pub(in crate::controllers::migration_api) emoji: Option<String>,
-    pub(in crate::controllers::migration_api) onboarding_order: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct ProfileRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) user_id: String,
-    pub(in crate::controllers::migration_api) name: String,
-    pub(in crate::controllers::migration_api) bio: Option<String>,
-    pub(in crate::controllers::migration_api) age: u8,
-    pub(in crate::controllers::migration_api) profile_picture: Option<String>,
-    pub(in crate::controllers::migration_api) images: Vec<String>,
-    pub(in crate::controllers::migration_api) program: Option<String>,
-    pub(in crate::controllers::migration_api) tag_ids: Vec<String>,
-    pub(in crate::controllers::migration_api) created_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) updated_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct DegreeRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) name: String,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct EventRecord {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) title: String,
-    pub(in crate::controllers::migration_api) description: Option<String>,
-    pub(in crate::controllers::migration_api) cover_image: Option<String>,
-    pub(in crate::controllers::migration_api) location: Option<String>,
-    pub(in crate::controllers::migration_api) starts_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) ends_at: Option<DateTime<Utc>>,
-    pub(in crate::controllers::migration_api) creator_id: String,
-    pub(in crate::controllers::migration_api) conversation_id: Option<String>,
-    pub(in crate::controllers::migration_api) tag_ids: Vec<String>,
-    pub(in crate::controllers::migration_api) created_at: DateTime<Utc>,
-    pub(in crate::controllers::migration_api) updated_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::controllers::migration_api) struct UploadRecord {
-    pub(in crate::controllers::migration_api) owner_id: Option<String>,
-    pub(in crate::controllers::migration_api) context: UploadContext,
-    pub(in crate::controllers::migration_api) context_id: Option<String>,
-    pub(in crate::controllers::migration_api) mime_type: String,
-    pub(in crate::controllers::migration_api) deleted: bool,
-}
-
-#[derive(Default)]
-pub(in crate::controllers::migration_api) struct MigrationState {
-    pub(in crate::controllers::migration_api) users: HashMap<String, UserRecord>,
-    pub(in crate::controllers::migration_api) users_by_email: HashMap<String, String>,
-    pub(in crate::controllers::migration_api) sessions_by_token: HashMap<String, SessionRecord>,
-    pub(in crate::controllers::migration_api) profiles: HashMap<String, ProfileRecord>,
-    pub(in crate::controllers::migration_api) profiles_by_user: HashMap<String, String>,
-    pub(in crate::controllers::migration_api) tags: HashMap<String, TagRecord>,
-    pub(in crate::controllers::migration_api) degrees: Vec<DegreeRecord>,
-    pub(in crate::controllers::migration_api) events: HashMap<String, EventRecord>,
-    pub(in crate::controllers::migration_api) event_attendees:
-        HashMap<(String, String), AttendeeStatus>,
-    pub(in crate::controllers::migration_api) uploads: HashMap<String, UploadRecord>,
-    pub(in crate::controllers::migration_api) otp_by_email: HashMap<String, String>,
-    pub(in crate::controllers::migration_api) user_settings:
-        HashMap<String, crate::controllers::migration_api::settings::UserSettingsRecord>,
 }

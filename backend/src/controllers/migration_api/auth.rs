@@ -1,9 +1,4 @@
-use axum::{
-    extract::State,
-    http::HeaderMap,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use loco_rs::{app::AppContext, hash, prelude::*};
 
@@ -112,7 +107,7 @@ pub(super) async fn sign_up(
     .await
     {
         Ok(user) => user,
-        Err(ModelError::EntityAlreadyExists {}) => {
+        Err(ModelError::EntityAlreadyExists) => {
             return Ok(error_response(
                 axum::http::StatusCode::CONFLICT,
                 &headers,
@@ -333,9 +328,7 @@ pub(super) async fn delete_account(
         .await;
 
     // Delete user
-    let _ = users::Entity::delete_by_id(user.id)
-        .exec(&ctx.db)
-        .await;
+    let _ = users::Entity::delete_by_id(user.id).exec(&ctx.db).await;
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }

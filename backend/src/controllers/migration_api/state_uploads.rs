@@ -92,12 +92,3 @@ pub(in crate::controllers::migration_api) const fn is_chat_context(context: Uplo
         UploadContext::ChatCover | UploadContext::ChatAttachment
     )
 }
-
-pub(in crate::controllers::migration_api) const fn is_upload_public(
-    context: UploadContext,
-) -> bool {
-    matches!(
-        context,
-        UploadContext::ProfilePicture | UploadContext::ProfileGallery | UploadContext::EventCover
-    )
-}

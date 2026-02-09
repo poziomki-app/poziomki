@@ -5,7 +5,11 @@ use opendal::{
 use std::{sync::OnceLock, time::Duration};
 use url::Url;
 
-use super::super::state::is_production_mode;
+fn is_production_mode() -> bool {
+    std::env::var("NODE_ENV")
+        .map(|value| value.eq_ignore_ascii_case("production"))
+        .unwrap_or(false)
+}
 
 const DEFAULT_UPLOADS_DIR: &str = "../data/uploads";
 const DEFAULT_REGION: &str = "us-east-1";
