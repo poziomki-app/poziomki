@@ -76,47 +76,49 @@ fun ProfileViewScreen(
 
                 val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-                if (!state.isOwnProfile) Surface(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(
-                                end = 16.dp,
-                                bottom = bottomInsets + 8.dp,
-                            ),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.Transparent,
-                    border = BorderStroke(1.dp, Border),
-                ) {
-                    Row(
+                if (!state.isOwnProfile) {
+                    Surface(
                         modifier =
                             Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors =
-                                            listOf(
-                                                Color(0xFF1A2029),
-                                                Color(0xFF161B22),
-                                            ),
-                                    ),
-                                ).clickable { onNavigateToChat(p.userId, p.name) }
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                                .align(Alignment.BottomEnd)
+                                .padding(
+                                    end = 16.dp,
+                                    bottom = bottomInsets + 8.dp,
+                                ),
+                        shape = RoundedCornerShape(28.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(1.dp, Border),
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = null,
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "Wiadomość",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = Color.White,
-                        )
+                        Row(
+                            modifier =
+                                Modifier
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors =
+                                                listOf(
+                                                    Color(0xFF1A2029),
+                                                    Color(0xFF161B22),
+                                                ),
+                                        ),
+                                    ).clickable { onNavigateToChat(p.userId, p.name) }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                                tint = Primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Wiadomość",
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = Color.White,
+                            )
+                        }
                     }
                 }
             }

@@ -39,15 +39,16 @@ fun App() {
 
     // Compute start destination once from initial session state.
     // Not reactive — sign-up saving a session mid-flow must NOT change startDestination.
-    val startDestination = remember {
-        val hasUser = runBlocking { sessionManager.isLoggedIn.first() }
-        val hasProfile = runBlocking { sessionManager.profileId.first() } != null
-        when {
-            !hasUser -> Route.AuthGraph
-            !hasProfile -> Route.OnboardingGraph
-            else -> Route.MainGraph
+    val startDestination =
+        remember {
+            val hasUser = runBlocking { sessionManager.isLoggedIn.first() }
+            val hasProfile = runBlocking { sessionManager.profileId.first() } != null
+            when {
+                !hasUser -> Route.AuthGraph
+                !hasProfile -> Route.OnboardingGraph
+                else -> Route.MainGraph
+            }
         }
-    }
 
     DisposableEffect(Unit) {
         syncEngine.start()

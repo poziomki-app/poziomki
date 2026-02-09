@@ -48,6 +48,7 @@ class AuthViewModel(
                                 _uiState.value = AuthUiState()
                                 onSuccess()
                             }
+
                             is ApiResult.Error -> {
                                 _uiState.value = AuthUiState()
                                 onNeedsOnboarding()

@@ -418,4 +418,3 @@ private fun MiniTagChip(
                 .padding(horizontal = 6.dp, vertical = 1.dp),
     )
 }
-
