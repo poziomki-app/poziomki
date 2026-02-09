@@ -80,22 +80,17 @@ pub(super) async fn tags_search(
     Ok(Json(DataResponse { data }).into_response())
 }
 
-pub(super) async fn tags_create(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-    Json(payload): Json<CreateTagBody>,
-) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
-
+async fn validate_and_insert_tag(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    payload: CreateTagBody,
+) -> std::result::Result<tags::Model, Response> {
     let name = payload.name.trim().to_string();
 
     if name.is_empty() || name.chars().count() > 100 {
-        return Ok(error_response(
+        return Err(error_response(
             axum::http::StatusCode::BAD_REQUEST,
-            &headers,
+            headers,
             ErrorSpec {
                 error: "Tag name must be between 1 and 100 characters".to_string(),
                 code: "VALIDATION_ERROR",
@@ -106,18 +101,27 @@ pub(super) async fn tags_create(
 
     let scope_str = scope_to_str(payload.scope);
 
-    // Check for duplicates (case-insensitive)
     let existing = tags::Entity::find()
         .filter(tags::Column::Scope.eq(scope_str))
         .filter(tags::Column::Name.eq(&name))
-        .one(&ctx.db)
+        .one(db)
         .await
-        .map_err(|e: sea_orm::DbErr| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e: sea_orm::DbErr| {
+            error_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                ErrorSpec {
+                    error: e.to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            )
+        })?;
 
     if existing.is_some() {
-        return Ok(error_response(
+        return Err(error_response(
             axum::http::StatusCode::CONFLICT,
-            &headers,
+            headers,
             ErrorSpec {
                 error: format!("Tag '{name}' already exists for scope '{scope_str}'"),
                 code: "CONFLICT",
@@ -138,13 +142,36 @@ pub(super) async fn tags_create(
         updated_at: ActiveValue::Set(now.into()),
     };
 
-    let inserted = tag
-        .insert(&ctx.db)
-        .await
-        .map_err(|e: sea_orm::DbErr| loco_rs::Error::Any(e.into()))?;
+    tag.insert(db).await.map_err(|e: sea_orm::DbErr| {
+        error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: e.to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        )
+    })
+}
 
-    let data = tag_model_to_response(&inserted);
-    Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
+pub(super) async fn tags_create(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateTagBody>,
+) -> Result<Response> {
+    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+        Ok(auth) => auth,
+        Err(response) => return Ok(*response),
+    };
+
+    match validate_and_insert_tag(&ctx.db, &headers, payload).await {
+        Ok(inserted) => {
+            let data = tag_model_to_response(&inserted);
+            Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
+        }
+        Err(response) => Ok(response),
+    }
 }
 
 pub(super) async fn degrees_search(
