@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
-    bgworker::{BackgroundWorker, Queue},
+    bgworker::Queue,
     boot::{create_app, BootResult, StartMode},
     config::Config,
     controller::AppRoutes,
@@ -14,9 +14,7 @@ use migration::Migrator;
 use std::path::Path;
 
 #[allow(unused_imports)]
-use crate::{
-    app_support, controllers, models::_entities::users, tasks, workers::downloader::DownloadWorker,
-};
+use crate::{app_support, controllers, models::_entities::users, tasks};
 
 pub struct App;
 #[async_trait]
@@ -53,8 +51,7 @@ impl Hooks for App {
             .add_routes(controllers::migration_api::routes())
             .add_route(controllers::auth::routes())
     }
-    async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
-        queue.register(DownloadWorker::build(ctx)).await?;
+    async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
         Ok(())
     }
 
