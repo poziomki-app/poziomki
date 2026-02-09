@@ -267,3 +267,19 @@ data class MatrixSessionData(
     val deviceId: String? = null,
     val expiresAt: Long? = null,
 )
+
+// Settings models
+
+@Serializable
+data class UpdateSettingsRequest(
+    val theme: String? = null,
+    val language: String? = null,
+    @SerialName("notifications_enabled")
+    val notificationsEnabled: Boolean? = null,
+    @SerialName("privacy_show_age")
+    val privacyShowAge: Boolean? = null,
+    @SerialName("privacy_show_program")
+    val privacyShowProgram: Boolean? = null,
+    @SerialName("privacy_discoverable")
+    val privacyDiscoverable: Boolean? = null,
+)
