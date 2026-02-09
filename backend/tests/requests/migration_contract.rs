@@ -4,6 +4,14 @@ use serial_test::serial;
 
 use super::prepare_data::auth_header;
 
+fn sign_up_json(email: &str, password: &str) -> serde_json::Value {
+    serde_json::json!({
+        "email": email,
+        "name": "Test User",
+        "password": password,
+    })
+}
+
 #[tokio::test]
 #[serial]
 async fn health_endpoint_matches_contract() {
@@ -281,6 +289,77 @@ async fn matching_and_uploads_endpoints_available() {
 
         let missing_upload_response = request.get("/api/v1/uploads/missing.png").await;
         assert_eq!(missing_upload_response.status_code(), 404);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn sign_in_verifies_hashed_password() {
+    request::<App, _, _>(|request, _ctx| async move {
+        let sign_up = request
+            .post("/api/v1/auth/sign-up/email")
+            .json(&sign_up_json("hash-test@example.com", "correct-password"))
+            .await;
+        assert_eq!(sign_up.status_code(), 200);
+
+        // sign in with the correct password succeeds
+        let sign_in_ok = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "hash-test@example.com",
+                "password": "correct-password",
+            }))
+            .await;
+        assert_eq!(sign_in_ok.status_code(), 200);
+        let ok_payload: serde_json::Value = sign_in_ok.json();
+        assert!(ok_payload["data"]["token"].is_string());
+
+        // sign in with a wrong password fails
+        let sign_in_bad = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "hash-test@example.com",
+                "password": "wrong-password",
+            }))
+            .await;
+        assert_eq!(sign_in_bad.status_code(), 401);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn delete_account_verifies_hashed_password() {
+    request::<App, _, _>(|request, _ctx| async move {
+        let sign_up = request
+            .post("/api/v1/auth/sign-up/email")
+            .json(&sign_up_json("delete-test@example.com", "my-password"))
+            .await;
+        assert_eq!(sign_up.status_code(), 200);
+        let payload: serde_json::Value = sign_up.json();
+        let token = payload["data"]["token"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .unwrap_or_default();
+
+        let (auth_key, auth_value) = auth_header(&token);
+
+        // delete with wrong password fails
+        let delete_bad = request
+            .delete("/api/v1/auth/account")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .json(&serde_json::json!({ "password": "wrong-password" }))
+            .await;
+        assert_eq!(delete_bad.status_code(), 401);
+
+        // delete with correct password succeeds
+        let delete_ok = request
+            .delete("/api/v1/auth/account")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .json(&serde_json::json!({ "password": "my-password" }))
+            .await;
+        assert_eq!(delete_ok.status_code(), 200);
     })
     .await;
 }

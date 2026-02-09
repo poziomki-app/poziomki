@@ -1,6 +1,6 @@
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::{Duration, Utc};
-use loco_rs::prelude::*;
+use loco_rs::{hash, prelude::*};
 use uuid::Uuid;
 
 use super::{
@@ -85,11 +85,13 @@ pub(super) async fn sign_up(
             ));
         }
 
+        let password_hash =
+            hash::hash_password(&payload.password).map_err(|e| loco_rs::Error::Any(e.into()))?;
         let user = UserRecord {
             id: Uuid::new_v4().to_string(),
             email: email.clone(),
             name,
-            password: payload.password,
+            password: password_hash,
             email_verified: false,
             created_at: Utc::now(),
         };
@@ -136,7 +138,7 @@ pub(super) async fn sign_in(
             .users_by_email
             .get(&email)
             .and_then(|user_id| state.users.get(user_id))
-            .filter(|user| user.password == payload.password)
+            .filter(|user| hash::verify_password(&payload.password, &user.password))
             .cloned();
 
         let Some(user) = authorized_user else {
@@ -275,7 +277,7 @@ pub(super) async fn delete_account(
         Err(response) => return Ok(*response),
     };
 
-    if payload.password.is_empty() || payload.password != user.password {
+    if payload.password.is_empty() || !hash::verify_password(&payload.password, &user.password) {
         return Ok(unauthorized_error(&headers, "Invalid password"));
     }
 
