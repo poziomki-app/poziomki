@@ -113,21 +113,6 @@ async fn not_implemented(headers: HeaderMap) -> Result<Response> {
     ))
 }
 
-async fn legacy_chat_gone(headers: HeaderMap) -> Result<Response> {
-    Ok(error_response(
-        axum::http::StatusCode::GONE,
-        &headers,
-        ErrorSpec {
-            error: "Legacy chat API was removed. Migrate to Matrix-native chat APIs.".to_string(),
-            code: "CHAT_MIGRATED_TO_MATRIX",
-            details: Some(serde_json::json!({
-                "migrationPath": "/api/v1/matrix",
-                "doc": "CHAT_PORT_MAP.md",
-            })),
-        },
-    ))
-}
-
 fn auth_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/auth")
@@ -204,43 +189,12 @@ fn settings_routes() -> Routes {
         .add("", patch(settings::settings_update))
 }
 
-fn legacy_chat_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/chats")
-        .add("", get(legacy_chat_gone))
-        .add("/{id}", get(legacy_chat_gone))
-        .add("/personal", post(legacy_chat_gone))
-        .add("/group", post(legacy_chat_gone))
-        .add("/event", post(legacy_chat_gone))
-        .add("/{id}/leave", delete(legacy_chat_gone))
-        .add("/{id}/participants", post(legacy_chat_gone))
-        .add("/{id}/participants/{profileId}", delete(legacy_chat_gone))
-        .add("/{id}/messages", get(legacy_chat_gone))
-        .add("/{id}/messages", post(legacy_chat_gone))
-        .add("/messages/{messageId}", patch(legacy_chat_gone))
-        .add("/messages/{messageId}", delete(legacy_chat_gone))
-        .add("/{id}/read", post(legacy_chat_gone))
-        .add("/messages/{messageId}/reactions", post(legacy_chat_gone))
-        .add(
-            "/messages/{messageId}/reactions/{emoji}",
-            delete(legacy_chat_gone),
-        )
-        .add(
-            "/messages/{messageId}/reactions/{emoji}/users",
-            get(legacy_chat_gone),
-        )
-}
-
 fn matrix_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/matrix")
         .add("/config", get(matrix_config))
         .add("/session", post(matrix::create_session))
         .add("/events/{eventId}/room", get(not_implemented))
-}
-
-fn legacy_ws_routes() -> Routes {
-    Routes::new().add("/ws/chat", get(legacy_chat_gone))
 }
 
 pub(crate) fn reset_state() {
@@ -260,8 +214,6 @@ pub fn routes() -> Vec<Routes> {
         matching_routes(),
         uploads_routes(),
         settings_routes(),
-        legacy_chat_routes(),
         matrix_routes(),
-        legacy_ws_routes(),
     ]
 }

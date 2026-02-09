@@ -68,34 +68,6 @@ async fn profiles_me_requires_auth_after_phase_2() {
 
 #[tokio::test]
 #[serial]
-async fn legacy_chat_http_returns_gone() {
-    request::<App, _, _>(|request, _ctx| async move {
-        let response = request.get("/api/v1/chats").await;
-        assert_eq!(response.status_code(), 410);
-
-        let payload: serde_json::Value = response.json();
-        assert_eq!(payload["code"], "CHAT_MIGRATED_TO_MATRIX");
-        assert_eq!(payload["details"]["migrationPath"], "/api/v1/matrix");
-        assert!(payload["requestId"].is_string());
-    })
-    .await;
-}
-
-#[tokio::test]
-#[serial]
-async fn legacy_chat_websocket_path_returns_gone() {
-    request::<App, _, _>(|request, _ctx| async move {
-        let response = request.get("/ws/chat").await;
-        assert_eq!(response.status_code(), 410);
-
-        let payload: serde_json::Value = response.json();
-        assert_eq!(payload["code"], "CHAT_MIGRATED_TO_MATRIX");
-    })
-    .await;
-}
-
-#[tokio::test]
-#[serial]
 async fn auth_get_session_returns_unwrapped_shape() {
     request::<App, _, _>(|request, _ctx| async move {
         let response = request.get("/api/v1/auth/get-session").await;
