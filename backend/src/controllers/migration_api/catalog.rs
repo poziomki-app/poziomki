@@ -19,7 +19,7 @@ pub(super) async fn tags_search(Query(query): Query<TagsQuery>) -> Result<Respon
         state
             .tags
             .values()
-            .filter(|tag| query.scope.map_or(true, |s| tag.scope == s))
+            .filter(|tag| query.scope.is_none_or(|s| tag.scope == s))
             .filter(|tag| search.is_empty() || tag.name.to_lowercase().contains(&search))
             .take(limit)
             .map(to_tag_response)
