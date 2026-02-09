@@ -139,95 +139,12 @@ fun ProfileEditScreen(
             )
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            ) {
-                state.images.forEachIndexed { index, imageUrl ->
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(12.dp)),
-                    ) {
-                        AsyncImage(
-                            model = resolveImageUrl(imageUrl),
-                            contentDescription = "Zdjęcie ${index + 1}",
-                            modifier =
-                                Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                            contentScale = ContentScale.Crop,
-                        )
-                        // X overlay
-                        Box(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(4.dp)
-                                    .size(20.dp)
-                                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
-                                    .clickable { viewModel.removeImage(index) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "Usuń",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    }
-                }
-
-                // Upload loading placeholder
-                if (state.isUploading) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(80.dp)
-                                .background(SurfaceColor, RoundedCornerShape(12.dp))
-                                .border(1.dp, Border, RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            color = Primary,
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                }
-
-                // Add button
-                Box(
-                    modifier =
-                        Modifier
-                            .size(80.dp)
-                            .border(
-                                width = 1.dp,
-                                color = Border,
-                                shape = RoundedCornerShape(12.dp),
-                            ).clip(RoundedCornerShape(12.dp))
-                            .clickable(enabled = !state.isUploading) { imagePicker() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = "Dodaj zdjęcie",
-                            tint = TextMuted,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Text(
-                            text = "dodaj",
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp,
-                            color = TextMuted,
-                        )
-                    }
-                }
-            }
+            ImageGalleryRow(
+                images = state.images,
+                isUploading = state.isUploading,
+                onRemoveImage = { viewModel.removeImage(it) },
+                onAddImage = { imagePicker() },
+            )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
@@ -402,6 +319,106 @@ fun ProfileEditScreen(
             }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        }
+    }
+}
+
+@Composable
+private fun ImageGalleryRow(
+    images: List<String>,
+    isUploading: Boolean,
+    onRemoveImage: (Int) -> Unit,
+    onAddImage: () -> Unit,
+) {
+    val nunito = NunitoFamily
+
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+    ) {
+        images.forEachIndexed { index, imageUrl ->
+            Box(
+                modifier =
+                    Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+            ) {
+                AsyncImage(
+                    model = resolveImageUrl(imageUrl),
+                    contentDescription = "Zdjęcie ${index + 1}",
+                    modifier =
+                        Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+                // X overlay
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(20.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                            .clickable { onRemoveImage(index) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Usuń",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+        }
+
+        // Upload loading placeholder
+        if (isUploading) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(80.dp)
+                        .background(SurfaceColor, RoundedCornerShape(12.dp))
+                        .border(1.dp, Border, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    color = Primary,
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+
+        // Add button
+        Box(
+            modifier =
+                Modifier
+                    .size(80.dp)
+                    .border(
+                        width = 1.dp,
+                        color = Border,
+                        shape = RoundedCornerShape(12.dp),
+                    ).clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = !isUploading) { onAddImage() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = "Dodaj zdjęcie",
+                    tint = TextMuted,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    text = "dodaj",
+                    fontFamily = nunito,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                )
+            }
         }
     }
 }
