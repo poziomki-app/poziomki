@@ -66,12 +66,19 @@ android {
     namespace = "com.poziomki.app"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.poziomki.app"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
+        buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
     }
     packaging {
         resources {

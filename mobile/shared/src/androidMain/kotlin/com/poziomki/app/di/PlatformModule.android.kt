@@ -17,13 +17,14 @@ import org.koin.dsl.module
 actual fun platformModule(): Module =
     module {
         single<HttpClientEngine> {
+            val apiUrl = getProperty("API_BASE_URL", "http://localhost:5150")
             OkHttp.create {
                 addInterceptor { chain ->
                     val request =
                         chain
                             .request()
                             .newBuilder()
-                            .header("Origin", "http://localhost:5150")
+                            .header("Origin", apiUrl)
                             .build()
                     chain.proceed(request)
                 }

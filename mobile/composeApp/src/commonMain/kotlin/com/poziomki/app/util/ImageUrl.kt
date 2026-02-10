@@ -1,7 +1,11 @@
 package com.poziomki.app.util
 
-private const val API_BASE_URL = "http://localhost:5150"
+import org.koin.mp.KoinPlatform
 
-fun resolveImageUrl(url: String): String = if (url.startsWith("/")) "$API_BASE_URL$url" else url
+private val apiBaseUrl: String by lazy {
+    KoinPlatform.getKoin().getProperty("API_BASE_URL", "http://localhost:5150")
+}
+
+fun resolveImageUrl(url: String): String = if (url.startsWith("/")) "$apiBaseUrl$url" else url
 
 fun isImageUrl(value: String): Boolean = value.startsWith("/") || value.startsWith("http://") || value.startsWith("https://")
