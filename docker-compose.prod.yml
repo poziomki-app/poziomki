@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loco}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-poziomki-rs}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loco} -d ${POSTGRES_DB:-poziomki-rs}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5150:5150"
+    environment:
+      NODE_ENV: production
+      PORT: 5150
+      SERVER_BINDING: 0.0.0.0
+      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      DATABASE_URL: postgres://${POSTGRES_USER:-loco}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-poziomki-rs}
+      JWT_SECRET: ${JWT_SECRET}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
+      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-us-east-1}
+      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://rs-cdn.poziomki.app}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
+      OTP_BYPASS_CODE: ${OTP_BYPASS_CODE:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  garage:
+    image: dxflrs/garage:v1.1.0
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "127.0.0.1:3900:3900"
+      - "127.0.0.1:3903:3903"
+    environment:
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+    volumes:
+      - garage_data:/var/lib/garage/data
+      - garage_meta:/var/lib/garage/meta
+      - ./garage.toml:/etc/garage.toml:ro,z
+
+volumes:
+  postgres_data:
+  garage_data:
+  garage_meta:
