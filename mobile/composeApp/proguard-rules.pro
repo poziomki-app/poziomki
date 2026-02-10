@@ -33,8 +33,9 @@
 # Coil
 -keep class coil3.** { *; }
 
-# SQLDelight
+# SQLDelight — keep library and generated DB classes
 -keep class app.cash.sqldelight.** { *; }
+-keep class com.poziomki.app.db.** { *; }
 
 # Matrix SDK (Android only, large — keep public API)
 -keep class org.matrix.rustcomponents.** { *; }
@@ -46,6 +47,12 @@
 
 # DataStore
 -keep class androidx.datastore.** { *; }
+
+# Keep all app data/API/mapper classes (repositories, models, mappers)
+-keep class com.poziomki.app.api.** { *; }
+-keep class com.poziomki.app.data.** { *; }
+-keep class com.poziomki.app.session.** { *; }
+-keep class com.poziomki.app.di.** { *; }
 
 # Keep Kotlin metadata for reflection-based libraries
 -keep class kotlin.Metadata { *; }
