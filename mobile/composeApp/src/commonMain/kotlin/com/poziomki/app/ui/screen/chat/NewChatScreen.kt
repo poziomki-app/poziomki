@@ -153,9 +153,10 @@ private fun ProfileRow(
                     color = TextPrimary,
                     maxLines = 1,
                 )
-                if (!profile.program.isNullOrBlank()) {
+                val program = profile.program
+                if (!program.isNullOrBlank()) {
                     Text(
-                        text = profile.program,
+                        text = program,
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         maxLines = 1,
