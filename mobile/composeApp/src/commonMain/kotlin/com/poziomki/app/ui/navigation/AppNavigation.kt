@@ -2,8 +2,6 @@ package com.poziomki.app.ui.navigation
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,8 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -38,8 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -75,27 +75,26 @@ import com.poziomki.app.ui.screen.profile.PrivacyScreen
 import com.poziomki.app.ui.screen.profile.ProfileEditScreen
 import com.poziomki.app.ui.screen.profile.ProfileViewScreen
 import com.poziomki.app.ui.theme.Background
-import com.poziomki.app.util.matrixLocalpartFromUserId
-import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.Primary
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import com.poziomki.app.ui.theme.TextMuted
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
 data class BottomNavItem(
     val label: String,
     val icon: ImageVector,
+    val selectedIcon: ImageVector,
     val route: Route,
 )
 
 val bottomNavItems =
     listOf(
-        BottomNavItem("Explore", Icons.Filled.Groups, Route.Explore),
-        BottomNavItem("Events", Icons.Filled.CalendarMonth, Route.Events),
-        BottomNavItem("Messages", Icons.AutoMirrored.Filled.Chat, Route.Messages),
-        BottomNavItem("Profile", Icons.Outlined.Person, Route.ProfileTab),
+        BottomNavItem("Explore", Icons.Outlined.Groups, Icons.Filled.Groups, Route.Explore),
+        BottomNavItem("Events", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, Route.Events),
+        BottomNavItem("Messages", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, Route.Messages),
+        BottomNavItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Route.ProfileTab),
     )
 
 @Composable
@@ -374,16 +373,6 @@ fun MainScreen(
                 }
 
                 // Floating pill-shaped bottom navbar
-                val selectedIndex =
-                    bottomNavItems
-                        .indexOfFirst { item ->
-                            currentDestination?.hasRoute(item.route::class) == true
-                        }.coerceAtLeast(0)
-                val glowFraction by animateFloatAsState(
-                    targetValue = (selectedIndex + 0.5f) / bottomNavItems.size,
-                    animationSpec = tween(durationMillis = 350),
-                )
-
                 Surface(
                     modifier =
                         Modifier
@@ -395,7 +384,7 @@ fun MainScreen(
                             ),
                     shape = RoundedCornerShape(28.dp),
                     color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0x40FFFFFF)),
                 ) {
                     Row(
                         modifier =
@@ -405,34 +394,16 @@ fun MainScreen(
                                     Brush.verticalGradient(
                                         colors =
                                             listOf(
-                                                Color(0xFF1A2029),
-                                                Color(0xFF161B22),
+                                                Color(0xCC1A2029),
+                                                Color(0xCC161B22),
                                             ),
                                     ),
-                                ).drawBehind {
-                                    // Subtle light shadow that follows the selected tab
-                                    val centerX = size.width * glowFraction
-                                    val centerY = size.height * 0.45f
-                                    drawCircle(
-                                        brush =
-                                            Brush.radialGradient(
-                                                colors =
-                                                    listOf(
-                                                        Color(0x0CFFFFFF),
-                                                        Color.Transparent,
-                                                    ),
-                                                center = Offset(centerX, centerY),
-                                                radius = size.width * 0.18f,
-                                            ),
-                                        radius = size.width * 0.18f,
-                                        center = Offset(centerX, centerY),
-                                    )
-                                }.padding(horizontal = 8.dp, vertical = 8.dp),
+                                ).padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         val haptic = LocalHapticFeedback.current
-                        bottomNavItems.forEachIndexed { index, item ->
+                        bottomNavItems.forEach { item ->
                             val selected = currentDestination?.hasRoute(item.route::class) == true
                             Box(
                                 modifier =
@@ -455,7 +426,7 @@ fun MainScreen(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
-                                    item.icon,
+                                    if (selected) item.selectedIcon else item.icon,
                                     contentDescription = item.label,
                                     modifier = Modifier.size(26.dp),
                                     tint = if (selected) Primary else TextMuted,
