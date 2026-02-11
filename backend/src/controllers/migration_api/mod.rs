@@ -77,6 +77,28 @@ pub(crate) fn error_response(
         .into_response()
 }
 
+/// Strip a presigned URL down to just the filename (last path segment).
+/// If the value is already a plain filename, return it unchanged.
+fn extract_filename(value: &str) -> String {
+    if value.starts_with("http") {
+        url::Url::parse(value)
+            .ok()
+            .and_then(|u| u.path_segments()?.next_back().map(ToString::to_string))
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| value.to_string())
+    } else {
+        value.to_string()
+    }
+}
+
+/// Resolve a stored image value (filename or legacy presigned URL) to a fresh signed URL.
+async fn resolve_image_url(stored: &str) -> String {
+    let filename = extract_filename(stored);
+    uploads::uploads_storage::signed_get_url(&filename)
+        .await
+        .unwrap_or(filename)
+}
+
 async fn health() -> Result<Response> {
     Ok(Json(HealthResponse { status: "ok" }).into_response())
 }

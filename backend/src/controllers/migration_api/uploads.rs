@@ -1,7 +1,7 @@
 #[path = "uploads_multipart.rs"]
 mod uploads_multipart;
 #[path = "uploads_storage.rs"]
-mod uploads_storage;
+pub(super) mod uploads_storage;
 #[path = "uploads_support.rs"]
 mod uploads_support;
 

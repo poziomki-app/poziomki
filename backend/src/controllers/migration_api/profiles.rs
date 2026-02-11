@@ -12,7 +12,7 @@ use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
 use super::{
-    error_response,
+    error_response, resolve_image_url,
     state::{
         require_auth_db, DataResponse, FullProfileResponse, ProfileResponse, TagResponse, TagScope,
     },
@@ -54,19 +54,30 @@ fn validation_error(headers: &HeaderMap, message: &str) -> Response {
     )
 }
 
-fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> ProfileResponse {
+async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> ProfileResponse {
+    let profile_picture = match &profile.profile_picture {
+        Some(pic) => Some(resolve_image_url(pic).await),
+        None => None,
+    };
+
+    let raw_images: Vec<String> = profile
+        .images
+        .as_ref()
+        .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        .unwrap_or_default();
+    let mut images = Vec::with_capacity(raw_images.len());
+    for img in &raw_images {
+        images.push(resolve_image_url(img).await);
+    }
+
     ProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
         age: u8::try_from(profile.age).unwrap_or(0),
-        profile_picture: profile.profile_picture.clone(),
-        images: profile
-            .images
-            .as_ref()
-            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
-            .unwrap_or_default(),
+        profile_picture,
+        images,
         program: profile.program.clone(),
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
@@ -113,18 +124,30 @@ async fn full_profile_response(
     user_pid: &Uuid,
 ) -> std::result::Result<FullProfileResponse, loco_rs::Error> {
     let profile_tags = load_profile_tags(db, profile.id).await?;
+
+    let profile_picture = match &profile.profile_picture {
+        Some(pic) => Some(resolve_image_url(pic).await),
+        None => None,
+    };
+
+    let raw_images: Vec<String> = profile
+        .images
+        .as_ref()
+        .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        .unwrap_or_default();
+    let mut images = Vec::with_capacity(raw_images.len());
+    for img in &raw_images {
+        images.push(resolve_image_url(img).await);
+    }
+
     Ok(FullProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
         age: u8::try_from(profile.age).unwrap_or(0),
-        profile_picture: profile.profile_picture.clone(),
-        images: profile
-            .images
-            .as_ref()
-            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
-            .unwrap_or_default(),
+        profile_picture,
+        images,
         program: profile.program.clone(),
         tags: profile_tags,
         created_at: profile.created_at.to_rfc3339(),
@@ -214,7 +237,7 @@ pub(super) async fn profile_get(
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
     let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
 
-    let data = profile_to_response(&profile, &user_pid);
+    let data = profile_to_response(&profile, &user_pid).await;
     Ok(Json(DataResponse { data }).into_response())
 }
 

@@ -136,6 +136,7 @@ class ProfileEditViewModel(
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
                     program = s.program.ifBlank { null },
+                    profilePicture = s.images.firstOrNull(),
                     images = s.images,
                     tagIds = s.selectedTags.map { it.id },
                 )

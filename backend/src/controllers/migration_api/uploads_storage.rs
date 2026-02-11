@@ -32,8 +32,8 @@ struct StorageConfig {
 static STORAGE: OnceLock<Result<StorageConfig, String>> = OnceLock::new();
 
 #[derive(Clone)]
-pub(super) struct StorageError {
-    pub(super) kind: Option<ErrorKind>,
+pub(in crate::controllers::migration_api) struct StorageError {
+    pub(in crate::controllers::migration_api) kind: Option<ErrorKind>,
 }
 
 fn parse_bool_env(name: &str, default: bool) -> bool {
@@ -194,7 +194,9 @@ pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
         })
 }
 
-pub(super) async fn signed_get_url(filename: &str) -> Result<String, StorageError> {
+pub(in crate::controllers::migration_api) async fn signed_get_url(
+    filename: &str,
+) -> Result<String, StorageError> {
     let config = storage().map_err(|_message| StorageError { kind: None })?;
     match config.mode {
         StorageMode::Development => Ok(format!("/api/v1/uploads/{filename}")),

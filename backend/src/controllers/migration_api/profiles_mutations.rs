@@ -10,7 +10,7 @@ use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
 use crate::controllers::migration_api::{
-    error_response,
+    error_response, extract_filename,
     state::{
         require_auth_db, validate_profile_age, validate_profile_name, CreateProfileBody,
         DataResponse, SuccessResponse, UpdateProfileBody,
@@ -36,7 +36,7 @@ fn validate_profile_fields(
     Ok(())
 }
 
-async fn check_profile_not_exists(
+async fn check_no_existing_profile(
     db: &DatabaseConnection,
     headers: &HeaderMap,
     user_id: i32,
@@ -56,7 +56,6 @@ async fn check_profile_not_exists(
                 },
             ))
         })?;
-
     if existing.is_some() {
         return Err(Box::new(error_response(
             axum::http::StatusCode::CONFLICT,
@@ -68,7 +67,6 @@ async fn check_profile_not_exists(
             },
         )));
     }
-
     Ok(())
 }
 
@@ -77,10 +75,9 @@ async fn validate_create(
     headers: &HeaderMap,
     payload: &CreateProfileBody,
 ) -> std::result::Result<crate::models::_entities::users::Model, Box<Response>> {
-    let (_session, user) =
-        crate::controllers::migration_api::state::require_auth_db(&ctx.db, headers).await?;
+    let (_session, user) = require_auth_db(&ctx.db, headers).await?;
     validate_profile_fields(headers, payload)?;
-    check_profile_not_exists(&ctx.db, headers, user.id).await?;
+    check_no_existing_profile(&ctx.db, headers, user.id).await?;
     Ok(user)
 }
 
@@ -90,10 +87,9 @@ fn build_create_model(
 ) -> (profiles::ActiveModel, Uuid) {
     let now = Utc::now();
     let profile_id = Uuid::new_v4();
-    let images_json = payload
-        .images
-        .as_ref()
-        .and_then(|imgs| serde_json::to_value(imgs).ok());
+    let images_json = payload.images.as_ref().and_then(|imgs| {
+        serde_json::to_value(imgs.iter().map(|s| extract_filename(s)).collect::<Vec<_>>()).ok()
+    });
 
     let model = profiles::ActiveModel {
         id: ActiveValue::Set(profile_id),
@@ -101,7 +97,7 @@ fn build_create_model(
         name: ActiveValue::Set(payload.name.trim().to_string()),
         bio: ActiveValue::Set(payload.bio.clone()),
         age: ActiveValue::Set(i16::from(payload.age)),
-        profile_picture: ActiveValue::Set(payload.profile_picture.clone()),
+        profile_picture: ActiveValue::Set(payload.profile_picture.as_deref().map(extract_filename)),
         images: ActiveValue::Set(images_json),
         program: ActiveValue::Set(payload.program.clone()),
         created_at: ActiveValue::Set(now.into()),
@@ -171,21 +167,23 @@ fn apply_profile_updates(
         active.program = ActiveValue::Set(Some(program.clone()));
     }
     if let Some(pic) = &payload.profile_picture {
-        active.profile_picture = ActiveValue::Set(Some(pic.clone()));
+        active.profile_picture = ActiveValue::Set(Some(extract_filename(pic)));
     }
     if let Some(images) = &payload.images {
-        active.images = ActiveValue::Set(serde_json::to_value(images).ok());
+        let filenames: Vec<String> = images.iter().map(|s| extract_filename(s)).collect();
+        active.images = ActiveValue::Set(serde_json::to_value(filenames).ok());
     }
     active.updated_at = ActiveValue::Set(Utc::now().into());
 
     active
 }
 
-async fn load_profile(
-    db: &DatabaseConnection,
+async fn load_and_verify_profile(
+    ctx: &AppContext,
     headers: &HeaderMap,
     id: &str,
-) -> std::result::Result<profiles::Model, Box<Response>> {
+) -> std::result::Result<(profiles::Model, crate::models::_entities::users::Model), Box<Response>> {
+    let (_session, user) = require_auth_db(&ctx.db, headers).await?;
     let profile_uuid = Uuid::parse_str(id).map_err(|_| {
         Box::new(error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -199,20 +197,12 @@ async fn load_profile(
     })?;
 
     let profile = profiles::Entity::find_by_id(profile_uuid)
-        .one(db)
+        .one(&ctx.db)
         .await
         .map_err(|_| Box::new(not_found_profile(headers, id)))?
         .ok_or_else(|| Box::new(not_found_profile(headers, id)))?;
 
-    Ok(profile)
-}
-
-fn check_profile_ownership(
-    headers: &HeaderMap,
-    profile: &profiles::Model,
-    user_id: i32,
-) -> std::result::Result<(), Box<Response>> {
-    if profile.user_id != user_id {
+    if profile.user_id != user.id {
         return Err(Box::new(error_response(
             axum::http::StatusCode::FORBIDDEN,
             headers,
@@ -223,24 +213,11 @@ fn check_profile_ownership(
             },
         )));
     }
-    Ok(())
-}
 
-async fn validate_update(
-    ctx: &AppContext,
-    headers: &HeaderMap,
-    id: &str,
-    payload: &UpdateProfileBody,
-) -> std::result::Result<(profiles::Model, crate::models::_entities::users::Model), Box<Response>> {
-    let (_session, user) =
-        crate::controllers::migration_api::state::require_auth_db(&ctx.db, headers).await?;
-    let profile = load_profile(&ctx.db, headers, id).await?;
-    check_profile_ownership(headers, &profile, user.id)?;
-    validate_update_payload(headers, payload)?;
     Ok((profile, user))
 }
 
-async fn maybe_sync_profile_tags(
+async fn maybe_sync_tags(
     db: &DatabaseConnection,
     profile_id: Uuid,
     tags: Option<Vec<String>>,
@@ -259,10 +236,12 @@ pub(in crate::controllers::migration_api) async fn profile_update(
     Path(id): Path<String>,
     Json(payload): Json<UpdateProfileBody>,
 ) -> Result<Response> {
-    let (profile, user) = match validate_update(&ctx, &headers, &id, &payload).await {
+    let (profile, user) = match load_and_verify_profile(&ctx, &headers, &id).await {
         Ok(data) => data,
         Err(response) => return Ok(*response),
     };
+    validate_update_payload(&headers, &payload)
+        .map_err(|r| loco_rs::Error::Message(format!("{r:?}")))?;
 
     let profile_uuid = profile.id;
     let active = apply_profile_updates(profile, &payload);
@@ -272,21 +251,10 @@ pub(in crate::controllers::migration_api) async fn profile_update(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    maybe_sync_profile_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
+    maybe_sync_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
 
     let data = full_profile_response(&ctx.db, &updated, &user.pid).await?;
     Ok(Json(DataResponse { data }).into_response())
-}
-
-async fn validate_delete(
-    ctx: &AppContext,
-    headers: &HeaderMap,
-    id: &str,
-) -> std::result::Result<profiles::Model, Box<Response>> {
-    let (_session, user) = require_auth_db(&ctx.db, headers).await?;
-    let profile = load_profile(&ctx.db, headers, id).await?;
-    check_profile_ownership(headers, &profile, user.id)?;
-    Ok(profile)
 }
 
 pub(in crate::controllers::migration_api) async fn profile_delete(
@@ -294,7 +262,7 @@ pub(in crate::controllers::migration_api) async fn profile_delete(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let profile = match validate_delete(&ctx, &headers, &id).await {
+    let (profile, _user) = match load_and_verify_profile(&ctx, &headers, &id).await {
         Ok(p) => p,
         Err(response) => return Ok(*response),
     };

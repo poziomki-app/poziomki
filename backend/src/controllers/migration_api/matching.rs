@@ -8,9 +8,12 @@ use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
 use uuid::Uuid;
 
-use super::state::{
-    require_auth_db, DataResponse, MatchingQuery, MatchingTagResponse, ProfileRecommendation,
-    TagScope,
+use super::{
+    resolve_image_url,
+    state::{
+        require_auth_db, DataResponse, MatchingQuery, MatchingTagResponse, ProfileRecommendation,
+        TagScope,
+    },
 };
 use crate::models::_entities::{profile_tags, profiles, tags, users};
 
@@ -55,6 +58,44 @@ async fn load_profile_tags(
     Ok(matched_tags)
 }
 
+async fn load_users_by_ids(
+    db: &DatabaseConnection,
+    user_ids: &[i32],
+) -> std::result::Result<Vec<users::Model>, loco_rs::Error> {
+    if user_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    users::Entity::find()
+        .filter(users::Column::Id.is_in(user_ids.to_vec()))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))
+}
+
+async fn build_recommendation(
+    db: &DatabaseConnection,
+    profile: &profiles::Model,
+    user_pid: Uuid,
+) -> std::result::Result<ProfileRecommendation, loco_rs::Error> {
+    let matched_tags = load_profile_tags(db, profile.id).await?;
+    let profile_picture = match &profile.profile_picture {
+        Some(pic) => Some(resolve_image_url(pic).await),
+        None => None,
+    };
+    Ok(ProfileRecommendation {
+        id: profile.id.to_string(),
+        user_id: user_pid.to_string(),
+        name: profile.name.clone(),
+        bio: profile.bio.clone(),
+        age: u8::try_from(profile.age).unwrap_or(0),
+        profile_picture,
+        program: profile.program.clone(),
+        created_at: profile.created_at.to_rfc3339(),
+        updated_at: profile.updated_at.to_rfc3339(),
+        tags: matched_tags,
+    })
+}
+
 pub(super) async fn profiles_recommendations(
     State(ctx): State<AppContext>,
     headers: HeaderMap,
@@ -67,7 +108,6 @@ pub(super) async fn profiles_recommendations(
 
     let limit = u64::from(query.limit.unwrap_or(10).clamp(1, 50));
 
-    // Get profiles that don't belong to this user, ordered by newest first
     let other_profiles = profiles::Entity::find()
         .filter(profiles::Column::UserId.ne(user.id))
         .order_by_desc(profiles::Column::CreatedAt)
@@ -76,17 +116,8 @@ pub(super) async fn profiles_recommendations(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    // Collect user IDs to fetch pids
     let user_ids: Vec<i32> = other_profiles.iter().map(|p| p.user_id).collect();
-    let user_models = if user_ids.is_empty() {
-        vec![]
-    } else {
-        users::Entity::find()
-            .filter(users::Column::Id.is_in(user_ids))
-            .all(&ctx.db)
-            .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
-    };
+    let user_models = load_users_by_ids(&ctx.db, &user_ids).await?;
 
     let mut data = Vec::new();
     for profile in &other_profiles {
@@ -94,21 +125,7 @@ pub(super) async fn profiles_recommendations(
             .iter()
             .find(|u| u.id == profile.user_id)
             .map_or(Uuid::nil(), |u| u.pid);
-
-        let matched_tags = load_profile_tags(&ctx.db, profile.id).await?;
-
-        data.push(ProfileRecommendation {
-            id: profile.id.to_string(),
-            user_id: user_pid.to_string(),
-            name: profile.name.clone(),
-            bio: profile.bio.clone(),
-            age: u8::try_from(profile.age).unwrap_or(0),
-            profile_picture: profile.profile_picture.clone(),
-            program: profile.program.clone(),
-            created_at: profile.created_at.to_rfc3339(),
-            updated_at: profile.updated_at.to_rfc3339(),
-            tags: matched_tags,
-        });
+        data.push(build_recommendation(&ctx.db, profile, user_pid).await?);
     }
 
     Ok(Json(DataResponse { data }).into_response())
