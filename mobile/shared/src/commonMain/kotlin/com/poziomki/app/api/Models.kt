@@ -224,6 +224,7 @@ data class Degree(
 @Serializable
 data class MatchProfile(
     val id: String,
+    val userId: String = "",
     val name: String,
     val bio: String? = null,
     val age: Int,

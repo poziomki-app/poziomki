@@ -33,9 +33,7 @@ data class ChatUiState(
 )
 
 data class NewChatUiState(
-    val dmUserId: String = "",
-    val roomName: String = "",
-    val inviteUserIdsRaw: String = "",
-    val isSubmitting: Boolean = false,
+    val profiles: List<com.poziomki.app.api.MatchProfile> = emptyList(),
+    val isLoading: Boolean = false,
     val error: String? = null,
 )

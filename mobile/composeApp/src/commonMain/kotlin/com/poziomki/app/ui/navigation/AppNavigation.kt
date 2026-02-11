@@ -301,10 +301,9 @@ fun AppNavigation(
         composable<Route.NewChat> {
             NewChatScreen(
                 onBack = { navController.popBackStack() },
-                onChatCreated = { id ->
-                    navController.navigate(Route.Chat(id)) {
-                        popUpTo(Route.NewChat) { inclusive = true }
-                    }
+                onUserSelected = { userId, displayName ->
+                    navigateToDm(userId, displayName)
+                    navController.popBackStack(Route.NewChat, inclusive = true)
                 },
             )
         }
