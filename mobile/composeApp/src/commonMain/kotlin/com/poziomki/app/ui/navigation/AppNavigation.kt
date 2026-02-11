@@ -75,6 +75,7 @@ import com.poziomki.app.ui.screen.profile.PrivacyScreen
 import com.poziomki.app.ui.screen.profile.ProfileEditScreen
 import com.poziomki.app.ui.screen.profile.ProfileViewScreen
 import com.poziomki.app.ui.theme.Background
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
@@ -132,8 +133,9 @@ fun AppNavigation(
 
     val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
         if (userId.isBlank()) return@navigateToDm
+        val matrixLocalpart = matrixLocalpartFromUserId(userId)
         navigationScope.launch {
-            val roomId = matrixClient.createDM(userId, displayName).getOrNull() ?: return@launch
+            val roomId = matrixClient.createDM(matrixLocalpart, displayName).getOrNull() ?: return@launch
             navController.navigate(Route.Chat(roomId))
         }
     }
