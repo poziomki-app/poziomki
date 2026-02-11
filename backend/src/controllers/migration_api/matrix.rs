@@ -35,7 +35,7 @@ async fn do_create_session(
     device_name: Option<&str>,
     headers: &HeaderMap,
 ) -> std::result::Result<Response, Response> {
-    let homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
+    let internal_homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
         chat_bootstrap_error(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             headers,
@@ -44,10 +44,13 @@ async fn do_create_session(
         )
     })?;
 
+    let public_homeserver =
+        matrix_support::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
+
     let config = matrix_support::build_conn_config(user_pid, device_name);
     let http_client = matrix_support::init_http_client(headers)?;
 
-    let matrix_auth = matrix_support::try_matrix_auth(&http_client, &homeserver, &config)
+    let matrix_auth = matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config)
         .await
         .map_err(|error| {
             tracing::warn!(
@@ -64,7 +67,7 @@ async fn do_create_session(
             )
         })?;
 
-    matrix_support::build_session_response(homeserver, matrix_auth, headers)
+    matrix_support::build_session_response(public_homeserver, matrix_auth, headers)
 }
 
 pub(super) fn chat_bootstrap_error(

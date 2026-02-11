@@ -16,6 +16,25 @@ services:
       timeout: 5s
       retries: 5
 
+  tuwunel:
+    image: jevolk/tuwunel:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6167:6167"
+    environment:
+      TUWUNEL_SERVER_NAME: "chat.poziomki.app"
+      TUWUNEL_PORT: "6167"
+      TUWUNEL_ADDRESS: "0.0.0.0"
+      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
+      TUWUNEL_ALLOW_REGISTRATION: "true"
+      TUWUNEL_REGISTRATION_TOKEN: "${MATRIX_REGISTRATION_TOKEN:-poziomki-prod-token}"
+      TUWUNEL_ALLOW_FEDERATION: "false"
+      TUWUNEL_CREATE_ADMIN_ROOM: "true"
+      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
+      TUWUNEL_LOG: "warn"
+    volumes:
+      - tuwunel_data:/var/lib/tuwunel
+
   api:
     build:
       context: ./backend
@@ -24,6 +43,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      tuwunel:
+        condition: service_started
     ports:
       - "127.0.0.1:5150:5150"
     environment:
@@ -42,6 +63,10 @@ services:
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://rs-cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
       OTP_BYPASS_CODE: ${OTP_BYPASS_CODE:-}
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
+      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
+      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
+      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s
@@ -66,3 +91,4 @@ volumes:
   postgres_data:
   garage_data:
   garage_meta:
+  tuwunel_data:

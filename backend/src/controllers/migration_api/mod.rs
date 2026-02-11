@@ -53,6 +53,10 @@ pub(crate) struct ErrorSpec {
     pub(crate) details: Option<serde_json::Value>,
 }
 
+fn env_non_empty(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
+}
+
 fn request_id(headers: &HeaderMap) -> String {
     headers
         .get("x-request-id")
@@ -113,7 +117,8 @@ async fn root() -> Result<Response> {
 }
 
 async fn matrix_config() -> Result<Response> {
-    let homeserver = std::env::var("MATRIX_HOMESERVER_URL").ok();
+    let homeserver = env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
+        .or_else(|| env_non_empty("MATRIX_HOMESERVER_URL"));
     Ok(Json(MatrixConfigResponse {
         data: MatrixConfigData {
             homeserver,

@@ -1,5 +1,7 @@
 package com.poziomki.app.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -140,6 +142,10 @@ fun AppNavigation(
         navController = navController,
         startDestination = startDestination,
         modifier = Modifier.fillMaxSize(),
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
     ) {
         // Auth graph
         navigation<Route.AuthGraph>(startDestination = Route.Login) {
@@ -330,6 +336,10 @@ fun MainScreen(
                 NavHost(
                     navController = tabNavController,
                     startDestination = Route.Explore,
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None },
+                    popEnterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None },
                     modifier =
                         Modifier
                             .fillMaxSize()

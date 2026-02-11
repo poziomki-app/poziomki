@@ -77,6 +77,14 @@ pub(super) fn resolve_homeserver() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Public-facing homeserver URL for client session responses.
+/// Falls back to internal URL if public URL is not set.
+pub(super) fn resolve_public_homeserver() -> Option<String> {
+    super::env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
+        .or_else(|| super::env_non_empty("MATRIX_HOMESERVER_URL"))
+        .map(|v| v.trim().trim_end_matches('/').to_string())
+}
+
 pub(super) fn build_conn_config(user_pid: &str, device_name: Option<&str>) -> MatrixConnConfig {
     MatrixConnConfig {
         localpart: matrix_localpart_from_user_id(user_pid),
