@@ -4,17 +4,19 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUserDomainMask
 
 fun createDataStoreIos(): DataStore<Preferences> =
     createDataStore {
-        val directory =
+        val directoryUrl =
             NSFileManager.defaultManager.URLForDirectory(
                 directory = NSDocumentDirectory,
                 inDomain = NSUserDomainMask,
                 appropriateForURL = null,
                 create = false,
                 error = null,
-            )!!
-        "${directory.path}/$DATA_STORE_FILE_NAME"
+            )
+        val basePath = directoryUrl?.path ?: NSTemporaryDirectory()
+        "$basePath/$DATA_STORE_FILE_NAME"
     }

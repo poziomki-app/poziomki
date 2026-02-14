@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+  # sqlx-mysql/rsa is not compiled in this project (Postgres+SQLite only);
+  # no upstream fix exists yet for RUSTSEC-2023-0071.
+  "RUSTSEC-2023-0071",
+]

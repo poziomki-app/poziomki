@@ -39,7 +39,9 @@ impl Hooks for App {
         config: Config,
     ) -> Result<BootResult> {
         controllers::migration_api::reset_state();
-        create_app::<Self, Migrator>(mode, environment, config).await
+        let boot = create_app::<Self, Migrator>(mode, environment, config).await?;
+        controllers::migration_api::migrate_legacy_session_tokens(&boot.app_context).await?;
+        Ok(boot)
     }
 
     async fn initializers(_ctx: &AppContext) -> Result<Vec<Box<dyn Initializer>>> {
@@ -47,9 +49,7 @@ impl Hooks for App {
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
-        AppRoutes::empty() // controller routes below
-            .add_routes(controllers::migration_api::routes())
-            .add_route(controllers::auth::routes())
+        AppRoutes::empty().add_routes(controllers::migration_api::routes())
     }
     async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
         Ok(())

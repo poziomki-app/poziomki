@@ -8,6 +8,8 @@ import com.poziomki.app.chat.matrix.impl.RustMatrixClient
 import com.poziomki.app.data.connectivity.AndroidConnectivityMonitor
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
+import com.poziomki.app.session.AndroidSecureSessionTokenStore
+import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStore
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -31,6 +33,7 @@ actual fun platformModule(): Module =
             }
         }
         single { createDataStore(get<Context>()) }
+        single<SessionTokenStore> { AndroidSecureSessionTokenStore(get<Context>()) }
         single<MatrixClient> { RustMatrixClient(get(), get(), get()) }
         single<SqlDriver> {
             AndroidSqliteDriver(PoziomkiDatabase.Schema, get<Context>(), "poziomki.db")

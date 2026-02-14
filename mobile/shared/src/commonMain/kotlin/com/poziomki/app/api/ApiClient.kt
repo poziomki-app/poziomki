@@ -27,6 +27,7 @@ import kotlinx.serialization.json.Json
 class ApiClient(
     baseUrl: String,
     engine: io.ktor.client.engine.HttpClientEngine,
+    enableHttpLogging: Boolean = false,
     @PublishedApi internal val tokenProvider: suspend () -> String?,
     @PublishedApi internal val onUnauthorized: (suspend () -> Unit)? = null,
 ) {
@@ -45,8 +46,10 @@ class ApiClient(
                 json(json)
             }
             install(HttpCookies)
-            install(Logging) {
-                level = LogLevel.ALL
+            if (enableHttpLogging) {
+                install(Logging) {
+                    level = LogLevel.ALL
+                }
             }
             defaultRequest {
                 url(baseUrl)

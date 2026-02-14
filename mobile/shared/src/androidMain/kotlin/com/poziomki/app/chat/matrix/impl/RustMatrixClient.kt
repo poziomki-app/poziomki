@@ -480,5 +480,7 @@ private fun TimelineItemContent.toPreviewText(): String? =
         is TimelineItemContent.State,
         is TimelineItemContent.FailedToParseMessageLike,
         is TimelineItemContent.FailedToParseState,
-        -> null
+        -> {
+            null
+        }
     }

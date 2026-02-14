@@ -3,55 +3,72 @@ package com.poziomki.app.ui.screen.chat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.ui.screen.chat.model.ComposerMode
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Border
-import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
+import com.poziomki.app.util.rememberSingleFilePicker
+import com.poziomki.app.util.rememberSingleImagePicker
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -67,45 +84,46 @@ fun ChatScreen(
     viewModel: ChatViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val timelineListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
-    var actionMenuEventId by remember { mutableStateOf<String?>(null) }
+    var selectedActionEvent by remember { mutableStateOf<MatrixTimelineItem.Event?>(null) }
+    var showAttachmentMenu by remember { mutableStateOf(false) }
+
+    val pickImage = rememberSingleImagePicker { bytes -> bytes?.let(viewModel::sendImageAttachment) }
+    val pickFile = rememberSingleFilePicker { file -> file?.let(viewModel::sendFileAttachment) }
 
     LaunchedEffect(chatId) {
         viewModel.loadRoom(chatId)
     }
 
-    LaunchedEffect(state.timelineItems.size) {
-        if (state.timelineItems.isNotEmpty()) {
-            viewModel.markAsRead()
-        }
+    LaunchedEffect(timelineListState) {
+        snapshotFlow {
+            val layoutInfo = timelineListState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index
+            val totalItems = layoutInfo.totalItemsCount
+            Triple(
+                lastVisibleIndex,
+                totalItems,
+                totalItems > 0 && (lastVisibleIndex ?: -1) >= (totalItems - 2),
+            )
+        }.distinctUntilChanged()
+            .collect { (lastVisibleIndex, _, atLatest) ->
+                viewModel.onTimelineViewportChanged(lastVisibleIndex)
+                if (atLatest) {
+                    viewModel.markAsRead()
+                }
+            }
     }
 
     Scaffold(
         containerColor = Background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        state.roomDisplayName.ifBlank { "chat" },
-                        color = TextPrimary,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimary,
-                        )
-                    }
-                },
-                actions = {
-                    if (state.timelineMode is MatrixTimelineMode.FocusedOnEvent) {
-                        TextButton(onClick = { viewModel.enterLiveTimeline() }) {
-                            Text("na zywo")
-                        }
-                    }
-                },
+            ChatTopBar(
+                title = state.roomDisplayName.ifBlank { "Chat" },
+                timelineMode = state.timelineMode,
+                onBack = onBack,
+                onLive = viewModel::enterLiveTimeline,
             )
         },
     ) { padding ->
@@ -138,92 +156,114 @@ fun ChatScreen(
                     CircularProgressIndicator(color = Primary)
                 }
             } else {
-                LazyColumn(
+                Box(
                     modifier =
                         Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = PoziomkiTheme.spacing.md),
+                            .padding(horizontal = 10.dp),
                 ) {
-                    item {
-                        Button(
-                            onClick = { viewModel.paginateBackwards() },
-                            enabled = state.hasMoreBackwards && !state.isPaginatingBackwards,
+                    LazyColumn(
+                        state = timelineListState,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        item {
+                            TextButton(
+                                onClick = { viewModel.paginateBackwards() },
+                                enabled = state.hasMoreBackwards && !state.isPaginatingBackwards,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                val label =
+                                    when {
+                                        state.isPaginatingBackwards -> "Ładowanie..."
+                                        state.hasMoreBackwards -> "Pokaż starsze wiadomości"
+                                        else -> "Brak starszych wiadomości"
+                                    }
+                                Text(label)
+                            }
+                        }
+
+                        itemsIndexed(
+                            items = state.timelineItems,
+                            key = { index, item -> timelineItemKey(index, item) },
+                        ) { index, item ->
+                            when (item) {
+                                is MatrixTimelineItem.DateDivider -> {
+                                    DateDivider(timestampMillis = item.timestampMillis)
+                                }
+
+                                is MatrixTimelineItem.Event -> {
+                                    val previousEvent = state.timelineItems.getOrNull(index - 1) as? MatrixTimelineItem.Event
+                                    MessageEventRow(
+                                        event = item,
+                                        groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
+                                        onToggleReaction = { emoji ->
+                                            viewModel.toggleReaction(item.eventOrTransactionId, emoji)
+                                        },
+                                        onFocusOnEvent = { item.eventId?.let(viewModel::focusOnEvent) },
+                                        onFocusOnReply = { item.inReplyTo?.eventId?.let(viewModel::focusOnEvent) },
+                                        onSenderClick = { onNavigateToProfile(item.senderId) },
+                                        onActionsLongPress = { selectedActionEvent = item },
+                                        onSwipeReply = { viewModel.startReply(item) },
+                                    )
+                                }
+
+                                MatrixTimelineItem.ReadMarker -> {
+                                    NewMessagesDivider()
+                                }
+
+                                MatrixTimelineItem.TimelineStart -> {
+                                    StatusDivider(text = "Początek rozmowy")
+                                }
+                            }
+                        }
+
+                        item {
+                            if (state.typingUserIds.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = SurfaceColor,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                ) {
+                                    Text(
+                                        text = "Pisze: ${state.typingUserIds.joinToString()}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondary,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    )
+                                }
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                    }
+
+                    if (state.isAwayFromLatest && state.unreadBelowCount > 0) {
+                        FloatingActionButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val lastIndex = (timelineListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                                    timelineListState.animateScrollToItem(lastIndex)
+                                    viewModel.jumpToLatestHandled()
+                                }
+                            },
+                            containerColor = Primary,
+                            contentColor = Background,
                             modifier =
                                 Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = PoziomkiTheme.spacing.sm),
+                                    .align(Alignment.BottomEnd)
+                                    .padding(bottom = 10.dp, end = 8.dp),
                         ) {
-                            val label =
-                                when {
-                                    state.isPaginatingBackwards -> "ladowanie..."
-                                    state.hasMoreBackwards -> "starsze wiadomosci"
-                                    else -> "brak starszych wiadomosci"
-                                }
-                            Text(label)
-                        }
-                    }
-
-                    itemsIndexed(
-                        items = state.timelineItems,
-                        key = { index, item -> timelineItemKey(index, item) },
-                    ) { index, item ->
-                        when (item) {
-                            is MatrixTimelineItem.DateDivider -> {
-                                DateDivider(timestampMillis = item.timestampMillis)
-                            }
-
-                            is MatrixTimelineItem.Event -> {
-                                val previousEvent = state.timelineItems.getOrNull(index - 1) as? MatrixTimelineItem.Event
-                                MessageEventRow(
-                                    event = item,
-                                    groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
-                                    menuExpanded = actionMenuEventId == item.eventOrTransactionId,
-                                    onToggleReaction = { emoji ->
-                                        viewModel.toggleReaction(item.eventOrTransactionId, emoji)
-                                    },
-                                    onFocusOnEvent = {
-                                        item.eventId?.let(viewModel::focusOnEvent)
-                                    },
-                                    onFocusOnReply = {
-                                        item.inReplyTo?.eventId?.let(viewModel::focusOnEvent)
-                                    },
-                                    onSenderClick = { onNavigateToProfile(item.senderId) },
-                                    onMenuOpen = { actionMenuEventId = item.eventOrTransactionId },
-                                    onMenuDismiss = { actionMenuEventId = null },
-                                    onReply = {
-                                        viewModel.startReply(item)
-                                        actionMenuEventId = null
-                                    },
-                                    onEdit = {
-                                        viewModel.startEdit(item)
-                                        actionMenuEventId = null
-                                    },
-                                    onDelete = {
-                                        viewModel.redactEvent(item.eventOrTransactionId)
-                                        actionMenuEventId = null
-                                    },
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = "Najnowsze",
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(state.unreadBelowCount.toString())
                             }
-
-                            MatrixTimelineItem.ReadMarker -> {
-                                StatusDivider(text = "przeczytano")
-                            }
-
-                            MatrixTimelineItem.TimelineStart -> {
-                                StatusDivider(text = "poczatek rozmowy")
-                            }
-                        }
-                    }
-
-                    item {
-                        if (state.typingUserIds.isNotEmpty()) {
-                            Text(
-                                text = "pisze: ${state.typingUserIds.joinToString()}",
-                                fontFamily = NunitoFamily,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(vertical = PoziomkiTheme.spacing.sm),
-                            )
                         }
                     }
                 }
@@ -238,22 +278,76 @@ fun ChatScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(PoziomkiTheme.spacing.md),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = state.messageDraft,
-                    onValueChange = { viewModel.onDraftChanged(it) },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
-                        Text(composerPlaceholder(state.composerMode))
-                    },
-                    singleLine = true,
-                )
-                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
                 Surface(
-                    color = Primary,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = SurfaceColor,
+                    border = BorderStroke(1.dp, Border),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box {
+                            IconButton(onClick = { showAttachmentMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Załącznik",
+                                    tint = TextSecondary,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showAttachmentMenu,
+                                onDismissRequest = { showAttachmentMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Wyślij zdjęcie") },
+                                    onClick = {
+                                        pickImage()
+                                        showAttachmentMenu = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Wyślij plik") },
+                                    onClick = {
+                                        pickFile()
+                                        showAttachmentMenu = false
+                                    },
+                                )
+                            }
+                        }
+                        BasicTextField(
+                            value = state.messageDraft,
+                            onValueChange = { viewModel.onDraftChanged(it) },
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                            decorationBox = { innerTextField ->
+                                if (state.messageDraft.isBlank()) {
+                                    Text(
+                                        text = composerPlaceholder(state.composerMode),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = TextSecondary,
+                                    )
+                                }
+                                innerTextField()
+                            },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Surface(
+                    color = if (state.messageDraft.isBlank()) SurfaceColor else Primary,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, Border),
                     modifier =
                         Modifier
                             .size(46.dp)
@@ -262,13 +356,206 @@ fun ChatScreen(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                            tint = Background,
+                            contentDescription = "Wyślij",
+                            tint = if (state.messageDraft.isBlank()) TextSecondary else Background,
                         )
                     }
                 }
             }
         }
+    }
+
+    selectedActionEvent?.let { event ->
+        val eventId = event.eventId
+        ModalBottomSheet(
+            onDismissRequest = { selectedActionEvent = null },
+            containerColor = SurfaceColor,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PoziomkiTheme.spacing.md, vertical = PoziomkiTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "Akcje wiadomości",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TextPrimary,
+                )
+                HorizontalDivider(color = Border)
+
+                if (event.canReply && eventId != null) {
+                    TextButton(
+                        onClick = {
+                            viewModel.startReply(event)
+                            selectedActionEvent = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Odpowiedz")
+                    }
+                }
+
+                if (eventId != null) {
+                    TextButton(
+                        onClick = {
+                            viewModel.focusOnEvent(eventId)
+                            selectedActionEvent = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Pokaż kontekst")
+                    }
+                }
+
+                if (event.isEditable) {
+                    TextButton(
+                        onClick = {
+                            viewModel.startEdit(event)
+                            selectedActionEvent = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Edytuj")
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.redactEvent(event.eventOrTransactionId)
+                            selectedActionEvent = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Usuń")
+                    }
+                }
+
+                HorizontalDivider(color = Border)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = PoziomkiTheme.spacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("👍", "❤️", "😂", "😮", "😢", "🎉").forEach { emoji ->
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Background,
+                            border = BorderStroke(1.dp, Border),
+                            modifier =
+                                Modifier.clickable {
+                                    viewModel.toggleReaction(event.eventOrTransactionId, emoji)
+                                    selectedActionEvent = null
+                                },
+                        ) {
+                            Text(
+                                text = emoji,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatTopBar(
+    title: String,
+    timelineMode: MatrixTimelineMode,
+    onBack: () -> Unit,
+    onLive: () -> Unit,
+) {
+    Surface(
+        color = Background,
+        border = BorderStroke(1.dp, Border.copy(alpha = 0.35f)),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Wstecz",
+                    tint = TextPrimary,
+                )
+            }
+
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = CircleShape,
+                color = Primary.copy(alpha = 0.2f),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = title.firstOrNull()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Primary,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (timelineMode is MatrixTimelineMode.FocusedOnEvent) {
+                    Text(
+                        text = "Podgląd kontekstu",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+            }
+
+            if (timelineMode is MatrixTimelineMode.FocusedOnEvent) {
+                TextButton(onClick = onLive) {
+                    Text("Na żywo")
+                }
+            }
+
+            IconButton(onClick = { }) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = "Szukaj",
+                    tint = TextSecondary,
+                )
+            }
+            IconButton(onClick = { }) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "Więcej",
+                    tint = TextSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewMessagesDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Primary.copy(alpha = 0.3f))
+        Text(
+            text = "NOWE WIADOMOŚCI",
+            style = MaterialTheme.typography.labelSmall,
+            color = Primary,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Primary.copy(alpha = 0.3f))
     }
 }
 
@@ -284,23 +571,23 @@ private fun ComposerModeBanner(
 
         is ComposerMode.Edit -> {
             Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PoziomkiTheme.spacing.md),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                 color = SurfaceColor,
                 border = BorderStroke(1.dp, Border),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "edycja wiadomosci",
+                        text = "Edycja wiadomości",
                         style = MaterialTheme.typography.labelMedium,
                         color = TextPrimary,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = onCancel) {
-                        Text("anuluj")
+                        Text("Anuluj")
                     }
                 }
             }
@@ -308,13 +595,13 @@ private fun ComposerModeBanner(
 
         is ComposerMode.Reply -> {
             Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PoziomkiTheme.spacing.md),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                 color = SurfaceColor,
                 border = BorderStroke(1.dp, Border),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -326,7 +613,7 @@ private fun ComposerModeBanner(
                     Spacer(modifier = Modifier.width(6.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "odpowiedz do ${mode.senderDisplayName ?: "uzytkownik"}",
+                            text = "Odpowiedź do ${mode.senderDisplayName ?: "użytkownik"}",
                             style = MaterialTheme.typography.labelMedium,
                             color = TextPrimary,
                             maxLines = 1,
@@ -339,7 +626,7 @@ private fun ComposerModeBanner(
                         )
                     }
                     TextButton(onClick = onCancel) {
-                        Text("anuluj")
+                        Text("Anuluj")
                     }
                 }
             }
@@ -355,10 +642,7 @@ private fun DateDivider(timestampMillis: Long) {
 @Composable
 private fun StatusDivider(text: String) {
     Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -371,9 +655,9 @@ private fun StatusDivider(text: String) {
 
 private fun composerPlaceholder(mode: ComposerMode): String =
     when (mode) {
-        ComposerMode.NewMessage -> "napisz wiadomosc..."
-        is ComposerMode.Reply -> "odpowiedz..."
-        is ComposerMode.Edit -> "edytuj wiadomosc..."
+        ComposerMode.NewMessage -> "Wiadomość"
+        is ComposerMode.Reply -> "Odpowiedz..."
+        is ComposerMode.Edit -> "Edytuj wiadomość..."
     }
 
 private fun shouldGroupWithPrevious(

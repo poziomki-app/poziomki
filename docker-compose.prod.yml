@@ -15,6 +15,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    tmpfs:
+      - /tmp
+      - /run
 
   tuwunel:
     image: jevolk/tuwunel:latest
@@ -34,6 +51,14 @@ services:
       TUWUNEL_LOG: "warn"
     volumes:
       - tuwunel_data:/var/lib/tuwunel
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   api:
     build:
@@ -62,7 +87,6 @@ services:
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://rs-cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
-      OTP_BYPASS_CODE: ${OTP_BYPASS_CODE:-}
       MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
       MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
       MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
@@ -72,11 +96,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   garage:
     image: dxflrs/garage:v1.1.0
     restart: unless-stopped
-    user: "0:0"
+    user: "1000:1000"
     ports:
       - "127.0.0.1:3900:3900"
       - "127.0.0.1:3903:3903"
@@ -86,6 +121,14 @@ services:
       - garage_data:/var/lib/garage/data
       - garage_meta:/var/lib/garage/meta
       - ./garage.toml:/etc/garage.toml:ro,z
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
 volumes:
   postgres_data:

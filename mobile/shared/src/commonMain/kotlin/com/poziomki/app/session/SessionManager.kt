@@ -5,14 +5,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 class SessionManager(
     private val dataStore: DataStore<Preferences>,
+    private val tokenStore: SessionTokenStore,
 ) {
     private companion object {
-        val SESSION_TOKEN = stringPreferencesKey("session_token")
         val USER_ID = stringPreferencesKey("user_id")
         val USER_EMAIL = stringPreferencesKey("user_email")
         val USER_NAME = stringPreferencesKey("user_name")
@@ -24,22 +23,20 @@ class SessionManager(
             prefs[USER_ID] != null
         }
 
-    val sessionToken: Flow<String?> =
-        dataStore.data.map { prefs ->
-            prefs[SESSION_TOKEN]
-        }
-
     val userId: Flow<String?> =
         dataStore.data.map { prefs ->
             prefs[USER_ID]
         }
+
+    val sessionToken: Flow<String?> =
+        userId.map { tokenStore.getToken() }
 
     val profileId: Flow<String?> =
         dataStore.data.map { prefs ->
             prefs[PROFILE_ID]
         }
 
-    suspend fun getToken(): String? = dataStore.data.first()[SESSION_TOKEN]
+    suspend fun getToken(): String? = tokenStore.getToken()
 
     suspend fun saveSession(
         token: String,
@@ -47,8 +44,8 @@ class SessionManager(
         email: String,
         name: String,
     ) {
+        tokenStore.saveToken(token)
         dataStore.edit { prefs ->
-            prefs[SESSION_TOKEN] = token
             prefs[USER_ID] = userId
             prefs[USER_EMAIL] = email
             prefs[USER_NAME] = name
@@ -62,6 +59,7 @@ class SessionManager(
     }
 
     suspend fun clearSession() {
+        tokenStore.clearToken()
         dataStore.edit { it.clear() }
     }
 }

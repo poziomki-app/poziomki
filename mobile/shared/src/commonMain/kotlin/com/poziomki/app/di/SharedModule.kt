@@ -2,6 +2,8 @@ package com.poziomki.app.di
 
 import com.poziomki.app.api.ApiClient
 import com.poziomki.app.api.ApiService
+import com.poziomki.app.chat.draft.InMemoryRoomComposerDraftStore
+import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.DegreeRepository
 import com.poziomki.app.data.repository.EventRepository
@@ -20,12 +22,14 @@ import org.koin.dsl.module
 
 val sharedModule =
     module {
-        single { SessionManager(get()) }
+        single { SessionManager(get(), get()) }
+        single<RoomComposerDraftStore> { InMemoryRoomComposerDraftStore() }
         single {
             val sessionManager = get<SessionManager>()
             ApiClient(
                 baseUrl = getProperty("API_BASE_URL", "http://localhost:5150"),
                 engine = get(),
+                enableHttpLogging = getProperty("ENABLE_HTTP_LOGGING", false),
                 tokenProvider = { sessionManager.getToken() },
                 onUnauthorized = { sessionManager.clearSession() },
             )

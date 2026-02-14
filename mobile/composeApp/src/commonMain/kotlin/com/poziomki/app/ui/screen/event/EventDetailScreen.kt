@@ -74,137 +74,138 @@ fun EventDetailScreen(
             }
 
             state.event != null -> {
-                val event = state.event!!
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                            .verticalScroll(rememberScrollState()),
-                ) {
-                    event.coverImage?.let { url ->
-                        AsyncImage(
-                            model = url,
-                            contentDescription = event.title,
-                            modifier = Modifier.fillMaxWidth().height(200.dp),
-                            contentScale = ContentScale.Crop,
-                        )
-                    }
-
-                    Column(modifier = Modifier.padding(PoziomkiTheme.spacing.lg)) {
-                        Text(
-                            text = event.title,
-                            style = MaterialTheme.typography.headlineSmall,
-                        )
-
-                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-
-                        Text(
-                            text = event.startsAt,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-
-                        event.location?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                state.event?.let { event ->
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(padding)
+                                .verticalScroll(rememberScrollState()),
+                    ) {
+                        event.coverImage?.let { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = event.title,
+                                modifier = Modifier.fillMaxWidth().height(200.dp),
+                                contentScale = ContentScale.Crop,
                             )
                         }
 
-                        event.description?.let {
-                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+                        Column(modifier = Modifier.padding(PoziomkiTheme.spacing.lg)) {
                             Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = event.title,
+                                style = MaterialTheme.typography.headlineSmall,
                             )
-                        }
 
-                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
-                        ) {
-                            if (event.isAttending) {
-                                OutlinedButton(
-                                    onClick = { viewModel.leaveEvent() },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("Leave")
-                                }
-                            } else {
-                                Button(
-                                    onClick = { viewModel.attendEvent() },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("Attend")
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-
-                        OutlinedButton(
-                            onClick = { viewModel.openEventChat(onNavigateToChat) },
-                            enabled = !state.isOpeningChat,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            if (state.isOpeningChat) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Filled.Email,
-                                    contentDescription = null,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Czat wydarzenia")
-                            }
-                        }
-
-                        state.error?.let { error ->
                             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                            Text(
-                                text = error,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
 
-                        // Attendees
-                        if (state.attendees.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
                             Text(
-                                text = "Attendees (${state.attendees.size})",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = event.startsAt,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary,
                             )
-                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+
+                            event.location?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            event.description?.let {
+                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
                             ) {
-                                items(state.attendees) { attendee ->
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier =
-                                            Modifier
-                                                .width(72.dp)
-                                                .clickable { onNavigateToProfile(attendee.profileId) },
+                                if (event.isAttending) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.leaveEvent() },
+                                        modifier = Modifier.weight(1f),
                                     ) {
-                                        AsyncImage(
-                                            model = attendee.profilePicture?.let { resolveImageUrl(it) },
-                                            contentDescription = attendee.name,
-                                            modifier = Modifier.size(48.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                        Text(
-                                            text = attendee.name,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1,
-                                        )
+                                        Text("Leave")
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.attendEvent() },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text("Attend")
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+                            OutlinedButton(
+                                onClick = { viewModel.openEventChat(onNavigateToChat) },
+                                enabled = !state.isOpeningChat,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (state.isOpeningChat) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.Email,
+                                        contentDescription = null,
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Czat wydarzenia")
+                                }
+                            }
+
+                            state.error?.let { error ->
+                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                                Text(
+                                    text = error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+
+                            // Attendees
+                            if (state.attendees.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+                                Text(
+                                    text = "Attendees (${state.attendees.size})",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                                ) {
+                                    items(state.attendees) { attendee ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier =
+                                                Modifier
+                                                    .width(72.dp)
+                                                    .clickable { onNavigateToProfile(attendee.profileId) },
+                                        ) {
+                                            AsyncImage(
+                                                model = attendee.profilePicture?.let { resolveImageUrl(it) },
+                                                contentDescription = attendee.name,
+                                                modifier = Modifier.size(48.dp).clip(CircleShape),
+                                                contentScale = ContentScale.Crop,
+                                            )
+                                            Text(
+                                                text = attendee.name,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1,
+                                            )
+                                        }
                                     }
                                 }
                             }

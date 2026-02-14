@@ -1,29 +1,32 @@
+#[path = "state_auth.rs"]
+mod state_auth;
 #[path = "state_types.rs"]
 mod state_types;
 #[path = "state_uploads.rs"]
 mod state_uploads;
 
-use axum::http::HeaderMap;
-use chrono::{Duration, Utc};
-use loco_rs::prelude::*;
-use sea_orm::ActiveValue;
+use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard};
-use uuid::Uuid;
 
-use super::{error_response, ErrorSpec};
-use crate::models::_entities::{sessions, users};
+use super::ErrorSpec;
+pub(super) use state_auth::*;
 pub(super) use state_types::*;
 pub(super) use state_uploads::*;
-
-const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
-const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
 
 // --- OTP in-memory state (sole remaining in-memory data) ---
 
 #[derive(Default)]
 pub(super) struct OtpState {
-    pub(super) otp_by_email: HashMap<String, String>,
+    pub(super) otp_by_email: HashMap<String, OtpEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct OtpEntry {
+    pub(super) code: String,
+    pub(super) expires_at: chrono::DateTime<Utc>,
+    pub(super) attempts: u8,
+    pub(super) last_sent_at: chrono::DateTime<Utc>,
 }
 
 static OTP_STATE: LazyLock<Mutex<OtpState>> = LazyLock::new(|| Mutex::new(OtpState::default()));
@@ -41,110 +44,6 @@ pub(super) fn reset_otp_state() {
 
 pub(super) fn reset_state() {
     reset_otp_state();
-}
-
-// --- DB-backed auth helpers ---
-
-pub(super) fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
-    let header = headers.get("authorization")?.to_str().ok()?;
-    let token = header.strip_prefix("Bearer ")?;
-    Some(token.to_string())
-}
-
-pub(super) async fn require_auth_db(
-    db: &DatabaseConnection,
-    headers: &HeaderMap,
-) -> std::result::Result<(sessions::Model, users::Model), Box<Response>> {
-    let token =
-        extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-
-    let session = sessions::Entity::find()
-        .filter(sessions::Column::Token.eq(&token))
-        .one(db)
-        .await
-        .map_err(|_| Box::new(unauthorized_response(headers)))?
-        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-
-    let now = Utc::now();
-    if session.expires_at.with_timezone(&Utc) <= now {
-        let _ = sessions::Entity::delete_by_id(session.id).exec(db).await;
-        return Err(Box::new(unauthorized_response(headers)));
-    }
-
-    // Refresh session if stale
-    let elapsed = now - session.updated_at.with_timezone(&Utc);
-    if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
-        let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
-        let mut active: sessions::ActiveModel = session.clone().into();
-        active.updated_at = ActiveValue::Set(now.into());
-        active.expires_at = ActiveValue::Set(new_expires.into());
-        let _ = active.update(db).await;
-    }
-
-    let user = users::Entity::find_by_id(session.user_id)
-        .one(db)
-        .await
-        .map_err(|_| Box::new(unauthorized_response(headers)))?
-        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-
-    Ok((session, user))
-}
-
-pub(super) async fn create_session_db(
-    db: &DatabaseConnection,
-    headers: &HeaderMap,
-    user_id: i32,
-) -> std::result::Result<sessions::Model, loco_rs::Error> {
-    let now = Utc::now();
-    let token = Uuid::new_v4().to_string();
-    let session = sessions::ActiveModel {
-        id: ActiveValue::Set(Uuid::new_v4()),
-        user_id: ActiveValue::Set(user_id),
-        token: ActiveValue::Set(token),
-        ip_address: ActiveValue::Set(
-            headers
-                .get("x-forwarded-for")
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned),
-        ),
-        user_agent: ActiveValue::Set(
-            headers
-                .get("user-agent")
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned),
-        ),
-        expires_at: ActiveValue::Set((now + Duration::seconds(SESSION_DURATION_SECS)).into()),
-        created_at: ActiveValue::Set(now.into()),
-        updated_at: ActiveValue::Set(now.into()),
-    };
-    session
-        .insert(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
-}
-
-// --- View helpers ---
-
-pub(super) fn session_model_to_view(session: &sessions::Model) -> SessionView {
-    SessionView {
-        id: session.id.to_string(),
-        user_id: session.user_id.to_string(),
-        token: session.token.clone(),
-        expires_at: session.expires_at.to_rfc3339(),
-        created_at: session.created_at.to_rfc3339(),
-        updated_at: session.updated_at.to_rfc3339(),
-        ip_address: session.ip_address.clone(),
-        user_agent: session.user_agent.clone(),
-    }
-}
-
-pub(super) fn user_model_to_view(user: &users::Model) -> UserView {
-    UserView {
-        id: user.pid.to_string(),
-        email: user.email.clone(),
-        name: user.name.clone(),
-        email_verified: user.email_verified_at.is_some(),
-    }
 }
 
 // --- Auth validation helpers ---
@@ -216,16 +115,4 @@ pub(super) fn validate_profile_age(age: u8) -> std::result::Result<(), &'static 
         return Err("Age must be between 15 and 67");
     }
     Ok(())
-}
-
-fn unauthorized_response(headers: &HeaderMap) -> Response {
-    error_response(
-        axum::http::StatusCode::UNAUTHORIZED,
-        headers,
-        ErrorSpec {
-            error: "Authentication required".to_string(),
-            code: "UNAUTHORIZED",
-            details: None,
-        },
-    )
 }

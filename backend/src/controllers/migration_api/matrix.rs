@@ -47,7 +47,15 @@ async fn do_create_session(
     let public_homeserver =
         matrix_support::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
 
-    let config = matrix_support::build_conn_config(user_pid, device_name);
+    let config = matrix_support::build_conn_config(user_pid, device_name).map_err(|error| {
+        tracing::warn!(%error, "matrix session bootstrap is not configured");
+        chat_bootstrap_error(
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            headers,
+            "Messaging service is not configured",
+            "CHAT_NOT_CONFIGURED",
+        )
+    })?;
     let http_client = matrix_support::init_http_client(headers)?;
 
     let matrix_auth = matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config)

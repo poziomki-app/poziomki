@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EmbeddedEventDetails
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
+import org.matrix.rustcomponents.sdk.FileInfo
+import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.MessageType
 import org.matrix.rustcomponents.sdk.MsgLikeKind
 import org.matrix.rustcomponents.sdk.ProfileDetails
@@ -27,6 +29,8 @@ import org.matrix.rustcomponents.sdk.TimelineDiff
 import org.matrix.rustcomponents.sdk.TimelineItem
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import org.matrix.rustcomponents.sdk.TimelineListener
+import org.matrix.rustcomponents.sdk.UploadParameters
+import org.matrix.rustcomponents.sdk.UploadSource
 import org.matrix.rustcomponents.sdk.VirtualTimelineItem
 import org.matrix.rustcomponents.sdk.messageEventContentFromMarkdown
 
@@ -157,6 +161,80 @@ class RustTimeline(
             Unit
         }
 
+    override suspend fun sendImage(
+        data: ByteArray,
+        fileName: String,
+        mimeType: String?,
+        caption: String?,
+        inReplyToEventId: String?,
+    ): Result<Unit> =
+        runCatching {
+            val uploadSource = UploadSource.Data(bytes = data, filename = fileName)
+            val resolvedMimeType = mimeType ?: "image/jpeg"
+            val uploadParameters =
+                UploadParameters(
+                    source = uploadSource,
+                    caption = caption,
+                    formattedCaption = null,
+                    mentions = null,
+                    inReplyTo = inReplyToEventId,
+                )
+            val imageInfo =
+                ImageInfo(
+                    height = 0uL,
+                    width = 0uL,
+                    mimetype = resolvedMimeType,
+                    size = data.size.toULong(),
+                    thumbnailInfo = null,
+                    thumbnailSource = null,
+                    blurhash = null,
+                    isAnimated = null,
+                )
+            val joinHandle = inner.sendImage(uploadParameters, uploadSource, imageInfo)
+            try {
+                joinHandle.join()
+            } finally {
+                joinHandle.close()
+                imageInfo.destroy()
+            }
+            Unit
+        }
+
+    override suspend fun sendFile(
+        data: ByteArray,
+        fileName: String,
+        mimeType: String?,
+        caption: String?,
+        inReplyToEventId: String?,
+    ): Result<Unit> =
+        runCatching {
+            val uploadSource = UploadSource.Data(bytes = data, filename = fileName)
+            val resolvedMimeType = mimeType ?: "application/octet-stream"
+            val uploadParameters =
+                UploadParameters(
+                    source = uploadSource,
+                    caption = caption,
+                    formattedCaption = null,
+                    mentions = null,
+                    inReplyTo = inReplyToEventId,
+                )
+            val fileInfo =
+                FileInfo(
+                    mimetype = resolvedMimeType,
+                    size = data.size.toULong(),
+                    thumbnailInfo = null,
+                    thumbnailSource = null,
+                )
+            val joinHandle = inner.sendFile(uploadParameters, fileInfo)
+            try {
+                joinHandle.join()
+            } finally {
+                joinHandle.close()
+                fileInfo.destroy()
+            }
+            Unit
+        }
+
     override suspend fun edit(
         eventOrTransactionId: String,
         body: String,
@@ -228,7 +306,10 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         TimelineItemContent.CallInvite,
         TimelineItemContent.RtcNotification,
         is TimelineItemContent.FailedToParseState,
-        -> return null
+        -> {
+            return null
+        }
+
         else -> {} // continue processing
     }
 

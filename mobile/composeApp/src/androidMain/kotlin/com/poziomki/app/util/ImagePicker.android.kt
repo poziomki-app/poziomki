@@ -3,6 +3,7 @@ package com.poziomki.app.util
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,6 +40,33 @@ actual fun rememberMultiImagePicker(onResult: (List<ByteArray>) -> Unit): () -> 
         }
     return {
         launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+}
+
+@Composable
+actual fun rememberSingleFilePicker(onResult: (PickedFile?) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    val launcher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            if (uri == null) {
+                onResult(null)
+                return@rememberLauncherForActivityResult
+            }
+            val bytes =
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }.getOrNull()
+            if (bytes == null) {
+                onResult(null)
+                return@rememberLauncherForActivityResult
+            }
+            val fileName = readDisplayName(context, uri) ?: "attachment"
+            onResult(PickedFile(name = fileName, bytes = bytes, mimeType = context.contentResolver.getType(uri)))
+        }
+    return {
+        launcher.launch("*/*")
     }
 }
 
@@ -81,3 +109,16 @@ private fun compressImage(
         null
     }
 }
+
+private fun readDisplayName(
+    context: android.content.Context,
+    uri: Uri,
+): String? =
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index == -1) return@use null
+            if (!cursor.moveToFirst()) return@use null
+            cursor.getString(index)
+        }
+    }.getOrNull()

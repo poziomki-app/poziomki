@@ -60,12 +60,6 @@ fn storage_error_to_response(headers: &HeaderMap, err: &StorageError) -> Respons
     }
 }
 
-pub(super) async fn storage_exists(headers: &HeaderMap, filename: &str) -> HandlerResult<bool> {
-    uploads_storage::exists(filename)
-        .await
-        .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
-}
-
 pub(super) async fn storage_signed_url(
     headers: &HeaderMap,
     filename: &str,

@@ -85,91 +85,91 @@ fun ProfileScreen(
             }
 
             state.profile != null -> {
-                val profile = state.profile!!
-
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = PoziomkiTheme.spacing.lg),
-                ) {
-                    // ProfileCard
-                    ProfileCard(
-                        name = "${profile.name}, ${profile.age}",
-                        program = profile.program,
-                        profilePicture = profile.profilePicture,
-                        tags = state.tags,
-                        onClick = { onNavigateToProfileView(profile.id) },
-                    )
-
-                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-                    // Settings menu
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = SurfaceColor,
-                        border = BorderStroke(1.dp, Border),
+                state.profile?.let { profile ->
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = PoziomkiTheme.spacing.lg),
                     ) {
-                        Column {
-                            SettingsMenuItem(
-                                icon = Icons.Outlined.Edit,
-                                label = "edytuj profil",
-                                onClick = onNavigateToEdit,
-                            )
-                            HorizontalDivider(color = Border, thickness = 1.dp)
-                            SettingsMenuItem(
-                                icon = Icons.Outlined.Shield,
-                                label = "prywatność",
-                                onClick = onNavigateToPrivacy,
-                            )
-                            HorizontalDivider(color = Border, thickness = 1.dp)
-                            SettingsMenuItem(
-                                icon = Icons.Outlined.Settings,
-                                label = "ustawienia aplikacji",
-                                onClick = {},
-                            )
-                        }
-                    }
+                        // ProfileCard
+                        ProfileCard(
+                            name = "${profile.name}, ${profile.age}",
+                            program = profile.program,
+                            profilePicture = profile.profilePicture,
+                            tags = state.tags,
+                            onClick = { onNavigateToProfileView(profile.id) },
+                        )
 
-                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-                    // Logout button
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.background,
-                        border = BorderStroke(1.dp, Error),
-                    ) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.signOut()
-                                        onSignOut()
-                                    }.padding(horizontal = PoziomkiTheme.spacing.md, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                        // Settings menu
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = SurfaceColor,
+                            border = BorderStroke(1.dp, Border),
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = null,
-                                tint = Error,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "wyloguj się",
-                                fontFamily = nunito,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp,
-                                color = Error,
-                            )
+                            Column {
+                                SettingsMenuItem(
+                                    icon = Icons.Outlined.Edit,
+                                    label = "edytuj profil",
+                                    onClick = onNavigateToEdit,
+                                )
+                                HorizontalDivider(color = Border, thickness = 1.dp)
+                                SettingsMenuItem(
+                                    icon = Icons.Outlined.Shield,
+                                    label = "prywatność",
+                                    onClick = onNavigateToPrivacy,
+                                )
+                                HorizontalDivider(color = Border, thickness = 1.dp)
+                                SettingsMenuItem(
+                                    icon = Icons.Outlined.Settings,
+                                    label = "ustawienia aplikacji",
+                                    onClick = {},
+                                )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                        // Logout button
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.background,
+                            border = BorderStroke(1.dp, Error),
+                        ) {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.signOut()
+                                            onSignOut()
+                                        }.padding(horizontal = PoziomkiTheme.spacing.md, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = null,
+                                    tint = Error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "wyloguj się",
+                                    fontFamily = nunito,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = Error,
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+                    }
                 }
             }
 

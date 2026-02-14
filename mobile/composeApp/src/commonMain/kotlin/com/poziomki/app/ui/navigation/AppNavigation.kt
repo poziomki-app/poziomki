@@ -76,8 +76,8 @@ import com.poziomki.app.ui.screen.profile.ProfileEditScreen
 import com.poziomki.app.ui.screen.profile.ProfileViewScreen
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Primary
-import com.poziomki.app.util.matrixLocalpartFromUserId
 import com.poziomki.app.ui.theme.TextMuted
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel

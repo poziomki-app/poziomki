@@ -23,7 +23,7 @@ use super::state::{
 use crate::models::_entities::{profiles, uploads};
 use uploads_multipart::HandlerError;
 use uploads_support::{
-    bad_request, not_found, storage_delete, storage_exists, storage_read, storage_signed_url,
+    bad_request, forbidden, not_found, storage_delete, storage_read, storage_signed_url,
     storage_upload,
 };
 
@@ -43,63 +43,75 @@ impl serde::Serialize for AuthCheckResponse {
     }
 }
 
-async fn production_file_get(
+async fn require_auth_profile(
     db: &DatabaseConnection,
-    headers: HeaderMap,
-    filename: String,
-) -> Response {
-    let response: std::result::Result<Response, HandlerError> = async {
-        require_auth_db(db, &headers)
-            .await
-            .map_err(|e| e as HandlerError)?;
-
-        if !storage_exists(&headers, &filename).await? {
-            return Err(Box::new(not_found(&headers)));
-        }
-
-        let url = storage_signed_url(&headers, &filename).await?;
-        Ok(Json(UploadUrlResponse { url }).into_response())
-    }
-    .await;
-
-    response.unwrap_or_else(|response| *response)
+    headers: &HeaderMap,
+) -> std::result::Result<profiles::Model, HandlerError> {
+    let (_session, user) = require_auth_db(db, headers)
+        .await
+        .map_err(|e| e as HandlerError)?;
+    profiles::Entity::find()
+        .filter(profiles::Column::UserId.eq(user.id))
+        .one(db)
+        .await
+        .map_err(|_| {
+            Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")) as HandlerError
+        })?
+        .ok_or_else(|| Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")))
 }
 
-async fn development_file_get(
+async fn load_owned_upload(
     db: &DatabaseConnection,
-    filename: String,
-    headers: HeaderMap,
-) -> Response {
-    let mime_type = uploads::Entity::find()
-        .filter(uploads::Column::Filename.eq(&filename))
+    headers: &HeaderMap,
+    filename: &str,
+    owner_profile_id: uuid::Uuid,
+) -> std::result::Result<uploads::Model, HandlerError> {
+    let upload = uploads::Entity::find()
+        .filter(uploads::Column::Filename.eq(filename))
         .filter(uploads::Column::Deleted.eq(false))
         .one(db)
         .await
-        .ok()
-        .flatten()
-        .map(|record| record.mime_type);
+        .map_err(|_| Box::new(not_found(headers)) as HandlerError)?
+        .ok_or_else(|| Box::new(not_found(headers)) as HandlerError)?;
 
-    let Some(mime_type) = mime_type else {
-        return not_found(&headers);
-    };
+    if upload.owner_id != Some(owner_profile_id) {
+        return Err(Box::new(forbidden(
+            headers,
+            "ACCESS_DENIED",
+            "File access denied",
+        )));
+    }
 
-    let bytes = match storage_read(&headers, &filename).await {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    Ok(upload)
+}
 
-    let mut response = bytes.into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_str(&mime_type)
-            .unwrap_or(HeaderValue::from_static("application/octet-stream")),
-    );
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("private, max-age=31536000"),
-    );
+fn extract_filename_from_original_uri(
+    headers: &HeaderMap,
+) -> std::result::Result<String, HandlerError> {
+    let original_uri = headers
+        .get("x-original-uri")
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| {
+            Box::new(bad_request(
+                headers,
+                "MISSING_URI",
+                "Missing X-Original-URI header",
+            )) as HandlerError
+        })?;
 
-    response
+    let path = original_uri.split('?').next().unwrap_or_default();
+    let filename = path
+        .strip_prefix("/uploads/")
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            Box::new(bad_request(headers, "INVALID_URI", "Invalid upload URI")) as HandlerError
+        })?;
+
+    if let Err(message) = validate_filename(filename) {
+        return Err(Box::new(bad_request(headers, "INVALID_FILENAME", message)));
+    }
+
+    Ok(filename.to_string())
 }
 
 pub(super) async fn auth_check(
@@ -107,28 +119,9 @@ pub(super) async fn auth_check(
     headers: HeaderMap,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
-        let (_session, user) = require_auth_db(&ctx.db, &headers)
-            .await
-            .map_err(|e| e as HandlerError)?;
-
-        let _profile = profiles::Entity::find()
-            .filter(profiles::Column::UserId.eq(user.id))
-            .one(&ctx.db)
-            .await
-            .map_err(|_| {
-                Box::new(uploads_support::forbidden(
-                    &headers,
-                    "ACCESS_DENIED",
-                    "Profile not found",
-                )) as HandlerError
-            })?
-            .ok_or_else(|| {
-                Box::new(uploads_support::forbidden(
-                    &headers,
-                    "ACCESS_DENIED",
-                    "Profile not found",
-                )) as HandlerError
-            })?;
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let filename = extract_filename_from_original_uri(&headers)?;
+        let _upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
 
         Ok(Json(AuthCheckResponse { ok: true }).into_response())
     }
@@ -142,15 +135,35 @@ pub(super) async fn file_get(
     headers: HeaderMap,
     Path(filename): Path<String>,
 ) -> Result<Response> {
-    if let Err(message) = validate_filename(&filename) {
-        return Ok(bad_request(&headers, "INVALID_FILENAME", message));
-    }
+    let response: std::result::Result<Response, HandlerError> = async {
+        if let Err(message) = validate_filename(&filename) {
+            return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
+        }
 
-    if is_production_mode() {
-        Ok(production_file_get(&ctx.db, headers, filename).await)
-    } else {
-        Ok(development_file_get(&ctx.db, filename, headers).await)
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
+
+        if is_production_mode() {
+            let url = storage_signed_url(&headers, &filename).await?;
+            Ok(Json(UploadUrlResponse { url }).into_response())
+        } else {
+            let bytes = storage_read(&headers, &filename).await?;
+            let mut response = bytes.into_response();
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_str(&upload.mime_type)
+                    .unwrap_or(HeaderValue::from_static("application/octet-stream")),
+            );
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("private, max-age=31536000"),
+            );
+            Ok(response)
+        }
     }
+    .await;
+
+    Ok(response.unwrap_or_else(|r| *r))
 }
 
 pub(super) async fn file_upload(
@@ -159,18 +172,7 @@ pub(super) async fn file_upload(
     multipart: Multipart,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
-        let owner_id = {
-            let (_session, user) = require_auth_db(&ctx.db, &headers)
-                .await
-                .map_err(|e| e as HandlerError)?;
-            profiles::Entity::find()
-                .filter(profiles::Column::UserId.eq(user.id))
-                .one(&ctx.db)
-                .await
-                .ok()
-                .flatten()
-                .map(|p| p.id)
-        };
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
@@ -182,7 +184,7 @@ pub(super) async fn file_upload(
         let upload = uploads::ActiveModel {
             id: ActiveValue::Set(Uuid::new_v4()),
             filename: ActiveValue::Set(filename.clone()),
-            owner_id: ActiveValue::Set(owner_id),
+            owner_id: ActiveValue::Set(Some(profile.id)),
             context: ActiveValue::Set(context_str),
             context_id: ActiveValue::Set(parsed.context_id),
             mime_type: ActiveValue::Set(parsed.mime_type.clone()),
@@ -223,17 +225,8 @@ pub(super) async fn file_delete(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        require_auth_db(&ctx.db, &headers)
-            .await
-            .map_err(|e| e as HandlerError)?;
-
-        let upload = uploads::Entity::find()
-            .filter(uploads::Column::Filename.eq(&filename))
-            .filter(uploads::Column::Deleted.eq(false))
-            .one(&ctx.db)
-            .await
-            .map_err(|_| Box::new(not_found(&headers)) as HandlerError)?
-            .ok_or_else(|| Box::new(not_found(&headers)) as HandlerError)?;
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
 
         storage_delete(&headers, &filename).await?;
 

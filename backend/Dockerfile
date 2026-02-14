@@ -13,10 +13,13 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
+    && chown appuser:appuser /app
 
 COPY --from=builder /app/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
-COPY --from=builder /app/config ./config
+COPY --from=builder --chown=appuser:appuser /app/config ./config
 
+USER appuser
 EXPOSE 5150
 CMD ["poziomki_backend-cli", "start", "-e", "production"]

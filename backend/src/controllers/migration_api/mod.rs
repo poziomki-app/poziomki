@@ -228,6 +228,10 @@ pub(crate) fn reset_state() {
     state::reset_state();
 }
 
+pub(crate) async fn migrate_legacy_session_tokens(ctx: &AppContext) -> Result<()> {
+    state::migrate_legacy_session_tokens(&ctx.db).await
+}
+
 pub fn routes() -> Vec<Routes> {
     vec![
         Routes::new()

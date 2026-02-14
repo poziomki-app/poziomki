@@ -12,7 +12,12 @@ class PoziomkiApp : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@PoziomkiApp)
-            properties(mapOf("API_BASE_URL" to BuildConfig.API_BASE_URL))
+            properties(
+                mapOf(
+                    "API_BASE_URL" to BuildConfig.API_BASE_URL,
+                    "ENABLE_HTTP_LOGGING" to BuildConfig.DEBUG,
+                ),
+            )
             modules(sharedModule, platformModule(), appModule)
         }
     }

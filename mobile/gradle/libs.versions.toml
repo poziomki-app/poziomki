@@ -15,6 +15,7 @@ materialIconsCore = "1.7.3"
 navigationCompose = "2.9.0-beta03"
 lifecycleCompose = "2.9.1"
 matrixSdk = "26.2.6"
+securityCrypto = "1.1.0"
 sqldelight = "2.0.2"
 
 [libraries]
@@ -40,6 +41,7 @@ material-icons-core = { module = "org.jetbrains.compose.material:material-icons-
 material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsCore" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 matrix-sdk = { module = "org.matrix.rustcomponents:sdk-android", version.ref = "matrixSdk" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }

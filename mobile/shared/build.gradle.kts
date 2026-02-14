@@ -45,6 +45,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.matrix.sdk)
+            implementation(libs.androidx.security.crypto)
             implementation(libs.sqldelight.android.driver)
         }
         iosMain.dependencies {

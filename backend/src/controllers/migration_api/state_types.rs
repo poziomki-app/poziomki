@@ -206,7 +206,6 @@ pub(in crate::controllers::migration_api) struct SessionView {
     pub(in crate::controllers::migration_api) id: String,
     #[serde(rename = "userId")]
     pub(in crate::controllers::migration_api) user_id: String,
-    pub(in crate::controllers::migration_api) token: String,
     #[serde(rename = "expiresAt")]
     pub(in crate::controllers::migration_api) expires_at: String,
     #[serde(rename = "createdAt")]

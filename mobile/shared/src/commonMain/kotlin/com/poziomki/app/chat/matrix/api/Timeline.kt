@@ -68,6 +68,22 @@ interface Timeline : AutoCloseable {
         body: String,
     ): Result<Unit>
 
+    suspend fun sendImage(
+        data: ByteArray,
+        fileName: String,
+        mimeType: String? = null,
+        caption: String? = null,
+        inReplyToEventId: String? = null,
+    ): Result<Unit>
+
+    suspend fun sendFile(
+        data: ByteArray,
+        fileName: String,
+        mimeType: String? = null,
+        caption: String? = null,
+        inReplyToEventId: String? = null,
+    ): Result<Unit>
+
     suspend fun edit(
         eventOrTransactionId: String,
         body: String,

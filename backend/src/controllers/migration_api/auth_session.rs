@@ -3,7 +3,8 @@ use chrono::Utc;
 use loco_rs::{app::AppContext, prelude::*};
 
 use super::super::state::{
-    extract_bearer_token, session_model_to_view, user_model_to_view, SessionResponse,
+    extract_bearer_token, resolve_session_by_token, session_model_to_view, user_model_to_view,
+    SessionResponse,
 };
 use crate::models::_entities::{sessions, users};
 
@@ -23,11 +24,7 @@ async fn resolve_session_and_user(
         return Ok(None);
     };
 
-    let session = sessions::Entity::find()
-        .filter(sessions::Column::Token.eq(&token))
-        .one(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+    let session = resolve_session_by_token(db, &token).await?;
 
     let session = session.filter(|s| s.expires_at.with_timezone(&Utc) > Utc::now());
     let Some(session) = session else {

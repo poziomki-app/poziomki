@@ -106,9 +106,9 @@ fun VerifyScreen(
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xxl))
 
         // Error
-        if (uiState.error != null) {
+        uiState.error?.let { error ->
             Text(
-                text = uiState.error!!,
+                text = error,
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,

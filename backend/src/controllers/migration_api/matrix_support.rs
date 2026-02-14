@@ -7,8 +7,6 @@ use sha2::Sha256;
 use std::time::Duration;
 
 const DEFAULT_DEVICE_NAME: &str = "Poziomki Mobile";
-const DEFAULT_PASSWORD_PEPPER: &str = "poziomki-dev-matrix-pepper";
-const DEV_REGISTRATION_TOKEN: &str = "poziomki-dev-token";
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -68,6 +66,22 @@ pub(super) struct MatrixConnConfig {
     localpart: String,
     password: String,
     device_name: String,
+    registration_token: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) enum MatrixConfigError {
+    MissingPasswordPepper,
+    MissingRegistrationToken,
+}
+
+impl std::fmt::Display for MatrixConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingPasswordPepper => write!(f, "missing MATRIX_PASSWORD_PEPPER"),
+            Self::MissingRegistrationToken => write!(f, "missing MATRIX_REGISTRATION_TOKEN"),
+        }
+    }
 }
 
 pub(super) fn resolve_homeserver() -> Option<String> {
@@ -85,12 +99,21 @@ pub(super) fn resolve_public_homeserver() -> Option<String> {
         .map(|v| v.trim().trim_end_matches('/').to_string())
 }
 
-pub(super) fn build_conn_config(user_pid: &str, device_name: Option<&str>) -> MatrixConnConfig {
-    MatrixConnConfig {
+pub(super) fn build_conn_config(
+    user_pid: &str,
+    device_name: Option<&str>,
+) -> std::result::Result<MatrixConnConfig, MatrixConfigError> {
+    let password_pepper = super::env_non_empty("MATRIX_PASSWORD_PEPPER")
+        .ok_or(MatrixConfigError::MissingPasswordPepper)?;
+    let registration_token = super::env_non_empty("MATRIX_REGISTRATION_TOKEN")
+        .ok_or(MatrixConfigError::MissingRegistrationToken)?;
+
+    Ok(MatrixConnConfig {
         localpart: matrix_localpart_from_user_id(user_pid),
-        password: derive_matrix_password(user_pid),
+        password: derive_matrix_password(user_pid, &password_pepper),
         device_name: normalize_device_name(device_name),
-    }
+        registration_token,
+    })
 }
 
 #[allow(clippy::result_large_err)]
@@ -170,12 +193,7 @@ pub(super) fn build_session_response(
     .into_response())
 }
 
-fn derive_matrix_password(user_pid: &str) -> String {
-    let pepper = std::env::var("MATRIX_PASSWORD_PEPPER")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_PASSWORD_PEPPER.to_string());
-
+fn derive_matrix_password(user_pid: &str, pepper: &str) -> String {
     // HMAC accepts any key length, so new_from_slice never fails for SHA-256.
     #[allow(clippy::expect_used)]
     let mut mac =
@@ -208,13 +226,6 @@ fn matrix_localpart_from_user_id(user_id: &str) -> String {
     }
 }
 
-fn matrix_registration_token() -> String {
-    std::env::var("MATRIX_REGISTRATION_TOKEN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEV_REGISTRATION_TOKEN.to_string())
-}
-
 fn matrix_endpoint(homeserver: &str, path: &str) -> String {
     format!(
         "{}/{}",
@@ -233,10 +244,10 @@ async fn login_matrix_user(
         "type": "m.login.password",
         "identifier": {
             "type": "m.id.user",
-            "user": config.localpart,
+            "user": config.localpart.as_str(),
         },
-        "password": config.password,
-        "initial_device_display_name": config.device_name,
+        "password": config.password.as_str(),
+        "initial_device_display_name": config.device_name.as_str(),
         "refresh_token": true,
     });
     execute_matrix_auth_request(http_client, &url, payload).await
@@ -249,14 +260,14 @@ async fn register_matrix_user(
 ) -> std::result::Result<MatrixAuthResponse, MatrixRequestError> {
     let url = matrix_endpoint(homeserver, "/_matrix/client/v3/register");
     let payload = json!({
-        "username": config.localpart,
-        "password": config.password,
-        "initial_device_display_name": config.device_name,
+        "username": config.localpart.as_str(),
+        "password": config.password.as_str(),
+        "initial_device_display_name": config.device_name.as_str(),
         "refresh_token": true,
         "inhibit_login": false,
         "auth": {
             "type": "m.login.registration_token",
-            "token": matrix_registration_token(),
+            "token": config.registration_token.as_str(),
         },
     });
     execute_matrix_auth_request(http_client, &url, payload).await

@@ -160,17 +160,6 @@ pub(super) async fn upload(
         })
 }
 
-pub(super) async fn exists(filename: &str) -> Result<bool, StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    config
-        .operator
-        .exists(filename)
-        .await
-        .map_err(|err| StorageError {
-            kind: Some(err.kind()),
-        })
-}
-
 pub(super) async fn read(filename: &str) -> Result<Vec<u8>, StorageError> {
     let config = storage().map_err(|_message| StorageError { kind: None })?;
     config

@@ -18,4 +18,4 @@ root_domain = ".web.garage.localhost"
 
 [admin]
 api_bind_addr = "[::]:3903"
-admin_token = "garage-admin-token"
+admin_token = "d2b41a4a5c8f2dcd797d404db2d5d90c730c2fbc27e426487cfd7db40bdf0c95"

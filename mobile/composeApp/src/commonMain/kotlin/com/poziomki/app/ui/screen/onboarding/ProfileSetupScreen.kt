@@ -106,9 +106,9 @@ fun ProfileSetupScreen(
         showBack = true,
         onBack = onBack,
         footer = {
-            if (state.error != null) {
+            state.error?.let { error ->
                 Text(
-                    text = state.error!!,
+                    text = error,
                     fontFamily = nunito,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
@@ -190,7 +190,7 @@ fun ProfileSetupScreen(
 
                             state.selectedAvatar != null -> {
                                 Text(
-                                    text = state.selectedAvatar!!,
+                                    text = state.selectedAvatar.orEmpty(),
                                     fontSize = 36.sp,
                                     textAlign = TextAlign.Center,
                                 )

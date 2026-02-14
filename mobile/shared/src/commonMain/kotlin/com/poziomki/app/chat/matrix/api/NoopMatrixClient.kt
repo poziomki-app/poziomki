@@ -18,8 +18,7 @@ class NoopMatrixClient : MatrixClient {
     override suspend fun createDM(
         userId: String,
         displayName: String?,
-    ): Result<String> =
-        Result.failure(IllegalStateException("Chat is not available yet"))
+    ): Result<String> = Result.failure(IllegalStateException("Chat is not available yet"))
 
     override suspend fun createRoom(
         name: String,

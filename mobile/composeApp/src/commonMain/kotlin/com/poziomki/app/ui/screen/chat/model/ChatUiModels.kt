@@ -25,6 +25,8 @@ data class ChatUiState(
     val timelineItems: List<MatrixTimelineItem> = emptyList(),
     val isPaginatingBackwards: Boolean = false,
     val hasMoreBackwards: Boolean = true,
+    val isAwayFromLatest: Boolean = false,
+    val unreadBelowCount: Int = 0,
     val typingUserIds: List<String> = emptyList(),
     val messageDraft: String = "",
     val composerMode: ComposerMode = ComposerMode.NewMessage,
