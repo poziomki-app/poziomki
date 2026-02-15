@@ -58,8 +58,8 @@ fun ProfileCard(
         Brush.linearGradient(
             colors =
                 listOf(
-                    Color(0xFF181D24),
-                    Color(0xFF131820),
+                    Color(0xFF161C26),
+                    Color(0xFF080B10),
                 ),
             start = Offset(0f, 0f),
             end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),

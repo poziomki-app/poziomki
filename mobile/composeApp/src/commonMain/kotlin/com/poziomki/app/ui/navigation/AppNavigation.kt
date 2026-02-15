@@ -403,9 +403,9 @@ fun MainScreen(
                                 Brush.linearGradient(
                                     colors =
                                         listOf(
-                                            Color(0xFF1A2030),
-                                            Color(0xFF0F1820),
-                                            Color(0xFF122028),
+                                            Color(0xFF141A22),
+                                            Color(0xFF0E1318),
+                                            Color(0xFF101820),
                                         ),
                                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                                     end =
@@ -419,9 +419,9 @@ fun MainScreen(
                                 Brush.verticalGradient(
                                     colors =
                                         listOf(
-                                            Color(0x0CFFFFFF),
-                                            Color(0x03FFFFFF),
-                                            Color(0x06FFFFFF),
+                                            Color(0x08FFFFFF),
+                                            Color.Transparent,
+                                            Color(0x04FFFFFF),
                                         ),
                                 ),
                             )
@@ -431,9 +431,9 @@ fun MainScreen(
                                     Brush.linearGradient(
                                         colors =
                                             listOf(
-                                                Color(0x20FFFFFF),
-                                                Color(0x0CFFFFFF),
-                                                Color(0x14FFFFFF),
+                                                Color(0x18FFFFFF),
+                                                Color(0x0AFFFFFF),
+                                                Color(0x10FFFFFF),
                                             ),
                                     ),
                                 shape = navBarShape,
