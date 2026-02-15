@@ -10,6 +10,7 @@ mod matching;
 mod matrix;
 mod matrix_support;
 mod profiles;
+mod search_api;
 mod settings;
 mod state;
 mod uploads;
@@ -216,6 +217,12 @@ fn settings_routes() -> Routes {
         .add("", patch(settings::settings_update))
 }
 
+fn search_routes() -> Routes {
+    Routes::new()
+        .prefix("/api/v1")
+        .add("/search", get(search_api::search))
+}
+
 fn matrix_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/matrix")
@@ -245,6 +252,7 @@ pub fn routes() -> Vec<Routes> {
         matching_routes(),
         uploads_routes(),
         settings_routes(),
+        search_routes(),
         matrix_routes(),
     ]
 }

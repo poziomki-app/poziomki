@@ -57,3 +57,13 @@
 # Keep Kotlin metadata for reflection-based libraries
 -keep class kotlin.Metadata { *; }
 -dontwarn kotlin.**
+
+# MapLibre
+-keep class org.maplibre.** { *; }
+-dontwarn org.maplibre.**
+
+# Google Tink / errorprone annotations (used by AndroidX security-crypto)
+-dontwarn com.google.errorprone.annotations.CanIgnoreReturnValue
+-dontwarn com.google.errorprone.annotations.CheckReturnValue
+-dontwarn com.google.errorprone.annotations.Immutable
+-dontwarn com.google.errorprone.annotations.RestrictedApi

@@ -10,6 +10,8 @@ use super::{error_response, state::require_auth_db, ErrorSpec};
 pub(super) struct MatrixSessionRequest {
     #[serde(default)]
     device_name: Option<String>,
+    #[serde(default)]
+    device_id: Option<String>,
 }
 
 pub(super) async fn create_session(
@@ -17,22 +19,32 @@ pub(super) async fn create_session(
     headers: HeaderMap,
     Json(payload): Json<MatrixSessionRequest>,
 ) -> Result<Response> {
-    let user_pid = {
+    let (user_pid, user_name) = {
         let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
             Ok(auth) => auth,
             Err(response) => return Ok(*response),
         };
-        user.pid.to_string()
+        (user.pid.to_string(), user.name)
     };
 
-    match do_create_session(&user_pid, payload.device_name.as_deref(), &headers).await {
+    match do_create_session(
+        &user_pid,
+        &user_name,
+        payload.device_name.as_deref(),
+        payload.device_id.as_deref(),
+        &headers,
+    )
+    .await
+    {
         Ok(response) | Err(response) => Ok(response),
     }
 }
 
 async fn do_create_session(
     user_pid: &str,
+    user_name: &str,
     device_name: Option<&str>,
+    device_id: Option<&str>,
     headers: &HeaderMap,
 ) -> std::result::Result<Response, Response> {
     let internal_homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
@@ -47,15 +59,16 @@ async fn do_create_session(
     let public_homeserver =
         matrix_support::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
 
-    let config = matrix_support::build_conn_config(user_pid, device_name).map_err(|error| {
-        tracing::warn!(%error, "matrix session bootstrap is not configured");
-        chat_bootstrap_error(
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            headers,
-            "Messaging service is not configured",
-            "CHAT_NOT_CONFIGURED",
-        )
-    })?;
+    let config =
+        matrix_support::build_conn_config(user_pid, device_name, device_id).map_err(|error| {
+            tracing::warn!(%error, "matrix session bootstrap is not configured");
+            chat_bootstrap_error(
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                headers,
+                "Messaging service is not configured",
+                "CHAT_NOT_CONFIGURED",
+            )
+        })?;
     let http_client = matrix_support::init_http_client(headers)?;
 
     let matrix_auth = matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config)
@@ -74,6 +87,19 @@ async fn do_create_session(
                 "CHAT_UNAVAILABLE",
             )
         })?;
+
+    // Set the user's Matrix display name (best-effort, don't fail the session)
+    if let Err(e) = matrix_support::set_display_name(
+        &http_client,
+        &internal_homeserver,
+        &matrix_auth.access_token,
+        &matrix_auth.user_id,
+        user_name,
+    )
+    .await
+    {
+        tracing::warn!(error = %e, "failed to set matrix display name");
+    }
 
     matrix_support::build_session_response(public_homeserver, matrix_auth, headers)
 }

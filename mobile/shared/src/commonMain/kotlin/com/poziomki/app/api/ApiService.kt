@@ -86,10 +86,20 @@ class ApiService(
 
     suspend fun getMatchingProfiles(): ApiResult<List<MatchProfile>> = client.get("/api/v1/matching/profiles")
 
+    // Search
+
+    suspend fun search(
+        query: String,
+        limit: Int = 10,
+    ): ApiResult<SearchResults> = client.get("/api/v1/search?q=$query&limit=$limit")
+
     // Matrix bootstrap
 
     suspend fun getMatrixConfig(): ApiResult<MatrixConfigData> = client.get("/api/v1/matrix/config")
 
-    suspend fun createMatrixSession(deviceName: String = "Poziomki Mobile"): ApiResult<MatrixSessionData> =
-        client.post("/api/v1/matrix/session", MatrixSessionRequest(deviceName = deviceName))
+    suspend fun createMatrixSession(
+        deviceName: String = "Poziomki Mobile",
+        deviceId: String? = null,
+    ): ApiResult<MatrixSessionData> =
+        client.post("/api/v1/matrix/session", MatrixSessionRequest(deviceName = deviceName, deviceId = deviceId))
 }

@@ -21,4 +21,6 @@ interface JoinedRoom {
     suspend fun markAsRead(): Result<Unit>
 
     suspend fun inviteUserById(userId: String): Result<Unit>
+
+    suspend fun getMemberDisplayName(userId: String): String?
 }

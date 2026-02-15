@@ -68,7 +68,7 @@ fun ProfileScreen(
         // Header
         Text(
             text = "profil",
-            style = MaterialTheme.typography.headlineLarge,
+            style = MaterialTheme.typography.headlineMedium,
             color = TextPrimary,
             modifier =
                 Modifier.padding(
@@ -95,7 +95,7 @@ fun ProfileScreen(
                     ) {
                         // ProfileCard
                         ProfileCard(
-                            name = "${profile.name}, ${profile.age}",
+                            name = profile.name,
                             program = profile.program,
                             profilePicture = profile.profilePicture,
                             tags = state.tags,

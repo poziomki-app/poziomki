@@ -166,6 +166,7 @@ data class Event(
 data class CreateEventRequest(
     val title: String,
     val description: String? = null,
+    val coverImage: String? = null,
     val location: String? = null,
     val startsAt: String,
     val endsAt: String? = null,
@@ -176,6 +177,7 @@ data class CreateEventRequest(
 data class UpdateEventRequest(
     val title: String? = null,
     val description: String? = null,
+    val coverImage: String? = null,
     val location: String? = null,
     val startsAt: String? = null,
     val endsAt: String? = null,
@@ -252,6 +254,7 @@ data class MatrixConfigData(
 @Serializable
 data class MatrixSessionRequest(
     val deviceName: String = "Poziomki Mobile",
+    val deviceId: String? = null,
 )
 
 @Serializable
@@ -267,6 +270,65 @@ data class MatrixSessionData(
     val userId: String? = null,
     val deviceId: String? = null,
     val expiresAt: Long? = null,
+)
+
+// Search models
+
+@Serializable
+data class SearchResults(
+    val profiles: List<SearchProfile> = emptyList(),
+    val events: List<SearchEvent> = emptyList(),
+    val tags: List<SearchTag> = emptyList(),
+    val degrees: List<SearchDegree> = emptyList(),
+)
+
+@Serializable
+data class SearchProfile(
+    val id: String,
+    val name: String,
+    val bio: String? = null,
+    val age: Int,
+    val program: String? = null,
+    @SerialName("profile_picture")
+    val profilePicture: String? = null,
+    val tags: List<String> = emptyList(),
+)
+
+@Serializable
+data class SearchEvent(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val location: String? = null,
+    @SerialName("starts_at")
+    val startsAt: String,
+    @SerialName("cover_image")
+    val coverImage: String? = null,
+    @SerialName("creator_name")
+    val creatorName: String,
+)
+
+@Serializable
+data class SearchTag(
+    val id: String,
+    val name: String,
+    val scope: String,
+    val category: String? = null,
+    val emoji: String? = null,
+)
+
+@Serializable
+data class SearchDegree(
+    val id: String,
+    val name: String,
+)
+
+// Geocoding models
+
+data class GeocodingResult(
+    val name: String,
+    val lat: Double,
+    val lng: Double,
 )
 
 // Settings models

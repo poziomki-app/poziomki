@@ -167,6 +167,20 @@ pub(super) async fn tags_create(
 
     match validate_and_insert_tag(&ctx.db, &headers, payload).await {
         Ok(inserted) => {
+            // Sync to Meilisearch (fire-and-forget)
+            if let Ok(meili) = crate::search::create_client() {
+                crate::search::index_tag(
+                    &meili,
+                    crate::search::TagDocument {
+                        id: inserted.id.to_string(),
+                        name: inserted.name.clone(),
+                        scope: inserted.scope.clone(),
+                        category: inserted.category.clone(),
+                        emoji: inserted.emoji.clone(),
+                    },
+                );
+            }
+
             let data = tag_model_to_response(&inserted);
             Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
         }

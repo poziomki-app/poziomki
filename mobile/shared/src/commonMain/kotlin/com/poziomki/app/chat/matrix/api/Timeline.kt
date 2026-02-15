@@ -16,10 +16,16 @@ sealed interface MatrixTimelineMode {
     ) : MatrixTimelineMode
 }
 
+data class MatrixReactionSender(
+    val senderId: String,
+    val displayName: String?,
+)
+
 data class MatrixReaction(
     val emoji: String,
     val count: Int,
     val reactedByMe: Boolean,
+    val senders: List<MatrixReactionSender> = emptyList(),
 )
 
 data class MatrixReplyDetails(

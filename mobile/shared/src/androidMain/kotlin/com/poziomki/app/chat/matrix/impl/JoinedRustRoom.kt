@@ -108,6 +108,8 @@ class JoinedRustRoom(
             Unit
         }
 
+    override suspend fun getMemberDisplayName(userId: String): String? = runCatching { innerRoom.memberDisplayName(userId) }.getOrNull()
+
     fun close() {
         typingHandle?.cancel()
         roomInfoHandle?.cancel()

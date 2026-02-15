@@ -2,6 +2,7 @@ package com.poziomki.app.di
 
 import com.poziomki.app.api.ApiClient
 import com.poziomki.app.api.ApiService
+import com.poziomki.app.api.GeocodingService
 import com.poziomki.app.chat.draft.InMemoryRoomComposerDraftStore
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.data.CacheManager
@@ -35,6 +36,7 @@ val sharedModule =
             )
         }
         single { ApiService(get()) }
+        single { GeocodingService(get()) }
         single { PoziomkiDatabase(get()) }
         single { CacheManager(get()) }
         single { PendingOperationsManager(get()) }

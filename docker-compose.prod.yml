@@ -60,6 +60,25 @@ services:
         limits:
           memory: 512m
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7700:7700"
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_ENV: production
+    volumes:
+      - meili_data:/meili_data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
   api:
     build:
       context: ./backend
@@ -79,6 +98,8 @@ services:
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-loco}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-poziomki-rs}
       JWT_SECRET: ${JWT_SECRET}
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
       GARAGE_S3_ENDPOINT: http://garage:3900
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
       GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
@@ -137,3 +158,4 @@ volumes:
   garage_data:
   garage_meta:
   tuwunel_data:
+  meili_data:

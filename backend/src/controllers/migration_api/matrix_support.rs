@@ -28,13 +28,13 @@ struct MatrixSessionData {
 
 #[derive(Clone, Debug, Deserialize)]
 pub(super) struct MatrixAuthResponse {
-    access_token: String,
-    user_id: String,
-    device_id: String,
+    pub(super) access_token: String,
+    pub(super) user_id: String,
+    pub(super) device_id: String,
     #[serde(default)]
-    refresh_token: Option<String>,
+    pub(super) refresh_token: Option<String>,
     #[serde(default)]
-    expires_in_ms: Option<i64>,
+    pub(super) expires_in_ms: Option<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -66,6 +66,7 @@ pub(super) struct MatrixConnConfig {
     localpart: String,
     password: String,
     device_name: String,
+    device_id: Option<String>,
     registration_token: String,
 }
 
@@ -102,6 +103,7 @@ pub(super) fn resolve_public_homeserver() -> Option<String> {
 pub(super) fn build_conn_config(
     user_pid: &str,
     device_name: Option<&str>,
+    device_id: Option<&str>,
 ) -> std::result::Result<MatrixConnConfig, MatrixConfigError> {
     let password_pepper = super::env_non_empty("MATRIX_PASSWORD_PEPPER")
         .ok_or(MatrixConfigError::MissingPasswordPepper)?;
@@ -112,6 +114,7 @@ pub(super) fn build_conn_config(
         localpart: matrix_localpart_from_user_id(user_pid),
         password: derive_matrix_password(user_pid, &password_pepper),
         device_name: normalize_device_name(device_name),
+        device_id: normalize_device_id(device_id),
         registration_token,
     })
 }
@@ -193,6 +196,35 @@ pub(super) fn build_session_response(
     .into_response())
 }
 
+pub(super) async fn set_display_name(
+    http_client: &reqwest::Client,
+    homeserver: &str,
+    access_token: &str,
+    user_id: &str,
+    display_name: &str,
+) -> std::result::Result<(), String> {
+    let encoded_user_id = user_id
+        .replace('%', "%25")
+        .replace('@', "%40")
+        .replace(':', "%3A");
+    let url = matrix_endpoint(
+        homeserver,
+        &format!("/_matrix/client/v3/profile/{encoded_user_id}/displayname"),
+    );
+    let response = http_client
+        .put(&url)
+        .bearer_auth(access_token)
+        .json(&json!({ "displayname": display_name }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("HTTP {}", response.status()))
+    }
+}
+
 fn derive_matrix_password(user_pid: &str, pepper: &str) -> String {
     // HMAC accepts any key length, so new_from_slice never fails for SHA-256.
     #[allow(clippy::expect_used)]
@@ -211,6 +243,24 @@ fn normalize_device_name(name: Option<&str>) -> String {
     } else {
         bounded
     }
+}
+
+fn normalize_device_id(device_id: Option<&str>) -> Option<String> {
+    let trimmed = device_id.map(str::trim).unwrap_or_default();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let normalized: String = trimmed
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(*ch, '_' | '-' | '.'))
+        .take(64)
+        .collect();
+    if normalized.is_empty() {
+        return None;
+    }
+
+    Some(normalized.to_ascii_uppercase())
 }
 
 fn matrix_localpart_from_user_id(user_id: &str) -> String {
@@ -250,6 +300,7 @@ async fn login_matrix_user(
         "initial_device_display_name": config.device_name.as_str(),
         "refresh_token": true,
     });
+    let payload = with_device_id(payload, config.device_id.as_deref());
     execute_matrix_auth_request(http_client, &url, payload).await
 }
 
@@ -270,7 +321,17 @@ async fn register_matrix_user(
             "token": config.registration_token.as_str(),
         },
     });
+    let payload = with_device_id(payload, config.device_id.as_deref());
     execute_matrix_auth_request(http_client, &url, payload).await
+}
+
+fn with_device_id(mut payload: serde_json::Value, device_id: Option<&str>) -> serde_json::Value {
+    if let Some(device_id) = device_id {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("device_id".to_string(), json!(device_id));
+        }
+    }
+    payload
 }
 
 async fn execute_matrix_auth_request(

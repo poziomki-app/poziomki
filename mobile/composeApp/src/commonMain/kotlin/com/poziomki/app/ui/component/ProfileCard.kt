@@ -1,5 +1,6 @@
 package com.poziomki.app.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,9 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.NorthEast
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,11 +22,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.regular.ArrowUpRight
+import com.adamglin.phosphoricons.regular.User
 import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.MontserratFamily
@@ -38,7 +43,6 @@ import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 import com.poziomki.app.util.isImageUrl
 import com.poziomki.app.util.resolveImageUrl
-import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
 @Composable
 fun ProfileCard(
@@ -49,15 +53,25 @@ fun ProfileCard(
     maxVisibleTags: Int = 2,
     onClick: () -> Unit,
 ) {
-    Surface(
+    val cardShape = RoundedCornerShape(20.dp)
+    val gradientBrush =
+        Brush.linearGradient(
+            colors =
+                listOf(
+                    Color(0xFF181D24),
+                    Color(0xFF131820),
+                ),
+            start = Offset(0f, 0f),
+            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+        )
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(cardShape)
+                .border(1.dp, Border, cardShape)
+                .background(gradientBrush)
                 .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = SurfaceColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Border),
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -99,7 +113,7 @@ fun ProfileCard(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
-                                    Icons.Filled.Person,
+                                    PhosphorIcons.Regular.User,
                                     contentDescription = name,
                                     modifier = Modifier.size(40.dp),
                                     tint = TextMuted,
@@ -138,12 +152,12 @@ fun ProfileCard(
                     if (tags.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             tags.take(maxVisibleTags).forEach { tag ->
                                 Text(
-                                    text = tag.name,
+                                    text = tag.name.lowercase(),
                                     fontFamily = NunitoFamily,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 13.sp,
@@ -154,7 +168,7 @@ fun ProfileCard(
                                                 1.dp,
                                                 Border,
                                                 RoundedCornerShape(50),
-                                            ).padding(horizontal = 8.dp, vertical = 3.dp),
+                                            ).padding(horizontal = 10.dp, vertical = 4.dp),
                                 )
                             }
                             val overflow = tags.size - maxVisibleTags
@@ -174,7 +188,7 @@ fun ProfileCard(
 
             // Expand arrow top-right
             Icon(
-                Icons.Filled.NorthEast,
+                PhosphorIcons.Regular.ArrowUpRight,
                 contentDescription = "View profile",
                 modifier =
                     Modifier

@@ -7,6 +7,7 @@
 package com.poziomki.app.chat.matrix.impl
 
 import com.poziomki.app.chat.matrix.api.MatrixReaction
+import com.poziomki.app.chat.matrix.api.MatrixReactionSender
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
@@ -328,6 +329,13 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
                         emoji = reaction.key,
                         count = reaction.senders.size,
                         reactedByMe = reaction.senders.any { it.senderId == ownUserId },
+                        senders =
+                            reaction.senders.map { sender ->
+                                MatrixReactionSender(
+                                    senderId = sender.senderId,
+                                    displayName = null,
+                                )
+                            },
                     )
                 }
             }
@@ -426,7 +434,7 @@ private fun timelineContentToText(content: TimelineItemContent): String =
                 }
 
                 is MsgLikeKind.UnableToDecrypt -> {
-                    "Unable to decrypt message"
+                    "Encrypted message"
                 }
 
                 is MsgLikeKind.Other -> {

@@ -264,6 +264,13 @@ class ChatViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
+    suspend fun resolveDisplayNames(userIds: List<String>): Map<String, String> {
+        val room = activeRoom ?: return emptyMap()
+        return userIds.associateWith { userId ->
+            room.getMemberDisplayName(userId) ?: userId
+        }
+    }
+
     override fun onCleared() {
         clearTypingTimers()
         focusedTimeline?.close()

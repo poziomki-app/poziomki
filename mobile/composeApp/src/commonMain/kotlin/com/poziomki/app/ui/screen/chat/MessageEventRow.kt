@@ -55,7 +55,7 @@ internal fun MessageEventRow(
     event: MatrixTimelineItem.Event,
     groupedWithPrevious: Boolean,
     onToggleReaction: (String) -> Unit,
-    onFocusOnEvent: () -> Unit,
+    onReactionsClick: () -> Unit,
     onFocusOnReply: () -> Unit,
     onSenderClick: () -> Unit,
     onActionsLongPress: () -> Unit,
@@ -214,7 +214,7 @@ internal fun MessageEventRow(
                             Surface(
                                 shape = RoundedCornerShape(999.dp),
                                 color = if (reaction.reactedByMe) Primary.copy(alpha = 0.22f) else SurfaceColor,
-                                modifier = Modifier.clickable { onToggleReaction(reaction.emoji) },
+                                modifier = Modifier.clickable { onReactionsClick() },
                             ) {
                                 Text(
                                     text = "${reaction.emoji} ${reaction.count}",
@@ -226,15 +226,6 @@ internal fun MessageEventRow(
                             }
                         }
                     }
-                }
-
-                if (event.eventId != null) {
-                    Text(
-                        text = "kontekst",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(top = 2.dp, start = 8.dp, end = 8.dp).clickable(onClick = onFocusOnEvent),
-                    )
                 }
             }
         }

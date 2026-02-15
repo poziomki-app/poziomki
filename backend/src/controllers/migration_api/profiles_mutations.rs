@@ -127,6 +127,28 @@ pub(in crate::controllers::migration_api) async fn profile_create(
         sync_profile_tags(&ctx.db, profile_id, &tag_ids).await?;
     }
 
+    // Sync to Meilisearch (fire-and-forget)
+    if let Ok(meili) = crate::search::create_client() {
+        let tag_names = super::load_profile_tags(&ctx.db, profile_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        crate::search::index_profile(
+            &meili,
+            crate::search::ProfileDocument {
+                id: inserted.id.to_string(),
+                name: inserted.name.clone(),
+                bio: inserted.bio.clone(),
+                age: inserted.age,
+                program: inserted.program.clone(),
+                profile_picture: inserted.profile_picture.clone(),
+                tags: tag_names,
+            },
+        );
+    }
+
     let data = full_profile_response(&ctx.db, &inserted, &user.pid).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
 }
@@ -253,6 +275,28 @@ pub(in crate::controllers::migration_api) async fn profile_update(
 
     maybe_sync_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
 
+    // Sync to Meilisearch (fire-and-forget)
+    if let Ok(meili) = crate::search::create_client() {
+        let tag_names = super::load_profile_tags(&ctx.db, profile_uuid)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        crate::search::index_profile(
+            &meili,
+            crate::search::ProfileDocument {
+                id: updated.id.to_string(),
+                name: updated.name.clone(),
+                bio: updated.bio.clone(),
+                age: updated.age,
+                program: updated.program.clone(),
+                profile_picture: updated.profile_picture.clone(),
+                tags: tag_names,
+            },
+        );
+    }
+
     let data = full_profile_response(&ctx.db, &updated, &user.pid).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
@@ -267,10 +311,17 @@ pub(in crate::controllers::migration_api) async fn profile_delete(
         Err(response) => return Ok(*response),
     };
 
+    let profile_id_str = profile.id.to_string();
+
     profiles::Entity::delete_by_id(profile.id)
         .exec(&ctx.db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    // Sync to Meilisearch (fire-and-forget)
+    if let Ok(meili) = crate::search::create_client() {
+        crate::search::delete_profile(&meili, profile_id_str);
+    }
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }

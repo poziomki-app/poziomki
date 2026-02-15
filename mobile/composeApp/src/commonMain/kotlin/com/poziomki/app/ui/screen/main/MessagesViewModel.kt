@@ -2,9 +2,12 @@ package com.poziomki.app.ui.screen.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.poziomki.app.api.ApiResult
+import com.poziomki.app.api.ApiService
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.ui.screen.main.messages.MessagesUiState
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +16,7 @@ import kotlinx.coroutines.launch
 
 class MessagesViewModel(
     private val matrixClient: MatrixClient,
+    private val apiService: ApiService,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
@@ -21,6 +25,7 @@ class MessagesViewModel(
         observeClientState()
         observeRooms()
         refresh()
+        loadProfilePictures()
     }
 
     fun refresh() {
@@ -81,6 +86,25 @@ class MessagesViewModel(
                         isLoading = false,
                     )
                 }
+            }
+        }
+    }
+
+    private fun loadProfilePictures() {
+        viewModelScope.launch {
+            when (val result = apiService.getMatchingProfiles()) {
+                is ApiResult.Success -> {
+                    val pictureMap = mutableMapOf<String, String>()
+                    result.data.forEach { profile ->
+                        val pic = profile.profilePicture
+                        if (!pic.isNullOrBlank() && profile.userId.isNotBlank()) {
+                            val localpart = matrixLocalpartFromUserId(profile.userId)
+                            pictureMap[localpart] = pic
+                        }
+                    }
+                    _state.update { it.copy(profilePictures = pictureMap) }
+                }
+                is ApiResult.Error -> { /* ignore — avatars will just fall back */ }
             }
         }
     }

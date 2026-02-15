@@ -173,7 +173,8 @@ private fun OtpInput(
                     Box(
                         modifier =
                             Modifier
-                                .size(48.dp)
+                                .weight(1f)
+                                .height(48.dp)
                                 .background(Surface, RoundedCornerShape(12.dp))
                                 .border(
                                     width = if (isFocused) 2.dp else 1.dp,

@@ -13,6 +13,23 @@ enum class TimeFilter {
 }
 
 private val POLISH_WEEKDAYS = arrayOf("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
+private val POLISH_WEEKDAYS_FULL =
+    arrayOf("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
+private val POLISH_MONTHS_GENITIVE =
+    arrayOf(
+        "stycznia",
+        "lutego",
+        "marca",
+        "kwietnia",
+        "maja",
+        "czerwca",
+        "lipca",
+        "sierpnia",
+        "września",
+        "października",
+        "listopada",
+        "grudnia",
+    )
 private val POLISH_MONTHS =
     arrayOf(
         "sty",
@@ -35,6 +52,17 @@ fun formatEventDate(isoString: String): String {
     val weekday = POLISH_WEEKDAYS[dt.dayOfWeek.ordinal]
     val day = dt.dayOfMonth
     val month = POLISH_MONTHS[dt.monthNumber - 1]
+    val hour = dt.hour.toString().padStart(2, '0')
+    val minute = dt.minute.toString().padStart(2, '0')
+    return "$weekday, $day $month · $hour:$minute"
+}
+
+fun formatEventDateFull(isoString: String): String {
+    val instant = Instant.parse(isoString)
+    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+    val weekday = POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]
+    val day = dt.dayOfMonth
+    val month = POLISH_MONTHS_GENITIVE[dt.monthNumber - 1]
     val hour = dt.hour.toString().padStart(2, '0')
     val minute = dt.minute.toString().padStart(2, '0')
     return "$weekday, $day $month · $hour:$minute"

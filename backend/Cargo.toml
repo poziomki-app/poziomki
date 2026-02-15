@@ -69,6 +69,8 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 ruma = { version = "0.14", features = ["client-api-c", "events"] }
 opendal = { version = "0.55", features = ["services-s3", "services-fs"] }
 url = { version = "2.5" }
+meilisearch-sdk = { version = "0.28" }
+futures = { version = "0.3" }
 
 [[bin]]
 name = "poziomki_backend-cli"

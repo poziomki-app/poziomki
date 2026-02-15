@@ -55,9 +55,8 @@ impl Hooks for App {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     fn register_tasks(tasks: &mut Tasks) {
-        // tasks-inject (do not remove)
+        tasks.register(tasks::seed_search::SeedSearch);
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
         app_support::truncate_all_tables(&ctx.db).await?;

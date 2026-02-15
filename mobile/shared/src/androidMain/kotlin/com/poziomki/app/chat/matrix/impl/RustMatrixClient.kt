@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
 import org.matrix.rustcomponents.sdk.LatestEventValue
@@ -38,8 +39,10 @@ import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
+import uniffi.matrix_sdk.BackupDownloadStrategy
 import java.io.File
 import java.net.URI
+import java.util.UUID
 
 class RustMatrixClient(
     private val apiService: ApiService,
@@ -96,77 +99,114 @@ class RustMatrixClient(
                 return@withLock Result.failure(IllegalStateException(message))
             }
 
-            runCatching {
-                val storeNamespace = matrixStoreNamespace()
-                val dataPath = File(appContext.filesDir, "matrix-sdk/$storeNamespace/data").apply { mkdirs() }
-                val cachePath = File(appContext.cacheDir, "matrix-sdk/$storeNamespace/cache").apply { mkdirs() }
+            val storeNamespace = matrixStoreNamespace()
+            val dataPath = File(appContext.filesDir, "matrix-sdk/$storeNamespace/data").apply { mkdirs() }
+            val cachePath = File(appContext.cacheDir, "matrix-sdk/$storeNamespace/cache").apply { mkdirs() }
 
-                val newClient =
-                    ClientBuilder()
-                        .homeserverUrl(homeserver)
-                        .sessionPaths(dataPath.absolutePath, cachePath.absolutePath)
-                        .build()
+            suspend fun attemptConnect(retried: Boolean = false): Result<Unit> =
+                runCatching {
+                    val matrixDeviceId = loadOrCreateMatrixDeviceId(storeNamespace)
 
-                val matrixSession =
-                    when (val sessionResult = apiService.createMatrixSession(deviceName = "Poziomki Mobile")) {
-                        is ApiResult.Success -> {
-                            sessionResult.data
+                    val newClient =
+                        ClientBuilder()
+                            .homeserverUrl(homeserver)
+                            .sessionPaths(dataPath.absolutePath, cachePath.absolutePath)
+                            .autoEnableBackups(true)
+                            .autoEnableCrossSigning(true)
+                            .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
+                            .build()
+
+                    val matrixSession =
+                        when (
+                            val sessionResult =
+                                apiService.createMatrixSession(
+                                    deviceName = "Poziomki Mobile",
+                                    deviceId = matrixDeviceId,
+                                )
+                        ) {
+                            is ApiResult.Success -> {
+                                sessionResult.data
+                            }
+
+                            is ApiResult.Error -> {
+                                val message = "Failed to initialize secure messaging: ${sessionResult.message}"
+                                _state.value = MatrixClientState.Error(message)
+                                return Result.failure(IllegalStateException(message))
+                            }
                         }
 
-                        is ApiResult.Error -> {
-                            val message = "Failed to initialize secure messaging: ${sessionResult.message}"
-                            _state.value = MatrixClientState.Error(message)
-                            return@withLock Result.failure(IllegalStateException(message))
+                    val accessToken = matrixSession.accessToken
+                    val refreshToken = matrixSession.refreshToken
+                    val userId = matrixSession.userId
+                    val deviceId = matrixSession.deviceId
+
+                    if (
+                        accessToken.isNullOrBlank() ||
+                        refreshToken.isNullOrBlank() ||
+                        userId.isNullOrBlank() ||
+                        deviceId.isNullOrBlank()
+                    ) {
+                        val message = "Failed to initialize secure messaging session"
+                        _state.value = MatrixClientState.Error(message)
+                        return Result.failure(IllegalStateException(message))
+                    }
+
+                    saveMatrixDeviceId(storeNamespace, deviceId)
+
+                    newClient.restoreSession(
+                        org.matrix.rustcomponents.sdk.Session(
+                            accessToken = accessToken,
+                            refreshToken = refreshToken,
+                            userId = userId,
+                            deviceId = deviceId,
+                            homeserverUrl = homeserver,
+                            oidcData = null,
+                            slidingSyncVersion = SlidingSyncVersion.NATIVE,
+                        ),
+                    )
+
+                    val newSyncService = newClient.syncService().finish()
+                    newSyncService.start()
+
+                    // Give E2EE startup tasks time to recover keys before we expose timelines.
+                    withTimeoutOrNull(20_000) {
+                        runCatching { newClient.encryption().waitForE2eeInitializationTasks() }
+                    }
+
+                    runCatching {
+                        val encryption = newClient.encryption()
+                        if (
+                            encryption.backupExistsOnServer() &&
+                            encryption.backupState() != org.matrix.rustcomponents.sdk.BackupState.ENABLED
+                        ) {
+                            encryption.enableBackups()
                         }
                     }
 
-                val accessToken = matrixSession.accessToken
-                val refreshToken = matrixSession.refreshToken
-                val userId = matrixSession.userId
-                val deviceId = matrixSession.deviceId
+                    subscribeRoomList(newSyncService)
 
-                if (
-                    accessToken.isNullOrBlank() ||
-                    refreshToken.isNullOrBlank() ||
-                    userId.isNullOrBlank() ||
-                    deviceId.isNullOrBlank()
-                ) {
-                    val message = "Failed to initialize secure messaging session"
-                    _state.value = MatrixClientState.Error(message)
-                    return@withLock Result.failure(IllegalStateException(message))
+                    client = newClient
+                    syncService = newSyncService
+                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver)
+                }.onFailure { throwable ->
+                    cleanupInternal()
+                    if (!retried) {
+                        parseMismatchedStoreDeviceId(throwable.message)?.let { storedDeviceId ->
+                            saveMatrixDeviceId(storeNamespace, storedDeviceId)
+                            return attemptConnect(retried = true)
+                        }
+                    }
+                    if (!retried && shouldResetCryptoStore(throwable)) {
+                        wipeMatrixStore(storeNamespace)
+                        return attemptConnect(retried = true)
+                    }
+                    _state.value = MatrixClientState.Error(throwable.message ?: "Failed to initialize Matrix")
                 }
 
-                newClient.restoreSession(
-                    org.matrix.rustcomponents.sdk.Session(
-                        accessToken = accessToken,
-                        refreshToken = refreshToken,
-                        userId = userId,
-                        deviceId = deviceId,
-                        homeserverUrl = homeserver,
-                        oidcData = null,
-                        slidingSyncVersion = SlidingSyncVersion.NATIVE,
-                    ),
-                )
-
-                val newSyncService = newClient.syncService().finish()
-                newSyncService.start()
-
-                subscribeRoomList(newSyncService)
-
-                client = newClient
-                syncService = newSyncService
-                _state.value = MatrixClientState.Ready(newClient.userId(), homeserver)
-            }.onFailure { throwable ->
-                cleanupInternal()
-                // Wipe crypto store so the next attempt starts fresh (avoids
-                // "account in the store doesn't match" after backend restarts).
-                val storeNamespace = matrixStoreNamespace()
-                File(appContext.filesDir, "matrix-sdk/$storeNamespace").deleteRecursively()
-                File(appContext.cacheDir, "matrix-sdk/$storeNamespace").deleteRecursively()
-                _state.value = MatrixClientState.Error(throwable.message ?: "Failed to initialize Matrix")
-            }
+            attemptConnect()
 
             if (_state.value is MatrixClientState.Ready) {
+                syncDisplayName()
                 Result.success(Unit)
             } else {
                 Result.failure(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: "Failed to initialize Matrix"))
@@ -279,11 +319,19 @@ class RustMatrixClient(
                         val info = room.roomInfo()
                         val latest = room.latestEvent()
 
+                        val heroUserId =
+                            if (info.isDirect) {
+                                info.heroes.firstOrNull()?.userId
+                            } else {
+                                null
+                            }
+
                         MatrixRoomSummary(
                             roomId = info.id,
                             displayName = info.displayName ?: room.displayName() ?: info.id,
                             avatarUrl = info.avatarUrl,
                             isDirect = info.isDirect,
+                            directUserId = heroUserId,
                             unreadCount =
                                 info.numUnreadNotifications
                                     .toLong()
@@ -296,6 +344,16 @@ class RustMatrixClient(
                 }
 
             _rooms.value = mappedRooms.sortedByDescending { it.latestTimestampMillis ?: Long.MIN_VALUE }
+        }
+    }
+
+    private fun syncDisplayName() {
+        scope.launch {
+            val c = client ?: return@launch
+            val profile = (apiService.getMyProfile() as? ApiResult.Success)?.data ?: return@launch
+            val currentName = runCatching { c.displayName() }.getOrNull()
+            if (currentName == profile.name) return@launch
+            runCatching { c.setDisplayName(profile.name) }
         }
     }
 
@@ -324,6 +382,67 @@ class RustMatrixClient(
             ?.replace(Regex("[^A-Za-z0-9_.-]"), "_")
             ?.ifBlank { null }
             ?: "default"
+
+    private fun shouldResetCryptoStore(error: Throwable): Boolean {
+        val message = error.message?.lowercase() ?: return false
+        return message.contains("account in the store doesn't match") ||
+            message.contains("account in store doesn't match")
+    }
+
+    private fun wipeMatrixStore(storeNamespace: String) {
+        File(appContext.filesDir, "matrix-sdk/$storeNamespace").deleteRecursively()
+        File(appContext.cacheDir, "matrix-sdk/$storeNamespace").deleteRecursively()
+    }
+
+    private fun loadMatrixDeviceId(storeNamespace: String): String? {
+        val file = matrixDeviceIdFile(storeNamespace)
+        return runCatching {
+            if (file.exists()) {
+                normalizeMatrixDeviceId(file.readText())
+            } else {
+                null
+            }
+        }.getOrNull()
+    }
+
+    private fun saveMatrixDeviceId(
+        storeNamespace: String,
+        rawDeviceId: String?,
+    ) {
+        val normalized = normalizeMatrixDeviceId(rawDeviceId) ?: return
+        val file = matrixDeviceIdFile(storeNamespace)
+        file.parentFile?.mkdirs()
+        runCatching { file.writeText(normalized) }
+    }
+
+    private fun matrixDeviceIdFile(storeNamespace: String): File = File(appContext.filesDir, "matrix-sdk/$storeNamespace/device_id.txt")
+
+    private fun loadOrCreateMatrixDeviceId(storeNamespace: String): String {
+        loadMatrixDeviceId(storeNamespace)?.let { return it }
+
+        val created = "POZ${UUID.randomUUID().toString().replace("-", "").take(16).uppercase()}"
+        saveMatrixDeviceId(storeNamespace, created)
+        return created
+    }
+
+    private fun normalizeMatrixDeviceId(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val filtered = raw.trim().uppercase().filter { it.isLetterOrDigit() || it == '_' || it == '-' || it == '.' }
+        val bounded = filtered.take(64)
+        return bounded.ifBlank { null }
+    }
+
+    private fun parseMismatchedStoreDeviceId(message: String?): String? {
+        if (message.isNullOrBlank()) return null
+        val regex =
+            Regex(
+                pattern = """expected\s+.+:([A-Za-z0-9_.-]+),\s*got\s+.+:([A-Za-z0-9_.-]+)""",
+                options = setOf(RegexOption.IGNORE_CASE),
+            )
+        val match = regex.find(message) ?: return null
+        val storedDeviceId = match.groupValues.getOrNull(2)
+        return normalizeMatrixDeviceId(storedDeviceId)
+    }
 
     private suspend fun createRoomInternal(
         name: String?,
@@ -467,7 +586,7 @@ private fun TimelineItemContent.toPreviewText(): String? =
                 org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Message removed"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Poll: ${kind.question}"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Unable to decrypt message"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Encrypted message"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> "Unsupported message"
             }
         }

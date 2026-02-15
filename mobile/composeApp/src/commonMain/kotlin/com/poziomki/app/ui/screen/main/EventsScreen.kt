@@ -93,7 +93,7 @@ fun EventsScreen(
         ) {
             Text(
                 text = "wydarzenia",
-                style = MaterialTheme.typography.headlineLarge,
+                style = MaterialTheme.typography.headlineMedium,
                 color = TextPrimary,
             )
             IconButton(onClick = onNavigateToEventCreate) {
@@ -225,29 +225,41 @@ private fun TimeFilterRow(
         )
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PoziomkiTheme.spacing.md),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         filters.forEachIndexed { index, (filter, label) ->
-            Text(
-                text = label,
-                fontFamily = NunitoFamily,
-                fontWeight = if (filter == activeFilter) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 14.sp,
-                color = if (filter == activeFilter) Primary else TextMuted,
+            val isActive = filter == activeFilter
+            Row(
                 modifier =
                     Modifier
                         .clickable { onFilterSelected(filter) }
-                        .padding(vertical = 4.dp),
-            )
-            if (index < filters.lastIndex) {
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isActive) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(6.dp)
+                                .background(Primary, CircleShape),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
                 Text(
-                    text = " · ",
+                    text = label,
                     fontFamily = NunitoFamily,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     fontSize = 14.sp,
-                    color = Border,
+                    color = if (isActive) TextPrimary else TextMuted,
                 )
+            }
+            if (index < filters.lastIndex) {
+                Spacer(modifier = Modifier.width(8.dp))
             }
         }
     }
@@ -285,7 +297,7 @@ private fun EventCard(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(2.2f)
+                                .aspectRatio(1.6f)
                                 .clip(
                                     RoundedCornerShape(
                                         topStart = PoziomkiTheme.componentSizes.cardRadius,
@@ -299,7 +311,7 @@ private fun EventCard(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(2.2f)
+                                .aspectRatio(1.6f)
                                 .background(SurfaceElevated),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -340,26 +352,25 @@ private fun EventCard(
                         vertical = PoziomkiTheme.spacing.sm,
                     ),
             ) {
-                // Date/time — above title for visual hierarchy
-                Text(
-                    text = formatEventDate(event.startsAt),
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    color = Primary,
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
                 // Title
                 Text(
                     text = event.title,
                     style = MaterialTheme.typography.titleSmall,
                     color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 2,
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Date/time
+                Text(
+                    text = formatEventDate(event.startsAt),
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                )
 
                 // Creator
                 event.creator?.let { creator ->
@@ -370,8 +381,9 @@ private fun EventCard(
                         fontSize = 13.sp,
                         color = TextMuted,
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Attendees row
                 if (event.attendeesCount > 0) {

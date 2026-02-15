@@ -1,6 +1,5 @@
 package com.poziomki.app.ui.screen.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,7 +43,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -135,7 +139,7 @@ fun ProfileEditScreen(
                 fontFamily = nunito,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Primary,
+                color = TextPrimary,
             )
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
@@ -154,7 +158,7 @@ fun ProfileEditScreen(
                 fontFamily = nunito,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Primary,
+                color = TextPrimary,
             )
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
@@ -213,7 +217,7 @@ fun ProfileEditScreen(
                 fontFamily = nunito,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Primary,
+                color = TextPrimary,
             )
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
@@ -331,6 +335,7 @@ private fun ImageGalleryRow(
     onAddImage: () -> Unit,
 ) {
     val nunito = NunitoFamily
+    val imageSize = 130.dp
 
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -340,7 +345,7 @@ private fun ImageGalleryRow(
             Box(
                 modifier =
                     Modifier
-                        .size(80.dp)
+                        .size(imageSize)
                         .clip(RoundedCornerShape(12.dp)),
             ) {
                 AsyncImage(
@@ -348,7 +353,7 @@ private fun ImageGalleryRow(
                     contentDescription = "Zdjęcie ${index + 1}",
                     modifier =
                         Modifier
-                            .size(80.dp)
+                            .size(imageSize)
                             .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop,
                 )
@@ -358,7 +363,7 @@ private fun ImageGalleryRow(
                         Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp)
-                            .size(20.dp)
+                            .size(22.dp)
                             .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
                             .clickable { onRemoveImage(index) },
                     contentAlignment = Alignment.Center,
@@ -378,7 +383,7 @@ private fun ImageGalleryRow(
             Box(
                 modifier =
                     Modifier
-                        .size(80.dp)
+                        .size(imageSize)
                         .background(SurfaceColor, RoundedCornerShape(12.dp))
                         .border(1.dp, Border, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
@@ -391,34 +396,58 @@ private fun ImageGalleryRow(
             }
         }
 
-        // Add button
+        // Add button — dashed border
+        val dashedBorderColor = Border
+        val cornerRadiusDp = 12.dp
         Box(
             modifier =
                 Modifier
-                    .size(80.dp)
-                    .border(
-                        width = 1.dp,
-                        color = Border,
-                        shape = RoundedCornerShape(12.dp),
-                    ).clip(RoundedCornerShape(12.dp))
-                    .clickable(enabled = !isUploading) { onAddImage() },
+                    .size(imageSize)
+                    .clip(RoundedCornerShape(cornerRadiusDp))
+                    .drawBehind {
+                        val strokeWidth = 1.5.dp.toPx()
+                        val dash = 8.dp.toPx()
+                        val gap = 6.dp.toPx()
+                        drawRoundRect(
+                            color = dashedBorderColor,
+                            style =
+                                Stroke(
+                                    width = strokeWidth,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, gap), 0f),
+                                ),
+                            cornerRadius = CornerRadius(cornerRadiusDp.toPx()),
+                        )
+                    }.clickable(enabled = !isUploading) { onAddImage() },
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = "Dodaj zdjęcie",
-                    tint = TextMuted,
-                    modifier = Modifier.size(24.dp),
+                    tint = Primary,
+                    modifier = Modifier.size(28.dp),
                 )
                 Text(
                     text = "dodaj",
                     fontFamily = nunito,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 11.sp,
-                    color = TextMuted,
+                    fontSize = 12.sp,
+                    color = Primary,
                 )
             }
+        }
+
+        // Edit icon
+        Box(
+            modifier = Modifier.size(imageSize),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Edit,
+                contentDescription = "Edytuj zdjęcia",
+                tint = TextMuted,
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }
@@ -447,7 +476,7 @@ private fun TagSection(
         fontFamily = nunito,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
-        color = Primary,
+        color = TextPrimary,
     )
     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
@@ -579,23 +608,23 @@ private fun TagChip(
                 .border(1.dp, borderColor, RoundedCornerShape(50))
                 .clip(RoundedCornerShape(50))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "${tag.emoji ?: ""} ${tag.name}".trim(),
             fontFamily = nunito,
             fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             color = textColor,
         )
         if (selected) {
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(3.dp))
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "Usuń",
                 tint = textColor,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(14.dp),
             )
         }
     }

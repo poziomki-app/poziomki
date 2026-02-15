@@ -109,14 +109,14 @@ private fun TagChip(
                 .background(bgColor, shape)
                 .border(1.dp, borderColor, shape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             fontFamily = nunito,
             fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             color = textColor,
         )
     }

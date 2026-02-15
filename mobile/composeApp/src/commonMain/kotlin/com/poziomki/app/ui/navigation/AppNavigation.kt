@@ -3,6 +3,7 @@ package com.poziomki.app.ui.navigation
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -16,18 +17,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.fill.CalendarBlank
+import com.adamglin.phosphoricons.fill.ChatCircle
+import com.adamglin.phosphoricons.fill.User
+import com.adamglin.phosphoricons.fill.UsersThree
+import com.adamglin.phosphoricons.regular.CalendarBlank
+import com.adamglin.phosphoricons.regular.ChatCircle
+import com.adamglin.phosphoricons.regular.User
+import com.adamglin.phosphoricons.regular.UsersThree
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -62,8 +66,8 @@ import com.poziomki.app.ui.screen.auth.RegisterScreen
 import com.poziomki.app.ui.screen.auth.VerifyScreen
 import com.poziomki.app.ui.screen.chat.ChatScreen
 import com.poziomki.app.ui.screen.chat.NewChatScreen
+import com.poziomki.app.ui.screen.event.EventChatScreen
 import com.poziomki.app.ui.screen.event.EventCreateScreen
-import com.poziomki.app.ui.screen.event.EventDetailScreen
 import com.poziomki.app.ui.screen.main.EventsScreen
 import com.poziomki.app.ui.screen.main.ExploreScreen
 import com.poziomki.app.ui.screen.main.MessagesScreen
@@ -91,10 +95,10 @@ data class BottomNavItem(
 
 val bottomNavItems =
     listOf(
-        BottomNavItem("Explore", Icons.Outlined.Groups, Icons.Filled.Groups, Route.Explore),
-        BottomNavItem("Events", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, Route.Events),
-        BottomNavItem("Messages", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, Route.Messages),
-        BottomNavItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Route.ProfileTab),
+        BottomNavItem("Explore", PhosphorIcons.Regular.UsersThree, PhosphorIcons.Fill.UsersThree, Route.Explore),
+        BottomNavItem("Events", PhosphorIcons.Regular.CalendarBlank, PhosphorIcons.Fill.CalendarBlank, Route.Events),
+        BottomNavItem("Messages", PhosphorIcons.Regular.ChatCircle, PhosphorIcons.Fill.ChatCircle, Route.Messages),
+        BottomNavItem("Profile", PhosphorIcons.Regular.User, PhosphorIcons.Fill.User, Route.ProfileTab),
     )
 
 @Composable
@@ -261,9 +265,8 @@ fun AppNavigation(
 
         // Detail screens
         composable<Route.EventDetail> {
-            EventDetailScreen(
+            EventChatScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToChat = navigateToChat,
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
         }
@@ -271,6 +274,14 @@ fun AppNavigation(
             EventCreateScreen(
                 onBack = { navController.popBackStack() },
                 onCreated = { navController.popBackStack() },
+            )
+        }
+        composable<Route.EventEdit> { backStackEntry ->
+            val edit = backStackEntry.toRoute<Route.EventEdit>()
+            EventCreateScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { navController.popBackStack() },
+                eventId = edit.id,
             )
         }
         composable<Route.ProfileView> {
@@ -325,12 +336,15 @@ fun MainScreen(
     val currentDestination = navBackStackEntry?.destination
     val navBarHeight = 56.dp
     val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val safeTop = maxOf(topInsets, 16.dp)
 
     Scaffold(
         containerColor = Background,
         bottomBar = {},
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        contentWindowInsets = WindowInsets(0),
+    ) { _ ->
+        Column(modifier = Modifier.fillMaxSize().padding(top = safeTop)) {
             OfflineBanner()
             Box(modifier = Modifier.fillMaxSize().weight(1f)) {
                 NavHost(
@@ -343,7 +357,7 @@ fun MainScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .padding(bottom = navBarHeight + bottomInsets + 24.dp),
+                            .padding(bottom = navBarHeight + bottomInsets + 8.dp),
                 ) {
                     composable<Route.Explore> {
                         ExploreScreen(
@@ -360,6 +374,7 @@ fun MainScreen(
                         MessagesScreen(
                             onNavigateToChat = onNavigateToChat,
                             onNavigateToNewChat = onNavigateToNewChat,
+                            onNavigateToProfile = onNavigateToProfileView,
                         )
                     }
                     composable<Route.ProfileTab> {
@@ -372,33 +387,63 @@ fun MainScreen(
                     }
                 }
 
-                // Floating pill-shaped bottom navbar
-                Surface(
+                // Floating pill-shaped bottom navbar with liquid glass effect
+                val navBarShape = RoundedCornerShape(28.dp)
+                Box(
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
                             .padding(
                                 start = 16.dp,
                                 end = 16.dp,
-                                bottom = bottomInsets + 8.dp,
+                                bottom = bottomInsets + 16.dp,
+                            )
+                            .clip(navBarShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors =
+                                        listOf(
+                                            Color(0xFF1A2030),
+                                            Color(0xFF0F1820),
+                                            Color(0xFF122028),
+                                        ),
+                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    end =
+                                        androidx.compose.ui.geometry.Offset(
+                                            Float.POSITIVE_INFINITY,
+                                            Float.POSITIVE_INFINITY,
+                                        ),
+                                ),
+                            )
+                            .background(
+                                Brush.verticalGradient(
+                                    colors =
+                                        listOf(
+                                            Color(0x0CFFFFFF),
+                                            Color(0x03FFFFFF),
+                                            Color(0x06FFFFFF),
+                                        ),
+                                ),
+                            )
+                            .border(
+                                width = 1.dp,
+                                brush =
+                                    Brush.linearGradient(
+                                        colors =
+                                            listOf(
+                                                Color(0x20FFFFFF),
+                                                Color(0x0CFFFFFF),
+                                                Color(0x14FFFFFF),
+                                            ),
+                                    ),
+                                shape = navBarShape,
                             ),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.Transparent,
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0x40FFFFFF)),
                 ) {
                     Row(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors =
-                                            listOf(
-                                                Color(0xCC1A2029),
-                                                Color(0xCC161B22),
-                                            ),
-                                    ),
-                                ).padding(horizontal = 8.dp, vertical = 8.dp),
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

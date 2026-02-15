@@ -28,6 +28,7 @@ data class MatrixRoomSummary(
     val displayName: String,
     val avatarUrl: String?,
     val isDirect: Boolean,
+    val directUserId: String? = null,
     val unreadCount: Int,
     val latestMessage: String?,
     val latestTimestampMillis: Long?,

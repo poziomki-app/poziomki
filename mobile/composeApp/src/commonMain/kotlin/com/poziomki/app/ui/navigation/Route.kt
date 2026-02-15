@@ -41,6 +41,10 @@ sealed interface Route {
 
     @Serializable data object EventCreate : Route
 
+    @Serializable data class EventEdit(
+        val id: String,
+    ) : Route
+
     @Serializable data class ProfileView(
         val id: String,
     ) : Route

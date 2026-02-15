@@ -8,4 +8,5 @@ data class MessagesUiState(
     val matrixState: MatrixClientState = MatrixClientState.Idle,
     val isLoading: Boolean = false,
     val error: String? = null,
+    val profilePictures: Map<String, String> = emptyMap(),
 )
