@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,16 +65,26 @@ fun ExploreScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         // Header
-        Text(
-            text = "poznaj",
-            style = MaterialTheme.typography.headlineMedium,
-            color = TextPrimary,
+        Row(
             modifier =
-                Modifier.padding(
-                    horizontal = PoziomkiTheme.spacing.lg,
-                    vertical = PoziomkiTheme.spacing.md,
-                ),
-        )
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = PoziomkiTheme.spacing.lg,
+                        end = PoziomkiTheme.spacing.sm,
+                        top = PoziomkiTheme.spacing.md,
+                        bottom = PoziomkiTheme.spacing.md,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "poznaj",
+                style = MaterialTheme.typography.headlineMedium,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.size(48.dp))
+        }
 
         // Search bar
         Surface(
@@ -153,7 +164,8 @@ fun ExploreScreen(
                     val hasResults =
                         results.profiles.isNotEmpty() ||
                             results.events.isNotEmpty() ||
-                            results.tags.isNotEmpty()
+                            results.tags.isNotEmpty() ||
+                            results.degrees.isNotEmpty()
 
                     if (!hasResults) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -198,6 +210,33 @@ fun ExploreScreen(
                                                 )
                                             }
                                         }
+                                    }
+                                }
+                            }
+
+                            // Degrees section
+                            if (results.degrees.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "kierunki",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = TextSecondary,
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                    )
+                                }
+                                items(results.degrees, key = { "d-${it.id}" }) { degree ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = SurfaceElevated,
+                                    ) {
+                                        Text(
+                                            text = degree.name,
+                                            fontFamily = NunitoFamily,
+                                            color = TextPrimary,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                        )
                                     }
                                 }
                             }

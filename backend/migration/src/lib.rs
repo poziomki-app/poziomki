@@ -6,6 +6,8 @@ mod m20250209_000002_create_sessions;
 mod m20250209_000003_create_tags_and_degrees;
 mod m20250209_000004_create_profiles;
 mod m20250209_000005_create_events_uploads_settings;
+mod m20250209_000006_seed_full_degrees;
+mod m20250215_000007_replace_degrees_uw;
 
 pub struct Migrator;
 
@@ -18,6 +20,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250209_000003_create_tags_and_degrees::Migration),
             Box::new(m20250209_000004_create_profiles::Migration),
             Box::new(m20250209_000005_create_events_uploads_settings::Migration),
+            Box::new(m20250209_000006_seed_full_degrees::Migration),
+            Box::new(m20250215_000007_replace_degrees_uw::Migration),
             // inject-above (do not remove this comment)
         ]
     }
