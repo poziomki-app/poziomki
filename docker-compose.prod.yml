@@ -91,6 +91,8 @@ services:
       MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
       MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
       MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
+      OTP_BYPASS_ENABLED: ${OTP_BYPASS_ENABLED:-}
+      OTP_BYPASS_CODE: ${OTP_BYPASS_CODE:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s

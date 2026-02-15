@@ -42,10 +42,7 @@ fn env_truthy(key: &str) -> bool {
 }
 
 fn otp_bypass_enabled() -> bool {
-    let is_production = std::env::var("NODE_ENV")
-        .ok()
-        .is_some_and(|value| value.eq_ignore_ascii_case("production"));
-    env_truthy("OTP_BYPASS_ENABLED") && !is_production
+    env_truthy("OTP_BYPASS_ENABLED")
 }
 
 pub(super) fn generate_otp_code() -> String {
