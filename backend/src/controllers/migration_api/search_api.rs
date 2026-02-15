@@ -32,12 +32,23 @@ pub(super) async fn search(
         loco_rs::Error::Message("Search service unavailable".to_string())
     })?;
 
-    let results = crate::search::search_all(&client, &query.q, limit)
+    let mut results = crate::search::search_all(&client, &query.q, limit)
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");
             loco_rs::Error::Message("Search failed".to_string())
         })?;
+
+    for profile in &mut results.profiles {
+        if let Some(pic) = &profile.profile_picture {
+            profile.profile_picture = Some(super::resolve_image_url(pic).await);
+        }
+    }
+    for event in &mut results.events {
+        if let Some(img) = &event.cover_image {
+            event.cover_image = Some(super::resolve_image_url(img).await);
+        }
+    }
 
     Ok(Json(DataResponse { data: results }).into_response())
 }
