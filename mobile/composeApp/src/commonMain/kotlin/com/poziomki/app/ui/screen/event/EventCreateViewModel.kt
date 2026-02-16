@@ -38,6 +38,10 @@ class EventCreateViewModel(
     private val _state = MutableStateFlow(EventCreateState())
     val state: StateFlow<EventCreateState> = _state.asStateFlow()
 
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     fun updateTitle(title: String) {
         _state.value = _state.value.copy(title = title)
     }
@@ -108,6 +112,8 @@ class EventCreateViewModel(
                         location = event.location ?: "",
                         startsAt = event.startsAt,
                         coverImageUrl = event.coverImage,
+                        latitude = event.latitude,
+                        longitude = event.longitude,
                         isLoading = false,
                         eventId = eventId,
                     )
@@ -133,6 +139,8 @@ class EventCreateViewModel(
                         location = s.location.ifBlank { null },
                         startsAt = s.startsAt,
                         endsAt = s.endsAt.ifBlank { null },
+                        latitude = s.latitude,
+                        longitude = s.longitude,
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
                     is ApiResult.Success -> {
@@ -152,6 +160,8 @@ class EventCreateViewModel(
                         location = s.location.ifBlank { null },
                         startsAt = s.startsAt,
                         endsAt = s.endsAt.ifBlank { null },
+                        latitude = s.latitude,
+                        longitude = s.longitude,
                     )
                 when (eventRepository.createEvent(request)) {
                     is ApiResult.Success -> {

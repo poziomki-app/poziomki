@@ -207,10 +207,18 @@ fn apply_profile_updates(
         active.images = ActiveValue::Set(serde_json::to_value(filenames).ok());
     }
     if let Some(gs) = &payload.gradient_start {
-        active.gradient_start = ActiveValue::Set(Some(gs.clone()));
+        active.gradient_start = ActiveValue::Set(if gs.is_empty() {
+            None
+        } else {
+            Some(gs.clone())
+        });
     }
     if let Some(ge) = &payload.gradient_end {
-        active.gradient_end = ActiveValue::Set(Some(ge.clone()));
+        active.gradient_end = ActiveValue::Set(if ge.is_empty() {
+            None
+        } else {
+            Some(ge.clone())
+        });
     }
     active.updated_at = ActiveValue::Set(Utc::now().into());
 

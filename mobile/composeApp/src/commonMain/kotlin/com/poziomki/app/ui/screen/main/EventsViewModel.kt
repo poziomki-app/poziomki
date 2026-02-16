@@ -2,8 +2,10 @@ package com.poziomki.app.ui.screen.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.Event
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.util.TimeFilter
 import com.poziomki.app.util.matchesTimeFilter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +16,7 @@ import kotlinx.coroutines.launch
 data class EventsState(
     val allEvents: List<Event> = emptyList(),
     val recommendedEvents: List<Event> = emptyList(),
+    val nearbyEvents: List<Event> = emptyList(),
     val events: List<Event> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
@@ -25,6 +28,8 @@ data class EventsState(
 
 class EventsViewModel(
     private val eventRepository: EventRepository,
+    private val apiService: com.poziomki.app.api.ApiService,
+    private val locationProvider: LocationProvider,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EventsState())
     val state: StateFlow<EventsState> = _state.asStateFlow()
@@ -41,7 +46,7 @@ class EventsViewModel(
                 _state.value =
                     _state.value.copy(
                         allEvents = events,
-                        isLoading = false,
+                        isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
                     )
                 filterEvents()
             }
@@ -92,16 +97,44 @@ class EventsViewModel(
 
     fun setTimeFilter(filter: TimeFilter) {
         _state.value = _state.value.copy(activeFilter = filter)
+        if (filter == TimeFilter.NEARBY && _state.value.nearbyEvents.isEmpty()) {
+            fetchNearbyIfPermitted()
+        }
         filterEvents()
+    }
+
+    private fun fetchNearbyIfPermitted() {
+        if (!locationProvider.isPermissionGranted()) return
+        viewModelScope.launch {
+            val loc = locationProvider.getCurrentLocation() ?: return@launch
+            loadNearbyEvents(loc.latitude, loc.longitude)
+        }
+    }
+
+    fun loadNearbyEvents(
+        lat: Double,
+        lng: Double,
+        radiusM: Int = 10_000,
+    ) {
+        viewModelScope.launch {
+            when (val result = apiService.getMatchingEvents(lat = lat, lng = lng, radiusM = radiusM)) {
+                is ApiResult.Success -> {
+                    _state.value = _state.value.copy(nearbyEvents = result.data)
+                    filterEvents()
+                }
+
+                is ApiResult.Error -> {}
+            }
+        }
     }
 
     private fun filterEvents() {
         val current = _state.value
         val source =
-            if (current.activeFilter == TimeFilter.ALL) {
-                current.recommendedEvents.ifEmpty { current.allEvents }
-            } else {
-                current.allEvents
+            when (current.activeFilter) {
+                TimeFilter.ALL -> current.recommendedEvents.ifEmpty { current.allEvents }
+                TimeFilter.NEARBY -> current.nearbyEvents
+                else -> current.allEvents
             }
         val filtered =
             source.filter { event ->
@@ -110,6 +143,7 @@ class EventsViewModel(
                         event.title.contains(current.searchQuery, ignoreCase = true)
                 val matchesTime =
                     current.activeFilter == TimeFilter.ALL ||
+                        current.activeFilter == TimeFilter.NEARBY ||
                         matchesTimeFilter(event.startsAt, current.activeFilter)
                 matchesSearch && matchesTime
             }

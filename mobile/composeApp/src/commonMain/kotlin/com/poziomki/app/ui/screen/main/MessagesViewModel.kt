@@ -66,7 +66,7 @@ class MessagesViewModel(
                 _state.update {
                     it.copy(
                         isRefreshing = false,
-                        error = throwable.message ?: "Failed to initialize Matrix",
+                        refreshError = throwable.message ?: "Failed to initialize Matrix",
                     )
                 }
                 return@launch
@@ -76,7 +76,7 @@ class MessagesViewModel(
                 _state.update {
                     it.copy(
                         isRefreshing = false,
-                        error = throwable.message ?: "Failed to refresh Matrix room list",
+                        refreshError = throwable.message ?: "Failed to refresh Matrix room list",
                     )
                 }
                 return@launch
@@ -89,6 +89,10 @@ class MessagesViewModel(
 
     fun clearError() {
         _state.update { it.copy(error = null) }
+    }
+
+    fun clearRefreshError() {
+        _state.update { it.copy(refreshError = null) }
     }
 
     private fun observeClientState() {
@@ -114,7 +118,7 @@ class MessagesViewModel(
                 _state.update { current ->
                     current.copy(
                         rooms = rooms,
-                        isLoading = false,
+                        isLoading = if (rooms.isNotEmpty()) false else current.isLoading,
                     )
                 }
             }

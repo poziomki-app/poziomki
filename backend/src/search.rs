@@ -343,7 +343,10 @@ mod tests {
             lng: 21.0122,
             radius_m: 5000,
         };
-        let filter = format!("_geoRadius({}, {}, {})", params.lat, params.lng, params.radius_m);
+        let filter = format!(
+            "_geoRadius({}, {}, {})",
+            params.lat, params.lng, params.radius_m
+        );
         assert_eq!(filter, "_geoRadius(52.2297, 21.0122, 5000)");
     }
 
@@ -393,10 +396,7 @@ mod tests {
 
     #[test]
     fn geo_point_zero_coordinates() {
-        let point = GeoPoint {
-            lat: 0.0,
-            lng: 0.0,
-        };
+        let point = GeoPoint { lat: 0.0, lng: 0.0 };
         let json = serde_json::to_value(&point).unwrap();
         assert_eq!(json["lat"], 0.0);
         assert_eq!(json["lng"], 0.0);
@@ -409,7 +409,10 @@ mod tests {
             lng: 0.0,
             radius_m: 1_000_000,
         };
-        let filter = format!("_geoRadius({}, {}, {})", params.lat, params.lng, params.radius_m);
+        let filter = format!(
+            "_geoRadius({}, {}, {})",
+            params.lat, params.lng, params.radius_m
+        );
         assert_eq!(filter, "_geoRadius(0, 0, 1000000)");
     }
 }

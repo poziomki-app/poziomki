@@ -169,6 +169,40 @@ pub(super) async fn sign_in_success_or_unauthorized(
         return Ok(unauthorized_error(headers, "Authentication failed"));
     };
 
+    if user.email_verified_at.is_none() {
+        // Send a fresh OTP so the user can verify
+        let now = Utc::now();
+        let code = generate_otp_code();
+        let code_for_email = code.clone();
+        let email_for_send = email.to_owned();
+        {
+            let mut state = lock_otp_state();
+            state.cleanup();
+            state.otp_by_email.insert(
+                email.to_owned(),
+                super::super::state::OtpEntry {
+                    code,
+                    expires_at: now + chrono::Duration::seconds(OTP_TTL_SECS),
+                    attempts: 0,
+                    last_sent_at: now,
+                },
+            );
+        }
+        tokio::spawn(async move {
+            send_otp_email(&email_for_send, &code_for_email).await;
+        });
+
+        return Ok(error_response(
+            axum::http::StatusCode::FORBIDDEN,
+            headers,
+            ErrorSpec {
+                error: "Email not verified".to_string(),
+                code: "EMAIL_NOT_VERIFIED",
+                details: None,
+            },
+        ));
+    }
+
     let session = create_session_db(db, headers, user.id).await?;
     let data = serde_json::json!({
         "user": user_model_to_view(&user),
@@ -187,6 +221,44 @@ pub(super) async fn find_user_by_email(
         .one(db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))
+}
+
+fn otp_email_html(code: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kod weryfikacyjny Poziomki</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+
+<tr><td style="padding:32px 32px 0;text-align:center">
+  <img src="https://mobile.poziomki.app/download/poziomki-logo.png" alt="Poziomki" width="40" height="40" style="display:inline-block;vertical-align:middle;margin-right:8px">
+  <span style="font-size:20px;font-weight:700;color:#0d1117;vertical-align:middle;letter-spacing:-0.3px">Poziomki</span>
+</td></tr>
+
+<tr><td style="padding:28px 32px 12px;text-align:center">
+  <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.5">Twój kod weryfikacyjny do aplikacji Poziomki:</p>
+  <div style="margin:0 0 20px;padding:16px 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;display:inline-block">
+    <span style="font-size:32px;font-weight:700;color:#0d1117;letter-spacing:6px;font-variant-numeric:tabular-nums">{code}</span>
+  </div>
+  <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5">Wpisz ten kod w aplikacji, aby potwierdzić swoje konto.<br>Kod wygasa za 10 minut.</p>
+</td></tr>
+
+<tr><td style="padding:20px 32px 28px">
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"#
+    )
 }
 
 pub(super) async fn send_otp_email(to: &str, code: &str) {
@@ -213,14 +285,28 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
         return;
     };
 
+    let html_body = otp_email_html(code);
+    let plain_body = format!(
+        "Twój kod weryfikacyjny do aplikacji Poziomki: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzić swoje konto.\nKod wygasa za 10 minut."
+    );
+
     let email = match Message::builder()
         .from(from_addr)
         .to(to_addr)
-        .subject("Your Poziomki verification code")
-        .header(ContentType::TEXT_PLAIN)
-        .body(format!(
-            "Your verification code is: {code}\n\nThis code expires in 10 minutes."
-        )) {
+        .subject(format!("{code} \u{2014} Twój kod weryfikacyjny Poziomki"))
+        .multipart(
+            lettre::message::MultiPart::alternative()
+                .singlepart(
+                    lettre::message::SinglePart::builder()
+                        .header(ContentType::TEXT_PLAIN)
+                        .body(plain_body),
+                )
+                .singlepart(
+                    lettre::message::SinglePart::builder()
+                        .header(ContentType::TEXT_HTML)
+                        .body(html_body),
+                ),
+        ) {
         Ok(msg) => msg,
         Err(e) => {
             tracing::error!("Failed to build OTP email: {e}");
@@ -276,9 +362,12 @@ pub(super) async fn verify_otp_inner(
         let _ = active.update(db).await;
     }
 
+    let session = create_session_db(db, headers, user.id).await?;
     Ok(Json(DataResponse {
         data: serde_json::json!({
             "user": user_model_to_view(&user),
+            "token": session.token,
+            "session": session_model_to_view(&session.model),
             "status": true,
         }),
     })

@@ -35,6 +35,7 @@ val ErrorDark = Color(0xFFDA3633)
 val ErrorLight = Color(0xFF3D2020)
 val Success = Color(0xFF3FB950)
 val SuccessLight = Color(0xFF1A3D25)
+val Warning = Color(0xFFE65100)
 
 // Base
 val White = Color(0xFFF0F6FC)

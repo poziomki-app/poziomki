@@ -144,7 +144,11 @@ fun ProfileScreen(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .clickable { showLogoutDialog = true }.padding(horizontal = PoziomkiTheme.spacing.md, vertical = 14.dp),
+                                                .clickable { showLogoutDialog = true }
+                                                .padding(
+                                                    horizontal = PoziomkiTheme.spacing.md,
+                                                    vertical = 14.dp,
+                                                ),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center,
                                     ) {
@@ -192,6 +196,21 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    if (showLogoutDialog) {
+        ConfirmDialog(
+            title = "wyloguj si\u0119",
+            message = "czy na pewno chcesz si\u0119 wylogowa\u0107?",
+            confirmText = "wyloguj",
+            isDestructive = true,
+            onConfirm = {
+                showLogoutDialog = false
+                viewModel.signOut()
+                onSignOut()
+            },
+            onDismiss = { showLogoutDialog = false },
+        )
     }
 }
 

@@ -93,16 +93,36 @@ class ApiService(
 
     suspend fun getMatchingProfiles(): ApiResult<List<MatchProfile>> = client.get("/api/v1/matching/profiles")
 
-    suspend fun getMatchingEvents(limit: Int = 20): ApiResult<List<Event>> = client.get("/api/v1/matching/events?limit=$limit")
+    suspend fun getMatchingEvents(
+        limit: Int = 20,
+        lat: Double? = null,
+        lng: Double? = null,
+        radiusM: Int? = null,
+    ): ApiResult<List<Event>> {
+        val sb = StringBuilder("/api/v1/matching/events?limit=$limit")
+        if (lat != null && lng != null) {
+            sb.append("&lat=$lat&lng=$lng")
+            if (radiusM != null) sb.append("&radiusM=$radiusM")
+        }
+        return client.get(sb.toString())
+    }
 
     // Search
 
     suspend fun search(
         query: String,
         limit: Int = 10,
+        lat: Double? = null,
+        lng: Double? = null,
+        radiusM: Int? = null,
     ): ApiResult<SearchResults> {
         val encoded = query.encodeURLQueryComponent()
-        return client.get("/api/v1/search?q=$encoded&limit=$limit")
+        val sb = StringBuilder("/api/v1/search?q=$encoded&limit=$limit")
+        if (lat != null && lng != null) {
+            sb.append("&lat=$lat&lng=$lng")
+            if (radiusM != null) sb.append("&radiusM=$radiusM")
+        }
+        return client.get(sb.toString())
     }
 
     // Matrix bootstrap

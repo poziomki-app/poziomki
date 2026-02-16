@@ -52,10 +52,12 @@ static AUTH_RATE_LIMITS: LazyLock<Mutex<HashMap<String, RateLimitEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn client_ip(headers: &HeaderMap) -> String {
+    // Use the *last* x-forwarded-for entry — the one appended by our trusted
+    // reverse proxy (Caddy).  Earlier entries are client-controlled and spoofable.
     headers
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
+        .and_then(|value| value.rsplit(',').next())
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)

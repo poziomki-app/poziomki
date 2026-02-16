@@ -26,7 +26,7 @@ class NewChatViewModel(
                 _uiState.value =
                     _uiState.value.copy(
                         profiles = profiles,
-                        isLoading = false,
+                        isLoading = if (profiles.isNotEmpty()) false else _uiState.value.isLoading,
                     )
             }
         }

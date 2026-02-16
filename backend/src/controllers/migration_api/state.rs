@@ -106,7 +106,7 @@ pub(super) fn validate_signup_payload(payload: &SignUpBody) -> std::result::Resu
         ));
     }
     let domain = allowed_email_domain();
-    if error.is_none() && !email.ends_with(&format!("@{domain}")) {
+    if error.is_none() && domain != "*" && !email.ends_with(&format!("@{domain}")) {
         error = Some(validation_error_spec(&format!(
             "Only @{domain} emails are allowed"
         )));

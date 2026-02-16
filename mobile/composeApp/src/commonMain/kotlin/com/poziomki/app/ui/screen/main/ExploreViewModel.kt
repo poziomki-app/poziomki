@@ -44,7 +44,7 @@ class ExploreViewModel(
                 _state.value =
                     _state.value.copy(
                         profiles = profiles,
-                        isLoading = false,
+                        isLoading = if (profiles.isNotEmpty()) false else _state.value.isLoading,
                     )
             }
         }

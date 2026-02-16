@@ -10,6 +10,7 @@ import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.data.connectivity.AndroidConnectivityMonitor
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
+import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.session.AndroidSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStore
@@ -41,6 +42,7 @@ actual fun platformModule(): Module =
             AndroidSqliteDriver(PoziomkiDatabase.Schema, get<Context>(), "poziomki.db")
         }
         single<ConnectivityMonitor> { AndroidConnectivityMonitor(get<Context>()) }
+        single { LocationProvider(get<Context>()) }
         single { NotificationHelper(get<Context>()) }
         single { PushManager(get(), get(), get<Context>()) }
     }

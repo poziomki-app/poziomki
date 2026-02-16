@@ -155,8 +155,12 @@ class ProfileRepository(
                         request.images?.let { json.encodeToString(it) }
                             ?: current.images_json,
                     program = request.program ?: current.program,
-                    gradient_start = request.gradientStart ?: current.gradient_start,
-                    gradient_end = request.gradientEnd ?: current.gradient_end,
+                    gradient_start =
+                        request.gradientStart?.ifEmpty { null }
+                            ?: current.gradient_start,
+                    gradient_end =
+                        request.gradientEnd?.ifEmpty { null }
+                            ?: current.gradient_end,
                     is_own = current.is_own,
                     created_at = current.created_at,
                     updated_at = current.updated_at,

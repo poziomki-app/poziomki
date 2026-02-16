@@ -97,6 +97,12 @@ pub(in crate::controllers::migration_api) struct EventsQuery {
 pub(in crate::controllers::migration_api) struct MatchingQuery {
     #[serde(default)]
     pub(in crate::controllers::migration_api) limit: Option<u8>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) lat: Option<f64>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) lng: Option<f64>,
+    #[serde(default, rename = "radiusM")]
+    pub(in crate::controllers::migration_api) radius_m: Option<u32>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

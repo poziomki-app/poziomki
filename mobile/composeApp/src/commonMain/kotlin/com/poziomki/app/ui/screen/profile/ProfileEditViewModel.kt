@@ -8,6 +8,7 @@ import com.poziomki.app.api.Tag
 import com.poziomki.app.api.UpdateProfileRequest
 import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.data.repository.TagRepository
+import com.poziomki.app.ui.component.SnackbarType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,8 @@ data class ProfileEditState(
     val activityQuery: String = "",
     val gradientStart: String? = null,
     val gradientEnd: String? = null,
+    val snackbarMessage: String? = null,
+    val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
 
 class ProfileEditViewModel(
@@ -125,6 +128,10 @@ class ProfileEditViewModel(
         }
     }
 
+    fun clearSnackbar() {
+        _state.value = _state.value.copy(snackbarMessage = null)
+    }
+
     fun uploadAndAddImage(bytes: ByteArray) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isUploading = true)
@@ -134,7 +141,13 @@ class ProfileEditViewModel(
                     _state.value = _state.value.copy(images = current + result.data.url)
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 przes\u0142a\u0107 zdj\u0119cia",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
             }
             _state.value = _state.value.copy(isUploading = false)
         }
@@ -153,7 +166,13 @@ class ProfileEditViewModel(
                     }
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 przes\u0142a\u0107 zdj\u0119cia",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
             }
             _state.value = _state.value.copy(isBioImageUploading = false)
         }
@@ -170,15 +189,21 @@ class ProfileEditViewModel(
                     profilePicture = s.images.firstOrNull(),
                     images = s.images,
                     tagIds = s.selectedTags.map { it.id },
-                    gradientStart = s.gradientStart,
-                    gradientEnd = s.gradientEnd,
+                    gradientStart = s.gradientStart ?: "",
+                    gradientEnd = s.gradientEnd ?: "",
                 )
             when (profileRepository.updateProfile(s.profileId, request)) {
                 is ApiResult.Success -> {
                     onSuccess()
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 zapisa\u0107 profilu",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
             }
             _state.value = _state.value.copy(isSaving = false)
         }

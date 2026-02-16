@@ -13,11 +13,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
+import com.poziomki.app.ui.theme.Warning
 import com.poziomki.app.ui.theme.White
 import org.koin.compose.koinInject
 
@@ -36,7 +36,7 @@ fun OfflineBanner(modifier: Modifier = Modifier) {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFE65100))
+                    .background(Warning)
                     .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {

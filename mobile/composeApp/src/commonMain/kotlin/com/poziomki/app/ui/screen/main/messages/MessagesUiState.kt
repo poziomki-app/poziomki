@@ -9,5 +9,6 @@ data class MessagesUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    val refreshError: String? = null,
     val profilePictures: Map<String, String> = emptyMap(),
 )

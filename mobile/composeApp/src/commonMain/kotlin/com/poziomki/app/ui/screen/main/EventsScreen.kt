@@ -84,6 +84,7 @@ fun EventsScreen(
     val timeFilterTabs =
         listOf(
             TimeFilter.ALL to "polecane",
+            TimeFilter.NEARBY to "w pobliżu",
             TimeFilter.TODAY to "dzisiaj",
             TimeFilter.TOMORROW to "jutro",
             TimeFilter.WEEK to "ten tydzień",

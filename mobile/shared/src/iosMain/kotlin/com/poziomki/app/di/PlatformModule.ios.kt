@@ -7,6 +7,7 @@ import com.poziomki.app.chat.matrix.api.NoopMatrixClient
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.connectivity.IosConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
+import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.session.IosSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStoreIos
@@ -25,4 +26,5 @@ actual fun platformModule(): Module =
             NativeSqliteDriver(PoziomkiDatabase.Schema, "poziomki.db")
         }
         single<ConnectivityMonitor> { IosConnectivityMonitor() }
+        single { LocationProvider() }
     }

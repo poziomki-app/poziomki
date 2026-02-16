@@ -4,12 +4,13 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.theme.Error
+import com.poziomki.app.ui.theme.ErrorLight
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Success
+import com.poziomki.app.ui.theme.SuccessLight
 
 enum class SnackbarType { SUCCESS, ERROR }
 
@@ -21,8 +22,8 @@ fun PoziomkiSnackbar(
 ) {
     val containerColor =
         when (type) {
-            SnackbarType.ERROR -> Color(0xFF3D1F1F)
-            SnackbarType.SUCCESS -> Color(0xFF1A3D25)
+            SnackbarType.ERROR -> ErrorLight
+            SnackbarType.SUCCESS -> SuccessLight
         }
     val contentColor =
         when (type) {

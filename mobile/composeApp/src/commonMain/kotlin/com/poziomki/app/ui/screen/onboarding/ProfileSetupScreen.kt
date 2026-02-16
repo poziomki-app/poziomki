@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.component.ConfirmDialog
 import com.poziomki.app.ui.component.OnboardingLayout
 import com.poziomki.app.ui.component.PoziomkiButton
 import com.poziomki.app.ui.theme.Black
@@ -78,6 +79,7 @@ fun ProfileSetupScreen(
     val nunito = NunitoFamily
     var showAvatarPicker by remember { mutableStateOf(false) }
     var showProfilePreview by remember { mutableStateOf(false) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Image pickers
@@ -377,10 +379,7 @@ fun ProfileSetupScreen(
                     viewModel.selectAvatar(emoji)
                     showAvatarPicker = false
                 },
-                onClearAll = {
-                    viewModel.clearAll()
-                    showAvatarPicker = false
-                },
+                onClearAll = { showClearAllDialog = true },
                 hasContent = state.selectedAvatar != null || state.avatarImageBytes != null || state.galleryImages.isNotEmpty(),
             )
         }
@@ -397,6 +396,21 @@ fun ProfileSetupScreen(
             avatarImageBytes = state.avatarImageBytes,
             galleryImages = state.galleryImages,
             onDismiss = { showProfilePreview = false },
+        )
+    }
+
+    if (showClearAllDialog) {
+        ConfirmDialog(
+            title = "wyczy\u015b\u0107 wszystko",
+            message = "czy na pewno chcesz usun\u0105\u0107 avatar i wszystkie zdj\u0119cia?",
+            confirmText = "wyczy\u015b\u0107",
+            isDestructive = true,
+            onConfirm = {
+                viewModel.clearAll()
+                showAvatarPicker = false
+                showClearAllDialog = false
+            },
+            onDismiss = { showClearAllDialog = false },
         )
     }
 }

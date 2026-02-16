@@ -112,6 +112,15 @@ class AuthViewModel(
             _uiState.value = AuthUiState(isLoading = true)
             when (val result = apiService.verifyOtp(email, otp)) {
                 is ApiResult.Success -> {
+                    val data = result.data
+                    if (data.user != null && !data.token.isNullOrBlank()) {
+                        sessionManager.saveSession(
+                            token = data.token,
+                            userId = data.user.id,
+                            email = data.user.email,
+                            name = data.user.name,
+                        )
+                    }
                     _uiState.value = AuthUiState()
                     onSuccess()
                 }

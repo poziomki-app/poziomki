@@ -524,6 +524,10 @@ fun EventCreateScreen(
                     fontFamily = NunitoFamily,
                     fontSize = 14.sp,
                 )
+                LaunchedEffect(error) {
+                    kotlinx.coroutines.delay(5000)
+                    viewModel.clearError()
+                }
             }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))

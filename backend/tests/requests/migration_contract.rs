@@ -211,10 +211,7 @@ async fn events_flow_matches_phase_3_contract() {
             .await;
         assert_eq!(clear_geo.status_code(), 200);
         let cleared_payload: serde_json::Value = clear_geo.json();
-        assert_eq!(
-            cleared_payload["data"]["latitude"],
-            serde_json::Value::Null
-        );
+        assert_eq!(cleared_payload["data"]["latitude"], serde_json::Value::Null);
         assert_eq!(
             cleared_payload["data"]["longitude"],
             serde_json::Value::Null

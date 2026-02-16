@@ -10,6 +10,7 @@ enum class TimeFilter {
     TODAY,
     TOMORROW,
     WEEK,
+    NEARBY,
 }
 
 private val POLISH_WEEKDAYS = arrayOf("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
@@ -108,6 +109,10 @@ fun matchesTimeFilter(
         TimeFilter.WEEK -> {
             val daysDiff = eventDate.toEpochDays() - today.toEpochDays()
             daysDiff in 0..6
+        }
+
+        TimeFilter.NEARBY -> {
+            true
         }
     }
 }

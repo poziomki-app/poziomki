@@ -22,9 +22,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -102,95 +104,113 @@ fun MessagesScreen(
             RoomFilter.Events to "wydarzenia",
         )
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(Background),
-    ) {
-        ScreenHeader(title = "wiadomości") {
-            if (unreadTotal > 0) {
-                Box {
-                    Icon(
-                        imageVector = Icons.Filled.Notifications,
-                        contentDescription = "Powiadomienia",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = TextPrimary,
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .size(10.dp),
-                    ) {}
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            IconButton(onClick = onNavigateToNewChat) {
-                Icon(
-                    imageVector = Icons.Filled.Edit,
-                    contentDescription = "Nowa wiadomość",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-        PoziomkiSearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            placeholder = "szukaj wiadomości...",
-        )
-        FilterTabs(
-            tabs = roomFilterTabs,
-            selected = selectedFilter,
-            onSelect = { selectedFilter = it },
-        )
-
-        when {
-            state.isLoading && state.rooms.isEmpty() -> {
-                LoadingView()
-            }
-
-            state.rooms.isEmpty() -> {
-                EmptyView(state.error ?: "brak rozmów")
-            }
-
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = { viewModel.pullToRefresh() },
-                ) {
-                    if (filteredRooms.isEmpty()) {
-                        EmptyView("brak rozmów")
-                    } else {
-                        LazyColumn(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Background),
+        ) {
+            ScreenHeader(title = "wiadomości") {
+                if (unreadTotal > 0) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Filled.Notifications,
+                            contentDescription = "Powiadomienia",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = TextPrimary,
                             modifier =
                                 Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = PoziomkiTheme.spacing.lg),
-                        ) {
-                            items(filteredRooms, key = { it.roomId }) { room ->
-                                val profilePicture =
-                                    room.directUserId
-                                        ?.substringAfter("@")
-                                        ?.substringBefore(":")
-                                        ?.let { state.profilePictures[it] }
-                                RoomRow(
-                                    room = room,
-                                    profilePictureUrl = profilePicture,
-                                    onClick = { onNavigateToChat(room.roomId) },
-                                    onAvatarClick =
-                                        room.directUserId?.let { userId ->
-                                            { onNavigateToProfile(userId) }
-                                        },
-                                )
+                                    .align(Alignment.TopEnd)
+                                    .size(10.dp),
+                        ) {}
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                IconButton(onClick = onNavigateToNewChat) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = "Nowa wiadomość",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            PoziomkiSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                placeholder = "szukaj wiadomości...",
+            )
+            FilterTabs(
+                tabs = roomFilterTabs,
+                selected = selectedFilter,
+                onSelect = { selectedFilter = it },
+            )
+
+            when {
+                state.isLoading && state.rooms.isEmpty() -> {
+                    LoadingView()
+                }
+
+                state.rooms.isEmpty() -> {
+                    EmptyView(state.error ?: "brak rozmów")
+                }
+
+                else -> {
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { viewModel.pullToRefresh() },
+                    ) {
+                        if (filteredRooms.isEmpty()) {
+                            EmptyView("brak rozmów")
+                        } else {
+                            LazyColumn(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = PoziomkiTheme.spacing.lg),
+                            ) {
+                                items(filteredRooms, key = { it.roomId }) { room ->
+                                    val profilePicture =
+                                        room.directUserId
+                                            ?.substringAfter("@")
+                                            ?.substringBefore(":")
+                                            ?.let { state.profilePictures[it] }
+                                    RoomRow(
+                                        room = room,
+                                        profilePictureUrl = profilePicture,
+                                        onClick = { onNavigateToChat(room.roomId) },
+                                        onAvatarClick =
+                                            room.directUserId?.let { userId ->
+                                                { onNavigateToProfile(userId) }
+                                            },
+                                    )
+                                }
+                                item { Spacer(modifier = Modifier.height(84.dp)) }
                             }
-                            item { Spacer(modifier = Modifier.height(84.dp)) }
                         }
                     }
                 }
+            }
+        }
+
+        // Refresh error snackbar
+        state.refreshError?.let { error ->
+            Snackbar(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(PoziomkiTheme.spacing.md),
+            ) {
+                Text(text = error)
+            }
+            LaunchedEffect(error) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearRefreshError()
             }
         }
     }

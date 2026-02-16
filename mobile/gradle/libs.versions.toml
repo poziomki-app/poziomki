@@ -18,6 +18,7 @@ phosphor-icons = "1.0.0"
 lifecycleCompose = "2.9.1"
 matrixSdk = "26.2.6"
 securityCrypto = "1.1.0"
+playServicesLocation = "21.3.0"
 sqldelight = "2.0.2"
 
 [libraries]
@@ -46,6 +47,8 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphor-icons" }
 matrix-sdk = { module = "org.matrix.rustcomponents:sdk-android", version.ref = "matrixSdk" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version = "1.9.0" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }

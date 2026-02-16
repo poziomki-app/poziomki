@@ -71,6 +71,7 @@ data class AuthUser(
 @Serializable
 data class OtpResponse(
     val user: AuthUser? = null,
+    val token: String? = null,
     val status: Boolean? = null,
 )
 
@@ -157,6 +158,8 @@ data class Event(
     val description: String? = null,
     val coverImage: String? = null,
     val location: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val startsAt: String,
     val endsAt: String? = null,
     val creatorId: String? = null,
@@ -176,6 +179,8 @@ data class CreateEventRequest(
     val location: String? = null,
     val startsAt: String,
     val endsAt: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val tagIds: List<String> = emptyList(),
 )
 
@@ -187,6 +192,8 @@ data class UpdateEventRequest(
     val location: String? = null,
     val startsAt: String? = null,
     val endsAt: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 @Serializable
@@ -307,6 +314,12 @@ data class SearchProfile(
 )
 
 @Serializable
+data class SearchGeoPoint(
+    val lat: Double,
+    val lng: Double,
+)
+
+@Serializable
 data class SearchEvent(
     val id: String,
     val title: String,
@@ -318,6 +331,7 @@ data class SearchEvent(
     val coverImage: String? = null,
     @SerialName("creator_name")
     val creatorName: String,
+    val geo: SearchGeoPoint? = null,
 )
 
 @Serializable

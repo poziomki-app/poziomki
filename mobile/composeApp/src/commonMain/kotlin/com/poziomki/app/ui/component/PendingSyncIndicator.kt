@@ -12,10 +12,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.data.sync.PendingOperationsManager
+import com.poziomki.app.ui.theme.Warning
 import com.poziomki.app.ui.theme.White
 import org.koin.compose.koinInject
 
@@ -30,7 +30,7 @@ fun PendingSyncIndicator(modifier: Modifier = Modifier) {
                 modifier
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE65100)),
+                    .background(Warning),
             contentAlignment = Alignment.Center,
         ) {
             Text(

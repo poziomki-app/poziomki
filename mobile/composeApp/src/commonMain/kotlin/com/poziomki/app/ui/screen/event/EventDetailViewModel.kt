@@ -4,9 +4,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.Event
 import com.poziomki.app.api.EventAttendee
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.ui.component.SnackbarType
 import com.poziomki.app.ui.navigation.Route
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,8 @@ data class EventDetailState(
     val isLoading: Boolean = false,
     val isOpeningChat: Boolean = false,
     val error: String? = null,
+    val snackbarMessage: String? = null,
+    val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
 
 class EventDetailViewModel(
@@ -61,15 +65,39 @@ class EventDetailViewModel(
         }
     }
 
+    fun clearSnackbar() {
+        _state.value = _state.value.copy(snackbarMessage = null)
+    }
+
     fun attendEvent() {
         viewModelScope.launch {
-            eventRepository.attendEvent(eventId)
+            when (eventRepository.attendEvent(eventId)) {
+                is ApiResult.Success -> {}
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 zapisa\u0107 na wydarzenie",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
         }
     }
 
     fun leaveEvent() {
         viewModelScope.launch {
-            eventRepository.leaveEvent(eventId)
+            when (eventRepository.leaveEvent(eventId)) {
+                is ApiResult.Success -> {}
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 opu\u015bci\u0107 wydarzenia",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
         }
     }
 

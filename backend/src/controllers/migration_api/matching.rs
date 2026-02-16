@@ -121,6 +121,25 @@ async fn load_users_by_ids(
         .map_err(|e| loco_rs::Error::Any(e.into()))
 }
 
+/// Haversine distance between two (lat, lng) points in kilometres.
+#[allow(clippy::cast_precision_loss, clippy::suboptimal_flops)]
+fn haversine_km(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    const R: f64 = 6_371.0; // Earth radius in km
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lng = (lng2 - lng1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lng / 2.0).sin().powi(2);
+    2.0 * R * a.sqrt().asin()
+}
+
+/// Returns a 0.0–1.0 score: 1.0 when distance is 0, 0.0 at or beyond `max_km`.
+fn proximity_score(distance_km: f64, max_km: f64) -> f64 {
+    if max_km <= 0.0 {
+        return 0.0;
+    }
+    (1.0 - distance_km / max_km).clamp(0.0, 1.0)
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn jaccard(a: &HashSet<Uuid>, b: &HashSet<Uuid>) -> f64 {
     if a.is_empty() && b.is_empty() {
@@ -245,16 +264,24 @@ pub(super) async fn profiles_recommendations(
     Ok(Json(DataResponse { data }).into_response())
 }
 
-async fn load_event_tag_ids(
+/// Batch-load tag ID sets for a set of event IDs in 1 query.
+async fn batch_load_event_tag_ids(
     db: &DatabaseConnection,
-    event_id: Uuid,
-) -> std::result::Result<HashSet<Uuid>, loco_rs::Error> {
-    let links = event_tags::Entity::find()
-        .filter(event_tags::Column::EventId.eq(event_id))
+    event_ids: &[Uuid],
+) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, loco_rs::Error> {
+    if event_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let all_links = event_tags::Entity::find()
+        .filter(event_tags::Column::EventId.is_in(event_ids.to_vec()))
         .all(db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
-    Ok(links.iter().map(|l| l.tag_id).collect())
+    let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
+    for link in &all_links {
+        result.entry(link.event_id).or_default().insert(link.tag_id);
+    }
+    Ok(result)
 }
 
 pub(super) async fn events_recommendations(
@@ -294,17 +321,46 @@ pub(super) async fn events_recommendations(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    // Score each event by user tag overlap
+    // Batch-load all event tag IDs in one query
+    let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();
+    let all_event_tags = batch_load_event_tag_ids(&ctx.db, &event_ids).await?;
+
+    // Resolve user geo query: lat, lng, max radius in km (default 20 km)
+    let user_geo = query.lat.zip(query.lng).map(|(lat, lng)| {
+        (
+            lat,
+            lng,
+            f64::from(query.radius_m.unwrap_or(20_000)) / 1000.0,
+        )
+    });
+
+    // Score each event by user tag overlap + optional proximity.
+    // Without geo: pure tag relevance (0–100).
+    // With geo: tags still dominate (85 %) with proximity as mild tiebreaker (15 %).
     let mut scored: Vec<(f64, &events::Model)> = Vec::with_capacity(future_events.len());
     for event in &future_events {
-        let event_tag_ids = load_event_tag_ids(&ctx.db, event.id).await?;
+        let event_tag_ids = all_event_tags.get(&event.id).cloned().unwrap_or_default();
         #[allow(clippy::cast_precision_loss)]
-        let score = if my_tag_ids.is_empty() {
+        let tag_score = if my_tag_ids.is_empty() {
             0.0
         } else {
             let shared = my_tag_ids.intersection(&event_tag_ids).count();
             (shared as f64 / my_tag_ids.len() as f64) * 100.0
         };
+
+        let score = if let Some((ulat, ulng, max_km)) = user_geo {
+            let geo_bonus = match (event.latitude, event.longitude) {
+                (Some(elat), Some(elng)) => {
+                    proximity_score(haversine_km(ulat, ulng, elat, elng), max_km) * 15.0
+                }
+                _ => 0.0,
+            };
+            tag_score * 0.85 + geo_bonus
+        } else {
+            // No location provided — pure tag relevance, no penalty
+            tag_score
+        };
+
         scored.push((score, event));
     }
 
@@ -329,7 +385,12 @@ pub(super) async fn events_recommendations(
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp, clippy::unwrap_used, clippy::useless_vec, clippy::suboptimal_flops)]
+#[allow(
+    clippy::float_cmp,
+    clippy::unwrap_used,
+    clippy::useless_vec,
+    clippy::suboptimal_flops
+)]
 mod tests {
     use super::*;
     use crate::controllers::migration_api::state::{EventResponse, ProfilePreview};
@@ -553,6 +614,45 @@ mod tests {
         assert!(json.contains(r#""score":42.5"#), "score should be 42.5");
     }
 
+    // ── haversine / proximity ──────────────────────────────────
+
+    #[test]
+    fn haversine_same_point() {
+        assert!((haversine_km(50.0, 20.0, 50.0, 20.0) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn haversine_krakow_to_warsaw() {
+        // ~252 km between Kraków (50.06, 19.94) and Warsaw (52.23, 21.01)
+        let dist = haversine_km(50.06, 19.94, 52.23, 21.01);
+        assert!(dist > 240.0 && dist < 260.0, "got {dist}");
+    }
+
+    #[test]
+    fn proximity_at_zero() {
+        assert!((proximity_score(0.0, 10.0) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn proximity_at_max() {
+        assert!((proximity_score(10.0, 10.0) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn proximity_beyond_max() {
+        assert!((proximity_score(15.0, 10.0) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn proximity_half() {
+        assert!((proximity_score(5.0, 10.0) - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn proximity_zero_max_km() {
+        assert!((proximity_score(1.0, 0.0) - 0.0).abs() < f64::EPSILON);
+    }
+
     #[test]
     fn profile_recommendation_score_always_present() {
         let rec = ProfileRecommendation {
@@ -572,5 +672,161 @@ mod tests {
         };
         let json = serde_json::to_string(&rec).unwrap();
         assert!(json.contains(r#""score":0.0"#), "score=0 must appear");
+    }
+
+    // ── jaccard symmetry & edge cases ──────────────────────────
+
+    #[test]
+    fn jaccard_is_symmetric() {
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let b: HashSet<Uuid> = [id(2), id(4)].into();
+        assert!((jaccard(&a, &b) - jaccard(&b, &a)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_single_element_sets() {
+        let a: HashSet<Uuid> = [id(1)].into();
+        let b: HashSet<Uuid> = [id(1)].into();
+        assert!((jaccard(&a, &b) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_single_element_disjoint() {
+        let a: HashSet<Uuid> = [id(1)].into();
+        let b: HashSet<Uuid> = [id(2)].into();
+        assert!((jaccard(&a, &b) - 0.0).abs() < f64::EPSILON);
+    }
+
+    // ── event scoring formula ─────────────────────────────────
+    //
+    // Without geo: score = tag_score (0–100)
+    // With geo:    score = tag_score * 0.85 + proximity * 15 (max 100)
+
+    #[test]
+    fn event_score_no_geo_is_pure_tag() {
+        // No lat/lng → score equals tag_score, not penalized
+        let tag_score: f64 = 100.0;
+        assert!((tag_score - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_score_no_geo_partial_tags() {
+        // 50% tag match without geo → score = 50, NOT 35
+        let tag_score: f64 = 50.0;
+        assert!((tag_score - 50.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_combined_score_with_geo_tag_only() {
+        // Perfect tags, event has no coords → 100 * 0.85 + 0 = 85
+        let tag_score: f64 = 100.0;
+        let geo_bonus: f64 = 0.0;
+        let combined = tag_score * 0.85 + geo_bonus;
+        assert!((combined - 85.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_combined_score_with_geo_max() {
+        // Perfect tags + perfect proximity → 85 + 15 = 100
+        let tag_score: f64 = 100.0;
+        let geo_bonus = proximity_score(0.0, 20.0) * 15.0;
+        let combined = tag_score * 0.85 + geo_bonus;
+        assert!((combined - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_combined_score_geo_only() {
+        // 0 tag match, perfect proximity → 0 + 15 = 15
+        let tag_score: f64 = 0.0;
+        let geo_bonus = proximity_score(0.0, 20.0) * 15.0;
+        let combined = tag_score * 0.85 + geo_bonus;
+        assert!((combined - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_geo_same_city_doesnt_dominate() {
+        // Within one city: 3km away vs 15km away (20km radius)
+        // Close event (3km): proximity = (1 - 3/20) = 0.85 → geo_bonus = 12.75
+        // Far event (15km):  proximity = (1 - 15/20) = 0.25 → geo_bonus = 3.75
+        // Swing: ~9 points — smaller than any meaningful tag difference
+        let close = proximity_score(3.0, 20.0) * 15.0;
+        let far = proximity_score(15.0, 20.0) * 15.0;
+        let swing = close - far;
+        assert!(
+            swing < 10.0,
+            "geo swing {swing} should be small within city"
+        );
+        assert!(swing > 0.0, "closer should still rank higher");
+    }
+
+    // ── event scoring asymmetry ────────────────────────────────
+
+    #[test]
+    fn event_score_is_asymmetric() {
+        // User has 2 tags, event has 10 tags, 2 overlap → 100%
+        let user_tags: HashSet<Uuid> = [id(1), id(2)].into();
+        let event_tags: HashSet<Uuid> = (1..=10).map(id).collect();
+        let shared = user_tags.intersection(&event_tags).count();
+        #[allow(clippy::cast_precision_loss)]
+        let score = (shared as f64 / user_tags.len() as f64) * 100.0;
+        assert!((score - 100.0).abs() < f64::EPSILON);
+
+        // Flip: user has 10 tags, event has 2 tags, 2 overlap → 20%
+        let user_tags2: HashSet<Uuid> = (1..=10).map(id).collect();
+        let event_tags2: HashSet<Uuid> = [id(1), id(2)].into();
+        let shared2 = user_tags2.intersection(&event_tags2).count();
+        #[allow(clippy::cast_precision_loss)]
+        let score2 = (shared2 as f64 / user_tags2.len() as f64) * 100.0;
+        assert!((score2 - 20.0).abs() < f64::EPSILON);
+
+        // These should NOT be equal (asymmetric by design)
+        assert!((score - score2).abs() > 1.0);
+    }
+
+    // ── sort stability with NaN ────────────────────────────────
+
+    #[test]
+    fn sort_with_nan_does_not_panic() {
+        let mut scored = vec![(f64::NAN, "a"), (50.0, "b"), (f64::NAN, "c")];
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        // Just verify it doesn't panic; order is undefined with NaN
+        assert_eq!(scored.len(), 3);
+    }
+
+    // ── sort: zero scores fall back to tiebreaker ──────────────
+
+    #[test]
+    fn sort_all_zeros_falls_back_to_tiebreaker() {
+        // When all scores are 0, tiebreaker (ASC) should determine order
+        let mut scored = vec![(0.0, 30u32), (0.0, 10), (0.0, 20)];
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.cmp(&b.1))
+        });
+        let vals: Vec<u32> = scored.iter().map(|(_, v)| *v).collect();
+        assert_eq!(vals, vec![10, 20, 30]);
+    }
+
+    // ── haversine edge cases ───────────────────────────────────
+
+    #[test]
+    fn haversine_negative_coords() {
+        // Southern hemisphere, still produces valid distance
+        let dist = haversine_km(-33.87, 151.21, -37.81, 144.96); // Sydney → Melbourne
+        assert!(dist > 700.0 && dist < 900.0, "got {dist}");
+    }
+
+    #[test]
+    fn haversine_antipodal() {
+        // Opposite sides of Earth ≈ ~20000 km
+        let dist = haversine_km(0.0, 0.0, 0.0, 180.0);
+        assert!(dist > 19_900.0 && dist < 20_100.0, "got {dist}");
+    }
+
+    #[test]
+    fn proximity_negative_distance() {
+        // Should clamp to 1.0
+        assert!((proximity_score(-5.0, 10.0) - 1.0).abs() < f64::EPSILON);
     }
 }

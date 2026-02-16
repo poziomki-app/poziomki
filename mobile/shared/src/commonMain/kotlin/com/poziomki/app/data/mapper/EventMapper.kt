@@ -29,6 +29,8 @@ fun Event.toDbParams(): List<Any?> =
         conversationId,
         Clock.System.now().toEpochMilliseconds(),
         0L,
+        latitude,
+        longitude,
     )
 
 fun com.poziomki.app.db.Event.toApiModel(): Event =
@@ -38,6 +40,8 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         description = description,
         coverImage = cover_image,
         location = location,
+        latitude = latitude,
+        longitude = longitude,
         startsAt = starts_at,
         endsAt = ends_at,
         creatorId = creator_id,

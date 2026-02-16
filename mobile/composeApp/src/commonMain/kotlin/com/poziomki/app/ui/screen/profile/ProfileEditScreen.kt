@@ -37,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ import coil3.compose.AsyncImage
 import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.component.ButtonVariant
 import com.poziomki.app.ui.component.PoziomkiButton
+import com.poziomki.app.ui.component.PoziomkiSnackbar
 import com.poziomki.app.ui.component.PoziomkiTextField
 import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.SectionLabel
@@ -100,194 +102,212 @@ fun ProfileEditScreen(
 
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .imePadding(),
-    ) {
-        // Top bar
-        val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        ScreenHeader(
-            title = "edytuj profil",
-            onBack = onBack,
-            modifier = Modifier.padding(top = statusBarPadding),
-        )
-
-        if (state.isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
-            }
-            return
-        }
-
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = PoziomkiTheme.spacing.lg),
+                    .background(MaterialTheme.colorScheme.background)
+                    .imePadding(),
         ) {
-            // --- zdjęcia ---
-            SectionLabel("zdjęcia")
-
-            ImageGalleryRow(
-                images = state.images,
-                isUploading = state.isUploading,
-                onRemoveImage = { viewModel.removeImage(it) },
-                onAddImage = { imagePicker() },
+            // Top bar
+            val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            ScreenHeader(
+                title = "edytuj profil",
+                onBack = onBack,
+                modifier = Modifier.padding(top = statusBarPadding),
             )
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+            if (state.isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Primary)
+                }
+                return
+            }
 
-            // --- bio ---
-            SectionLabel("bio")
-
-            PoziomkiTextField(
-                value = state.bio,
-                onValueChange = { viewModel.updateBio(it.take(1500)) },
-                placeholder = "Napisz coś o sobie...",
-                singleLine = false,
-                maxLines = 5,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = PoziomkiTheme.spacing.lg),
             ) {
-                // Bio image button
+                // --- zdjęcia ---
+                SectionLabel("zdjęcia")
+
+                ImageGalleryRow(
+                    images = state.images,
+                    isUploading = state.isUploading,
+                    onRemoveImage = { viewModel.removeImage(it) },
+                    onAddImage = { imagePicker() },
+                )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                // --- bio ---
+                SectionLabel("bio")
+
+                PoziomkiTextField(
+                    value = state.bio,
+                    onValueChange = { viewModel.updateBio(it.take(1500)) },
+                    placeholder = "Napisz coś o sobie...",
+                    singleLine = false,
+                    maxLines = 5,
+                )
                 Row(
-                    modifier =
-                        Modifier
-                            .background(SurfaceColor, RoundedCornerShape(50))
-                            .border(1.dp, Border, RoundedCornerShape(50))
-                            .clip(RoundedCornerShape(50))
-                            .clickable(enabled = !state.isBioImageUploading) { bioImagePicker() }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (state.isBioImageUploading) {
-                        CircularProgressIndicator(
-                            color = Primary,
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 1.5.dp,
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(14.dp),
+                    // Bio image button
+                    Row(
+                        modifier =
+                            Modifier
+                                .background(SurfaceColor, RoundedCornerShape(50))
+                                .border(1.dp, Border, RoundedCornerShape(50))
+                                .clip(RoundedCornerShape(50))
+                                .clickable(enabled = !state.isBioImageUploading) { bioImagePicker() }
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (state.isBioImageUploading) {
+                            CircularProgressIndicator(
+                                color = Primary,
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 1.5.dp,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "zdjęcie",
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = TextMuted,
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        text = "zdjęcie",
+                        text = "${state.bio.length}/1500",
                         fontFamily = nunito,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
                         color = TextMuted,
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "${state.bio.length}/1500",
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 12.sp,
-                    color = TextMuted,
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                // --- kolor profilu ---
+                GradientPickerSection(
+                    selectedStart = state.gradientStart,
+                    selectedEnd = state.gradientEnd,
+                    onSelect = { start, end -> viewModel.updateGradient(start, end) },
                 )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+                // --- kierunek ---
+                SectionLabel("kierunek")
+
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(SurfaceColor, RoundedCornerShape(50))
+                            .border(1.dp, Border, RoundedCornerShape(50))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = state.program.ifEmpty { "Wybierz kierunek" },
+                        fontFamily = nunito,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 16.sp,
+                        color = if (state.program.isEmpty()) TextMuted else TextPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (state.program.isNotEmpty()) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Wyczyść",
+                            tint = TextMuted,
+                            modifier =
+                                Modifier
+                                    .size(20.dp)
+                                    .clickable { viewModel.clearProgram() },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                // --- zainteresowania ---
+                TagSection(
+                    label = "zainteresowania",
+                    query = state.interestQuery,
+                    onQueryChange = { viewModel.updateInterestQuery(it) },
+                    searchPlaceholder = "szukaj zainteresowań...",
+                    allTags = state.allTags.filter { it.scope == "interest" },
+                    selectedTags = state.selectedTags.filter { it.scope == "interest" },
+                    onAddTag = {
+                        viewModel.addTag(it)
+                        viewModel.updateInterestQuery("")
+                    },
+                    onRemoveTag = { viewModel.removeTag(it) },
+                )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+                // --- aktywności ---
+                TagSection(
+                    label = "aktywności",
+                    query = state.activityQuery,
+                    onQueryChange = { viewModel.updateActivityQuery(it) },
+                    searchPlaceholder = "szukaj aktywności...",
+                    allTags = state.allTags.filter { it.scope == "activity" },
+                    selectedTags = state.selectedTags.filter { it.scope == "activity" },
+                    onAddTag = {
+                        viewModel.addTag(it)
+                        viewModel.updateActivityQuery("")
+                    },
+                    onRemoveTag = { viewModel.removeTag(it) },
+                )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+
+                // Save button
+                PoziomkiButton(
+                    text = "zapisz",
+                    onClick = { viewModel.save(onBack) },
+                    variant = ButtonVariant.PRIMARY,
+                    loading = state.isSaving,
+                )
+
+                Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
             }
+        }
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            // --- kolor profilu ---
-            GradientPickerSection(
-                selectedStart = state.gradientStart,
-                selectedEnd = state.gradientEnd,
-                onSelect = { start, end -> viewModel.updateGradient(start, end) },
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            // --- kierunek ---
-            SectionLabel("kierunek")
-
-            Row(
+        // Snackbar for save/upload errors
+        state.snackbarMessage?.let { message ->
+            PoziomkiSnackbar(
+                message = message,
+                type = state.snackbarType,
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .background(SurfaceColor, RoundedCornerShape(50))
-                        .border(1.dp, Border, RoundedCornerShape(50))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = state.program.ifEmpty { "Wybierz kierunek" },
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 16.sp,
-                    color = if (state.program.isEmpty()) TextMuted else TextPrimary,
-                    modifier = Modifier.weight(1f),
-                )
-                if (state.program.isNotEmpty()) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Wyczyść",
-                        tint = TextMuted,
-                        modifier =
-                            Modifier
-                                .size(20.dp)
-                                .clickable { viewModel.clearProgram() },
-                    )
-                }
+                        .align(Alignment.BottomCenter)
+                        .padding(PoziomkiTheme.spacing.md),
+            )
+            LaunchedEffect(message) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearSnackbar()
             }
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            // --- zainteresowania ---
-            TagSection(
-                label = "zainteresowania",
-                query = state.interestQuery,
-                onQueryChange = { viewModel.updateInterestQuery(it) },
-                searchPlaceholder = "szukaj zainteresowań...",
-                allTags = state.allTags.filter { it.scope == "interest" },
-                selectedTags = state.selectedTags.filter { it.scope == "interest" },
-                onAddTag = {
-                    viewModel.addTag(it)
-                    viewModel.updateInterestQuery("")
-                },
-                onRemoveTag = { viewModel.removeTag(it) },
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            // --- aktywności ---
-            TagSection(
-                label = "aktywności",
-                query = state.activityQuery,
-                onQueryChange = { viewModel.updateActivityQuery(it) },
-                searchPlaceholder = "szukaj aktywności...",
-                allTags = state.allTags.filter { it.scope == "activity" },
-                selectedTags = state.selectedTags.filter { it.scope == "activity" },
-                onAddTag = {
-                    viewModel.addTag(it)
-                    viewModel.updateActivityQuery("")
-                },
-                onRemoveTag = { viewModel.removeTag(it) },
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-
-            // Save button
-            PoziomkiButton(
-                text = "zapisz",
-                onClick = { viewModel.save(onBack) },
-                variant = ButtonVariant.PRIMARY,
-                loading = state.isSaving,
-            )
-
-            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
 }

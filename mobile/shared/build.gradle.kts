@@ -11,6 +11,7 @@ plugins {
 kotlin {
     compilerOptions {
         allWarningsAsErrors.set(true)
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
     androidTarget {
@@ -48,6 +49,8 @@ kotlin {
             implementation(libs.matrix.sdk)
             implementation(libs.androidx.security.crypto)
             implementation(libs.sqldelight.android.driver)
+            implementation(libs.play.services.location)
+            implementation(libs.kotlinx.coroutines.play.services)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
