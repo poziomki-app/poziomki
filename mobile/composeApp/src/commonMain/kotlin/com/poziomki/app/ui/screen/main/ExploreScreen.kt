@@ -47,6 +47,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ExploreScreen(
     onNavigateToProfile: (String) -> Unit,
+    onNavigateToEventDetail: (String) -> Unit = {},
     viewModel: ExploreViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -195,7 +196,7 @@ fun ExploreScreen(
                                             modifier =
                                                 Modifier
                                                     .fillMaxWidth()
-                                                    .clickable { },
+                                                    .clickable { onNavigateToEventDetail(event.id) },
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceElevated,
                                         ) {

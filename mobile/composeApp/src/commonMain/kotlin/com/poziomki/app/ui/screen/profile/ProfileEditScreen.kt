@@ -44,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
@@ -87,6 +89,13 @@ fun ProfileEditScreen(
         rememberSingleImagePicker { bytes ->
             if (bytes != null) {
                 viewModel.uploadAndAddImage(bytes)
+            }
+        }
+
+    val bioImagePicker =
+        rememberSingleImagePicker { bytes ->
+            if (bytes != null) {
+                viewModel.uploadBioImage(bytes)
             }
         }
 
@@ -140,22 +149,66 @@ fun ProfileEditScreen(
 
             PoziomkiTextField(
                 value = state.bio,
-                onValueChange = { viewModel.updateBio(it) },
+                onValueChange = { viewModel.updateBio(it.take(1500)) },
                 placeholder = "Napisz coś o sobie...",
                 singleLine = false,
                 maxLines = 5,
             )
-            Text(
-                text = "${state.bio.length}/500",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Normal,
-                fontSize = 12.sp,
-                color = TextMuted,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                textAlign = TextAlign.End,
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Bio image button
+                Row(
+                    modifier =
+                        Modifier
+                            .background(SurfaceColor, RoundedCornerShape(50))
+                            .border(1.dp, Border, RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(50))
+                            .clickable(enabled = !state.isBioImageUploading) { bioImagePicker() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (state.isBioImageUploading) {
+                        CircularProgressIndicator(
+                            color = Primary,
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "zdjęcie",
+                        fontFamily = nunito,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        color = TextMuted,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "${state.bio.length}/1500",
+                    fontFamily = nunito,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+            // --- kolor profilu ---
+            GradientPickerSection(
+                selectedStart = state.gradientStart,
+                selectedEnd = state.gradientEnd,
+                onSelect = { start, end -> viewModel.updateGradient(start, end) },
             )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
@@ -494,6 +547,96 @@ private fun TagSearchBar(
             tint = TextMuted,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+private data class GradientPreset(
+    val start: String,
+    val end: String,
+    val label: String,
+)
+
+private val gradientPresets =
+    listOf(
+        GradientPreset("FF6B6B", "FFA07A", "sunset"),
+        GradientPreset("00F5FF", "FF00FF", "neon"),
+        GradientPreset("667EEA", "764BA2", "ocean"),
+        GradientPreset("00B09B", "96C93D", "mint"),
+        GradientPreset("FF416C", "FF4B2B", "fire"),
+        GradientPreset("C471F5", "FA71CD", "lavender"),
+        GradientPreset("2193B0", "6DD5ED", "sky"),
+        GradientPreset("F093FB", "F5576C", "coral"),
+        GradientPreset("0F2027", "2C5364", "night"),
+        GradientPreset("FFD89B", "19547B", "peach"),
+        GradientPreset("8E2DE2", "4A00E0", "berry"),
+        GradientPreset("FC5C7D", "6A82FB", "candy"),
+    )
+
+private fun parseHex(hex: String): Color =
+    runCatching { Color(("FF$hex").toLong(16)) }.getOrDefault(Color.Gray)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GradientPickerSection(
+    selectedStart: String?,
+    selectedEnd: String?,
+    onSelect: (String?, String?) -> Unit,
+) {
+    val nunito = NunitoFamily
+
+    SectionLabel("kolor profilu")
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // "brak" option
+        val isNone = selectedStart == null && selectedEnd == null
+        Box(
+            modifier =
+                Modifier
+                    .size(width = 64.dp, height = 40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(
+                        if (isNone) 2.dp else 1.dp,
+                        if (isNone) Primary else Border,
+                        RoundedCornerShape(10.dp),
+                    )
+                    .background(SurfaceColor)
+                    .clickable { onSelect(null, null) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "brak",
+                fontFamily = nunito,
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.sp,
+                color = if (isNone) Primary else TextMuted,
+            )
+        }
+
+        gradientPresets.forEach { preset ->
+            val isSelected = selectedStart == preset.start && selectedEnd == preset.end
+            Box(
+                modifier =
+                    Modifier
+                        .size(width = 64.dp, height = 40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(
+                            if (isSelected) 2.dp else 1.dp,
+                            if (isSelected) Primary else Border,
+                            RoundedCornerShape(10.dp),
+                        )
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(parseHex(preset.start), parseHex(preset.end)),
+                                start = Offset(0f, 0f),
+                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+                            ),
+                        )
+                        .clickable { onSelect(preset.start, preset.end) },
+            )
+        }
     }
 }
 

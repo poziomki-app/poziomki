@@ -362,6 +362,7 @@ fun MainScreen(
                     composable<Route.Explore> {
                         ExploreScreen(
                             onNavigateToProfile = onNavigateToProfileView,
+                            onNavigateToEventDetail = onNavigateToEventDetail,
                         )
                     }
                     composable<Route.Events> {
