@@ -54,10 +54,11 @@ fun OnboardingLayout(
                         .padding(horizontal = PoziomkiTheme.spacing.lg)
                         .padding(top = PoziomkiTheme.spacing.sm)
                         .padding(
-                            bottom = maxOf(
-                                PoziomkiTheme.spacing.xl,
-                                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                            ),
+                            bottom =
+                                maxOf(
+                                    PoziomkiTheme.spacing.xl,
+                                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                                ),
                         ),
             ) {
                 footer()

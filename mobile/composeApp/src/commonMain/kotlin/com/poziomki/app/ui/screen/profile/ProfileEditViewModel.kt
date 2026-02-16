@@ -88,7 +88,10 @@ class ProfileEditViewModel(
         _state.value = _state.value.copy(program = "")
     }
 
-    fun updateGradient(start: String?, end: String?) {
+    fun updateGradient(
+        start: String?,
+        end: String?,
+    ) {
         _state.value = _state.value.copy(gradientStart = start, gradientEnd = end)
     }
 

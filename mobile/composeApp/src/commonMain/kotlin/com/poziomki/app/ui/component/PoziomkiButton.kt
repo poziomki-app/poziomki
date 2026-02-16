@@ -44,37 +44,41 @@ fun PoziomkiButton(
 ) {
     val colors =
         when (variant) {
-            ButtonVariant.PRIMARY ->
+            ButtonVariant.PRIMARY -> {
                 ButtonDefaults.buttonColors(
                     containerColor = Primary,
                     contentColor = Black,
                     disabledContainerColor = Primary.copy(alpha = 0.3f),
                     disabledContentColor = Black.copy(alpha = 0.7f),
                 )
+            }
 
-            ButtonVariant.SECONDARY ->
+            ButtonVariant.SECONDARY -> {
                 ButtonDefaults.buttonColors(
                     containerColor = Secondary,
                     contentColor = Black,
                     disabledContainerColor = Secondary.copy(alpha = 0.7f),
                     disabledContentColor = Black.copy(alpha = 0.7f),
                 )
+            }
 
-            ButtonVariant.OUTLINE ->
+            ButtonVariant.OUTLINE -> {
                 ButtonDefaults.buttonColors(
                     containerColor = Color.Transparent,
                     contentColor = Primary,
                     disabledContainerColor = Color.Transparent,
                     disabledContentColor = Primary.copy(alpha = 0.7f),
                 )
+            }
 
-            ButtonVariant.DESTRUCTIVE ->
+            ButtonVariant.DESTRUCTIVE -> {
                 ButtonDefaults.buttonColors(
                     containerColor = Error,
                     contentColor = White,
                     disabledContainerColor = Error.copy(alpha = 0.7f),
                     disabledContentColor = White.copy(alpha = 0.7f),
                 )
+            }
         }
 
     val border =

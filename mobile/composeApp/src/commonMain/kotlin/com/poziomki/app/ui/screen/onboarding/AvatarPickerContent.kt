@@ -44,8 +44,8 @@ import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.Secondary
 import com.poziomki.app.ui.theme.Surface
 import com.poziomki.app.ui.theme.TextMuted
-import com.poziomki.app.ui.theme.White
 import com.poziomki.app.ui.theme.TextPrimary
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.decodeImageBytes
 
 internal val EMOJI_AVATARS =

@@ -31,17 +31,19 @@ class PrivacyViewModel(
             _state.value = _state.value.copy(isExporting = true, error = null)
             when (val result = apiService.exportData()) {
                 is ApiResult.Success -> {
-                    _state.value = _state.value.copy(
-                        isExporting = false,
-                        exportedJson = result.data.toString(),
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isExporting = false,
+                            exportedJson = result.data.toString(),
+                        )
                 }
 
                 is ApiResult.Error -> {
-                    _state.value = _state.value.copy(
-                        isExporting = false,
-                        error = "Nie udało się wyeksportować danych",
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isExporting = false,
+                            error = "Nie udało się wyeksportować danych",
+                        )
                 }
             }
         }
@@ -51,7 +53,10 @@ class PrivacyViewModel(
         _state.value = _state.value.copy(exportedJson = null)
     }
 
-    fun deleteAccount(password: String, onDeleted: () -> Unit) {
+    fun deleteAccount(
+        password: String,
+        onDeleted: () -> Unit,
+    ) {
         if (password.isBlank()) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isDeleting = true, error = null)
@@ -64,10 +69,11 @@ class PrivacyViewModel(
                 }
 
                 is ApiResult.Error -> {
-                    _state.value = _state.value.copy(
-                        isDeleting = false,
-                        error = "Nie udało się usunąć konta. Sprawdź hasło.",
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            isDeleting = false,
+                            error = "Nie udało się usunąć konta. Sprawdź hasło.",
+                        )
                 }
             }
         }

@@ -21,17 +21,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.fill.CalendarBlank
-import com.adamglin.phosphoricons.fill.ChatCircle
-import com.adamglin.phosphoricons.fill.User
-import com.adamglin.phosphoricons.fill.UsersThree
-import com.adamglin.phosphoricons.regular.CalendarBlank
-import com.adamglin.phosphoricons.regular.ChatCircle
-import com.adamglin.phosphoricons.regular.User
-import com.adamglin.phosphoricons.regular.UsersThree
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -59,6 +48,17 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.fill.CalendarBlank
+import com.adamglin.phosphoricons.fill.ChatCircle
+import com.adamglin.phosphoricons.fill.User
+import com.adamglin.phosphoricons.fill.UsersThree
+import com.adamglin.phosphoricons.regular.CalendarBlank
+import com.adamglin.phosphoricons.regular.ChatCircle
+import com.adamglin.phosphoricons.regular.User
+import com.adamglin.phosphoricons.regular.UsersThree
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.ui.component.OfflineBanner
 import com.poziomki.app.ui.screen.auth.LoginScreen
@@ -403,8 +403,7 @@ fun MainScreen(
                                 start = 16.dp,
                                 end = 16.dp,
                                 bottom = bottomInsets + 16.dp,
-                            )
-                            .clip(navBarShape)
+                            ).clip(navBarShape)
                             .background(
                                 Brush.linearGradient(
                                     colors =
@@ -413,15 +412,16 @@ fun MainScreen(
                                             Color(0xFF0E1318),
                                             Color(0xFF101820),
                                         ),
-                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    start =
+                                        androidx.compose.ui.geometry
+                                            .Offset(0f, 0f),
                                     end =
                                         androidx.compose.ui.geometry.Offset(
                                             Float.POSITIVE_INFINITY,
                                             Float.POSITIVE_INFINITY,
                                         ),
                                 ),
-                            )
-                            .background(
+                            ).background(
                                 Brush.verticalGradient(
                                     colors =
                                         listOf(
@@ -430,8 +430,7 @@ fun MainScreen(
                                             Color(0x04FFFFFF),
                                         ),
                                 ),
-                            )
-                            .border(
+                            ).border(
                                 width = 1.dp,
                                 brush =
                                     Brush.linearGradient(

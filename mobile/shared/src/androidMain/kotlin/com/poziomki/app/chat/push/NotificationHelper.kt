@@ -1,0 +1,72 @@
+package com.poziomki.app.chat.push
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import java.util.concurrent.atomic.AtomicInteger
+
+class NotificationHelper(
+    private val context: Context,
+) {
+    private val notificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private val notificationIdCounter = AtomicInteger(1000)
+
+    fun createChannels() {
+        val messagesChannel =
+            NotificationChannel(
+                CHANNEL_MESSAGES,
+                "Messages",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "New message notifications"
+            }
+        val serviceChannel =
+            NotificationChannel(
+                CHANNEL_SERVICE,
+                "Push Service",
+                NotificationManager.IMPORTANCE_MIN,
+            ).apply {
+                description = "Background connection for push notifications"
+            }
+        notificationManager.createNotificationChannel(messagesChannel)
+        notificationManager.createNotificationChannel(serviceChannel)
+    }
+
+    fun buildServiceNotification(): Notification =
+        Notification
+            .Builder(context, CHANNEL_SERVICE)
+            .setContentTitle("Poziomki")
+            .setContentText("Connected")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .build()
+
+    fun showMessageNotification(
+        sender: String?,
+        roomId: String?,
+    ) {
+        val title = sender ?: "New message"
+        val body = "You have a new message"
+        val groupKey = "poz_messages_${roomId ?: "unknown"}"
+
+        val notification =
+            Notification
+                .Builder(context, CHANNEL_MESSAGES)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setAutoCancel(true)
+                .setGroup(groupKey)
+                .build()
+
+        notificationManager.notify(notificationIdCounter.getAndIncrement(), notification)
+    }
+
+    companion object {
+        const val CHANNEL_MESSAGES = "poz_messages"
+        const val CHANNEL_SERVICE = "poz_push_service"
+        const val SERVICE_NOTIFICATION_ID = 900
+    }
+}

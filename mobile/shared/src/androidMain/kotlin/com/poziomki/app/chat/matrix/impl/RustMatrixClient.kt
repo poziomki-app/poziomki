@@ -42,7 +42,6 @@ import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
 import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
-import org.matrix.rustcomponents.sdk.SetPusherData
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk.BackupDownloadStrategy
@@ -363,25 +362,23 @@ class RustMatrixClient(
         runCatching {
             val c = client ?: error("Matrix client is not initialized")
             c.setPusher(
-                SetPusherData(
-                    identifiers =
-                        PusherIdentifiers(
-                            pushkey = ntfyEndpoint,
-                            appId = "app.poziomki",
+                identifiers =
+                    PusherIdentifiers(
+                        pushkey = ntfyEndpoint,
+                        appId = "app.poziomki",
+                    ),
+                kind =
+                    PusherKind.Http(
+                        HttpPusherData(
+                            url = gatewayUrl,
+                            format = PushFormat.EVENT_ID_ONLY,
+                            defaultPayload = null,
                         ),
-                    kind =
-                        PusherKind.Http(
-                            HttpPusherData(
-                                url = gatewayUrl,
-                                format = PushFormat.EVENT_ID_ONLY,
-                                defaultPayload = null,
-                            ),
-                        ),
-                    appDisplayName = "Poziomki",
-                    deviceDisplayName = "Poziomki Android",
-                    profileTag = null,
-                    lang = "en",
-                ),
+                    ),
+                appDisplayName = "Poziomki",
+                deviceDisplayName = "Poziomki Android",
+                profileTag = null,
+                lang = "en",
             )
         }
 

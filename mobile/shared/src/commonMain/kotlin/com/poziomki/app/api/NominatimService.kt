@@ -39,7 +39,9 @@ internal data class PhotonProperties(
     val country: String? = null,
 )
 
-class GeocodingService(engine: HttpClientEngine) {
+class GeocodingService(
+    engine: HttpClientEngine,
+) {
     private val client =
         HttpClient(engine) {
             install(ContentNegotiation) {
@@ -59,29 +61,37 @@ class GeocodingService(engine: HttpClientEngine) {
     suspend fun search(query: String): List<GeocodingResult> =
         try {
             val response: PhotonResponse =
-                client.get("api") {
-                    parameter("q", query)
-                    parameter("limit", "5")
-                    parameter("lang", "pl")
-                    parameter("lat", "52.2297")
-                    parameter("lon", "21.0122")
-                    parameter("location_bias_scale", "0.5")
-                    parameter("bbox", "20.75,52.05,21.35,52.45")
-                }.body()
+                client
+                    .get("api") {
+                        parameter("q", query)
+                        parameter("limit", "5")
+                        parameter("lang", "pl")
+                        parameter("lat", "52.2297")
+                        parameter("lon", "21.0122")
+                        parameter("location_bias_scale", "0.5")
+                        parameter("bbox", "20.75,52.05,21.35,52.45")
+                    }.body()
             response.features.mapNotNull { it.toResult() }
         } catch (_: Exception) {
             emptyList()
         }
 
-    suspend fun reverse(lat: Double, lng: Double): String? =
+    suspend fun reverse(
+        lat: Double,
+        lng: Double,
+    ): String? =
         try {
             val response: PhotonResponse =
-                client.get("reverse") {
-                    parameter("lat", lat)
-                    parameter("lon", lng)
-                    parameter("lang", "pl")
-                }.body()
-            response.features.firstOrNull()?.toResult()?.name
+                client
+                    .get("reverse") {
+                        parameter("lat", lat)
+                        parameter("lon", lng)
+                        parameter("lang", "pl")
+                    }.body()
+            response.features
+                .firstOrNull()
+                ?.toResult()
+                ?.name
         } catch (_: Exception) {
             null
         }

@@ -37,8 +37,7 @@ fun ScreenHeader(
                     end = PoziomkiTheme.spacing.sm,
                     top = PoziomkiTheme.spacing.md,
                     bottom = PoziomkiTheme.spacing.md,
-                )
-                .height(48.dp),
+                ).height(48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {

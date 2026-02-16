@@ -65,19 +65,22 @@ class OnboardingViewModel(
             _state.value = _state.value.copy(degreeSearchResults = emptyList())
             return
         }
-        degreeSearchJob = viewModelScope.launch {
-            delay(300)
-            when (val result = apiService.search(query)) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(
-                        degreeSearchResults = result.data.degrees,
-                    )
-                }
-                is ApiResult.Error -> {
-                    _state.value = _state.value.copy(degreeSearchResults = emptyList())
+        degreeSearchJob =
+            viewModelScope.launch {
+                delay(300)
+                when (val result = apiService.search(query)) {
+                    is ApiResult.Success -> {
+                        _state.value =
+                            _state.value.copy(
+                                degreeSearchResults = result.data.degrees,
+                            )
+                    }
+
+                    is ApiResult.Error -> {
+                        _state.value = _state.value.copy(degreeSearchResults = emptyList())
+                    }
                 }
             }
-        }
     }
 
     fun updateName(name: String) {

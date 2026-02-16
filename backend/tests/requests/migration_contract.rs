@@ -128,6 +128,7 @@ async fn events_flow_matches_phase_3_contract() {
             .await;
         assert_eq!(profile_response.status_code(), 201);
 
+        // Create event without geo
         let create_response = request
             .post("/api/v1/events")
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
@@ -148,6 +149,76 @@ async fn events_flow_matches_phase_3_contract() {
         assert!(!event_id.is_empty());
         assert_eq!(created_payload["data"]["attendeesCount"], 1);
         assert_eq!(created_payload["data"]["isAttending"], true);
+        assert_eq!(created_payload["data"]["latitude"], serde_json::Value::Null);
+        assert_eq!(
+            created_payload["data"]["longitude"],
+            serde_json::Value::Null
+        );
+
+        // Create event with geo coordinates
+        let geo_create = request
+            .post("/api/v1/events")
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "title": "Geo event in Warsaw",
+                "startsAt": "2030-06-01T10:00:00Z",
+                "latitude": 52.2297,
+                "longitude": 21.0122
+            }))
+            .await;
+        assert_eq!(geo_create.status_code(), 201);
+        let geo_payload: serde_json::Value = geo_create.json();
+        let geo_event_id = geo_payload["data"]["id"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .unwrap_or_default();
+        assert!(!geo_event_id.is_empty());
+        assert_eq!(geo_payload["data"]["latitude"], 52.2297);
+        assert_eq!(geo_payload["data"]["longitude"], 21.0122);
+
+        // Verify geo event appears in list with coordinates
+        let geo_detail = request
+            .get(&format!("/api/v1/events/{geo_event_id}"))
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .await;
+        assert_eq!(geo_detail.status_code(), 200);
+        let detail_payload: serde_json::Value = geo_detail.json();
+        assert_eq!(detail_payload["data"]["latitude"], 52.2297);
+        assert_eq!(detail_payload["data"]["longitude"], 21.0122);
+
+        // Update event to add geo coordinates
+        let update_geo = request
+            .patch(&format!("/api/v1/events/{event_id}"))
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "latitude": 50.0647,
+                "longitude": 19.9450
+            }))
+            .await;
+        assert_eq!(update_geo.status_code(), 200);
+        let updated_payload: serde_json::Value = update_geo.json();
+        assert_eq!(updated_payload["data"]["latitude"], 50.0647);
+        assert_eq!(updated_payload["data"]["longitude"], 19.945);
+
+        // Update event to clear geo coordinates
+        let clear_geo = request
+            .patch(&format!("/api/v1/events/{event_id}"))
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "latitude": null,
+                "longitude": null
+            }))
+            .await;
+        assert_eq!(clear_geo.status_code(), 200);
+        let cleared_payload: serde_json::Value = clear_geo.json();
+        assert_eq!(
+            cleared_payload["data"]["latitude"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            cleared_payload["data"]["longitude"],
+            serde_json::Value::Null
+        );
 
         let attendee_signup = request
             .post("/api/v1/auth/sign-up/email")

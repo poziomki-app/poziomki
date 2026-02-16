@@ -35,12 +35,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.component.ConfirmDialog
 import com.poziomki.app.ui.component.EmptyView
 import com.poziomki.app.ui.component.LoadingView
 import com.poziomki.app.ui.component.ProfileCard
@@ -64,6 +68,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -139,10 +144,7 @@ fun ProfileScreen(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .clickable {
-                                                    viewModel.signOut()
-                                                    onSignOut()
-                                                }.padding(horizontal = PoziomkiTheme.spacing.md, vertical = 14.dp),
+                                                .clickable { showLogoutDialog = true }.padding(horizontal = PoziomkiTheme.spacing.md, vertical = 14.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center,
                                     ) {

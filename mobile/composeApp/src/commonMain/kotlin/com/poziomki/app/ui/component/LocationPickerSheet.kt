@@ -73,7 +73,10 @@ private const val DEFAULT_LNG = 21.0122
 
 private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/positron"
 
-internal fun pointGeoJson(lat: Double, lng: Double): GeoJsonData =
+internal fun pointGeoJson(
+    lat: Double,
+    lng: Double,
+): GeoJsonData =
     GeoJsonData.JsonString(
         """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[$lng,$lat]},"properties":{}}]}""",
     )
@@ -246,8 +249,7 @@ fun LocationPickerSheet(
                                                         ),
                                                     )
                                                 }
-                                            }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            }.padding(horizontal = 16.dp, vertical = 12.dp),
                                 )
                             }
                         }

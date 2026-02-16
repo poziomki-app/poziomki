@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -50,20 +50,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
-import com.poziomki.app.ui.component.LocationPickerSheet
 import com.poziomki.app.ui.component.ButtonVariant
+import com.poziomki.app.ui.component.LocationPickerSheet
 import com.poziomki.app.ui.component.PoziomkiButton
 import com.poziomki.app.ui.component.PoziomkiTextField
 import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.component.pointGeoJson
 import com.poziomki.app.ui.theme.Background
-import com.poziomki.app.ui.theme.Black
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Overlay
@@ -103,9 +101,10 @@ fun EventCreateScreen(
     val viewModel = koinViewModel<EventCreateViewModel>()
     val state by viewModel.state.collectAsState()
 
-    val pickImage = rememberSingleImagePicker { bytes ->
-        if (bytes != null) viewModel.uploadCoverImage(bytes)
-    }
+    val pickImage =
+        rememberSingleImagePicker { bytes ->
+            if (bytes != null) viewModel.uploadCoverImage(bytes)
+        }
 
     var showLocationPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -715,7 +714,11 @@ private fun updateEndsAt(
     viewModel.updateEndsAt(toIsoString(dateMillis, hour, minute))
 }
 
-private fun toIsoString(dateMillis: Long, hour: Int, minute: Int): String {
+private fun toIsoString(
+    dateMillis: Long,
+    hour: Int,
+    minute: Int,
+): String {
     val dateInstant = Instant.fromEpochMilliseconds(dateMillis)
     val dateLd = dateInstant.toLocalDateTime(TimeZone.currentSystemDefault())
     return "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${

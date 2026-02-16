@@ -26,9 +26,10 @@ fun StackedAvatars(
                 picture = url,
                 displayName = null,
                 size = avatarSize,
-                modifier = Modifier
-                    .offset(x = xOffset)
-                    .border(1.5.dp, Border, CircleShape),
+                modifier =
+                    Modifier
+                        .offset(x = xOffset)
+                        .border(1.5.dp, Border, CircleShape),
             )
         }
     }

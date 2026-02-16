@@ -362,9 +362,13 @@ private fun RichBio(bio: String) {
 }
 
 private sealed class BioSegment {
-    data class TextSegment(val text: String) : BioSegment()
+    data class TextSegment(
+        val text: String,
+    ) : BioSegment()
 
-    data class ImageSegment(val url: String) : BioSegment()
+    data class ImageSegment(
+        val url: String,
+    ) : BioSegment()
 }
 
 private fun parseBioSegments(bio: String): List<BioSegment> {

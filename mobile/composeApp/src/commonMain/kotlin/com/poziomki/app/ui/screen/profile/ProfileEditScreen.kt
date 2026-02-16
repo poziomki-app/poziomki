@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -52,15 +52,14 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.poziomki.app.api.Tag
-import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.ButtonVariant
 import com.poziomki.app.ui.component.PoziomkiButton
 import com.poziomki.app.ui.component.PoziomkiTextField
+import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
@@ -133,7 +132,6 @@ fun ProfileEditScreen(
             // --- zdjęcia ---
             SectionLabel("zdjęcia")
 
-
             ImageGalleryRow(
                 images = state.images,
                 isUploading = state.isUploading,
@@ -145,7 +143,6 @@ fun ProfileEditScreen(
 
             // --- bio ---
             SectionLabel("bio")
-
 
             PoziomkiTextField(
                 value = state.bio,
@@ -215,7 +212,6 @@ fun ProfileEditScreen(
 
             // --- kierunek ---
             SectionLabel("kierunek")
-
 
             Row(
                 modifier =
@@ -572,8 +568,7 @@ private val gradientPresets =
         GradientPreset("FC5C7D", "6A82FB", "candy"),
     )
 
-private fun parseHex(hex: String): Color =
-    runCatching { Color(("FF$hex").toLong(16)) }.getOrDefault(Color.Gray)
+private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong(16)) }.getOrDefault(Color.Gray)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -601,8 +596,7 @@ private fun GradientPickerSection(
                         if (isNone) 2.dp else 1.dp,
                         if (isNone) Primary else Border,
                         RoundedCornerShape(10.dp),
-                    )
-                    .background(SurfaceColor)
+                    ).background(SurfaceColor)
                     .clickable { onSelect(null, null) },
             contentAlignment = Alignment.Center,
         ) {
@@ -626,15 +620,13 @@ private fun GradientPickerSection(
                             if (isSelected) 2.dp else 1.dp,
                             if (isSelected) Primary else Border,
                             RoundedCornerShape(10.dp),
-                        )
-                        .background(
+                        ).background(
                             Brush.linearGradient(
                                 colors = listOf(parseHex(preset.start), parseHex(preset.end)),
                                 start = Offset(0f, 0f),
                                 end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
                             ),
-                        )
-                        .clickable { onSelect(preset.start, preset.end) },
+                        ).clickable { onSelect(preset.start, preset.end) },
             )
         }
     }

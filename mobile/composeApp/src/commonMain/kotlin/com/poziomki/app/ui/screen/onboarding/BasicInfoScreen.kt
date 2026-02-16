@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -124,26 +124,27 @@ fun BasicInfoScreen(
                     KeyboardOptions(
                         imeAction = ImeAction.Done,
                     ),
-                trailingContent = if (state.program.isNotEmpty()) {
-                    {
-                        IconButton(
-                            onClick = {
-                                viewModel.updateProgram("")
-                                showDegreeSuggestions = false
-                            },
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "wyczyść",
-                                tint = TextMuted,
-                                modifier = Modifier.size(20.dp),
-                            )
+                trailingContent =
+                    if (state.program.isNotEmpty()) {
+                        {
+                            IconButton(
+                                onClick = {
+                                    viewModel.updateProgram("")
+                                    showDegreeSuggestions = false
+                                },
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "wyczyść",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
-                    }
-                } else {
-                    null
-                },
+                    } else {
+                        null
+                    },
             )
 
             if (showDegreeSuggestions && state.degreeSearchResults.isNotEmpty()) {
@@ -168,8 +169,7 @@ fun BasicInfoScreen(
                                         .clickable {
                                             viewModel.updateProgram(degree.name)
                                             showDegreeSuggestions = false
-                                        }
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        }.padding(horizontal = 16.dp, vertical = 10.dp),
                             )
                         }
                     }
@@ -180,7 +180,10 @@ fun BasicInfoScreen(
 }
 
 @Composable
-private fun highlightMatch(text: String, query: String) = buildAnnotatedString {
+private fun highlightMatch(
+    text: String,
+    query: String,
+) = buildAnnotatedString {
     if (query.isBlank()) {
         withStyle(SpanStyle(color = TextPrimary)) { append(text) }
         return@buildAnnotatedString

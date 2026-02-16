@@ -136,8 +136,7 @@ fun PrivacyScreen(
                             .background(
                                 MaterialTheme.colorScheme.surfaceVariant,
                                 MaterialTheme.shapes.small,
-                            )
-                            .padding(PoziomkiTheme.spacing.md),
+                            ).padding(PoziomkiTheme.spacing.md),
                 )
             }
 

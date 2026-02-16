@@ -50,7 +50,11 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(location = location)
     }
 
-    fun updateLocationWithCoordinates(name: String, lat: Double, lng: Double) {
+    fun updateLocationWithCoordinates(
+        name: String,
+        lat: Double,
+        lng: Double,
+    ) {
         _state.value = _state.value.copy(location = name, latitude = lat, longitude = lng)
     }
 
@@ -131,7 +135,10 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
-                    is ApiResult.Success -> onSaved()
+                    is ApiResult.Success -> {
+                        onSaved()
+                    }
+
                     is ApiResult.Error -> {
                         _state.value = _state.value.copy(isLoading = false, error = "Nie udało się zaktualizować wydarzenia")
                     }
@@ -147,7 +154,10 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                     )
                 when (eventRepository.createEvent(request)) {
-                    is ApiResult.Success -> onSaved()
+                    is ApiResult.Success -> {
+                        onSaved()
+                    }
+
                     is ApiResult.Error -> {
                         _state.value = _state.value.copy(isLoading = false, error = "Nie udało się utworzyć wydarzenia")
                     }

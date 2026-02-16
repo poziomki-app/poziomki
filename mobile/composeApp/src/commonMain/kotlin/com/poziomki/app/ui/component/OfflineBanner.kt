@@ -17,8 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.theme.White
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
+import com.poziomki.app.ui.theme.White
 import org.koin.compose.koinInject
 
 @Composable
