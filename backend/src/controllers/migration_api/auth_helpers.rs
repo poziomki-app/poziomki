@@ -5,6 +5,7 @@ use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use loco_rs::{hash, prelude::*};
+use subtle::ConstantTimeEq;
 
 use super::super::{
     error_response,
@@ -70,7 +71,10 @@ fn otp_bypass_matches(otp: &str) -> bool {
     otp_bypass_enabled()
         && std::env::var("OTP_BYPASS_CODE")
             .ok()
-            .is_some_and(|code| otp == code)
+            .is_some_and(|code| {
+                code.len() == otp.len()
+                    && bool::from(otp.as_bytes().ct_eq(code.as_bytes()))
+            })
 }
 
 pub(super) fn verify_otp_from_state(email: &str, otp: &str, now: chrono::DateTime<Utc>) -> bool {
@@ -80,7 +84,9 @@ pub(super) fn verify_otp_from_state(email: &str, otp: &str, now: chrono::DateTim
     if let Some(saved) = state.otp_by_email.get_mut(email) {
         if saved.expires_at <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
             state.otp_by_email.remove(email);
-        } else if saved.code != otp {
+        } else if saved.code.len() != otp.len()
+            || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes()))
+        {
             saved.attempts = saved.attempts.saturating_add(1);
         } else {
             state.otp_by_email.remove(email);
@@ -127,15 +133,18 @@ pub(super) async fn create_user_or_error(
                 details: None,
             },
         ),
-        other => error_response(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            headers,
-            ErrorSpec {
-                error: other.to_string(),
-                code: "INTERNAL_ERROR",
-                details: None,
-            },
-        ),
+        other => {
+            tracing::error!("User creation failed: {other}");
+            error_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                ErrorSpec {
+                    error: "Registration failed".to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            )
+        }
     })
 }
 
@@ -266,8 +275,7 @@ pub(super) async fn verify_otp_inner(
 
     if user.email_verified_at.is_none() {
         let mut active: users::ActiveModel = user.clone().into();
-        active.email_verified_at =
-            sea_orm::ActiveValue::Set(Some(chrono::offset::Local::now().into()));
+        active.email_verified_at = sea_orm::ActiveValue::Set(Some(Utc::now().into()));
         let _ = active.update(db).await;
     }
 
