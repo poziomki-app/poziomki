@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 // --- Geo types ---
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoPoint {
     pub lat: f64,
     pub lng: f64,
@@ -235,4 +235,181 @@ pub async fn search_all(
             .map(|r| r.hits.into_iter().map(|h| h.result).collect())
             .unwrap_or_default(),
     })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
+mod tests {
+    use super::*;
+
+    fn sample_event(geo: Option<GeoPoint>) -> EventDocument {
+        EventDocument {
+            id: "evt-1".to_string(),
+            title: "Test Event".to_string(),
+            description: Some("A description".to_string()),
+            location: Some("Warsaw".to_string()),
+            starts_at: "2030-01-01T12:00:00Z".to_string(),
+            cover_image: None,
+            creator_name: "Alice".to_string(),
+            geo,
+        }
+    }
+
+    #[test]
+    fn geo_point_serializes_correctly() {
+        let point = GeoPoint {
+            lat: 52.2297,
+            lng: 21.0122,
+        };
+        let json = serde_json::to_value(&point).unwrap();
+        assert_eq!(json["lat"], 52.2297);
+        assert_eq!(json["lng"], 21.0122);
+    }
+
+    #[test]
+    fn geo_point_roundtrips_through_json() {
+        let point = GeoPoint {
+            lat: 52.2297,
+            lng: 21.0122,
+        };
+        let json = serde_json::to_string(&point).unwrap();
+        let deserialized: GeoPoint = serde_json::from_str(&json).unwrap();
+        assert_eq!(point, deserialized);
+    }
+
+    #[test]
+    fn event_document_with_geo_serializes_as_underscore_geo() {
+        let doc = sample_event(Some(GeoPoint {
+            lat: 52.2297,
+            lng: 21.0122,
+        }));
+        let json = serde_json::to_value(&doc).unwrap();
+        assert!(json.get("_geo").is_some(), "_geo field must be present");
+        assert_eq!(json["_geo"]["lat"], 52.2297);
+        assert_eq!(json["_geo"]["lng"], 21.0122);
+        assert!(
+            json.get("geo").is_none(),
+            "plain 'geo' field must not appear"
+        );
+    }
+
+    #[test]
+    fn event_document_without_geo_omits_field() {
+        let doc = sample_event(None);
+        let json = serde_json::to_value(&doc).unwrap();
+        assert!(
+            json.get("_geo").is_none(),
+            "_geo must be absent when None (skip_serializing_if)"
+        );
+    }
+
+    #[test]
+    fn event_document_deserializes_with_geo() {
+        let raw = serde_json::json!({
+            "id": "evt-2",
+            "title": "Geo Event",
+            "description": null,
+            "location": "Krakow",
+            "starts_at": "2030-06-15T18:00:00Z",
+            "cover_image": null,
+            "creator_name": "Bob",
+            "_geo": { "lat": 50.0647, "lng": 19.9450 }
+        });
+        let doc: EventDocument = serde_json::from_value(raw).unwrap();
+        let geo = doc.geo.expect("geo must be Some");
+        assert!((geo.lat - 50.0647).abs() < f64::EPSILON);
+        assert!((geo.lng - 19.9450).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_document_deserializes_without_geo() {
+        let raw = serde_json::json!({
+            "id": "evt-3",
+            "title": "No Geo",
+            "description": null,
+            "location": null,
+            "starts_at": "2030-06-15T18:00:00Z",
+            "cover_image": null,
+            "creator_name": "Charlie",
+        });
+        let doc: EventDocument = serde_json::from_value(raw).unwrap();
+        assert!(doc.geo.is_none());
+    }
+
+    #[test]
+    fn geo_filter_format_matches_meilisearch_syntax() {
+        let params = GeoSearchParams {
+            lat: 52.2297,
+            lng: 21.0122,
+            radius_m: 5000,
+        };
+        let filter = format!("_geoRadius({}, {}, {})", params.lat, params.lng, params.radius_m);
+        assert_eq!(filter, "_geoRadius(52.2297, 21.0122, 5000)");
+    }
+
+    #[test]
+    fn geo_sort_format_matches_meilisearch_syntax() {
+        let params = GeoSearchParams {
+            lat: 52.2297,
+            lng: 21.0122,
+            radius_m: 5000,
+        };
+        let sort = format!("_geoPoint({}, {}):asc", params.lat, params.lng);
+        assert_eq!(sort, "_geoPoint(52.2297, 21.0122):asc");
+    }
+
+    #[test]
+    fn search_results_includes_geo_in_events() {
+        let results = SearchResults {
+            profiles: vec![],
+            events: vec![
+                sample_event(Some(GeoPoint {
+                    lat: 52.0,
+                    lng: 21.0,
+                })),
+                sample_event(None),
+            ],
+            tags: vec![],
+            degrees: vec![],
+        };
+        let json = serde_json::to_value(&results).unwrap();
+        let events = json["events"].as_array().unwrap();
+        assert!(events[0].get("_geo").is_some());
+        assert!(events[1].get("_geo").is_none());
+    }
+
+    #[test]
+    fn geo_point_negative_coordinates() {
+        let point = GeoPoint {
+            lat: -33.8688,
+            lng: -151.2093,
+        };
+        let json = serde_json::to_value(&point).unwrap();
+        assert_eq!(json["lat"], -33.8688);
+        assert_eq!(json["lng"], -151.2093);
+        let deserialized: GeoPoint = serde_json::from_value(json).unwrap();
+        assert_eq!(point, deserialized);
+    }
+
+    #[test]
+    fn geo_point_zero_coordinates() {
+        let point = GeoPoint {
+            lat: 0.0,
+            lng: 0.0,
+        };
+        let json = serde_json::to_value(&point).unwrap();
+        assert_eq!(json["lat"], 0.0);
+        assert_eq!(json["lng"], 0.0);
+    }
+
+    #[test]
+    fn geo_filter_with_large_radius() {
+        let params = GeoSearchParams {
+            lat: 0.0,
+            lng: 0.0,
+            radius_m: 1_000_000,
+        };
+        let filter = format!("_geoRadius({}, {}, {})", params.lat, params.lng, params.radius_m);
+        assert_eq!(filter, "_geoRadius(0, 0, 1000000)");
+    }
 }
