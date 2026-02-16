@@ -16,9 +16,33 @@ pub(super) use state_uploads::*;
 
 // --- OTP in-memory state (sole remaining in-memory data) ---
 
+const OTP_STATE_MAX_ENTRIES: usize = 5_000;
+
 #[derive(Default)]
 pub(super) struct OtpState {
     pub(super) otp_by_email: HashMap<String, OtpEntry>,
+}
+
+impl OtpState {
+    /// Evict expired entries and enforce maximum capacity.
+    pub(super) fn cleanup(&mut self) {
+        let now = Utc::now();
+        self.otp_by_email.retain(|_, entry| entry.expires_at > now);
+
+        // If still over capacity, evict oldest entries by last_sent_at
+        if self.otp_by_email.len() > OTP_STATE_MAX_ENTRIES {
+            let mut entries: Vec<(String, chrono::DateTime<Utc>)> = self
+                .otp_by_email
+                .iter()
+                .map(|(k, v)| (k.clone(), v.last_sent_at))
+                .collect();
+            entries.sort_by_key(|(_, ts)| *ts);
+            let to_remove = self.otp_by_email.len() - OTP_STATE_MAX_ENTRIES;
+            for (key, _) in entries.into_iter().take(to_remove) {
+                self.otp_by_email.remove(&key);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

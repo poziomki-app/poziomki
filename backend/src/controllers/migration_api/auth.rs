@@ -55,6 +55,7 @@ pub(super) async fn sign_up(
         let code_for_email = code.clone();
         let email_for_send = normalized_email.clone();
         let mut otp_state = lock_otp_state();
+        otp_state.cleanup();
         otp_state.otp_by_email.insert(
             normalized_email.clone(),
             super::state::OtpEntry {
@@ -136,6 +137,7 @@ pub(super) async fn resend_otp(
     if exists {
         let now = Utc::now();
         let mut state = lock_otp_state();
+        state.cleanup();
         let in_cooldown = state.otp_by_email.get(&email).is_some_and(|entry| {
             entry.last_sent_at + Duration::seconds(OTP_RESEND_COOLDOWN_SECS) > now
         });

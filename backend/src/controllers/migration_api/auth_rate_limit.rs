@@ -94,7 +94,8 @@ pub(super) fn enforce_rate_limit(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    if state.len() > 10_000 {
+    // Periodic cleanup: always evict stale entries, cap at 1,000
+    if state.len() > 1_000 {
         state.retain(|_, entry| {
             now.signed_duration_since(entry.window_start)
                 < Duration::seconds(AUTH_RATE_LIMIT_WINDOW_SECS * 2)
