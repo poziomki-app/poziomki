@@ -1,0 +1,2 @@
+ALTER TABLE profile ADD COLUMN gradient_start TEXT;
+ALTER TABLE profile ADD COLUMN gradient_end TEXT;

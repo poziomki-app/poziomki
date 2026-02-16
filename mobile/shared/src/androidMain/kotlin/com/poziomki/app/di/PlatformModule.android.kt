@@ -1,6 +1,7 @@
 package com.poziomki.app.di
 
 import android.content.Context
+import androidx.sqlite.db.SupportSQLiteDatabase
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.poziomki.app.chat.matrix.api.MatrixClient
@@ -39,7 +40,41 @@ actual fun platformModule(): Module =
         single<SessionTokenStore> { AndroidSecureSessionTokenStore(get<Context>()) }
         single<MatrixClient> { RustMatrixClient(get(), get(), get()) }
         single<SqlDriver> {
-            AndroidSqliteDriver(PoziomkiDatabase.Schema, get<Context>(), "poziomki.db")
+            val context = get<Context>()
+            val dbName = "poziomki.db"
+            val schema = PoziomkiDatabase.Schema
+            val callback =
+                object : AndroidSqliteDriver.Callback(schema) {
+                    override fun onUpgrade(
+                        db: SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int,
+                    ) {
+                        try {
+                            super.onUpgrade(db, oldVersion, newVersion)
+                        } catch (_: Exception) {
+                            val cursor =
+                                db.query(
+                                    "SELECT name FROM sqlite_master WHERE type='table'" +
+                                        " AND name NOT LIKE 'sqlite_%'" +
+                                        " AND name NOT LIKE 'android_%'",
+                                )
+                            val tables = mutableListOf<String>()
+                            while (cursor.moveToNext()) {
+                                tables.add(cursor.getString(0))
+                            }
+                            cursor.close()
+                            tables.forEach { db.execSQL("DROP TABLE IF EXISTS \"$it\"") }
+                            onCreate(db)
+                        }
+                    }
+                }
+            AndroidSqliteDriver(
+                schema = schema,
+                context = context,
+                name = dbName,
+                callback = callback,
+            )
         }
         single<ConnectivityMonitor> { AndroidConnectivityMonitor(get<Context>()) }
         single { LocationProvider(get<Context>()) }

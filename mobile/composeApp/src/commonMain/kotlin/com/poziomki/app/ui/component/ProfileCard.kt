@@ -41,7 +41,7 @@ private fun parseHexColor(hex: String?): Color? {
     if (hex.isNullOrBlank()) return null
     val clean = hex.trimStart('#')
     if (clean.length != 6) return null
-    return runCatching { Color(("FF$clean").toLong(16)) }.getOrNull()
+    return runCatching { Color(("FF$clean").toLong(16).toInt()) }.getOrNull()
 }
 
 @Composable
