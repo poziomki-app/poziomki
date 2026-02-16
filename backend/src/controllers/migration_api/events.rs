@@ -23,11 +23,12 @@ use uuid::Uuid;
 use super::state::{DataResponse, EventsQuery};
 use crate::models::_entities::events;
 use events_support::{not_found_event, require_auth_profile};
-use events_view::{attendee_info, build_event_response};
+use events_view::attendee_info;
 
 pub(super) use events_mutations::{
     event_attend, event_create, event_delete, event_leave, event_update,
 };
+pub(super) use events_view::build_event_response;
 
 pub(super) async fn events_list(
     State(ctx): State<AppContext>,

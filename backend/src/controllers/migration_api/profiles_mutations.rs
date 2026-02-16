@@ -25,8 +25,10 @@ use super::{
 
 /// Strip `![](...)` image markers from bio text for search indexing.
 fn strip_bio_images(text: &str) -> String {
-    regex::Regex::new(r"!\[\]\([^)]*\)")
-        .map_or_else(|_| text.to_owned(), |re| re.replace_all(text, "").trim().to_string())
+    regex::Regex::new(r"!\[\]\([^)]*\)").map_or_else(
+        |_| text.to_owned(),
+        |re| re.replace_all(text, "").trim().to_string(),
+    )
 }
 
 fn validate_profile_fields(

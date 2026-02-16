@@ -16,6 +16,7 @@ pub(super) use state_uploads::*;
 
 // --- OTP in-memory state (sole remaining in-memory data) ---
 
+#[allow(dead_code)]
 const OTP_STATE_MAX_ENTRIES: usize = 5_000;
 
 #[derive(Default)]
@@ -25,6 +26,7 @@ pub(super) struct OtpState {
 
 impl OtpState {
     /// Evict expired entries and enforce maximum capacity.
+    #[allow(dead_code)]
     pub(super) fn cleanup(&mut self) {
         let now = Utc::now();
         self.otp_by_email.retain(|_, entry| entry.expires_at > now);

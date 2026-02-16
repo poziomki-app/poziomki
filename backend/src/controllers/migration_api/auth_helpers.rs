@@ -1,8 +1,8 @@
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use lettre::{
-    message::header::ContentType, transport::smtp::authentication::Credentials,
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
+    AsyncTransport, Message, Tokio1Executor,
 };
 use loco_rs::{hash, prelude::*};
 use subtle::ConstantTimeEq;
@@ -69,12 +69,9 @@ pub(super) fn invalid_otp_response(headers: &HeaderMap) -> Response {
 
 fn otp_bypass_matches(otp: &str) -> bool {
     otp_bypass_enabled()
-        && std::env::var("OTP_BYPASS_CODE")
-            .ok()
-            .is_some_and(|code| {
-                code.len() == otp.len()
-                    && bool::from(otp.as_bytes().ct_eq(code.as_bytes()))
-            })
+        && std::env::var("OTP_BYPASS_CODE").ok().is_some_and(|code| {
+            code.len() == otp.len() && bool::from(otp.as_bytes().ct_eq(code.as_bytes()))
+        })
 }
 
 pub(super) fn verify_otp_from_state(email: &str, otp: &str, now: chrono::DateTime<Utc>) -> bool {

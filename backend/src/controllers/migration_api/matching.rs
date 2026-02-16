@@ -38,7 +38,7 @@ async fn load_profile_tag_ids(
 }
 
 /// Batch-load all tag links and tag models for a set of profile IDs in 2 queries.
-/// Returns a map from profile_id → Vec<MatchingTagResponse>.
+/// Returns a map from `profile_id` → `Vec<MatchingTagResponse>`.
 async fn batch_load_profile_tags(
     db: &DatabaseConnection,
     profile_ids: &[Uuid],
@@ -58,7 +58,7 @@ async fn batch_load_profile_tags(
         vec![]
     } else {
         tags::Entity::find()
-            .filter(tags::Column::Id.is_in(all_tag_ids.into_iter().collect::<Vec<_>>()))
+            .filter(tags::Column::Id.is_in(all_tag_ids))
             .all(db)
             .await
             .map_err(|e| loco_rs::Error::Any(e.into()))?
@@ -326,4 +326,251 @@ pub(super) async fn events_recommendations(
     }
 
     Ok(Json(DataResponse { data }).into_response())
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp, clippy::unwrap_used, clippy::useless_vec, clippy::suboptimal_flops)]
+mod tests {
+    use super::*;
+    use crate::controllers::migration_api::state::{EventResponse, ProfilePreview};
+
+    fn id(n: u128) -> Uuid {
+        Uuid::from_u128(n)
+    }
+
+    // ── jaccard ────────────────────────────────────────────────
+
+    #[test]
+    fn jaccard_both_empty() {
+        let a: HashSet<Uuid> = HashSet::new();
+        let b: HashSet<Uuid> = HashSet::new();
+        assert!((jaccard(&a, &b) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_one_empty() {
+        let a: HashSet<Uuid> = [id(1), id(2)].into();
+        let b: HashSet<Uuid> = HashSet::new();
+        assert!((jaccard(&a, &b) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_identical() {
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        assert!((jaccard(&a, &a) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_disjoint() {
+        let a: HashSet<Uuid> = [id(1), id(2)].into();
+        let b: HashSet<Uuid> = [id(3), id(4)].into();
+        assert!((jaccard(&a, &b) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_partial_overlap() {
+        // {1,2,3} ∩ {2,3,4} = {2,3}  →  2/4 = 0.5
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let b: HashSet<Uuid> = [id(2), id(3), id(4)].into();
+        assert!((jaccard(&a, &b) - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn jaccard_subset() {
+        // {1,2} ∩ {1,2,3} = {1,2}  →  2/3
+        let a: HashSet<Uuid> = [id(1), id(2)].into();
+        let b: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let expected = 2.0 / 3.0;
+        assert!((jaccard(&a, &b) - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn jaccard_single_overlap() {
+        // {1,2,3} ∩ {3,4,5} = {3}  →  1/5 = 0.2
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let b: HashSet<Uuid> = [id(3), id(4), id(5)].into();
+        assert!((jaccard(&a, &b) - 0.2).abs() < f64::EPSILON);
+    }
+
+    // ── score scaling ──────────────────────────────────────────
+
+    #[test]
+    fn profile_score_scales_to_100() {
+        let a: HashSet<Uuid> = [id(1), id(2)].into();
+        let b: HashSet<Uuid> = [id(1), id(2)].into();
+        let score = jaccard(&a, &b) * 100.0;
+        assert!((score - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn profile_score_partial() {
+        // jaccard = 0.5 → score = 50.0
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let b: HashSet<Uuid> = [id(2), id(3), id(4)].into();
+        let score = jaccard(&a, &b) * 100.0;
+        assert!((score - 50.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn program_bonus_stacks() {
+        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let b: HashSet<Uuid> = [id(2), id(3), id(4)].into();
+        let score = jaccard(&a, &b) * 100.0 + 10.0; // same program bonus
+        assert!((score - 60.0).abs() < f64::EPSILON);
+    }
+
+    // ── event scoring ──────────────────────────────────────────
+
+    #[test]
+    fn event_score_user_no_tags() {
+        let user_tags: HashSet<Uuid> = HashSet::new();
+        let event_tags: HashSet<Uuid> = [id(1), id(2)].into();
+        let score = if user_tags.is_empty() {
+            0.0
+        } else {
+            let shared = user_tags.intersection(&event_tags).count();
+            #[allow(clippy::cast_precision_loss)]
+            let s = (shared as f64 / user_tags.len() as f64) * 100.0;
+            s
+        };
+        assert!((score - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_score_event_no_tags() {
+        let user_tags: HashSet<Uuid> = [id(1), id(2)].into();
+        let event_tags: HashSet<Uuid> = HashSet::new();
+        let shared = user_tags.intersection(&event_tags).count();
+        #[allow(clippy::cast_precision_loss)]
+        let score = (shared as f64 / user_tags.len() as f64) * 100.0;
+        assert!((score - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_score_full_match() {
+        let user_tags: HashSet<Uuid> = [id(1), id(2)].into();
+        let event_tags: HashSet<Uuid> = [id(1), id(2), id(3)].into();
+        let shared = user_tags.intersection(&event_tags).count();
+        #[allow(clippy::cast_precision_loss)]
+        let score = (shared as f64 / user_tags.len() as f64) * 100.0;
+        // 2/2 = 100 — event has extra tags but that's fine
+        assert!((score - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn event_score_partial_match() {
+        let user_tags: HashSet<Uuid> = [id(1), id(2), id(3), id(4)].into();
+        let event_tags: HashSet<Uuid> = [id(2), id(4)].into();
+        let shared = user_tags.intersection(&event_tags).count();
+        #[allow(clippy::cast_precision_loss)]
+        let score = (shared as f64 / user_tags.len() as f64) * 100.0;
+        // 2/4 = 50
+        assert!((score - 50.0).abs() < f64::EPSILON);
+    }
+
+    // ── sorting ────────────────────────────────────────────────
+
+    #[test]
+    fn sort_profiles_by_score_desc() {
+        let mut scored = vec![(25.0, "c"), (75.0, "a"), (50.0, "b")];
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let names: Vec<&str> = scored.iter().map(|(_, n)| *n).collect();
+        assert_eq!(names, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn sort_ties_stable_order() {
+        // Same score → secondary ordering should decide
+        let mut scored = vec![(50.0, 3u32), (50.0, 1), (50.0, 2)];
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.cmp(&b.1)) // ASC tiebreak
+        });
+        let vals: Vec<u32> = scored.iter().map(|(_, v)| *v).collect();
+        assert_eq!(vals, vec![1, 2, 3]);
+    }
+
+    // ── serialization ──────────────────────────────────────────
+
+    #[test]
+    fn event_response_score_none_omitted() {
+        let resp = EventResponse {
+            id: "test".into(),
+            title: "t".into(),
+            description: None,
+            cover_image: None,
+            location: None,
+            latitude: None,
+            longitude: None,
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            ends_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            creator: ProfilePreview {
+                id: "c".into(),
+                name: "Creator".into(),
+                profile_picture: None,
+            },
+            attendees_count: 0,
+            attendees_preview: vec![],
+            tags: vec![],
+            is_attending: false,
+            conversation_id: None,
+            score: None,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(!json.contains("score"), "score:None should be omitted");
+    }
+
+    #[test]
+    fn event_response_score_some_present() {
+        let resp = EventResponse {
+            id: "test".into(),
+            title: "t".into(),
+            description: None,
+            cover_image: None,
+            location: None,
+            latitude: None,
+            longitude: None,
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            ends_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            creator: ProfilePreview {
+                id: "c".into(),
+                name: "Creator".into(),
+                profile_picture: None,
+            },
+            attendees_count: 0,
+            attendees_preview: vec![],
+            tags: vec![],
+            is_attending: false,
+            conversation_id: None,
+            score: Some(42.5),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains(r#""score":42.5"#), "score should be 42.5");
+    }
+
+    #[test]
+    fn profile_recommendation_score_always_present() {
+        let rec = ProfileRecommendation {
+            id: "p1".into(),
+            user_id: "u1".into(),
+            name: "Test".into(),
+            bio: None,
+            age: 20,
+            profile_picture: None,
+            program: None,
+            gradient_start: None,
+            gradient_end: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            tags: vec![],
+            score: 0.0,
+        };
+        let json = serde_json::to_string(&rec).unwrap();
+        assert!(json.contains(r#""score":0.0"#), "score=0 must appear");
+    }
 }

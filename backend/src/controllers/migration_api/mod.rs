@@ -10,6 +10,7 @@ mod matching;
 mod matrix;
 mod matrix_support;
 mod profiles;
+mod push_gateway;
 mod search_api;
 mod settings;
 mod state;
@@ -36,6 +37,8 @@ struct MatrixConfigResponse {
 struct MatrixConfigData {
     homeserver: Option<String>,
     chat_mode: &'static str,
+    push_gateway_url: Option<String>,
+    ntfy_server: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -126,10 +129,14 @@ async fn root() -> Result<Response> {
 async fn matrix_config() -> Result<Response> {
     let homeserver = env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
         .or_else(|| env_non_empty("MATRIX_HOMESERVER_URL"));
+    let push_gateway_url = env_non_empty("PUSH_GATEWAY_URL");
+    let ntfy_server = env_non_empty("NTFY_SERVER_URL");
     Ok(Json(MatrixConfigResponse {
         data: MatrixConfigData {
             homeserver,
             chat_mode: "matrix-native",
+            push_gateway_url,
+            ntfy_server,
         },
     })
     .into_response())
@@ -238,6 +245,12 @@ fn matrix_routes() -> Routes {
         .add("/events/{eventId}/room", get(not_implemented))
 }
 
+fn push_gateway_routes() -> Routes {
+    Routes::new()
+        .prefix("/_matrix/push/v1")
+        .add("/notify", post(push_gateway::notify))
+}
+
 pub(crate) fn reset_state() {
     state::reset_state();
 }
@@ -261,5 +274,6 @@ pub fn routes() -> Vec<Routes> {
         settings_routes(),
         search_routes(),
         matrix_routes(),
+        push_gateway_routes(),
     ]
 }
