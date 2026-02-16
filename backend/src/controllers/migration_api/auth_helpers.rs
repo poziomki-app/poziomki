@@ -230,7 +230,7 @@ fn otp_email_html(code: &str) -> String {
 <html lang="pl">
 <head><meta charset="utf-8"></head>
 <body style="margin:0;padding:40px 20px;font-family:sans-serif;text-align:center">
-<a href="https://poziomki.app"><img src="https://mobile.poziomki.app/download/poziomki-wordmark.png" alt="poziomki.app" width="220" style="display:block;margin:0 auto 32px"></a>
+<a href="https://poziomki.app"><img src="https://mobile.poziomki.app/download/poziomki-wordmark.png" alt="poziomki.app" width="280" style="display:block;margin:0 auto 32px"></a>
 <p style="margin:0 0 24px;font-size:16px;color:#374151">Tw&#243;j kod logowania:</p>
 <p style="margin:0 0 24px;font-size:42px;font-weight:bold;letter-spacing:10px;color:#111">{code}</p>
 <p style="margin:0 0 32px;font-size:14px;color:#6b7280;line-height:1.6">Wpisz ten kod w aplikacji, aby potwierdzi&#263; swoje konto.<br>Kod wygasa za 10 minut.</p>
