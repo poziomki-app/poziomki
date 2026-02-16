@@ -48,6 +48,28 @@ pub(super) async fn sign_up(
         Err(response) => return Ok(response),
     };
 
+    // Generate and send OTP for email verification
+    {
+        let now = Utc::now();
+        let code = generate_otp_code();
+        let code_for_email = code.clone();
+        let email_for_send = normalized_email.clone();
+        let mut otp_state = lock_otp_state();
+        otp_state.otp_by_email.insert(
+            normalized_email.clone(),
+            super::state::OtpEntry {
+                code,
+                expires_at: now + Duration::seconds(OTP_TTL_SECS),
+                attempts: 0,
+                last_sent_at: now,
+            },
+        );
+        drop(otp_state);
+        tokio::spawn(async move {
+            send_otp_email(&email_for_send, &code_for_email).await;
+        });
+    }
+
     let session = create_session_db(&ctx.db, &headers, user.id)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
