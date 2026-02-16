@@ -1,7 +1,7 @@
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use lettre::{
-    message::{header, Mailbox},
+    message::{header, Mailbox, MultiPart},
     transport::smtp::authentication::Credentials,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
@@ -224,6 +224,22 @@ pub(super) async fn find_user_by_email(
         .map_err(|e| loco_rs::Error::Any(e.into()))
 }
 
+fn otp_email_html(code: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="pl">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:40px 20px;font-family:sans-serif;text-align:center">
+<a href="https://poziomki.app"><img src="https://mobile.poziomki.app/download/poziomki-wordmark.png" alt="poziomki.app" width="220" style="display:block;margin:0 auto 32px"></a>
+<p style="margin:0 0 24px;font-size:16px;color:#374151">Tw&#243;j kod logowania:</p>
+<p style="margin:0 0 24px;font-size:42px;font-weight:bold;letter-spacing:10px;color:#111">{code}</p>
+<p style="margin:0 0 32px;font-size:14px;color:#6b7280;line-height:1.6">Wpisz ten kod w aplikacji, aby potwierdzi&#263; swoje konto.<br>Kod wygasa za 10 minut.</p>
+<a href="https://poziomki.app" style="font-size:12px;color:#9ca3af;text-decoration:none">poziomki.app</a>
+</body>
+</html>"#
+    )
+}
+
 pub(super) async fn send_otp_email(to: &str, code: &str) {
     if !env_truthy("SMTP_ENABLE") {
         tracing::debug!("SMTP disabled, skipping OTP email to {to}");
@@ -252,7 +268,8 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
         return;
     };
 
-    let body = format!(
+    let html_body = otp_email_html(code);
+    let plain_body = format!(
         "Tw\u{00f3}j kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzi\u{0107} swoje konto.\nKod wygasa za 10 minut.\n\npoziomki.app"
     );
 
@@ -276,7 +293,11 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
             header::HeaderName::new_from_ascii_str("Feedback-ID"),
             "otp:poziomki:poziomki.app".to_owned(),
         ))
-        .body(body)
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("Precedence"),
+            "transactional".to_owned(),
+        ))
+        .multipart(MultiPart::alternative_plain_html(plain_body, html_body))
     {
         Ok(msg) => {
             let raw = msg.formatted();
