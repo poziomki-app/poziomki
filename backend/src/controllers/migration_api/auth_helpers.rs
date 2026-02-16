@@ -1,8 +1,9 @@
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use lettre::{
-    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
-    AsyncTransport, Message, Tokio1Executor,
+    message::{header, Mailbox},
+    transport::smtp::authentication::Credentials,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use loco_rs::{hash, prelude::*};
 use subtle::ConstantTimeEq;
@@ -223,44 +224,6 @@ pub(super) async fn find_user_by_email(
         .map_err(|e| loco_rs::Error::Any(e.into()))
 }
 
-fn otp_email_html(code: &str) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Kod weryfikacyjny Poziomki</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px">
-<tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-
-<tr><td style="padding:32px 32px 0;text-align:center">
-  <img src="https://mobile.poziomki.app/download/poziomki-logo.png" alt="Poziomki" width="40" height="40" style="display:inline-block;vertical-align:middle;margin-right:8px">
-  <span style="font-size:20px;font-weight:700;color:#0d1117;vertical-align:middle;letter-spacing:-0.3px">Poziomki</span>
-</td></tr>
-
-<tr><td style="padding:28px 32px 12px;text-align:center">
-  <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.5">Twój kod weryfikacyjny do aplikacji Poziomki:</p>
-  <div style="margin:0 0 20px;padding:16px 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;display:inline-block">
-    <span style="font-size:32px;font-weight:700;color:#0d1117;letter-spacing:6px;font-variant-numeric:tabular-nums">{code}</span>
-  </div>
-  <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5">Wpisz ten kod w aplikacji, aby potwierdzić swoje konto.<br>Kod wygasa za 10 minut.</p>
-</td></tr>
-
-<tr><td style="padding:20px 32px 28px">
-</td></tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>"#
-    )
-}
-
 pub(super) async fn send_otp_email(to: &str, code: &str) {
     if !env_truthy("SMTP_ENABLE") {
         tracing::debug!("SMTP disabled, skipping OTP email to {to}");
@@ -274,40 +237,54 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
         .unwrap_or(587);
     let user = std::env::var("SMTP_USER").unwrap_or_default();
     let password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
-    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@mail.poziomki.app".into());
+    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
 
     let Ok(from_addr) = from.parse() else {
         tracing::error!("Invalid SMTP_FROM address: {from}");
         return;
     };
+    let from_mbox = Mailbox::new(
+        Some("poziomki \u{2013} poznajmy si\u{0119}!".to_string()),
+        from_addr,
+    );
     let Ok(to_addr) = to.parse() else {
         tracing::error!("Invalid recipient address: {to}");
         return;
     };
 
-    let html_body = otp_email_html(code);
-    let plain_body = format!(
-        "Twój kod weryfikacyjny do aplikacji Poziomki: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzić swoje konto.\nKod wygasa za 10 minut."
+    let body = format!(
+        "Tw\u{00f3}j kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzi\u{0107} swoje konto.\nKod wygasa za 10 minut.\n\npoziomki.app"
     );
 
+    // Generate a proper Message-ID with our domain (not container hostname)
+    let msg_id = format!("<{}@poziomki.app>", uuid::Uuid::new_v4());
+
     let email = match Message::builder()
-        .from(from_addr)
+        .from(from_mbox)
         .to(to_addr)
-        .subject(format!("{code} \u{2014} Twój kod weryfikacyjny Poziomki"))
-        .multipart(
-            lettre::message::MultiPart::alternative()
-                .singlepart(
-                    lettre::message::SinglePart::builder()
-                        .header(ContentType::TEXT_PLAIN)
-                        .body(plain_body),
-                )
-                .singlepart(
-                    lettre::message::SinglePart::builder()
-                        .header(ContentType::TEXT_HTML)
-                        .body(html_body),
-                ),
-        ) {
-        Ok(msg) => msg,
+        .message_id(Some(msg_id.clone()))
+        .subject(format!("Tw\u{00f3}j kod logowania to {code}"))
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("Auto-Submitted"),
+            "auto-generated".to_owned(),
+        ))
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("X-Auto-Response-Suppress"),
+            "All".to_owned(),
+        ))
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("Feedback-ID"),
+            "otp:poziomki:poziomki.app".to_owned(),
+        ))
+        .body(body)
+    {
+        Ok(msg) => {
+            let raw = msg.formatted();
+            let formatted = String::from_utf8_lossy(&raw);
+            let header_end = formatted.find("\r\n\r\n").unwrap_or(500);
+            tracing::info!("OTP email headers: {}", &formatted[..header_end]);
+            msg
+        }
         Err(e) => {
             tracing::error!("Failed to build OTP email: {e}");
             return;
