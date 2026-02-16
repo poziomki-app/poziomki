@@ -106,7 +106,7 @@ services:
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
       GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
       GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
-      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-us-east-1}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://rs-cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
@@ -121,7 +121,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-noreply@mail.poziomki.app}
+      SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s

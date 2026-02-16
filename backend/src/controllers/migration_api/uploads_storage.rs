@@ -12,7 +12,7 @@ fn is_production_mode() -> bool {
 }
 
 const DEFAULT_UPLOADS_DIR: &str = "../data/uploads";
-const DEFAULT_REGION: &str = "us-east-1";
+const DEFAULT_REGION: &str = "garage";
 const DEFAULT_PRESIGN_EXPIRY_SECS: u64 = 3600;
 
 #[derive(Clone)]
