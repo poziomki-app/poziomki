@@ -12,7 +12,7 @@ use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
 use super::{
-    error_response, resolve_image_url,
+    error_response, resolve_image_url, resolve_image_urls,
     state::{
         require_auth_db, DataResponse, FullProfileResponse, ProfileResponse, TagResponse, TagScope,
     },
@@ -65,10 +65,7 @@ async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> Prof
         .as_ref()
         .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
         .unwrap_or_default();
-    let mut images = Vec::with_capacity(raw_images.len());
-    for img in &raw_images {
-        images.push(resolve_image_url(img).await);
-    }
+    let images = resolve_image_urls(&raw_images).await;
 
     ProfileResponse {
         id: profile.id.to_string(),
@@ -137,10 +134,7 @@ async fn full_profile_response(
         .as_ref()
         .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
         .unwrap_or_default();
-    let mut images = Vec::with_capacity(raw_images.len());
-    for img in &raw_images {
-        images.push(resolve_image_url(img).await);
-    }
+    let images = resolve_image_urls(&raw_images).await;
 
     Ok(FullProfileResponse {
         id: profile.id.to_string(),

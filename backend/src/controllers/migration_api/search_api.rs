@@ -51,14 +51,34 @@ pub(super) async fn search(
             loco_rs::Error::Message("Search failed".to_string())
         })?;
 
+    // Collect all image URLs and resolve in batch
+    let mut all_urls: Vec<String> = Vec::new();
+    for profile in &results.profiles {
+        if let Some(pic) = &profile.profile_picture {
+            all_urls.push(pic.clone());
+        }
+    }
+    for event in &results.events {
+        if let Some(img) = &event.cover_image {
+            all_urls.push(img.clone());
+        }
+    }
+    let resolved = super::resolve_image_urls(&all_urls).await;
+    let url_map: std::collections::HashMap<String, String> =
+        all_urls.into_iter().zip(resolved).collect();
+
     for profile in &mut results.profiles {
         if let Some(pic) = &profile.profile_picture {
-            profile.profile_picture = Some(super::resolve_image_url(pic).await);
+            if let Some(resolved_url) = url_map.get(pic) {
+                profile.profile_picture = Some(resolved_url.clone());
+            }
         }
     }
     for event in &mut results.events {
         if let Some(img) = &event.cover_image {
-            event.cover_image = Some(super::resolve_image_url(img).await);
+            if let Some(resolved_url) = url_map.get(img) {
+                event.cover_image = Some(resolved_url.clone());
+            }
         }
     }
 

@@ -104,6 +104,12 @@ async fn resolve_image_url(stored: &str) -> String {
         .unwrap_or(filename)
 }
 
+/// Resolve multiple image URLs in parallel.
+async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
+    let futs: Vec<_> = stored.iter().map(|s| resolve_image_url(s)).collect();
+    futures::future::join_all(futs).await
+}
+
 async fn health() -> Result<Response> {
     Ok(Json(HealthResponse { status: "ok" }).into_response())
 }
@@ -199,6 +205,7 @@ fn matching_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/matching")
         .add("/profiles", get(matching::profiles_recommendations))
+        .add("/events", get(matching::events_recommendations))
 }
 
 fn uploads_routes() -> Routes {
