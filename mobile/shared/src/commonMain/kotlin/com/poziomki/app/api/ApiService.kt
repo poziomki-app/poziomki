@@ -1,5 +1,7 @@
 package com.poziomki.app.api
 
+import io.ktor.http.encodeURLQueryComponent
+
 class ApiService(
     private val client: ApiClient,
 ) {
@@ -91,7 +93,10 @@ class ApiService(
     suspend fun search(
         query: String,
         limit: Int = 10,
-    ): ApiResult<SearchResults> = client.get("/api/v1/search?q=$query&limit=$limit")
+    ): ApiResult<SearchResults> {
+        val encoded = query.encodeURLQueryComponent()
+        return client.get("/api/v1/search?q=$encoded&limit=$limit")
+    }
 
     // Matrix bootstrap
 

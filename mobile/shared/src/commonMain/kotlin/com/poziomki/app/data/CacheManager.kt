@@ -36,6 +36,8 @@ class CacheManager(
                 db.profileQueries.deleteAll()
                 db.tagQueries.deleteAll()
                 db.degreeQueries.deleteAll()
+                db.matchedProfileQueries.deleteAll()
+                db.chatDraftQueries.deleteAll()
                 db.userSettingsQueries.deleteAll()
             }
         }

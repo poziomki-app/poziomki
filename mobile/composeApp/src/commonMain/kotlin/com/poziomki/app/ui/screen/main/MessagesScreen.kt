@@ -2,7 +2,6 @@ package com.poziomki.app.ui.screen.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,22 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Badge
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,31 +32,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.ui.component.EmptyView
+import com.poziomki.app.ui.component.FilterTabs
+import com.poziomki.app.ui.component.LoadingView
+import com.poziomki.app.ui.component.PoziomkiSearchBar
+import com.poziomki.app.ui.component.ScreenHeader
+import com.poziomki.app.ui.component.UserAvatar
 import com.poziomki.app.ui.theme.Background
-import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
-import com.poziomki.app.util.isImageUrl
-import com.poziomki.app.util.resolveImageUrl
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.absoluteValue
-import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
 private enum class RoomFilter {
     Direct,
@@ -71,6 +63,7 @@ private enum class RoomFilter {
     Events,
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(
     onNavigateToChat: (String) -> Unit,
@@ -102,221 +95,102 @@ fun MessagesScreen(
                 }
             }.toList()
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(Background)
-                .padding(horizontal = PoziomkiTheme.spacing.lg),
-    ) {
-        Header(
-            unreadTotal = unreadTotal,
-            onNewChat = onNavigateToNewChat,
-        )
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-        )
-        FilterTabs(
-            selectedFilter = selectedFilter,
-            onSelect = { selectedFilter = it },
-        )
-
-        when {
-            state.isLoading && state.rooms.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
-                }
-            }
-
-            filteredRooms.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = state.error ?: "Brak rozmów",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                    )
-                }
-            }
-
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(filteredRooms, key = { it.roomId }) { room ->
-                        val profilePicture = room.directUserId
-                            ?.substringAfter("@")
-                            ?.substringBefore(":")
-                            ?.let { state.profilePictures[it] }
-                        RoomRow(
-                            room = room,
-                            profilePictureUrl = profilePicture,
-                            onClick = { onNavigateToChat(room.roomId) },
-                            onAvatarClick =
-                                room.directUserId?.let { userId ->
-                                    { onNavigateToProfile(userId) }
-                                },
-                        )
-                    }
-                    item { Spacer(modifier = Modifier.height(84.dp)) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Header(
-    unreadTotal: Int,
-    onNewChat: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = PoziomkiTheme.spacing.md, bottom = PoziomkiTheme.spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "wiadomości",
-            style = MaterialTheme.typography.headlineMedium,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        if (unreadTotal > 0) {
-            Box {
-                Icon(
-                    imageVector = Icons.Filled.Notifications,
-                    contentDescription = "Powiadomienia",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Badge(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = TextPrimary,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .size(10.dp),
-                ) {}
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-        IconButton(onClick = onNewChat) {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = "Nowa wiadomość",
-                tint = TextSecondary,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = SurfaceColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Border),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = null,
-                tint = TextMuted,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            androidx.compose.foundation.text.BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-                decorationBox = { innerTextField ->
-                    if (query.isBlank()) {
-                        Text(
-                            text = "szukaj wiadomości...",
-                            fontFamily = NunitoFamily,
-                            color = TextMuted,
-                        )
-                    }
-                    innerTextField()
-                },
-            )
-            VerticalDivider(
-                modifier = Modifier.height(20.dp),
-                thickness = 1.dp,
-                color = Border,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.Filled.Tune,
-                contentDescription = "Filtruj",
-                tint = TextMuted,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun FilterTabs(
-    selectedFilter: RoomFilter,
-    onSelect: (RoomFilter) -> Unit,
-) {
-    val tabs =
+    val roomFilterTabs =
         listOf(
             RoomFilter.Direct to "znajomi",
             RoomFilter.Groups to "grupy",
             RoomFilter.Events to "wydarzenia",
         )
-    Row(
+
+    Column(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.Center,
+                .fillMaxSize()
+                .background(Background),
     ) {
-        tabs.forEachIndexed { index, (filter, label) ->
-            val selected = filter == selectedFilter
-            Row(
-                modifier =
-                    Modifier
-                        .clickable { onSelect(filter) }
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (selected) {
-                    Box(
+        ScreenHeader(title = "wiadomości") {
+            if (unreadTotal > 0) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Filled.Notifications,
+                        contentDescription = "Powiadomienia",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = TextPrimary,
                         modifier =
                             Modifier
-                                .size(6.dp)
-                                .background(Primary, CircleShape),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                                .align(Alignment.TopEnd)
+                                .size(10.dp),
+                    ) {}
                 }
-                Text(
-                    text = label,
-                    fontFamily = NunitoFamily,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 14.sp,
-                    color = if (selected) TextPrimary else TextMuted,
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            IconButton(onClick = onNavigateToNewChat) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = "Nowa wiadomość",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(22.dp),
                 )
             }
-            if (index < tabs.lastIndex) {
-                Spacer(modifier = Modifier.width(8.dp))
+        }
+        PoziomkiSearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            placeholder = "szukaj wiadomości...",
+        )
+        FilterTabs(
+            tabs = roomFilterTabs,
+            selected = selectedFilter,
+            onSelect = { selectedFilter = it },
+        )
+
+        when {
+            state.isLoading && state.rooms.isEmpty() -> {
+                LoadingView()
+            }
+
+            state.rooms.isEmpty() -> {
+                EmptyView(state.error ?: "brak rozmów")
+            }
+
+            else -> {
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = { viewModel.pullToRefresh() },
+                ) {
+                    if (filteredRooms.isEmpty()) {
+                        EmptyView("brak rozmów")
+                    } else {
+                        LazyColumn(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = PoziomkiTheme.spacing.lg),
+                        ) {
+                            items(filteredRooms, key = { it.roomId }) { room ->
+                                val profilePicture =
+                                    room.directUserId
+                                        ?.substringAfter("@")
+                                        ?.substringBefore(":")
+                                        ?.let { state.profilePictures[it] }
+                                RoomRow(
+                                    room = room,
+                                    profilePictureUrl = profilePicture,
+                                    onClick = { onNavigateToChat(room.roomId) },
+                                    onAvatarClick =
+                                        room.directUserId?.let { userId ->
+                                            { onNavigateToProfile(userId) }
+                                        },
+                                )
+                            }
+                            item { Spacer(modifier = Modifier.height(84.dp)) }
+                        }
+                    }
+                }
             }
         }
     }
@@ -345,10 +219,9 @@ private fun RoomRow(
                     Modifier
                 },
         ) {
-            RoomAvatar(
+            UserAvatar(
+                picture = profilePictureUrl ?: room.avatarUrl,
                 displayName = room.displayName,
-                avatarUrl = room.avatarUrl,
-                profilePictureUrl = profilePictureUrl,
             )
             if (room.unreadCount > 0) {
                 Badge(
@@ -395,60 +268,6 @@ private fun RoomRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-@Composable
-private fun RoomAvatar(
-    displayName: String,
-    avatarUrl: String?,
-    profilePictureUrl: String? = null,
-) {
-    val picture = profilePictureUrl ?: avatarUrl
-    Surface(
-        modifier = Modifier.size(52.dp),
-        shape = CircleShape,
-        color = Border,
-    ) {
-        when {
-            picture != null && isImageUrl(picture) -> {
-                AsyncImage(
-                    model = resolveImageUrl(picture),
-                    contentDescription = displayName,
-                    modifier =
-                        Modifier
-                            .size(52.dp)
-                            .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-
-            picture != null -> {
-                Box(
-                    modifier = Modifier.size(52.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = picture,
-                        fontSize = 24.sp,
-                    )
-                }
-            }
-
-            else -> {
-                Box(
-                    modifier = Modifier.size(52.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = displayName,
-                        modifier = Modifier.size(26.dp),
-                        tint = TextMuted,
-                    )
-                }
-            }
         }
     }
 }

@@ -19,6 +19,8 @@ pub struct Model {
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub images: Option<serde_json::Value>,
     pub program: Option<String>,
+    pub gradient_start: Option<String>,
+    pub gradient_end: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

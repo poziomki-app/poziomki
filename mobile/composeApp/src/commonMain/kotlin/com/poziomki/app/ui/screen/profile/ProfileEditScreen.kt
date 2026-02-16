@@ -16,15 +16,17 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -32,11 +34,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +46,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -55,14 +55,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.poziomki.app.api.Tag
+import com.poziomki.app.ui.component.ScreenHeader
+import com.poziomki.app.ui.component.ButtonVariant
+import com.poziomki.app.ui.component.PoziomkiButton
+import com.poziomki.app.ui.component.PoziomkiTextField
+import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
+import com.poziomki.app.ui.theme.Overlay
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.PrimaryLight
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.rememberSingleImagePicker
 import com.poziomki.app.util.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
@@ -83,41 +90,22 @@ fun ProfileEditScreen(
             }
         }
 
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .imePadding(),
     ) {
         // Top bar
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = PoziomkiTheme.spacing.sm,
-                        end = PoziomkiTheme.spacing.sm,
-                        top = statusBarPadding + PoziomkiTheme.spacing.sm,
-                        bottom = PoziomkiTheme.spacing.sm,
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Wstecz",
-                    tint = TextPrimary,
-                )
-            }
-            Text(
-                text = "edytuj profil",
-                fontFamily = com.poziomki.app.ui.theme.MontserratFamily,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp,
-                color = TextPrimary,
-            )
-        }
+        ScreenHeader(
+            title = "edytuj profil",
+            onBack = onBack,
+            modifier = Modifier.padding(top = statusBarPadding),
+        )
 
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -134,14 +122,8 @@ fun ProfileEditScreen(
                     .padding(horizontal = PoziomkiTheme.spacing.lg),
         ) {
             // --- zdjęcia ---
-            Text(
-                text = "zdjęcia",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = TextPrimary,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            SectionLabel("zdjęcia")
+
 
             ImageGalleryRow(
                 images = state.images,
@@ -153,48 +135,15 @@ fun ProfileEditScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
             // --- bio ---
-            Text(
-                text = "bio",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = TextPrimary,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            SectionLabel("bio")
 
-            TextField(
+
+            PoziomkiTextField(
                 value = state.bio,
                 onValueChange = { viewModel.updateBio(it) },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Border, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors =
-                    TextFieldDefaults.colors(
-                        focusedContainerColor = SurfaceColor,
-                        unfocusedContainerColor = SurfaceColor,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = Primary,
-                    ),
-                textStyle =
-                    androidx.compose.ui.text.TextStyle(
-                        fontFamily = nunito,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 16.sp,
-                    ),
+                placeholder = "Napisz coś o sobie...",
+                singleLine = false,
                 maxLines = 5,
-                placeholder = {
-                    Text(
-                        text = "Napisz coś o sobie...",
-                        fontFamily = nunito,
-                        color = TextMuted,
-                        fontSize = 16.sp,
-                    )
-                },
             )
             Text(
                 text = "${state.bio.length}/500",
@@ -212,14 +161,8 @@ fun ProfileEditScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             // --- kierunek ---
-            Text(
-                text = "kierunek",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = TextPrimary,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            SectionLabel("kierunek")
+
 
             Row(
                 modifier =
@@ -288,41 +231,14 @@ fun ProfileEditScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
             // Save button
-            androidx.compose.material3.Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
-                        .clickable(enabled = !state.isSaving) { viewModel.save(onBack) },
-                shape = RoundedCornerShape(50),
-                color = Primary,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (state.isSaving) {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(
-                            text = "zapisz",
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                            color = Color.Black,
-                        )
-                    }
-                }
-            }
+            PoziomkiButton(
+                text = "zapisz",
+                onClick = { viewModel.save(onBack) },
+                variant = ButtonVariant.PRIMARY,
+                loading = state.isSaving,
+            )
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
 }
@@ -335,7 +251,8 @@ private fun ImageGalleryRow(
     onAddImage: () -> Unit,
 ) {
     val nunito = NunitoFamily
-    val imageSize = 130.dp
+    val imageWidth = 90.dp
+    val imageHeight = 120.dp
 
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -345,7 +262,7 @@ private fun ImageGalleryRow(
             Box(
                 modifier =
                     Modifier
-                        .size(imageSize)
+                        .size(width = imageWidth, height = imageHeight)
                         .clip(RoundedCornerShape(12.dp)),
             ) {
                 AsyncImage(
@@ -353,7 +270,7 @@ private fun ImageGalleryRow(
                     contentDescription = "Zdjęcie ${index + 1}",
                     modifier =
                         Modifier
-                            .size(imageSize)
+                            .size(width = imageWidth, height = imageHeight)
                             .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop,
                 )
@@ -364,14 +281,14 @@ private fun ImageGalleryRow(
                             .align(Alignment.TopEnd)
                             .padding(4.dp)
                             .size(22.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                            .background(Overlay, RoundedCornerShape(50))
                             .clickable { onRemoveImage(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = "Usuń",
-                        tint = Color.White,
+                        tint = White,
                         modifier = Modifier.size(14.dp),
                     )
                 }
@@ -383,7 +300,7 @@ private fun ImageGalleryRow(
             Box(
                 modifier =
                     Modifier
-                        .size(imageSize)
+                        .size(width = imageWidth, height = imageHeight)
                         .background(SurfaceColor, RoundedCornerShape(12.dp))
                         .border(1.dp, Border, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
@@ -402,7 +319,7 @@ private fun ImageGalleryRow(
         Box(
             modifier =
                 Modifier
-                    .size(imageSize)
+                    .size(width = imageWidth, height = imageHeight)
                     .clip(RoundedCornerShape(cornerRadiusDp))
                     .drawBehind {
                         val strokeWidth = 1.5.dp.toPx()
@@ -439,7 +356,7 @@ private fun ImageGalleryRow(
 
         // Edit icon
         Box(
-            modifier = Modifier.size(imageSize),
+            modifier = Modifier.size(width = imageWidth, height = imageHeight),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -471,14 +388,7 @@ private fun TagSection(
                 (query.isBlank() || tag.name.contains(query, ignoreCase = true))
         }
 
-    Text(
-        text = label,
-        fontFamily = nunito,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        color = TextPrimary,
-    )
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    SectionLabel(label)
 
     TagSearchBar(
         query = query,
@@ -543,36 +453,33 @@ private fun TagSearchBar(
             modifier = Modifier.size(20.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
-        TextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f),
-            colors =
-                TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = Primary,
-                ),
-            textStyle =
-                androidx.compose.ui.text.TextStyle(
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 14.sp,
-                ),
-            singleLine = true,
-            placeholder = {
+        Box(
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (query.isEmpty()) {
                 Text(
                     text = placeholder,
                     fontFamily = nunito,
                     color = TextMuted,
                     fontSize = 14.sp,
                 )
-            },
-        )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                textStyle =
+                    androidx.compose.ui.text.TextStyle(
+                        fontFamily = nunito,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = TextPrimary,
+                    ),
+                singleLine = true,
+                cursorBrush = SolidColor(Primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Box(
             modifier =
                 Modifier
@@ -600,15 +507,16 @@ private fun TagChip(
     val bgColor = if (selected) PrimaryLight else Color.Transparent
     val borderColor = if (selected) Primary else Border
     val textColor = if (selected) Primary else TextSecondary
+    val shape = RoundedCornerShape(8.dp)
 
     Row(
         modifier =
             Modifier
-                .background(bgColor, RoundedCornerShape(50))
-                .border(1.dp, borderColor, RoundedCornerShape(50))
-                .clip(RoundedCornerShape(50))
+                .background(bgColor, shape)
+                .border(1.dp, borderColor, shape)
+                .clip(shape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 3.dp),
+                .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -617,14 +525,15 @@ private fun TagChip(
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             color = textColor,
+            lineHeight = 14.sp,
         )
         if (selected) {
-            Spacer(modifier = Modifier.width(3.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "Usuń",
                 tint = textColor,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(12.dp),
             )
         }
     }

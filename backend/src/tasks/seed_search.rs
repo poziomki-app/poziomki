@@ -100,6 +100,10 @@ impl Task for SeedSearch {
                     starts_at: e.starts_at.to_rfc3339(),
                     cover_image: e.cover_image.clone(),
                     creator_name,
+                    geo: e
+                        .latitude
+                        .zip(e.longitude)
+                        .map(|(lat, lng)| search::GeoPoint { lat, lng }),
                 }
             })
             .collect();

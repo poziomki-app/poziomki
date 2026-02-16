@@ -8,7 +8,7 @@ use crate::controllers::migration_api::{
     error_response,
     state::{
         allowed_upload_mime, is_chat_context, max_upload_size_bytes, parse_upload_context,
-        validate_magic_bytes, UploadContext,
+        validate_image_dimensions, validate_magic_bytes, UploadContext,
     },
     ErrorSpec,
 };
@@ -106,11 +106,17 @@ fn validate_upload_content(headers: &HeaderMap, parsed: &ParsedUpload) -> Handle
     Ok(())
 }
 
+fn validate_upload_dimensions(headers: &HeaderMap, parsed: &ParsedUpload) -> HandlerResult<()> {
+    validate_image_dimensions(&parsed.bytes, &parsed.mime_type)
+        .map_err(|msg| Box::new(bad_request(headers, "IMAGE_TOO_LARGE", msg)))
+}
+
 fn validate_upload_payload(headers: &HeaderMap, parsed: &ParsedUpload) -> HandlerResult<()> {
     validate_chat_context(headers, parsed)?;
     parse_upload_mime(headers, &parsed.mime_type)?;
     validate_upload_size(headers, parsed)?;
-    validate_upload_content(headers, parsed)
+    validate_upload_content(headers, parsed)?;
+    validate_upload_dimensions(headers, parsed)
 }
 
 fn classify_field(name: Option<&str>) -> UploadFieldKind {

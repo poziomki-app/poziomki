@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "events")]
 pub struct Model {
     pub created_at: DateTimeWithTimeZone,
@@ -19,6 +19,8 @@ pub struct Model {
     pub ends_at: Option<DateTimeWithTimeZone>,
     pub creator_id: Uuid,
     pub conversation_id: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

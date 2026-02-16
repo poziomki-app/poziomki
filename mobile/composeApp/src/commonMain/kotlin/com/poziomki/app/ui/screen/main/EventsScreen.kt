@@ -23,18 +23,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,12 +49,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.poziomki.app.api.Event
+import com.poziomki.app.ui.component.EmptyView
+import com.poziomki.app.ui.component.FilterTabs
+import com.poziomki.app.ui.component.LoadingView
+import com.poziomki.app.ui.component.PoziomkiSearchBar
+import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.StackedAvatars
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
+import com.poziomki.app.ui.theme.Overlay
 import com.poziomki.app.ui.theme.PoziomkiTheme
-import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.SurfaceElevated
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
@@ -60,9 +68,10 @@ import com.poziomki.app.util.TimeFilter
 import com.poziomki.app.util.formatEventDate
 import com.poziomki.app.util.pluralizePolish
 import com.poziomki.app.util.resolveImageUrl
+import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
-import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventsScreen(
     onNavigateToEventDetail: (String) -> Unit,
@@ -70,6 +79,15 @@ fun EventsScreen(
     viewModel: EventsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+
+    val timeFilterTabs =
+        listOf(
+            TimeFilter.ALL to "polecane",
+            TimeFilter.TODAY to "dzisiaj",
+            TimeFilter.TOMORROW to "jutro",
+            TimeFilter.WEEK to "ten tydzień",
+        )
 
     Column(
         modifier =
@@ -77,25 +95,7 @@ fun EventsScreen(
                 .fillMaxSize()
                 .background(Background),
     ) {
-        // Header row
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = PoziomkiTheme.spacing.lg,
-                        end = PoziomkiTheme.spacing.sm,
-                        top = PoziomkiTheme.spacing.md,
-                        bottom = PoziomkiTheme.spacing.sm,
-                    ),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "wydarzenia",
-                style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
-            )
+        ScreenHeader(title = "wydarzenia") {
             IconButton(onClick = onNavigateToEventCreate) {
                 Icon(
                     Icons.Filled.Edit,
@@ -106,160 +106,77 @@ fun EventsScreen(
             }
         }
 
-        // Search bar
-        Surface(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = PoziomkiTheme.spacing.md)
-                    .height(48.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = SurfaceColor,
-            border = BorderStroke(1.dp, Border),
-        ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Filled.Search,
-                    contentDescription = "Szukaj",
-                    modifier = Modifier.size(22.dp),
-                    tint = TextMuted,
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "szukaj wydarzeń...",
-                    fontFamily = NunitoFamily,
-                    color = TextMuted,
-                    modifier = Modifier.weight(1f),
-                )
-                VerticalDivider(
-                    modifier = Modifier.height(20.dp),
-                    thickness = 1.dp,
-                    color = Border,
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Icon(
-                    Icons.Filled.Tune,
-                    contentDescription = "Filtruj",
-                    modifier = Modifier.size(22.dp),
-                    tint = TextMuted,
-                )
-            }
-        }
+        PoziomkiSearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            placeholder = "szukaj wydarzeń...",
+        )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
-        // Time filter chips — centered
-        TimeFilterRow(
-            activeFilter = state.activeFilter,
-            onFilterSelected = { viewModel.setTimeFilter(it) },
+        FilterTabs(
+            tabs = timeFilterTabs,
+            selected = state.activeFilter,
+            onSelect = { viewModel.setTimeFilter(it) },
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
         // Content
-        when {
-            state.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                state.isLoading && state.allEvents.isEmpty() -> {
+                    LoadingView()
+                }
+
+                state.allEvents.isEmpty() -> {
+                    EmptyView(state.error ?: "brak wydarzeń")
+                }
+
+                else -> {
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { viewModel.pullToRefresh() },
+                    ) {
+                        LazyColumn(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = PoziomkiTheme.spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
+                        ) {
+                            if (state.events.isEmpty()) {
+                                item {
+                                    EmptyView("brak wydarzeń")
+                                }
+                            } else {
+                                items(state.events, key = { it.id }) { event ->
+                                    EventCard(
+                                        event = event,
+                                        onClick = { onNavigateToEventDetail(event.id) },
+                                    )
+                                }
+                            }
+                            item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
+                        }
+                    }
                 }
             }
 
-            state.error != null -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        state.error ?: "",
-                        fontFamily = NunitoFamily,
-                        color = TextSecondary,
-                    )
-                }
-            }
-
-            state.events.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "brak wydarzeń",
-                        fontFamily = NunitoFamily,
-                        color = TextSecondary,
-                    )
-                }
-            }
-
-            else -> {
-                LazyColumn(
+            // Refresh error snackbar
+            state.refreshError?.let { error ->
+                Snackbar(
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = PoziomkiTheme.spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
+                            .align(Alignment.BottomCenter)
+                            .padding(PoziomkiTheme.spacing.md),
                 ) {
-                    items(state.events, key = { it.id }) { event ->
-                        EventCard(
-                            event = event,
-                            onClick = { onNavigateToEventDetail(event.id) },
-                        )
-                    }
-                    item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
+                    Text(text = error)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TimeFilterRow(
-    activeFilter: TimeFilter,
-    onFilterSelected: (TimeFilter) -> Unit,
-) {
-    val filters =
-        listOf(
-            TimeFilter.ALL to "polecane",
-            TimeFilter.TODAY to "dzisiaj",
-            TimeFilter.TOMORROW to "jutro",
-            TimeFilter.WEEK to "ten tydzień",
-        )
-
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = PoziomkiTheme.spacing.md),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        filters.forEachIndexed { index, (filter, label) ->
-            val isActive = filter == activeFilter
-            Row(
-                modifier =
-                    Modifier
-                        .clickable { onFilterSelected(filter) }
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (isActive) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(6.dp)
-                                .background(Primary, CircleShape),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                LaunchedEffect(error) {
+                    delay(3000)
+                    viewModel.clearRefreshError()
                 }
-                Text(
-                    text = label,
-                    fontFamily = NunitoFamily,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 14.sp,
-                    color = if (isActive) TextPrimary else TextMuted,
-                )
-            }
-            if (index < filters.lastIndex) {
-                Spacer(modifier = Modifier.width(8.dp))
             }
         }
     }
@@ -332,7 +249,7 @@ private fun EventCard(
                             .padding(PoziomkiTheme.spacing.sm)
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f)),
+                            .background(Overlay),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -391,6 +308,7 @@ private fun EventCard(
                         if (event.attendeesPreview.isNotEmpty()) {
                             StackedAvatars(
                                 imageUrls = event.attendeesPreview.map { it.profilePicture },
+                                avatarSize = 36.dp,
                             )
                             Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
                         }

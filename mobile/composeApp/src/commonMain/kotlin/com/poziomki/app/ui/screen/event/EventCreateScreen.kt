@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -23,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
@@ -32,13 +32,10 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -52,26 +49,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.poziomki.app.ui.component.LocationPickerSheet
+import com.poziomki.app.ui.component.ButtonVariant
+import com.poziomki.app.ui.component.PoziomkiButton
+import com.poziomki.app.ui.component.PoziomkiTextField
+import com.poziomki.app.ui.component.ScreenHeader
+import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.component.pointGeoJson
 import com.poziomki.app.ui.theme.Background
+import com.poziomki.app.ui.theme.Black
 import com.poziomki.app.ui.theme.Border
-import com.poziomki.app.ui.theme.MontserratFamily
 import com.poziomki.app.ui.theme.NunitoFamily
+import com.poziomki.app.ui.theme.Overlay
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
-import com.poziomki.app.ui.theme.Primary
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.decodeImageBytes
 import com.poziomki.app.util.rememberSingleImagePicker
 import com.poziomki.app.util.resolveImageUrl
@@ -149,24 +150,7 @@ fun EventCreateScreen(
         }
 
     val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-
-    val textFieldColors =
-        TextFieldDefaults.colors(
-            focusedContainerColor = SurfaceColor,
-            unfocusedContainerColor = SurfaceColor,
-            focusedTextColor = TextPrimary,
-            unfocusedTextColor = TextPrimary,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            cursorColor = Primary,
-        )
-
-    val textFieldStyle =
-        TextStyle(
-            fontFamily = NunitoFamily,
-            fontSize = 16.sp,
-            color = TextPrimary,
-        )
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Column(
         modifier =
@@ -176,27 +160,10 @@ fun EventCreateScreen(
                 .padding(top = topInsets),
     ) {
         // Top bar
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Wstecz",
-                    tint = TextPrimary,
-                )
-            }
-            Text(
-                text = if (isEditMode) "edytuj wydarzenie" else "nowe wydarzenie",
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        ScreenHeader(
+            title = if (isEditMode) "edytuj wydarzenie" else "nowe wydarzenie",
+            onBack = onBack,
+        )
 
         Column(
             modifier =
@@ -248,7 +215,7 @@ fun EventCreateScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(1.8f)
-                                    .background(Color.Black.copy(alpha = 0.5f)),
+                                    .background(Overlay),
                             contentAlignment = Alignment.Center,
                         ) {
                             CircularProgressIndicator(color = Primary)
@@ -264,13 +231,13 @@ fun EventCreateScreen(
                                 .size(32.dp)
                                 .clickable { viewModel.removeCoverImage() },
                         shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.6f),
+                        color = Overlay,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Usuń zdjęcie",
-                                tint = Color.White,
+                                tint = White,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -314,21 +281,10 @@ fun EventCreateScreen(
 
             // Title
             SectionLabel("nazwa")
-            TextField(
+            PoziomkiTextField(
                 value = state.title,
                 onValueChange = viewModel::updateTitle,
-                placeholder = {
-                    Text(
-                        "np. planszówki w akademiku",
-                        color = TextMuted,
-                        fontFamily = NunitoFamily,
-                    )
-                },
-                colors = textFieldColors,
-                textStyle = textFieldStyle,
-                shape = RoundedCornerShape(14.dp),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = "np. planszówki w akademiku",
             )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
@@ -410,7 +366,7 @@ fun EventCreateScreen(
                             source = source,
                             radius = const(8.dp),
                             color = const(Primary),
-                            strokeColor = const(Color.White),
+                            strokeColor = const(White),
                             strokeWidth = const(2.dp),
                         )
                     }
@@ -421,22 +377,13 @@ fun EventCreateScreen(
 
             // Description
             SectionLabel("opis")
-            TextField(
+            PoziomkiTextField(
                 value = state.description,
                 onValueChange = viewModel::updateDescription,
-                placeholder = {
-                    Text(
-                        "co, dla kogo, jak się przygotować",
-                        color = TextMuted,
-                        fontFamily = NunitoFamily,
-                    )
-                },
-                colors = textFieldColors,
-                textStyle = textFieldStyle,
-                shape = RoundedCornerShape(14.dp),
+                placeholder = "co, dla kogo, jak się przygotować",
+                singleLine = false,
                 maxLines = 5,
                 minLines = 3,
-                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
@@ -551,44 +498,15 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
             // Submit button
-            Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .clickable(
-                            enabled = !state.isLoading && state.title.isNotBlank() && state.startsAt.isNotBlank(),
-                        ) {
-                            viewModel.saveEvent(onCreated)
-                        },
-                shape = RoundedCornerShape(26.dp),
-                color =
-                    if (state.title.isNotBlank() && state.startsAt.isNotBlank()) {
-                        Primary
-                    } else {
-                        Primary.copy(alpha = 0.3f)
-                    },
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            color = Background,
-                            modifier = Modifier.size(22.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(
-                            text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 16.sp,
-                            color = Background,
-                        )
-                    }
-                }
-            }
+            PoziomkiButton(
+                text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
+                onClick = { viewModel.saveEvent(onCreated) },
+                variant = ButtonVariant.PRIMARY,
+                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank(),
+                loading = state.isLoading,
+            )
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
 
@@ -675,18 +593,6 @@ fun EventCreateScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        fontFamily = MontserratFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        color = TextPrimary,
-        modifier = Modifier.padding(bottom = 8.dp),
-    )
 }
 
 private fun updateStartsAt(

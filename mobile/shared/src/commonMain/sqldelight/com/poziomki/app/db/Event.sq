@@ -66,3 +66,8 @@ WHERE id = ?;
 deleteStaleNonDirty:
 DELETE FROM event
 WHERE cached_at < ? AND is_dirty = 0;
+
+latestCachedAt:
+SELECT MAX(cached_at)
+FROM event
+WHERE is_dirty = 0;

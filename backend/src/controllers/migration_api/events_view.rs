@@ -154,6 +154,8 @@ pub(in crate::controllers::migration_api) async fn build_event_response(
         description: event.description.clone(),
         cover_image: event.cover_image.clone(),
         location: event.location.clone(),
+        latitude: event.latitude,
+        longitude: event.longitude,
         starts_at: event.starts_at.to_rfc3339(),
         ends_at: event.ends_at.map(|v| v.to_rfc3339()),
         created_at: event.created_at.to_rfc3339(),
@@ -164,6 +166,7 @@ pub(in crate::controllers::migration_api) async fn build_event_response(
         tags: event_tags,
         is_attending,
         conversation_id: event.conversation_id.clone(),
+        score: None,
     })
 }
 

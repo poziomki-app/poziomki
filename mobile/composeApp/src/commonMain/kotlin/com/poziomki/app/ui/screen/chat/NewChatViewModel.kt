@@ -2,8 +2,7 @@ package com.poziomki.app.ui.screen.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.poziomki.app.api.ApiResult
-import com.poziomki.app.api.ApiService
+import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.screen.chat.model.NewChatUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,22 +10,32 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class NewChatViewModel(
-    private val apiService: ApiService,
+    private val matchProfileRepository: MatchProfileRepository,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(NewChatUiState())
+    private val _uiState = MutableStateFlow(NewChatUiState(isLoading = true))
     val uiState: StateFlow<NewChatUiState> = _uiState.asStateFlow()
 
     init {
-        loadProfiles()
+        observeProfiles()
+        refreshProfiles()
     }
 
-    fun loadProfiles() {
+    private fun observeProfiles() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            when (val result = apiService.getMatchingProfiles()) {
-                is ApiResult.Success -> _uiState.value = NewChatUiState(profiles = result.data)
-                is ApiResult.Error -> _uiState.value = NewChatUiState(error = result.message)
+            matchProfileRepository.observeProfiles().collect { profiles ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        profiles = profiles,
+                        isLoading = false,
+                    )
             }
+        }
+    }
+
+    private fun refreshProfiles() {
+        viewModelScope.launch {
+            matchProfileRepository.refreshProfiles()
+            _uiState.value = _uiState.value.copy(isLoading = false)
         }
     }
 }

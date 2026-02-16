@@ -74,8 +74,12 @@ class ProfileRepository(
         }
     }
 
-    suspend fun refreshOwnProfile() {
+    suspend fun refreshOwnProfile(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val cachedAt = db.profileQueries.ownCachedAt().executeAsOneOrNull()
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+            }
             when (val result = api.getMyProfile()) {
                 is ApiResult.Success -> {
                     upsertProfile(result.data, isOwn = true)
@@ -87,25 +91,36 @@ class ProfileRepository(
 
                         is ApiResult.Error -> {}
                     }
+                    true
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 
-    suspend fun refreshProfile(id: String) {
+    suspend fun refreshProfile(
+        id: String,
+        forceRefresh: Boolean = false,
+    ): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val cachedAt = db.profileQueries.cachedAtById(id).executeAsOneOrNull()
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+            }
             when (val result = api.getProfileFull(id)) {
                 is ApiResult.Success -> {
                     upsertProfile(result.data.toProfile(), isOwn = false)
                     upsertProfileTags(result.data.id, result.data.tags)
+                    true
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 
     private fun ProfileWithTags.toProfile(): Profile =
         Profile(
@@ -117,6 +132,8 @@ class ProfileRepository(
             profilePicture = profilePicture,
             images = images,
             program = program,
+            gradientStart = gradientStart,
+            gradientEnd = gradientEnd,
         )
 
     suspend fun updateProfile(
@@ -138,6 +155,8 @@ class ProfileRepository(
                         request.images?.let { json.encodeToString(it) }
                             ?: current.images_json,
                     program = request.program ?: current.program,
+                    gradient_start = request.gradientStart ?: current.gradient_start,
+                    gradient_end = request.gradientEnd ?: current.gradient_end,
                     is_own = current.is_own,
                     created_at = current.created_at,
                     updated_at = current.updated_at,
@@ -214,6 +233,8 @@ class ProfileRepository(
             profile_picture = profile.profilePicture,
             images_json = json.encodeToString(profile.images),
             program = profile.program,
+            gradient_start = profile.gradientStart,
+            gradient_end = profile.gradientEnd,
             is_own = if (isOwn) 1L else 0L,
             created_at = profile.createdAt,
             updated_at = profile.updatedAt,

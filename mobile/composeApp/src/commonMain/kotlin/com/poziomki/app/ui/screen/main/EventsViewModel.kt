@@ -14,8 +14,10 @@ import kotlinx.coroutines.launch
 data class EventsState(
     val allEvents: List<Event> = emptyList(),
     val events: List<Event> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val error: String? = null,
+    val refreshError: String? = null,
     val searchQuery: String = "",
     val activeFilter: TimeFilter = TimeFilter.ALL,
 )
@@ -38,18 +40,38 @@ class EventsViewModel(
                     _state.value.copy(
                         allEvents = events,
                         isLoading = false,
-                        error = null,
                     )
                 filterEvents()
             }
         }
     }
 
-    fun refreshEvents() {
+    fun refreshEvents(showLoading: Boolean = false) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true)
-            eventRepository.refreshEvents()
+            if (showLoading) {
+                _state.value = _state.value.copy(isLoading = true)
+            }
+            val success = eventRepository.refreshEvents()
+            if (!success && _state.value.allEvents.isNotEmpty()) {
+                _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć wydarzeń")
+            }
+            _state.value = _state.value.copy(isLoading = false)
         }
+    }
+
+    fun pullToRefresh() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isRefreshing = true)
+            val success = eventRepository.refreshEvents(forceRefresh = true)
+            if (!success && _state.value.allEvents.isNotEmpty()) {
+                _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć wydarzeń")
+            }
+            _state.value = _state.value.copy(isRefreshing = false)
+        }
+    }
+
+    fun clearRefreshError() {
+        _state.value = _state.value.copy(refreshError = null)
     }
 
     fun setSearchQuery(query: String) {

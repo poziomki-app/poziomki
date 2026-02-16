@@ -11,6 +11,22 @@ server:
   binding: {{ get_env(name="SERVER_BINDING", default="0.0.0.0") }}
   host: {{ get_env(name="SERVER_HOST", default="https://api.poziomki.app") }}
   middlewares:
+    cors:
+      enable: true
+      allow_origins:
+        - https://rs.poziomki.app
+        - https://mobile.poziomki.app
+      allow_headers:
+        - Content-Type
+        - Authorization
+        - X-Request-Id
+      allow_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+      max_age: 86400
 
 workers:
   mode: BackgroundAsync

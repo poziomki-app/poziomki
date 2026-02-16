@@ -107,11 +107,12 @@ async fn validate_and_insert_tag(
         .one(db)
         .await
         .map_err(|e: sea_orm::DbErr| {
+            tracing::error!(error = %e, "database error checking existing tag");
             error_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 headers,
                 ErrorSpec {
-                    error: e.to_string(),
+                    error: "Internal server error".to_string(),
                     code: "INTERNAL_ERROR",
                     details: None,
                 },
@@ -143,11 +144,12 @@ async fn validate_and_insert_tag(
     };
 
     tag.insert(db).await.map_err(|e: sea_orm::DbErr| {
+        tracing::error!(error = %e, "database error inserting tag");
         error_response(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             headers,
             ErrorSpec {
-                error: e.to_string(),
+                error: "Internal server error".to_string(),
                 code: "INTERNAL_ERROR",
                 details: None,
             },

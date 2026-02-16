@@ -22,6 +22,13 @@ use super::events_tags::{
 use super::events_update::event_update_inner;
 use super::events_view::{build_event_response, created_event_response};
 
+const fn geo_from_event(event: &events::Model) -> Option<crate::search::GeoPoint> {
+    match (event.latitude, event.longitude) {
+        (Some(lat), Some(lng)) => Some(crate::search::GeoPoint { lat, lng }),
+        _ => None,
+    }
+}
+
 struct ValidatedCreate {
     profile: profiles::Model,
     title: String,
@@ -60,6 +67,8 @@ fn build_create_event(
         ends_at: ActiveValue::Set(validated.ends_at.map(Into::into)),
         creator_id: ActiveValue::Set(validated.profile.id),
         conversation_id: ActiveValue::Set(None),
+        latitude: ActiveValue::Set(payload.latitude),
+        longitude: ActiveValue::Set(payload.longitude),
         created_at: ActiveValue::Set(now.into()),
         updated_at: ActiveValue::Set(now.into()),
     };
@@ -101,6 +110,7 @@ pub(in crate::controllers::migration_api) async fn event_create(
                 starts_at: inserted.starts_at.to_rfc3339(),
                 cover_image: inserted.cover_image.clone(),
                 creator_name: validated.profile.name.clone(),
+                geo: geo_from_event(&inserted),
             },
         );
     }
@@ -140,6 +150,7 @@ pub(in crate::controllers::migration_api) async fn event_update(
                 starts_at: updated.starts_at.to_rfc3339(),
                 cover_image: updated.cover_image.clone(),
                 creator_name: profile.name.clone(),
+                geo: geo_from_event(&updated),
             },
         );
     }

@@ -12,11 +12,14 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 
 class TagRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
 ) {
+    private var lastRefreshMs: Long = 0L
+
     fun observeTags(scope: String? = null): Flow<List<Tag>> {
         val query =
             if (scope != null) {
@@ -30,8 +33,12 @@ class TagRepository(
             .map { rows -> rows.map { it.toApiModel() } }
     }
 
-    suspend fun refreshTags(scope: String? = null) {
+    suspend fun refreshTags(
+        scope: String? = null,
+        forceRefresh: Boolean = false,
+    ): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getTags(scope)) {
                 is ApiResult.Success -> {
                     db.transaction {
@@ -45,10 +52,13 @@ class TagRepository(
                             )
                         }
                     }
+                    lastRefreshMs = Clock.System.now().toEpochMilliseconds()
+                    true
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 }

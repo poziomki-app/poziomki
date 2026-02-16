@@ -8,6 +8,8 @@ mod m20250209_000004_create_profiles;
 mod m20250209_000005_create_events_uploads_settings;
 mod m20250209_000006_seed_full_degrees;
 mod m20250215_000007_replace_degrees_uw;
+mod m20250216_000008_add_event_geo;
+mod m20250216_000009_add_profile_personalization;
 
 pub struct Migrator;
 
@@ -22,6 +24,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250209_000005_create_events_uploads_settings::Migration),
             Box::new(m20250209_000006_seed_full_degrees::Migration),
             Box::new(m20250215_000007_replace_degrees_uw::Migration),
+            Box::new(m20250216_000008_add_event_geo::Migration),
+            Box::new(m20250216_000009_add_profile_personalization::Migration),
             // inject-above (do not remove this comment)
         ]
     }

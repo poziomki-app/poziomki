@@ -272,6 +272,8 @@ class SyncEngine(
                     profile_picture = profile.profilePicture,
                     images_json = json.encodeToString(profile.images),
                     program = profile.program,
+                    gradient_start = profile.gradientStart,
+                    gradient_end = profile.gradientEnd,
                     is_own =
                         db.profileQueries
                             .selectById(profile.id)

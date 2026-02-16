@@ -17,6 +17,7 @@ data class ProfileEditState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val isUploading: Boolean = false,
+    val isBioImageUploading: Boolean = false,
     val profileId: String = "",
     val bio: String = "",
     val program: String = "",
@@ -25,6 +26,8 @@ data class ProfileEditState(
     val selectedTags: List<Tag> = emptyList(),
     val interestQuery: String = "",
     val activityQuery: String = "",
+    val gradientStart: String? = null,
+    val gradientEnd: String? = null,
 )
 
 class ProfileEditViewModel(
@@ -63,6 +66,8 @@ class ProfileEditViewModel(
                             program = profile.program ?: "",
                             images = profile.images,
                             selectedTags = profile.tags,
+                            gradientStart = profile.gradientStart,
+                            gradientEnd = profile.gradientEnd,
                         )
                 }
             }
@@ -70,7 +75,7 @@ class ProfileEditViewModel(
     }
 
     fun updateBio(bio: String) {
-        if (bio.length <= 500) {
+        if (bio.length <= 1500) {
             _state.value = _state.value.copy(bio = bio)
         }
     }
@@ -81,6 +86,10 @@ class ProfileEditViewModel(
 
     fun clearProgram() {
         _state.value = _state.value.copy(program = "")
+    }
+
+    fun updateGradient(start: String?, end: String?) {
+        _state.value = _state.value.copy(gradientStart = start, gradientEnd = end)
     }
 
     fun updateInterestQuery(query: String) {
@@ -128,6 +137,25 @@ class ProfileEditViewModel(
         }
     }
 
+    fun uploadBioImage(bytes: ByteArray) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isBioImageUploading = true)
+            when (val result = apiService.uploadImage(bytes, "bio_image.jpg")) {
+                is ApiResult.Success -> {
+                    val marker = "![](${result.data.url})"
+                    val currentBio = _state.value.bio
+                    val newBio = if (currentBio.isBlank()) marker else "$currentBio\n$marker"
+                    if (newBio.length <= 1500) {
+                        _state.value = _state.value.copy(bio = newBio)
+                    }
+                }
+
+                is ApiResult.Error -> {}
+            }
+            _state.value = _state.value.copy(isBioImageUploading = false)
+        }
+    }
+
     fun save(onSuccess: () -> Unit) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
@@ -139,6 +167,8 @@ class ProfileEditViewModel(
                     profilePicture = s.images.firstOrNull(),
                     images = s.images,
                     tagIds = s.selectedTags.map { it.id },
+                    gradientStart = s.gradientStart,
+                    gradientEnd = s.gradientEnd,
                 )
             when (profileRepository.updateProfile(s.profileId, request)) {
                 is ApiResult.Success -> {

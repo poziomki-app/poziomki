@@ -58,6 +58,13 @@ fn apply_basic_fields(active: &mut events::ActiveModel, payload: &UpdateEventBod
     if let Some(cover) = &payload.cover_image {
         active.cover_image = ActiveValue::Set(cover.clone());
     }
+
+    if let Some(lat) = &payload.latitude {
+        active.latitude = ActiveValue::Set(*lat);
+    }
+    if let Some(lng) = &payload.longitude {
+        active.longitude = ActiveValue::Set(*lng);
+    }
 }
 
 fn parse_optional_ts(

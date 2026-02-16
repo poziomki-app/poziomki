@@ -11,6 +11,7 @@ import com.poziomki.app.data.repository.EventRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 data class EventCreateState(
@@ -89,19 +90,20 @@ class EventCreateViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, eventId = eventId)
             eventRepository.refreshEvent(eventId)
-            eventRepository.observeEvent(eventId).collect { event ->
-                if (event != null) {
-                    _state.value =
-                        _state.value.copy(
-                            title = event.title,
-                            description = event.description ?: "",
-                            location = event.location ?: "",
-                            startsAt = event.startsAt,
-                            coverImageUrl = event.coverImage,
-                            isLoading = false,
-                            eventId = eventId,
-                        )
-                }
+            val event = eventRepository.observeEvent(eventId).firstOrNull()
+            if (event != null) {
+                _state.value =
+                    _state.value.copy(
+                        title = event.title,
+                        description = event.description ?: "",
+                        location = event.location ?: "",
+                        startsAt = event.startsAt,
+                        coverImageUrl = event.coverImage,
+                        isLoading = false,
+                        eventId = eventId,
+                    )
+            } else {
+                _state.value = _state.value.copy(isLoading = false, eventId = eventId)
             }
         }
     }

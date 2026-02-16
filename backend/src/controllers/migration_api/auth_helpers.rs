@@ -1,5 +1,9 @@
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
+use lettre::{
+    message::header::ContentType, transport::smtp::authentication::Credentials,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+};
 use loco_rs::{hash, prelude::*};
 
 use super::super::{
@@ -177,6 +181,72 @@ pub(super) async fn find_user_by_email(
         .one(db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))
+}
+
+pub(super) async fn send_otp_email(to: &str, code: &str) {
+    if !env_truthy("SMTP_ENABLE") {
+        tracing::debug!("SMTP disabled, skipping OTP email to {to}");
+        return;
+    }
+
+    let host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".into());
+    let port: u16 = std::env::var("SMTP_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(587);
+    let user = std::env::var("SMTP_USER").unwrap_or_default();
+    let password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
+    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@mail.poziomki.app".into());
+
+    let Ok(from_addr) = from.parse() else {
+        tracing::error!("Invalid SMTP_FROM address: {from}");
+        return;
+    };
+    let Ok(to_addr) = to.parse() else {
+        tracing::error!("Invalid recipient address: {to}");
+        return;
+    };
+
+    let email = match Message::builder()
+        .from(from_addr)
+        .to(to_addr)
+        .subject("Your Poziomki verification code")
+        .header(ContentType::TEXT_PLAIN)
+        .body(format!(
+            "Your verification code is: {code}\n\nThis code expires in 10 minutes."
+        )) {
+        Ok(msg) => msg,
+        Err(e) => {
+            tracing::error!("Failed to build OTP email: {e}");
+            return;
+        }
+    };
+
+    let creds = Credentials::new(user, password);
+    // Accept self-signed certs for internal Docker network
+    let Ok(tls) = lettre::transport::smtp::client::TlsParameters::builder(host.clone())
+        .dangerous_accept_invalid_certs(true)
+        .build()
+    else {
+        tracing::error!("Failed to build TLS parameters");
+        return;
+    };
+
+    let Ok(transport) = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host) else {
+        tracing::error!("Failed to create SMTP transport for {host}");
+        return;
+    };
+    let mailer = transport
+        .port(port)
+        .credentials(creds)
+        .tls(lettre::transport::smtp::client::Tls::Required(tls))
+        .build();
+
+    if let Err(e) = mailer.send(email).await {
+        tracing::error!("Failed to send OTP email to {to}: {e}");
+    } else {
+        tracing::info!("OTP email sent to {to}");
+    }
 }
 
 pub(super) async fn verify_otp_inner(

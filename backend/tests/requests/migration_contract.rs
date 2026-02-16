@@ -1,8 +1,12 @@
+use axum::http::{HeaderName, HeaderValue};
 use loco_rs::testing::prelude::*;
 use poziomki_backend::app::App;
 use serial_test::serial;
 
-use super::prepare_data::auth_header;
+fn auth_header(token: &str) -> (HeaderName, HeaderValue) {
+    let value = HeaderValue::from_str(&format!("Bearer {token}")).unwrap();
+    (HeaderName::from_static("authorization"), value)
+}
 
 fn sign_up_json(email: &str, password: &str) -> serde_json::Value {
     serde_json::json!({

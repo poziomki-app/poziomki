@@ -16,8 +16,10 @@ import kotlinx.coroutines.launch
 data class ProfileState(
     val profile: Profile? = null,
     val tags: List<Tag> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val error: String? = null,
+    val refreshError: String? = null,
 )
 
 class ProfileViewModel(
@@ -59,11 +61,32 @@ class ProfileViewModel(
         }
     }
 
-    fun loadProfile() {
+    fun loadProfile(showLoading: Boolean = false) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true)
-            profileRepository.refreshOwnProfile()
+            if (showLoading) {
+                _state.value = _state.value.copy(isLoading = true)
+            }
+            val success = profileRepository.refreshOwnProfile()
+            if (!success && _state.value.profile != null) {
+                _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć profilu")
+            }
+            _state.value = _state.value.copy(isLoading = false)
         }
+    }
+
+    fun pullToRefresh() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isRefreshing = true)
+            val success = profileRepository.refreshOwnProfile(forceRefresh = true)
+            if (!success && _state.value.profile != null) {
+                _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć profilu")
+            }
+            _state.value = _state.value.copy(isRefreshing = false)
+        }
+    }
+
+    fun clearRefreshError() {
+        _state.value = _state.value.copy(refreshError = null)
     }
 
     fun signOut() {

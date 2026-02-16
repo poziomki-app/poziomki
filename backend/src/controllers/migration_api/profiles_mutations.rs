@@ -23,6 +23,12 @@ use super::{
     full_profile_response, not_found_profile, parse_tag_uuids, sync_profile_tags, validation_error,
 };
 
+/// Strip `![](...)` image markers from bio text for search indexing.
+fn strip_bio_images(text: &str) -> String {
+    regex::Regex::new(r"!\[\]\([^)]*\)")
+        .map_or_else(|_| text.to_owned(), |re| re.replace_all(text, "").trim().to_string())
+}
+
 fn validate_profile_fields(
     headers: &HeaderMap,
     payload: &CreateProfileBody,
@@ -46,12 +52,13 @@ async fn check_no_existing_profile(
         .one(db)
         .await
         .map_err(|e| {
+            tracing::error!(error = %e, "database error checking existing profile");
             Box::new(error_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 headers,
                 ErrorSpec {
-                    error: format!("Database error: {e}"),
-                    code: "DATABASE_ERROR",
+                    error: "Internal server error".to_string(),
+                    code: "INTERNAL_ERROR",
                     details: None,
                 },
             ))
@@ -100,6 +107,8 @@ fn build_create_model(
         profile_picture: ActiveValue::Set(payload.profile_picture.as_deref().map(extract_filename)),
         images: ActiveValue::Set(images_json),
         program: ActiveValue::Set(payload.program.clone()),
+        gradient_start: ActiveValue::Set(payload.gradient_start.clone()),
+        gradient_end: ActiveValue::Set(payload.gradient_end.clone()),
         created_at: ActiveValue::Set(now.into()),
         updated_at: ActiveValue::Set(now.into()),
     };
@@ -140,7 +149,7 @@ pub(in crate::controllers::migration_api) async fn profile_create(
             crate::search::ProfileDocument {
                 id: inserted.id.to_string(),
                 name: inserted.name.clone(),
-                bio: inserted.bio.clone(),
+                bio: inserted.bio.as_deref().map(strip_bio_images),
                 age: inserted.age,
                 program: inserted.program.clone(),
                 profile_picture: inserted.profile_picture.clone(),
@@ -194,6 +203,12 @@ fn apply_profile_updates(
     if let Some(images) = &payload.images {
         let filenames: Vec<String> = images.iter().map(|s| extract_filename(s)).collect();
         active.images = ActiveValue::Set(serde_json::to_value(filenames).ok());
+    }
+    if let Some(gs) = &payload.gradient_start {
+        active.gradient_start = ActiveValue::Set(Some(gs.clone()));
+    }
+    if let Some(ge) = &payload.gradient_end {
+        active.gradient_end = ActiveValue::Set(Some(ge.clone()));
     }
     active.updated_at = ActiveValue::Set(Utc::now().into());
 
@@ -288,7 +303,7 @@ pub(in crate::controllers::migration_api) async fn profile_update(
             crate::search::ProfileDocument {
                 id: updated.id.to_string(),
                 name: updated.name.clone(),
-                bio: updated.bio.clone(),
+                bio: updated.bio.as_deref().map(strip_bio_images),
                 age: updated.age,
                 program: updated.program.clone(),
                 profile_picture: updated.profile_picture.clone(),

@@ -1,6 +1,14 @@
 use meilisearch_sdk::client::Client;
 use serde::{Deserialize, Serialize};
 
+// --- Geo types ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoPoint {
+    pub lat: f64,
+    pub lng: f64,
+}
+
 // --- Document types ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +31,8 @@ pub struct EventDocument {
     pub starts_at: String,
     pub cover_image: Option<String>,
     pub creator_name: String,
+    #[serde(rename = "_geo", skip_serializing_if = "Option::is_none")]
+    pub geo: Option<GeoPoint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +62,13 @@ pub struct SearchResults {
 
 pub fn create_client() -> Result<Client, meilisearch_sdk::errors::Error> {
     let url = std::env::var("MEILI_URL").unwrap_or_else(|_| "http://localhost:7700".to_string());
-    let key = std::env::var("MEILI_MASTER_KEY").unwrap_or_else(|_| "meili-dev-key".to_string());
+    let key = match std::env::var("MEILI_MASTER_KEY") {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => {
+            tracing::warn!("MEILI_MASTER_KEY not set — search will not work in production");
+            String::new()
+        }
+    };
     Client::new(url, Some(key))
 }
 
@@ -82,9 +98,9 @@ async fn configure_events_index(client: &Client) {
         .set_searchable_attributes(["title", "description", "location", "creator_name"])
         .await;
     let _ = index
-        .set_filterable_attributes(["starts_at", "location"])
+        .set_filterable_attributes(["starts_at", "location", "_geo"])
         .await;
-    let _ = index.set_sortable_attributes(["starts_at"]).await;
+    let _ = index.set_sortable_attributes(["starts_at", "_geo"]).await;
 }
 
 async fn configure_tags_index(client: &Client) {
@@ -156,12 +172,21 @@ pub fn delete_event(client: &Client, id: String) {
     });
 }
 
+// --- Geo search params ---
+
+pub struct GeoSearchParams {
+    pub lat: f64,
+    pub lng: f64,
+    pub radius_m: u32,
+}
+
 // --- Multi-search ---
 
 pub async fn search_all(
     client: &Client,
     query: &str,
     limit: usize,
+    geo: Option<&GeoSearchParams>,
 ) -> Result<SearchResults, meilisearch_sdk::errors::Error> {
     let profiles_idx = client.index("profiles");
     let events_idx = client.index("events");
@@ -172,6 +197,18 @@ pub async fn search_all(
     pq.with_query(query).with_limit(limit);
     let mut eq = events_idx.search();
     eq.with_query(query).with_limit(limit);
+
+    let geo_filter;
+    let geo_sort;
+    let geo_sort_arr;
+    if let Some(g) = geo {
+        geo_filter = format!("_geoRadius({}, {}, {})", g.lat, g.lng, g.radius_m);
+        eq.with_filter(&geo_filter);
+        geo_sort = format!("_geoPoint({}, {}):asc", g.lat, g.lng);
+        geo_sort_arr = [geo_sort.as_str()];
+        eq.with_sort(&geo_sort_arr);
+    }
+
     let mut tq = tags_idx.search();
     tq.with_query(query).with_limit(limit);
     let mut dq = degrees_idx.search();

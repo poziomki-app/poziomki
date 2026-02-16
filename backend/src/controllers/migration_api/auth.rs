@@ -8,8 +8,8 @@ mod auth_rate_limit;
 mod auth_session;
 
 use self::auth_helpers::{
-    create_user_or_error, find_user_by_email, generate_otp_code, sign_in_success_or_unauthorized,
-    verify_otp_inner, OTP_RESEND_COOLDOWN_SECS, OTP_TTL_SECS,
+    create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
+    sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS, OTP_TTL_SECS,
 };
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
@@ -118,15 +118,22 @@ pub(super) async fn resend_otp(
             entry.last_sent_at + Duration::seconds(OTP_RESEND_COOLDOWN_SECS) > now
         });
         if !in_cooldown {
+            let code = generate_otp_code();
+            let code_for_email = code.clone();
+            let email_for_send = email.clone();
             state.otp_by_email.insert(
                 email,
                 super::state::OtpEntry {
-                    code: generate_otp_code(),
+                    code,
                     expires_at: now + Duration::seconds(OTP_TTL_SECS),
                     attempts: 0,
                     last_sent_at: now,
                 },
             );
+            drop(state);
+            tokio::spawn(async move {
+                send_otp_email(&email_for_send, &code_for_email).await;
+            });
         }
     }
 
@@ -168,11 +175,12 @@ pub(super) async fn sessions(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
+    let user_pid = user.pid.to_string();
     let data = user_sessions
         .iter()
         .map(|s| SessionListItem {
             id: s.id.to_string(),
-            user_id: s.user_id.to_string(),
+            user_id: user_pid.clone(),
             expires_at: s.expires_at.to_rfc3339(),
             created_at: s.created_at.to_rfc3339(),
             ip_address: s.ip_address.clone(),

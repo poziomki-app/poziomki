@@ -11,11 +11,14 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 
 class DegreeRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
 ) {
+    private var lastRefreshMs: Long = 0L
+
     fun observeDegrees(): Flow<List<Degree>> =
         db.degreeQueries
             .selectAll()
@@ -25,8 +28,9 @@ class DegreeRepository(
                 rows.map { Degree(id = it.id, name = it.name) }
             }
 
-    suspend fun refreshDegrees() {
+    suspend fun refreshDegrees(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getDegrees()) {
                 is ApiResult.Success -> {
                     db.transaction {
@@ -37,10 +41,13 @@ class DegreeRepository(
                             )
                         }
                     }
+                    lastRefreshMs = Clock.System.now().toEpochMilliseconds()
+                    true
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 }

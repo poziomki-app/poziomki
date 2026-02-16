@@ -7,6 +7,7 @@ data class MessagesUiState(
     val rooms: List<MatrixRoomSummary> = emptyList(),
     val matrixState: MatrixClientState = MatrixClientState.Idle,
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     val profilePictures: Map<String, String> = emptyMap(),
 )

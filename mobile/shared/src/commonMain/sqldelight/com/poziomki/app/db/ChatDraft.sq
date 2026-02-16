@@ -1,0 +1,21 @@
+CREATE TABLE chat_draft (
+    room_id TEXT NOT NULL PRIMARY KEY,
+    draft TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+selectByRoomId:
+SELECT draft
+FROM chat_draft
+WHERE room_id = ?;
+
+upsert:
+INSERT OR REPLACE INTO chat_draft(room_id, draft, updated_at)
+VALUES (?, ?, ?);
+
+deleteByRoomId:
+DELETE FROM chat_draft
+WHERE room_id = ?;
+
+deleteAll:
+DELETE FROM chat_draft;

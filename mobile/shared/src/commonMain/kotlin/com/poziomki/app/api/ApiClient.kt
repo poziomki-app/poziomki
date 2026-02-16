@@ -48,7 +48,8 @@ class ApiClient(
             install(HttpCookies)
             if (enableHttpLogging) {
                 install(Logging) {
-                    level = LogLevel.ALL
+                    level = LogLevel.INFO
+                    sanitizeHeader { header -> header == HttpHeaders.Authorization }
                 }
             }
             defaultRequest {

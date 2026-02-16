@@ -3,11 +3,12 @@ package com.poziomki.app.di
 import com.poziomki.app.api.ApiClient
 import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.GeocodingService
-import com.poziomki.app.chat.draft.InMemoryRoomComposerDraftStore
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
+import com.poziomki.app.chat.draft.SqlDelightRoomComposerDraftStore
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.DegreeRepository
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.data.repository.SettingsRepository
 import com.poziomki.app.data.repository.TagRepository
@@ -24,7 +25,7 @@ import org.koin.dsl.module
 val sharedModule =
     module {
         single { SessionManager(get(), get()) }
-        single<RoomComposerDraftStore> { InMemoryRoomComposerDraftStore() }
+        single<RoomComposerDraftStore> { SqlDelightRoomComposerDraftStore(get()) }
         single {
             val sessionManager = get<SessionManager>()
             ApiClient(
@@ -44,6 +45,7 @@ val sharedModule =
         single { ProfileRepository(get(), get(), get(), get()) }
         single { TagRepository(get(), get()) }
         single { DegreeRepository(get(), get()) }
+        single { MatchProfileRepository(get(), get()) }
         single { SettingsRepository(get(), get(), get()) }
         single {
             SyncEngine(

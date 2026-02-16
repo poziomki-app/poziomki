@@ -1,0 +1,49 @@
+CREATE TABLE matched_profile (
+    id TEXT NOT NULL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    bio TEXT,
+    age INTEGER NOT NULL,
+    profile_picture TEXT,
+    images_json TEXT,
+    program TEXT,
+    gradient_start TEXT,
+    gradient_end TEXT,
+    tags_json TEXT,
+    score REAL NOT NULL DEFAULT 0.0,
+    cached_at INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT *
+FROM matched_profile
+ORDER BY score DESC;
+
+selectById:
+SELECT *
+FROM matched_profile
+WHERE id = ?;
+
+selectByUserId:
+SELECT *
+FROM matched_profile
+WHERE user_id = ?;
+
+upsert:
+INSERT OR REPLACE INTO matched_profile(
+    id, user_id, name, bio, age, profile_picture,
+    images_json, program, gradient_start, gradient_end,
+    tags_json, score, cached_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteAll:
+DELETE FROM matched_profile;
+
+latestCachedAt:
+SELECT MAX(cached_at)
+FROM matched_profile;
+
+profilePictureByUserId:
+SELECT user_id, profile_picture
+FROM matched_profile
+WHERE profile_picture IS NOT NULL;

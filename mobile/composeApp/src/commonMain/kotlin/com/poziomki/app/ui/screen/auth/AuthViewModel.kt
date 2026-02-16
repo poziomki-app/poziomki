@@ -34,9 +34,10 @@ class AuthViewModel(
             when (val result = apiService.signIn(email, password)) {
                 is ApiResult.Success -> {
                     val user = result.data.user
-                    if (user != null) {
+                    val token = result.data.token
+                    if (user != null && !token.isNullOrBlank()) {
                         sessionManager.saveSession(
-                            token = result.data.token ?: "",
+                            token = token,
                             userId = user.id,
                             email = user.email,
                             name = user.name,
@@ -82,9 +83,10 @@ class AuthViewModel(
             when (val result = apiService.signUp(email, password, name)) {
                 is ApiResult.Success -> {
                     val user = result.data.user
-                    if (user != null) {
+                    val token = result.data.token
+                    if (user != null && !token.isNullOrBlank()) {
                         sessionManager.saveSession(
-                            token = result.data.token ?: "",
+                            token = token,
                             userId = user.id,
                             email = user.email,
                             name = user.name,

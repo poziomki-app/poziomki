@@ -4,10 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -50,6 +51,8 @@ fun PoziomkiTextField(
     placeholder: String? = null,
     error: String? = null,
     singleLine: Boolean = true,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    minLines: Int = 1,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     trailingContent: @Composable (() -> Unit)? = null,
@@ -70,17 +73,24 @@ fun PoziomkiTextField(
             )
         }
 
+        val heightModifier =
+            if (singleLine) {
+                Modifier.height(PoziomkiTheme.componentSizes.inputHeight)
+            } else {
+                Modifier.defaultMinSize(minHeight = PoziomkiTheme.componentSizes.inputHeight)
+            }
+
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(PoziomkiTheme.componentSizes.inputHeight)
+                    .then(heightModifier)
                     .background(Surface, shape)
                     .border(1.dp, borderColor, shape),
         ) {
             Row(
                 modifier = Modifier.matchParentSize(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
             ) {
                 BasicTextField(
                     value = value,
@@ -88,8 +98,10 @@ fun PoziomkiTextField(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp, vertical = if (singleLine) 0.dp else 12.dp),
                     singleLine = singleLine,
+                    maxLines = maxLines,
+                    minLines = minLines,
                     textStyle =
                         TextStyle(
                             fontFamily = nunito,

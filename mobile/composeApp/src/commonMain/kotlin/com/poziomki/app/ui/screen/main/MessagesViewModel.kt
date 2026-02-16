@@ -2,10 +2,9 @@ package com.poziomki.app.ui.screen.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.poziomki.app.api.ApiResult
-import com.poziomki.app.api.ApiService
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
+import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.screen.main.messages.MessagesUiState
 import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +15,7 @@ import kotlinx.coroutines.launch
 
 class MessagesViewModel(
     private val matrixClient: MatrixClient,
-    private val apiService: ApiService,
+    private val matchProfileRepository: MatchProfileRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
@@ -24,13 +23,16 @@ class MessagesViewModel(
     init {
         observeClientState()
         observeRooms()
+        observeProfilePictures()
         refresh()
-        loadProfilePictures()
+        refreshProfilePictures()
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            if (_state.value.rooms.isEmpty()) {
+                _state.update { it.copy(isLoading = true, error = null) }
+            }
 
             matrixClient.ensureStarted().onFailure { throwable ->
                 _state.update {
@@ -53,6 +55,35 @@ class MessagesViewModel(
             }
 
             _state.update { it.copy(isLoading = false) }
+        }
+    }
+
+    fun pullToRefresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+
+            matrixClient.ensureStarted().onFailure { throwable ->
+                _state.update {
+                    it.copy(
+                        isRefreshing = false,
+                        error = throwable.message ?: "Failed to initialize Matrix",
+                    )
+                }
+                return@launch
+            }
+
+            matrixClient.refreshRooms().onFailure { throwable ->
+                _state.update {
+                    it.copy(
+                        isRefreshing = false,
+                        error = throwable.message ?: "Failed to refresh Matrix room list",
+                    )
+                }
+                return@launch
+            }
+
+            matchProfileRepository.refreshProfiles(forceRefresh = true)
+            _state.update { it.copy(isRefreshing = false) }
         }
     }
 
@@ -90,22 +121,22 @@ class MessagesViewModel(
         }
     }
 
-    private fun loadProfilePictures() {
+    private fun observeProfilePictures() {
         viewModelScope.launch {
-            when (val result = apiService.getMatchingProfiles()) {
-                is ApiResult.Success -> {
-                    val pictureMap = mutableMapOf<String, String>()
-                    result.data.forEach { profile ->
-                        val pic = profile.profilePicture
-                        if (!pic.isNullOrBlank() && profile.userId.isNotBlank()) {
-                            val localpart = matrixLocalpartFromUserId(profile.userId)
-                            pictureMap[localpart] = pic
-                        }
-                    }
-                    _state.update { it.copy(profilePictures = pictureMap) }
+            matchProfileRepository.observeProfilePicturesByUserId().collect { userIdToPic ->
+                val pictureMap = mutableMapOf<String, String>()
+                userIdToPic.forEach { (userId, pic) ->
+                    val localpart = matrixLocalpartFromUserId(userId)
+                    pictureMap[localpart] = pic
                 }
-                is ApiResult.Error -> { /* ignore — avatars will just fall back */ }
+                _state.update { it.copy(profilePictures = pictureMap) }
             }
+        }
+    }
+
+    private fun refreshProfilePictures() {
+        viewModelScope.launch {
+            matchProfileRepository.refreshProfiles()
         }
     }
 }

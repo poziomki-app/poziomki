@@ -13,6 +13,9 @@ use super::state::{require_auth_db, DataResponse};
 pub(super) struct SearchQuery {
     q: String,
     limit: Option<u8>,
+    lat: Option<f64>,
+    lng: Option<f64>,
+    radius_m: Option<u32>,
 }
 
 pub(super) async fn search(
@@ -27,12 +30,21 @@ pub(super) async fn search(
 
     let limit = usize::from(query.limit.unwrap_or(10).clamp(1, 50));
 
+    let geo = match (query.lat, query.lng) {
+        (Some(lat), Some(lng)) => Some(crate::search::GeoSearchParams {
+            lat,
+            lng,
+            radius_m: query.radius_m.unwrap_or(10_000),
+        }),
+        _ => None,
+    };
+
     let client = crate::search::create_client().map_err(|e| {
         tracing::error!("Failed to create Meilisearch client: {e}");
         loco_rs::Error::Message("Search service unavailable".to_string())
     })?;
 
-    let mut results = crate::search::search_all(&client, &query.q, limit)
+    let mut results = crate::search::search_all(&client, &query.q, limit, geo.as_ref())
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");

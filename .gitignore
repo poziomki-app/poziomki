@@ -12,6 +12,7 @@ mobile/local.properties
 *.apk
 *.aab
 *.aar
+*.jks
 
 # iOS
 mobile/iosApp/Pods/

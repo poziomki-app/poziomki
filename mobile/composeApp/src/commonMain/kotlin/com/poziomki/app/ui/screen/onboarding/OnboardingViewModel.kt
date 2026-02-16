@@ -5,12 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.CreateProfileRequest
-import com.poziomki.app.api.Degree
+import com.poziomki.app.api.SearchDegree
 import com.poziomki.app.api.Tag
 import com.poziomki.app.api.UpdateProfileRequest
-import com.poziomki.app.data.repository.DegreeRepository
 import com.poziomki.app.data.repository.TagRepository
 import com.poziomki.app.session.SessionManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,7 @@ data class OnboardingState(
     val bio: String = "",
     val selectedTagIds: Set<String> = emptySet(),
     val availableTags: List<Tag> = emptyList(),
-    val degrees: List<Degree> = emptyList(),
+    val degreeSearchResults: List<SearchDegree> = emptyList(),
     val selectedAvatar: String? = null,
     val avatarImageBytes: ByteArray? = null,
     val galleryImages: List<ByteArray> = emptyList(),
@@ -35,14 +36,14 @@ class OnboardingViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val tagRepository: TagRepository,
-    private val degreeRepository: DegreeRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
 
+    private var degreeSearchJob: Job? = null
+
     init {
         loadTags()
-        loadDegrees()
     }
 
     private fun loadTags() {
@@ -58,16 +59,24 @@ class OnboardingViewModel(
         }
     }
 
-    private fun loadDegrees() {
-        viewModelScope.launch {
-            // Observe cached degrees
-            launch {
-                degreeRepository.observeDegrees().collect { degrees ->
-                    _state.value = _state.value.copy(degrees = degrees)
+    private fun searchDegrees(query: String) {
+        degreeSearchJob?.cancel()
+        if (query.isBlank()) {
+            _state.value = _state.value.copy(degreeSearchResults = emptyList())
+            return
+        }
+        degreeSearchJob = viewModelScope.launch {
+            delay(300)
+            when (val result = apiService.search(query)) {
+                is ApiResult.Success -> {
+                    _state.value = _state.value.copy(
+                        degreeSearchResults = result.data.degrees,
+                    )
+                }
+                is ApiResult.Error -> {
+                    _state.value = _state.value.copy(degreeSearchResults = emptyList())
                 }
             }
-            // Refresh from network
-            degreeRepository.refreshDegrees()
         }
     }
 
@@ -81,6 +90,7 @@ class OnboardingViewModel(
 
     fun updateProgram(program: String) {
         _state.value = _state.value.copy(program = program)
+        searchDegrees(program)
     }
 
     fun updateBio(bio: String) {
@@ -132,7 +142,7 @@ class OnboardingViewModel(
 
     fun createProfile(onComplete: () -> Unit) {
         val s = _state.value
-        val ageInt = s.age.toIntOrNull() ?: return
+        val ageInt = s.age.toIntOrNull() ?: 20
 
         viewModelScope.launch {
             _state.value = s.copy(isLoading = true)

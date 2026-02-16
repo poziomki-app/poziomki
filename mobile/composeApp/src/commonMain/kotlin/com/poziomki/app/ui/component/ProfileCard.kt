@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,15 +23,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.ArrowUpRight
-import com.adamglin.phosphoricons.regular.User
 import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.MontserratFamily
@@ -41,8 +36,13 @@ import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
-import com.poziomki.app.util.isImageUrl
-import com.poziomki.app.util.resolveImageUrl
+
+private fun parseHexColor(hex: String?): Color? {
+    if (hex.isNullOrBlank()) return null
+    val clean = hex.trimStart('#')
+    if (clean.length != 6) return null
+    return runCatching { Color(("FF$clean").toLong(16)) }.getOrNull()
+}
 
 @Composable
 fun ProfileCard(
@@ -50,20 +50,32 @@ fun ProfileCard(
     program: String?,
     profilePicture: String?,
     tags: List<Tag>,
+    gradientStart: String? = null,
+    gradientEnd: String? = null,
     maxVisibleTags: Int = 2,
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
+    val startColor = parseHexColor(gradientStart)
+    val endColor = parseHexColor(gradientEnd)
     val gradientBrush =
-        Brush.linearGradient(
-            colors =
-                listOf(
-                    Color(0xFF161C26),
-                    Color(0xFF080B10),
-                ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-        )
+        if (startColor != null && endColor != null) {
+            Brush.linearGradient(
+                colors = listOf(startColor, endColor),
+                start = Offset(0f, 0f),
+                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+            )
+        } else {
+            Brush.linearGradient(
+                colors =
+                    listOf(
+                        Color(0xFF161C26),
+                        Color(0xFF080B10),
+                    ),
+                start = Offset(0f, 0f),
+                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+            )
+        }
     Box(
         modifier =
             Modifier
@@ -76,52 +88,11 @@ fun ProfileCard(
         Box(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Avatar
-                Surface(
-                    modifier = Modifier.size(80.dp),
-                    shape = CircleShape,
-                    color = Border,
-                ) {
-                    when {
-                        profilePicture != null && isImageUrl(profilePicture) -> {
-                            AsyncImage(
-                                model = resolveImageUrl(profilePicture),
-                                contentDescription = name,
-                                modifier =
-                                    Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                            )
-                        }
-
-                        profilePicture != null -> {
-                            // Emoji avatar
-                            Box(
-                                modifier = Modifier.size(80.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = profilePicture,
-                                    fontSize = 36.sp,
-                                )
-                            }
-                        }
-
-                        else -> {
-                            Box(
-                                modifier = Modifier.size(80.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    PhosphorIcons.Regular.User,
-                                    contentDescription = name,
-                                    modifier = Modifier.size(40.dp),
-                                    tint = TextMuted,
-                                )
-                            }
-                        }
-                    }
-                }
+                UserAvatar(
+                    picture = profilePicture,
+                    displayName = name,
+                    size = 80.dp,
+                )
 
                 Spacer(modifier = Modifier.width(16.dp))
 

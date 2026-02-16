@@ -79,6 +79,8 @@ async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> Prof
         profile_picture,
         images,
         program: profile.program.clone(),
+        gradient_start: profile.gradient_start.clone(),
+        gradient_end: profile.gradient_end.clone(),
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
     }
@@ -149,6 +151,8 @@ async fn full_profile_response(
         profile_picture,
         images,
         program: profile.program.clone(),
+        gradient_start: profile.gradient_start.clone(),
+        gradient_end: profile.gradient_end.clone(),
         tags: profile_tags,
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),

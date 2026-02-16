@@ -9,6 +9,7 @@ pub use super::_entities::users::{self, ActiveModel, Entity, Model};
 
 pub const MAGIC_LINK_LENGTH: i8 = 32;
 pub const MAGIC_LINK_EXPIRATION_MIN: i8 = 5;
+pub const RESET_TOKEN_EXPIRATION_MIN: i64 = 60;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginParams {
@@ -155,7 +156,7 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// When could not find user by the given token or DB query error
+    /// When could not find user by the given token, token is expired, or DB query error
     pub async fn find_by_reset_token(db: &DatabaseConnection, token: &str) -> ModelResult<Self> {
         let user = users::Entity::find()
             .filter(
@@ -165,7 +166,14 @@ impl Model {
             )
             .one(db)
             .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
+        let user = user.ok_or(ModelError::EntityNotFound)?;
+        if let Some(sent_at) = user.reset_sent_at {
+            let expiry = sent_at + Duration::minutes(RESET_TOKEN_EXPIRATION_MIN);
+            if Local::now() > expiry {
+                return Err(ModelError::msg("reset token expired"));
+            }
+        }
+        Ok(user)
     }
 
     /// finds a user by the provided pid

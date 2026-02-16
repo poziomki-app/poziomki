@@ -8,4 +8,4 @@ private val apiBaseUrl: String by lazy {
 
 fun resolveImageUrl(url: String): String = if (url.startsWith("/")) "$apiBaseUrl$url" else url
 
-fun isImageUrl(value: String): Boolean = value.startsWith("/") || value.startsWith("http://") || value.startsWith("https://")
+fun isImageUrl(value: String): Boolean = value.startsWith("/") || value.startsWith("https://")

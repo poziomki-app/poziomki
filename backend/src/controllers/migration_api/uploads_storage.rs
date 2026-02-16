@@ -132,7 +132,7 @@ fn storage() -> Result<&'static StorageConfig, String> {
     result.as_ref().map_err(Clone::clone)
 }
 
-fn rewrite_signed_url(url: &str, public_url: &str) -> Option<String> {
+fn try_rewrite_signed_url(url: &str, public_url: &str) -> Option<String> {
     let mut signed = Url::parse(url).ok()?;
     let public = Url::parse(public_url).ok()?;
     signed.set_scheme(public.scheme()).ok()?;
@@ -141,6 +141,17 @@ fn rewrite_signed_url(url: &str, public_url: &str) -> Option<String> {
         return None;
     }
     Some(signed.to_string())
+}
+
+fn rewrite_signed_url(url: &str, public_url: &str) -> String {
+    try_rewrite_signed_url(url, public_url).unwrap_or_else(|| {
+        tracing::warn!(
+            url,
+            public_url,
+            "failed to rewrite presigned URL to public URL"
+        );
+        url.to_string()
+    })
 }
 
 pub(super) async fn upload(
@@ -200,7 +211,7 @@ pub(in crate::controllers::migration_api) async fn signed_get_url(
                 .uri()
                 .to_string();
             if let Some(public_url) = &config.public_url {
-                return Ok(rewrite_signed_url(&signed, public_url).unwrap_or(signed));
+                return Ok(rewrite_signed_url(&signed, public_url));
             }
             Ok(signed)
         }

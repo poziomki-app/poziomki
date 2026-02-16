@@ -91,6 +91,8 @@ data class Profile(
     val profilePicture: String? = null,
     val images: List<String> = emptyList(),
     val program: String? = null,
+    val gradientStart: String? = null,
+    val gradientEnd: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -105,6 +107,8 @@ data class ProfileWithTags(
     val profilePicture: String? = null,
     val images: List<String> = emptyList(),
     val program: String? = null,
+    val gradientStart: String? = null,
+    val gradientEnd: String? = null,
     val tags: List<Tag> = emptyList(),
 )
 
@@ -126,6 +130,8 @@ data class UpdateProfileRequest(
     val profilePicture: String? = null,
     val images: List<String>? = null,
     val tagIds: List<String>? = null,
+    val gradientStart: String? = null,
+    val gradientEnd: String? = null,
 )
 
 // Event models
@@ -233,6 +239,8 @@ data class MatchProfile(
     val profilePicture: String? = null,
     val images: List<String> = emptyList(),
     val program: String? = null,
+    val gradientStart: String? = null,
+    val gradientEnd: String? = null,
     val tags: List<Tag> = emptyList(),
     val score: Double = 0.0,
 )

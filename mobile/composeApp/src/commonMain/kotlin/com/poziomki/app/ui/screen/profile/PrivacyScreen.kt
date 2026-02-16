@@ -1,53 +1,40 @@
 package com.poziomki.app.ui.screen.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.theme.Error
+import com.poziomki.app.ui.component.ButtonVariant
+import com.poziomki.app.ui.component.PoziomkiButton
+import com.poziomki.app.ui.component.ScreenHeader
+import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.PoziomkiTheme
-import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
-import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 
 @Composable
 fun PrivacyScreen(onBack: () -> Unit) {
     val nunito = NunitoFamily
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Column(
         modifier =
@@ -57,33 +44,11 @@ fun PrivacyScreen(onBack: () -> Unit) {
     ) {
         // Top bar
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = PoziomkiTheme.spacing.sm,
-                        end = PoziomkiTheme.spacing.sm,
-                        top = statusBarPadding + PoziomkiTheme.spacing.sm,
-                        bottom = PoziomkiTheme.spacing.sm,
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Wstecz",
-                    tint = TextPrimary,
-                )
-            }
-            Text(
-                text = "prywatność",
-                fontFamily = com.poziomki.app.ui.theme.MontserratFamily,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp,
-                color = TextPrimary,
-            )
-        }
+        ScreenHeader(
+            title = "prywatność",
+            onBack = onBack,
+            modifier = Modifier.padding(top = statusBarPadding),
+        )
 
         Column(
             modifier =
@@ -95,13 +60,7 @@ fun PrivacyScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             // TWOJE DANE section
-            Text(
-                text = "TWOJE DANE",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                color = TextMuted,
-            )
+            SectionLabel("TWOJE DANE", color = TextMuted)
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
             Text(
                 text =
@@ -117,51 +76,17 @@ fun PrivacyScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             // Export button
-            Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
-                        .clickable { /* TODO: export data */ },
-                shape = RoundedCornerShape(50),
-                color = Color.Transparent,
-                border = BorderStroke(1.dp, Primary),
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 14.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.Download,
-                        contentDescription = null,
-                        tint = Primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "eksportuj dane",
-                        fontFamily = nunito,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = Primary,
-                    )
-                }
-            }
+            PoziomkiButton(
+                text = "eksportuj dane",
+                onClick = { /* TODO: export data */ },
+                variant = ButtonVariant.OUTLINE,
+                icon = Icons.Filled.Download,
+            )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
             // USUŃ KONTO section
-            Text(
-                text = "USUŃ KONTO",
-                fontFamily = nunito,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                color = TextMuted,
-            )
+            SectionLabel("USUŃ KONTO", color = TextMuted)
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
             Text(
                 text =
@@ -177,41 +102,14 @@ fun PrivacyScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
             // Delete button
-            Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
-                        .clickable { /* TODO: delete account */ },
-                shape = RoundedCornerShape(50),
-                color = Error,
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 14.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "usuń konto",
-                        fontFamily = nunito,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = Color.White,
-                    )
-                }
-            }
+            PoziomkiButton(
+                text = "usuń konto",
+                onClick = { /* TODO: delete account */ },
+                variant = ButtonVariant.DESTRUCTIVE,
+                icon = Icons.Filled.Delete,
+            )
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
 }

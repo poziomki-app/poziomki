@@ -54,8 +54,16 @@ class EventRepository(
             .mapToList(Dispatchers.IO)
             .map { rows -> rows.map { it.toApiModel() } }
 
-    suspend fun refreshEvents() {
+    suspend fun refreshEvents(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val cachedAt =
+                    db.eventQueries
+                        .latestCachedAt()
+                        .executeAsOneOrNull()
+                        ?.MAX
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+            }
             when (val result = api.getEvents()) {
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
@@ -64,25 +72,36 @@ class EventRepository(
                             upsertEvent(event, now)
                         }
                     }
+                    true
                 }
 
-                is ApiResult.Error -> {} // Silently fail — cached data remains
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 
-    suspend fun refreshEvent(id: String) {
+    suspend fun refreshEvent(
+        id: String,
+        forceRefresh: Boolean = false,
+    ): Boolean =
         withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val existing = db.eventQueries.selectById(id).executeAsOneOrNull()
+                if (existing != null && !CachePolicy.isStale(existing.cached_at)) return@withContext true
+            }
             when (val result = api.getEvent(id)) {
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
                     upsertEvent(result.data, now)
+                    true
                 }
 
-                is ApiResult.Error -> {}
+                is ApiResult.Error -> {
+                    false
+                }
             }
         }
-    }
 
     suspend fun refreshAttendees(eventId: String) {
         withContext(Dispatchers.IO) {

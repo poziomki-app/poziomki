@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -49,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.component.OnboardingLayout
 import com.poziomki.app.ui.component.PoziomkiButton
+import com.poziomki.app.ui.theme.Black
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.PoziomkiTheme
@@ -219,7 +219,7 @@ fun ProfileSetupScreen(
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = "Zmie\u0144 avatar",
-                            tint = Color.Black,
+                            tint = Black,
                             modifier = Modifier.size(14.dp),
                         )
                     }

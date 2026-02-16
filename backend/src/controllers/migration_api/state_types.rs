@@ -56,6 +56,7 @@ pub(in crate::controllers::migration_api) enum UploadContext {
     EventCover,
     ChatCover,
     ChatAttachment,
+    Bio,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -115,6 +116,10 @@ pub(in crate::controllers::migration_api) struct CreateProfileBody {
     pub(in crate::controllers::migration_api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::controllers::migration_api) tag_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) gradient_start: Option<String>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) gradient_end: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -136,10 +141,15 @@ pub(in crate::controllers::migration_api) struct UpdateProfileBody {
     pub(in crate::controllers::migration_api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::controllers::migration_api) tag_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) gradient_start: Option<String>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) gradient_end: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub(in crate::controllers::migration_api) struct CreateEventBody {
     pub(in crate::controllers::migration_api) title: String,
     #[serde(default)]
@@ -152,6 +162,10 @@ pub(in crate::controllers::migration_api) struct CreateEventBody {
     #[serde(default)]
     pub(in crate::controllers::migration_api) ends_at: Option<String>,
     #[serde(default)]
+    pub(in crate::controllers::migration_api) latitude: Option<f64>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) longitude: Option<f64>,
+    #[serde(default)]
     pub(in crate::controllers::migration_api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::controllers::migration_api) tag_ids: Option<Vec<String>>,
@@ -159,7 +173,7 @@ pub(in crate::controllers::migration_api) struct CreateEventBody {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::option_option)]
+#[allow(clippy::option_option, dead_code)]
 pub(in crate::controllers::migration_api) struct UpdateEventBody {
     #[serde(default)]
     pub(in crate::controllers::migration_api) title: Option<String>,
@@ -173,6 +187,10 @@ pub(in crate::controllers::migration_api) struct UpdateEventBody {
     pub(in crate::controllers::migration_api) starts_at: Option<String>,
     #[serde(default)]
     pub(in crate::controllers::migration_api) ends_at: Option<Option<String>>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) latitude: Option<Option<f64>>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) longitude: Option<Option<f64>>,
     #[serde(default)]
     pub(in crate::controllers::migration_api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
@@ -263,6 +281,10 @@ pub(in crate::controllers::migration_api) struct ProfileResponse {
     pub(in crate::controllers::migration_api) profile_picture: Option<String>,
     pub(in crate::controllers::migration_api) images: Vec<String>,
     pub(in crate::controllers::migration_api) program: Option<String>,
+    #[serde(rename = "gradientStart")]
+    pub(in crate::controllers::migration_api) gradient_start: Option<String>,
+    #[serde(rename = "gradientEnd")]
+    pub(in crate::controllers::migration_api) gradient_end: Option<String>,
     #[serde(rename = "createdAt")]
     pub(in crate::controllers::migration_api) created_at: String,
     #[serde(rename = "updatedAt")]
@@ -289,6 +311,10 @@ pub(in crate::controllers::migration_api) struct FullProfileResponse {
     pub(in crate::controllers::migration_api) profile_picture: Option<String>,
     pub(in crate::controllers::migration_api) images: Vec<String>,
     pub(in crate::controllers::migration_api) program: Option<String>,
+    #[serde(rename = "gradientStart")]
+    pub(in crate::controllers::migration_api) gradient_start: Option<String>,
+    #[serde(rename = "gradientEnd")]
+    pub(in crate::controllers::migration_api) gradient_end: Option<String>,
     pub(in crate::controllers::migration_api) tags: Vec<TagResponse>,
     #[serde(rename = "createdAt")]
     pub(in crate::controllers::migration_api) created_at: String,
@@ -304,6 +330,8 @@ pub(in crate::controllers::migration_api) struct EventResponse {
     #[serde(rename = "coverImage")]
     pub(in crate::controllers::migration_api) cover_image: Option<String>,
     pub(in crate::controllers::migration_api) location: Option<String>,
+    pub(in crate::controllers::migration_api) latitude: Option<f64>,
+    pub(in crate::controllers::migration_api) longitude: Option<f64>,
     #[serde(rename = "startsAt")]
     pub(in crate::controllers::migration_api) starts_at: String,
     #[serde(rename = "endsAt")]
@@ -322,6 +350,8 @@ pub(in crate::controllers::migration_api) struct EventResponse {
     pub(in crate::controllers::migration_api) is_attending: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::controllers::migration_api) conversation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) score: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -353,11 +383,16 @@ pub(in crate::controllers::migration_api) struct ProfileRecommendation {
     #[serde(rename = "profilePicture")]
     pub(in crate::controllers::migration_api) profile_picture: Option<String>,
     pub(in crate::controllers::migration_api) program: Option<String>,
+    #[serde(rename = "gradientStart")]
+    pub(in crate::controllers::migration_api) gradient_start: Option<String>,
+    #[serde(rename = "gradientEnd")]
+    pub(in crate::controllers::migration_api) gradient_end: Option<String>,
     #[serde(rename = "createdAt")]
     pub(in crate::controllers::migration_api) created_at: String,
     #[serde(rename = "updatedAt")]
     pub(in crate::controllers::migration_api) updated_at: String,
     pub(in crate::controllers::migration_api) tags: Vec<MatchingTagResponse>,
+    pub(in crate::controllers::migration_api) score: f64,
 }
 
 #[derive(Clone, Debug, Serialize)]

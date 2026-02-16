@@ -90,6 +90,8 @@ async fn build_recommendation(
         age: u8::try_from(profile.age).unwrap_or(0),
         profile_picture,
         program: profile.program.clone(),
+        gradient_start: profile.gradient_start.clone(),
+        gradient_end: profile.gradient_end.clone(),
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
         tags: matched_tags,

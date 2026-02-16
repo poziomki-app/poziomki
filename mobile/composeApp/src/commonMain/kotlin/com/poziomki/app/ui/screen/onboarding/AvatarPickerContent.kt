@@ -29,19 +29,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.theme.Black
 import com.poziomki.app.ui.theme.Border
+import com.poziomki.app.ui.theme.Error
 import com.poziomki.app.ui.theme.NunitoFamily
+import com.poziomki.app.ui.theme.Overlay
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.Secondary
 import com.poziomki.app.ui.theme.Surface
 import com.poziomki.app.ui.theme.TextMuted
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.util.decodeImageBytes
 
@@ -127,14 +130,14 @@ internal fun AvatarPickerContent(
                                     .padding(4.dp)
                                     .size(20.dp)
                                     .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .background(Overlay)
                                     .clickable { onRemoveGalleryImage(index) },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Usu\u0144",
-                                tint = Color.White,
+                                tint = White,
                                 modifier = Modifier.size(14.dp),
                             )
                         }
@@ -161,7 +164,7 @@ internal fun AvatarPickerContent(
                 Icon(
                     imageVector = Icons.Filled.Add,
                     contentDescription = null,
-                    tint = Color.Black,
+                    tint = Black,
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -170,7 +173,7 @@ internal fun AvatarPickerContent(
                     fontFamily = nunito,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
-                    color = Color.Black,
+                    color = Black,
                 )
             }
         }
@@ -258,7 +261,7 @@ internal fun AvatarPickerContent(
                 Icon(
                     imageVector = Icons.Filled.Delete,
                     contentDescription = null,
-                    tint = Color(0xFFF85149),
+                    tint = Error,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -267,7 +270,7 @@ internal fun AvatarPickerContent(
                     fontFamily = nunito,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
-                    color = Color(0xFFF85149),
+                    color = Error,
                 )
             }
         }
