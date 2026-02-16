@@ -19,6 +19,7 @@ data class EventCreateState(
     val description: String = "",
     val location: String = "",
     val startsAt: String = "",
+    val endsAt: String = "",
     val coverImageUrl: String? = null,
     val coverImageBytes: ByteArray? = null,
     val isUploadingCover: Boolean = false,
@@ -57,6 +58,10 @@ class EventCreateViewModel(
 
     fun updateStartsAt(startsAt: String) {
         _state.value = _state.value.copy(startsAt = startsAt)
+    }
+
+    fun updateEndsAt(endsAt: String) {
+        _state.value = _state.value.copy(endsAt = endsAt)
     }
 
     fun uploadCoverImage(bytes: ByteArray) {
@@ -123,6 +128,7 @@ class EventCreateViewModel(
                         coverImage = s.coverImageUrl,
                         location = s.location.ifBlank { null },
                         startsAt = s.startsAt,
+                        endsAt = s.endsAt.ifBlank { null },
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
                     is ApiResult.Success -> onSaved()
@@ -138,6 +144,7 @@ class EventCreateViewModel(
                         coverImage = s.coverImageUrl,
                         location = s.location.ifBlank { null },
                         startsAt = s.startsAt,
+                        endsAt = s.endsAt.ifBlank { null },
                     )
                 when (eventRepository.createEvent(request)) {
                     is ApiResult.Success -> onSaved()

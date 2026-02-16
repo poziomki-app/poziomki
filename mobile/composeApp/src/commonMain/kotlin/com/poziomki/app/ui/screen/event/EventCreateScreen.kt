@@ -113,6 +113,11 @@ fun EventCreateScreen(
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
     var selectedHour by remember { mutableStateOf(12) }
     var selectedMinute by remember { mutableStateOf(0) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    var showEndTimePicker by remember { mutableStateOf(false) }
+    var selectedEndDateMillis by remember { mutableStateOf<Long?>(null) }
+    var selectedEndHour by remember { mutableStateOf(23) }
+    var selectedEndMinute by remember { mutableStateOf(0) }
 
     val isEditMode = eventId != null
 
@@ -141,6 +146,33 @@ fun EventCreateScreen(
             if (state.startsAt.isNotBlank()) {
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
+                    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+                    "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
+                }.getOrDefault("")
+            } else {
+                ""
+            }
+        }
+
+    // Parse existing endsAt for display
+    val endDateDisplay =
+        remember(state.endsAt) {
+            if (state.endsAt.isNotBlank()) {
+                runCatching {
+                    val instant = Instant.parse(state.endsAt)
+                    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${dt.monthNumber.toString().padStart(2, '0')}.${dt.year}"
+                }.getOrDefault("")
+            } else {
+                ""
+            }
+        }
+
+    val endTimeDisplay =
+        remember(state.endsAt) {
+            if (state.endsAt.isNotBlank()) {
+                runCatching {
+                    val instant = Instant.parse(state.endsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
                     "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
                 }.getOrDefault("")
@@ -443,14 +475,14 @@ fun EventCreateScreen(
                     modifier =
                         Modifier
                             .weight(2f)
-                            .clickable { /* TODO: end date picker */ },
+                            .clickable { showEndDatePicker = true },
                     shape = RoundedCornerShape(14.dp),
                     color = SurfaceColor,
                 ) {
                     Text(
-                        text = "01.01.2025",
+                        text = endDateDisplay.ifBlank { "01.01.2025" },
                         fontFamily = NunitoFamily,
-                        color = TextMuted,
+                        color = if (endDateDisplay.isBlank()) TextMuted else TextPrimary,
                         fontSize = 16.sp,
                         modifier = Modifier.padding(16.dp),
                     )
@@ -460,14 +492,14 @@ fun EventCreateScreen(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .clickable { /* TODO: end time picker */ },
+                            .clickable { showEndTimePicker = true },
                     shape = RoundedCornerShape(14.dp),
                     color = SurfaceColor,
                 ) {
                     Text(
-                        text = "21:00",
+                        text = endTimeDisplay.ifBlank { "21:00" },
                         fontFamily = NunitoFamily,
-                        color = TextMuted,
+                        color = if (endTimeDisplay.isBlank()) TextMuted else TextPrimary,
                         fontSize = 16.sp,
                         modifier = Modifier.padding(16.dp),
                     )
@@ -593,6 +625,76 @@ fun EventCreateScreen(
             }
         }
     }
+
+    // End Date Picker Dialog
+    if (showEndDatePicker) {
+        val endDatePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedEndDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    endDatePickerState.selectedDateMillis?.let { millis ->
+                        selectedEndDateMillis = millis
+                        updateEndsAt(millis, selectedEndHour, selectedEndMinute, viewModel)
+                    }
+                    showEndDatePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text("Anuluj")
+                }
+            },
+        ) {
+            DatePicker(state = endDatePickerState)
+        }
+    }
+
+    // End Time Picker Dialog
+    if (showEndTimePicker) {
+        val endTimePickerState = rememberTimePickerState(initialHour = selectedEndHour, initialMinute = selectedEndMinute)
+        Dialog(onDismissRequest = { showEndTimePicker = false }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = "Wybierz godzin\u0119 zako\u0144czenia",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
+                    TimePicker(state = endTimePickerState)
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { showEndTimePicker = false }) {
+                            Text("Anuluj")
+                        }
+                        TextButton(onClick = {
+                            selectedEndHour = endTimePickerState.hour
+                            selectedEndMinute = endTimePickerState.minute
+                            selectedEndDateMillis?.let { millis ->
+                                updateEndsAt(millis, selectedEndHour, selectedEndMinute, viewModel)
+                            }
+                            showEndTimePicker = false
+                        }) {
+                            Text("OK")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun updateStartsAt(
@@ -601,11 +703,22 @@ private fun updateStartsAt(
     minute: Int,
     viewModel: EventCreateViewModel,
 ) {
+    viewModel.updateStartsAt(toIsoString(dateMillis, hour, minute))
+}
+
+private fun updateEndsAt(
+    dateMillis: Long,
+    hour: Int,
+    minute: Int,
+    viewModel: EventCreateViewModel,
+) {
+    viewModel.updateEndsAt(toIsoString(dateMillis, hour, minute))
+}
+
+private fun toIsoString(dateMillis: Long, hour: Int, minute: Int): String {
     val dateInstant = Instant.fromEpochMilliseconds(dateMillis)
     val dateLd = dateInstant.toLocalDateTime(TimeZone.currentSystemDefault())
-    val isoString =
-        "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${
-            hour.toString().padStart(2, '0')
-        }:${minute.toString().padStart(2, '0')}:00Z"
-    viewModel.updateStartsAt(isoString)
+    return "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${
+        hour.toString().padStart(2, '0')
+    }:${minute.toString().padStart(2, '0')}:00Z"
 }
