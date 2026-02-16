@@ -36,6 +36,7 @@ import com.poziomki.app.ui.component.ProfilePreview
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Primary
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.isImageUrl
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -117,7 +118,7 @@ fun ProfileViewScreen(
                                     fontFamily = NunitoFamily,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 15.sp,
-                                    color = Color.White,
+                                    color = White,
                                 )
                             }
                         }

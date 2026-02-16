@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.theme.Background
+import com.poziomki.app.ui.theme.Black
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.MontserratFamily
 import com.poziomki.app.ui.theme.NunitoFamily
@@ -51,6 +52,7 @@ import com.poziomki.app.ui.theme.Surface
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.decodeImageBytes
 import com.poziomki.app.util.resolveImageUrl
 
@@ -154,7 +156,7 @@ fun ProfilePreview(
                                         colors =
                                             listOf(
                                                 Color.Transparent,
-                                                Color.Black.copy(alpha = 0.3f),
+                                                Black.copy(alpha = 0.3f),
                                             ),
                                     ),
                                 ),
@@ -175,7 +177,7 @@ fun ProfilePreview(
                                         .height(4.dp)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(
-                                            if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
+                                            if (isActive) White else White.copy(alpha = 0.35f),
                                         ),
                             )
                         }
@@ -215,12 +217,12 @@ fun ProfilePreview(
                         .padding(top = 28.dp, end = 12.dp)
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.45f)),
+                        .background(Black.copy(alpha = 0.45f)),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Zamknij",
-                    tint = Color.White,
+                    tint = White,
                     modifier = Modifier.size(24.dp),
                 )
             }
@@ -265,14 +267,7 @@ fun ProfilePreview(
                     color = TextPrimary,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = bio,
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp,
-                    color = TextPrimary,
-                    lineHeight = 22.sp,
-                )
+                RichBio(bio = bio)
             }
 
             // Tags — compact
@@ -313,4 +308,82 @@ fun ProfilePreview(
             }
         }
     }
+}
+
+private val bioImageRegex = Regex("""!\[\]\((.*?)\)""")
+
+@Composable
+private fun RichBio(bio: String) {
+    val nunito = NunitoFamily
+
+    if (!bio.contains("![](")) {
+        Text(
+            text = bio,
+            fontFamily = nunito,
+            fontWeight = FontWeight.Normal,
+            fontSize = 15.sp,
+            color = TextPrimary,
+            lineHeight = 22.sp,
+        )
+        return
+    }
+
+    val segments = remember(bio) { parseBioSegments(bio) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        segments.forEach { segment ->
+            when (segment) {
+                is BioSegment.TextSegment -> {
+                    if (segment.text.isNotBlank()) {
+                        Text(
+                            text = segment.text,
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 15.sp,
+                            color = TextPrimary,
+                            lineHeight = 22.sp,
+                        )
+                    }
+                }
+
+                is BioSegment.ImageSegment -> {
+                    AsyncImage(
+                        model = resolveImageUrl(segment.url),
+                        contentDescription = null,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.FillWidth,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private sealed class BioSegment {
+    data class TextSegment(val text: String) : BioSegment()
+
+    data class ImageSegment(val url: String) : BioSegment()
+}
+
+private fun parseBioSegments(bio: String): List<BioSegment> {
+    val segments = mutableListOf<BioSegment>()
+    var lastIndex = 0
+    bioImageRegex.findAll(bio).forEach { match ->
+        val before = bio.substring(lastIndex, match.range.first).trim()
+        if (before.isNotEmpty()) {
+            segments.add(BioSegment.TextSegment(before))
+        }
+        val url = match.groupValues[1]
+        if (url.isNotBlank()) {
+            segments.add(BioSegment.ImageSegment(url))
+        }
+        lastIndex = match.range.last + 1
+    }
+    val after = bio.substring(lastIndex).trim()
+    if (after.isNotEmpty()) {
+        segments.add(BioSegment.TextSegment(after))
+    }
+    return segments
 }

@@ -9,6 +9,7 @@ package com.poziomki.app.chat.matrix.impl
 import android.content.Context
 import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.ApiService
+import com.poziomki.app.api.MatrixConfigData
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
@@ -28,8 +29,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
+import org.matrix.rustcomponents.sdk.HttpPusherData
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.Membership
+import org.matrix.rustcomponents.sdk.PushFormat
+import org.matrix.rustcomponents.sdk.PusherIdentifiers
+import org.matrix.rustcomponents.sdk.PusherKind
 import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.RoomListDynamicEntriesController
 import org.matrix.rustcomponents.sdk.RoomListEntriesListener
@@ -37,6 +42,7 @@ import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
 import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
+import org.matrix.rustcomponents.sdk.SetPusherData
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk.BackupDownloadStrategy
@@ -63,6 +69,7 @@ class RustMatrixClient(
     private var roomListSubscription: RoomListSubscription? = null
 
     private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
+    private var cachedConfig: MatrixConfigData? = null
 
     override suspend fun ensureStarted(): Result<Unit> =
         startStopMutex.withLock {
@@ -85,6 +92,7 @@ class RustMatrixClient(
                     }
                 }
 
+            cachedConfig = config
             val homeserver = config.homeserver
             if (homeserver.isNullOrBlank()) {
                 val message = "Matrix homeserver is not configured"
@@ -187,7 +195,7 @@ class RustMatrixClient(
 
                     client = newClient
                     syncService = newSyncService
-                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver)
+                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId())
                 }.onFailure { throwable ->
                     cleanupInternal()
                     if (!retried) {
@@ -207,6 +215,7 @@ class RustMatrixClient(
 
             if (_state.value is MatrixClientState.Ready) {
                 syncDisplayName()
+                registerPusherIfConfigured()
                 Result.success(Unit)
             } else {
                 Result.failure(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: "Failed to initialize Matrix"))
@@ -347,6 +356,46 @@ class RustMatrixClient(
         }
     }
 
+    override suspend fun registerPusher(
+        ntfyEndpoint: String,
+        gatewayUrl: String,
+    ): Result<Unit> =
+        runCatching {
+            val c = client ?: error("Matrix client is not initialized")
+            c.setPusher(
+                SetPusherData(
+                    identifiers =
+                        PusherIdentifiers(
+                            pushkey = ntfyEndpoint,
+                            appId = "app.poziomki",
+                        ),
+                    kind =
+                        PusherKind.Http(
+                            HttpPusherData(
+                                url = gatewayUrl,
+                                format = PushFormat.EVENT_ID_ONLY,
+                                defaultPayload = null,
+                            ),
+                        ),
+                    appDisplayName = "Poziomki",
+                    deviceDisplayName = "Poziomki Android",
+                    profileTag = null,
+                    lang = "en",
+                ),
+            )
+        }
+
+    override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> =
+        runCatching {
+            val c = client ?: error("Matrix client is not initialized")
+            c.deletePusher(
+                PusherIdentifiers(
+                    pushkey = ntfyEndpoint,
+                    appId = "app.poziomki",
+                ),
+            )
+        }
+
     private fun syncDisplayName() {
         scope.launch {
             val c = client ?: return@launch
@@ -354,6 +403,21 @@ class RustMatrixClient(
             val currentName = runCatching { c.displayName() }.getOrNull()
             if (currentName == profile.name) return@launch
             runCatching { c.setDisplayName(profile.name) }
+        }
+    }
+
+    private fun registerPusherIfConfigured() {
+        val config = cachedConfig ?: return
+        val gatewayUrl = config.pushGatewayUrl ?: return
+        val ntfyServer = config.ntfyServer ?: return
+        val readyState = state.value as? MatrixClientState.Ready ?: return
+        val ntfyEndpoint = "$ntfyServer/poz_${readyState.deviceId}"
+
+        scope.launch {
+            registerPusher(ntfyEndpoint, gatewayUrl).onFailure { error ->
+                // Best-effort — don't block startup
+                println("Failed to register pusher: ${error.message}")
+            }
         }
     }
 

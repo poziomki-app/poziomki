@@ -25,6 +25,13 @@ class NoopMatrixClient : MatrixClient {
         invitedUserIds: List<String>,
     ): Result<String> = Result.failure(IllegalStateException("Chat is not available yet"))
 
+    override suspend fun registerPusher(
+        ntfyEndpoint: String,
+        gatewayUrl: String,
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
+
     override suspend fun stop() {
         _state.value = MatrixClientState.Idle
     }

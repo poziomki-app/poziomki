@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
 import org.koin.compose.koinInject
 
@@ -41,7 +42,7 @@ fun OfflineBanner(modifier: Modifier = Modifier) {
         ) {
             Text(
                 text = "Offline — changes will sync when connected",
-                color = Color.White,
+                color = White,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
             )

@@ -16,6 +16,7 @@ sealed interface MatrixClientState {
     data class Ready(
         val userId: String,
         val homeserver: String,
+        val deviceId: String,
     ) : MatrixClientState
 
     data class Error(
@@ -53,6 +54,13 @@ interface MatrixClient {
         name: String,
         invitedUserIds: List<String>,
     ): Result<String>
+
+    suspend fun registerPusher(
+        ntfyEndpoint: String,
+        gatewayUrl: String,
+    ): Result<Unit>
+
+    suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>
 
     suspend fun stop()
 }

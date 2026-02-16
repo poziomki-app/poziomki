@@ -1,11 +1,14 @@
 package com.poziomki.app
 
 import android.app.Application
+import com.poziomki.app.chat.push.NotificationHelper
+import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.di.appModule
 import com.poziomki.app.di.platformModule
 import com.poziomki.app.di.sharedModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import org.koin.java.KoinJavaComponent.getKoin
 
 class PoziomkiApp : Application() {
     override fun onCreate() {
@@ -20,5 +23,8 @@ class PoziomkiApp : Application() {
             )
             modules(sharedModule, platformModule(), appModule)
         }
+
+        getKoin().get<NotificationHelper>().createChannels()
+        getKoin().get<PushManager>().startObserving()
     }
 }

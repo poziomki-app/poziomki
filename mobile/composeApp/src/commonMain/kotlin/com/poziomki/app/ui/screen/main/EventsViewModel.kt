@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 
 data class EventsState(
     val allEvents: List<Event> = emptyList(),
+    val recommendedEvents: List<Event> = emptyList(),
     val events: List<Event> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
@@ -31,6 +32,7 @@ class EventsViewModel(
     init {
         observeEvents()
         refreshEvents()
+        loadRecommendedEvents()
     }
 
     private fun observeEvents() {
@@ -43,6 +45,14 @@ class EventsViewModel(
                     )
                 filterEvents()
             }
+        }
+    }
+
+    private fun loadRecommendedEvents() {
+        viewModelScope.launch {
+            val recommended = eventRepository.fetchRecommendedEvents()
+            _state.value = _state.value.copy(recommendedEvents = recommended)
+            filterEvents()
         }
     }
 
@@ -66,6 +76,7 @@ class EventsViewModel(
             if (!success && _state.value.allEvents.isNotEmpty()) {
                 _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć wydarzeń")
             }
+            loadRecommendedEvents()
             _state.value = _state.value.copy(isRefreshing = false)
         }
     }
@@ -86,12 +97,20 @@ class EventsViewModel(
 
     private fun filterEvents() {
         val current = _state.value
+        val source =
+            if (current.activeFilter == TimeFilter.ALL) {
+                current.recommendedEvents.ifEmpty { current.allEvents }
+            } else {
+                current.allEvents
+            }
         val filtered =
-            current.allEvents.filter { event ->
+            source.filter { event ->
                 val matchesSearch =
                     current.searchQuery.isBlank() ||
                         event.title.contains(current.searchQuery, ignoreCase = true)
-                val matchesTime = matchesTimeFilter(event.startsAt, current.activeFilter)
+                val matchesTime =
+                    current.activeFilter == TimeFilter.ALL ||
+                        matchesTimeFilter(event.startsAt, current.activeFilter)
                 matchesSearch && matchesTime
             }
         _state.value = current.copy(events = filtered)

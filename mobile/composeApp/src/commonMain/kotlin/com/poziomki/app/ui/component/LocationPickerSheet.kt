@@ -47,6 +47,7 @@ import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
+import com.poziomki.app.ui.theme.White
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -153,7 +154,7 @@ fun LocationPickerSheet(
                         source = source,
                         radius = const(10.dp),
                         color = const(Primary),
-                        strokeColor = const(Color.White),
+                        strokeColor = const(White),
                         strokeWidth = const(2.5.dp),
                     )
                 }

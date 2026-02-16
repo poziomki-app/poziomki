@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.theme.White
 import com.poziomki.app.data.sync.PendingOperationsManager
 import org.koin.compose.koinInject
 
@@ -34,7 +35,7 @@ fun PendingSyncIndicator(modifier: Modifier = Modifier) {
         ) {
             Text(
                 text = if (pendingCount > 9) "9+" else pendingCount.toString(),
-                color = Color.White,
+                color = White,
                 fontSize = 10.sp,
             )
         }

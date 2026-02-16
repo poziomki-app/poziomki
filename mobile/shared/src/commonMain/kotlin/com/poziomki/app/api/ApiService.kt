@@ -88,6 +88,8 @@ class ApiService(
 
     suspend fun getMatchingProfiles(): ApiResult<List<MatchProfile>> = client.get("/api/v1/matching/profiles")
 
+    suspend fun getMatchingEvents(limit: Int = 20): ApiResult<List<Event>> = client.get("/api/v1/matching/events?limit=$limit")
+
     // Search
 
     suspend fun search(

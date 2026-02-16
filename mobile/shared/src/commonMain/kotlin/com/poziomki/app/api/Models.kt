@@ -257,6 +257,10 @@ data class MatrixConfigData(
     val homeserver: String? = null,
     @SerialName("chat_mode")
     val chatMode: String = "matrix-native",
+    @SerialName("push_gateway_url")
+    val pushGatewayUrl: String? = null,
+    @SerialName("ntfy_server")
+    val ntfyServer: String? = null,
 )
 
 @Serializable

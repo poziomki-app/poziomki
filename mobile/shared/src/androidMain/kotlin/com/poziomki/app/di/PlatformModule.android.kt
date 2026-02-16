@@ -5,6 +5,8 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.impl.RustMatrixClient
+import com.poziomki.app.chat.push.NotificationHelper
+import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.data.connectivity.AndroidConnectivityMonitor
 import com.poziomki.app.data.connectivity.ConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
@@ -39,4 +41,6 @@ actual fun platformModule(): Module =
             AndroidSqliteDriver(PoziomkiDatabase.Schema, get<Context>(), "poziomki.db")
         }
         single<ConnectivityMonitor> { AndroidConnectivityMonitor(get<Context>()) }
+        single { NotificationHelper(get<Context>()) }
+        single { PushManager(get(), get(), get<Context>()) }
     }

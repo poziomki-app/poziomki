@@ -54,6 +54,14 @@ class EventRepository(
             .mapToList(Dispatchers.IO)
             .map { rows -> rows.map { it.toApiModel() } }
 
+    suspend fun fetchRecommendedEvents(): List<Event> =
+        withContext(Dispatchers.IO) {
+            when (val result = api.getMatchingEvents()) {
+                is ApiResult.Success -> result.data
+                is ApiResult.Error -> emptyList()
+            }
+        }
+
     suspend fun refreshEvents(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
             if (!forceRefresh) {
