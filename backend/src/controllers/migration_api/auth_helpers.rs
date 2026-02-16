@@ -318,6 +318,7 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
     // Accept self-signed certs for internal Docker network
     let Ok(tls) = lettre::transport::smtp::client::TlsParameters::builder(host.clone())
         .dangerous_accept_invalid_certs(true)
+        .dangerous_accept_invalid_hostnames(true)
         .build()
     else {
         tracing::error!("Failed to build TLS parameters");
