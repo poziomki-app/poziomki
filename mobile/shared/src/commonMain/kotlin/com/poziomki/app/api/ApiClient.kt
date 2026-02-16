@@ -89,11 +89,15 @@ class ApiClient(
             }
         }
 
-    suspend inline fun <reified T> delete(path: String): ApiResult<T> =
+    suspend inline fun <reified T> delete(
+        path: String,
+        body: Any? = null,
+    ): ApiResult<T> =
         request {
             httpClient.delete(path) {
                 contentType(ContentType.Application.Json)
                 tokenProvider()?.let { bearerAuth(it) }
+                body?.let { setBody(it) }
             }
         }
 

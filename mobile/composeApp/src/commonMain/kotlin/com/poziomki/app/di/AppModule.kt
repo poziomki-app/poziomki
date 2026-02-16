@@ -10,6 +10,7 @@ import com.poziomki.app.ui.screen.main.ExploreViewModel
 import com.poziomki.app.ui.screen.main.MessagesViewModel
 import com.poziomki.app.ui.screen.main.ProfileViewModel
 import com.poziomki.app.ui.screen.onboarding.OnboardingViewModel
+import com.poziomki.app.ui.screen.profile.PrivacyViewModel
 import com.poziomki.app.ui.screen.profile.ProfileEditViewModel
 import com.poziomki.app.ui.screen.profile.ProfileViewViewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -29,4 +30,5 @@ val appModule =
         viewModelOf(::EventCreateViewModel)
         viewModelOf(::ProfileEditViewModel)
         viewModelOf(::ProfileViewViewModel)
+        viewModelOf(::PrivacyViewModel)
     }

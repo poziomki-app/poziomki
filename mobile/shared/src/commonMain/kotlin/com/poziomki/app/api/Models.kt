@@ -335,6 +335,13 @@ data class SearchDegree(
     val name: String,
 )
 
+// Account models
+
+@Serializable
+data class DeleteAccountRequest(
+    val password: String,
+)
+
 // Geocoding models
 
 data class GeocodingResult(

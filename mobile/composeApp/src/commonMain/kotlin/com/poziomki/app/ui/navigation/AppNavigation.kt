@@ -298,6 +298,11 @@ fun AppNavigation(
         composable<Route.Privacy> {
             PrivacyScreen(
                 onBack = { navController.popBackStack() },
+                onAccountDeleted = {
+                    navController.navigate(Route.AuthGraph) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
         composable<Route.Chat> { backStackEntry ->
