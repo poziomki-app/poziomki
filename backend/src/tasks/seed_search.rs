@@ -21,6 +21,13 @@ impl Task for SeedSearch {
     }
 
     async fn run(&self, ctx: &AppContext, _vars: &Vars) -> loco_rs::Result<()> {
+        if !search::meili_compat_enabled() {
+            tracing::info!(
+                "SEARCH_MEILI_COMPAT is disabled and SEARCH_BACKEND is not meilisearch; skipping seed_search"
+            );
+            return Ok(());
+        }
+
         let client = search::create_client().map_err(|e| {
             loco_rs::Error::Message(format!("Failed to create Meilisearch client: {e}"))
         })?;

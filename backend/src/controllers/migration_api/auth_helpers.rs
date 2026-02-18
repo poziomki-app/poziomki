@@ -299,16 +299,19 @@ pub(super) async fn verify_otp_inner(
         return Ok(invalid_otp_response(headers));
     }
 
-    if user.email_verified_at.is_none() {
+    let mut verified_user = user.clone();
+    if verified_user.email_verified_at.is_none() {
         let mut active: users::ActiveModel = user.clone().into();
-        active.email_verified_at = sea_orm::ActiveValue::Set(Some(Utc::now().into()));
+        let now = Utc::now();
+        active.email_verified_at = sea_orm::ActiveValue::Set(Some(now.into()));
         let _ = active.update(db).await;
+        verified_user.email_verified_at = Some(now.into());
     }
 
-    let session = create_session_db(db, headers, user.id).await?;
+    let session = create_session_db(db, headers, verified_user.id).await?;
     Ok(Json(DataResponse {
         data: serde_json::json!({
-            "user": user_model_to_view(&user),
+            "user": user_model_to_view(&verified_user),
             "token": session.token,
             "session": session_model_to_view(&session.model),
             "status": true,

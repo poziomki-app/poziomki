@@ -1,5 +1,8 @@
 use axum::http::{HeaderName, HeaderValue};
+use axum_test::multipart::{MultipartForm, Part};
+use base64::Engine as _;
 use loco_rs::testing::prelude::*;
+use loco_rs::TestServer;
 use poziomki_backend::app::App;
 use serial_test::serial;
 
@@ -16,6 +19,54 @@ fn sign_up_json(email: &str, password: &str) -> serde_json::Value {
     })
 }
 
+fn tiny_png_bytes() -> Vec<u8> {
+    base64::engine::general_purpose::STANDARD
+        .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2p9N8AAAAASUVORK5CYII=")
+        .expect("valid embedded png")
+}
+
+async fn create_user_with_profile(
+    request: &TestServer,
+    db: &sea_orm::DatabaseConnection,
+    email: &str,
+    name: &str,
+) -> (HeaderName, HeaderValue) {
+    let token = sign_up_and_verify(request, db, email, "secret123", name).await;
+
+    let (auth_key, auth_value) = auth_header(&token);
+    let profile = request
+        .post("/api/v1/profiles")
+        .add_header(auth_key.clone(), auth_value.clone())
+        .json(&serde_json::json!({ "name": name, "age": 26 }))
+        .await;
+    assert_eq!(profile.status_code(), 201);
+
+    (auth_key, auth_value)
+}
+
+async fn upload_png(
+    request: &TestServer,
+    auth_key: &HeaderName,
+    auth_value: &HeaderValue,
+) -> serde_json::Value {
+    let form = MultipartForm::new()
+        .add_text("context", "profile_gallery")
+        .add_part(
+            "file",
+            Part::bytes(tiny_png_bytes())
+                .file_name("tiny.png")
+                .mime_type("image/png"),
+        );
+
+    let upload = request
+        .post("/api/v1/uploads")
+        .add_header(auth_key.clone(), auth_value.clone())
+        .multipart(form)
+        .await;
+    assert_eq!(upload.status_code(), 200);
+    upload.json()
+}
+
 /// Query the OTP code from the database for a given email.
 async fn get_otp_code(db: &sea_orm::DatabaseConnection, email: &str) -> String {
     use poziomki_backend::models::_entities::otp_codes;
@@ -28,6 +79,41 @@ async fn get_otp_code(db: &sea_orm::DatabaseConnection, email: &str) -> String {
         .expect("DB query failed")
         .expect("No OTP found for email")
         .code
+}
+
+async fn sign_up_and_verify(
+    request: &TestServer,
+    db: &sea_orm::DatabaseConnection,
+    email: &str,
+    password: &str,
+    name: &str,
+) -> String {
+    let sign_up = request
+        .post("/api/v1/auth/sign-up/email")
+        .json(&serde_json::json!({
+            "email": email,
+            "name": name,
+            "password": password,
+        }))
+        .await;
+    assert_eq!(sign_up.status_code(), 200);
+    let sign_up_payload: serde_json::Value = sign_up.json();
+    assert!(sign_up_payload["data"]["token"].is_null());
+
+    let otp_code = get_otp_code(db, email).await;
+    let verify = request
+        .post("/api/v1/auth/verify-otp")
+        .json(&serde_json::json!({
+            "email": email,
+            "otp": otp_code,
+        }))
+        .await;
+    assert_eq!(verify.status_code(), 200);
+    let verify_payload: serde_json::Value = verify.json();
+    verify_payload["data"]["token"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .expect("verify-otp should return token")
 }
 
 #[tokio::test]
@@ -117,22 +203,9 @@ async fn matrix_config_endpoint_available() {
 #[tokio::test]
 #[serial]
 async fn events_flow_matches_phase_3_contract() {
-    request::<App, _, _>(|request, _ctx| async move {
-        let sign_up_response = request
-            .post("/api/v1/auth/sign-up/email")
-            .json(&serde_json::json!({
-                "email": "owner@example.com",
-                "name": "Owner",
-                "password": "secret123",
-            }))
-            .await;
-        assert_eq!(sign_up_response.status_code(), 200);
-        let sign_up_payload: serde_json::Value = sign_up_response.json();
-        let owner_token = sign_up_payload["data"]["token"]
-            .as_str()
-            .map(ToOwned::to_owned)
-            .unwrap_or_default();
-        assert!(!owner_token.is_empty());
+    request::<App, _, _>(|request, ctx| async move {
+        let owner_token =
+            sign_up_and_verify(&request, &ctx.db, "owner@example.com", "secret123", "Owner").await;
 
         let (owner_auth_key, owner_auth_value) = auth_header(&owner_token);
         let profile_response = request
@@ -234,21 +307,14 @@ async fn events_flow_matches_phase_3_contract() {
             serde_json::Value::Null
         );
 
-        let attendee_signup = request
-            .post("/api/v1/auth/sign-up/email")
-            .json(&serde_json::json!({
-                "email": "attendee@example.com",
-                "name": "Attendee",
-                "password": "secret123",
-            }))
-            .await;
-        assert_eq!(attendee_signup.status_code(), 200);
-        let attendee_signup_payload: serde_json::Value = attendee_signup.json();
-        let attendee_token = attendee_signup_payload["data"]["token"]
-            .as_str()
-            .map(ToOwned::to_owned)
-            .unwrap_or_default();
-        assert!(!attendee_token.is_empty());
+        let attendee_token = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "attendee@example.com",
+            "secret123",
+            "Attendee",
+        )
+        .await;
 
         let (attendee_auth_key, attendee_auth_value) = auth_header(&attendee_token);
         let attendee_profile_response = request
@@ -285,36 +351,17 @@ async fn events_flow_matches_phase_3_contract() {
 #[tokio::test]
 #[serial]
 async fn matching_and_uploads_endpoints_available() {
-    request::<App, _, _>(|request, _ctx| async move {
-        let signup_a = request
-            .post("/api/v1/auth/sign-up/email")
-            .json(&serde_json::json!({
-                "email": "match-a@example.com",
-                "name": "Alice",
-                "password": "secret123",
-            }))
-            .await;
-        assert_eq!(signup_a.status_code(), 200);
-        let payload_a: serde_json::Value = signup_a.json();
-        let token_a = payload_a["data"]["token"]
-            .as_str()
-            .map(ToOwned::to_owned)
-            .unwrap_or_default();
-
-        let signup_b = request
-            .post("/api/v1/auth/sign-up/email")
-            .json(&serde_json::json!({
-                "email": "match-b@example.com",
-                "name": "Bob",
-                "password": "secret123",
-            }))
-            .await;
-        assert_eq!(signup_b.status_code(), 200);
-        let payload_b: serde_json::Value = signup_b.json();
-        let token_b = payload_b["data"]["token"]
-            .as_str()
-            .map(ToOwned::to_owned)
-            .unwrap_or_default();
+    request::<App, _, _>(|request, ctx| async move {
+        let token_a = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "match-a@example.com",
+            "secret123",
+            "Alice",
+        )
+        .await;
+        let token_b =
+            sign_up_and_verify(&request, &ctx.db, "match-b@example.com", "secret123", "Bob").await;
 
         let (auth_key_a, auth_value_a) = auth_header(&token_a);
         let (auth_key_b, auth_value_b) = auth_header(&token_b);
@@ -366,6 +413,8 @@ async fn sign_in_verifies_hashed_password() {
             .json(&sign_up_json("hash-test@example.com", "correct-password"))
             .await;
         assert_eq!(sign_up.status_code(), 200);
+        let sign_up_payload: serde_json::Value = sign_up.json();
+        assert!(sign_up_payload["data"]["token"].is_null());
 
         // Verify email via OTP before sign-in (email verification is required)
         let otp_code = get_otp_code(&ctx.db, "hash-test@example.com").await;
@@ -405,18 +454,63 @@ async fn sign_in_verifies_hashed_password() {
 
 #[tokio::test]
 #[serial]
-async fn delete_account_verifies_hashed_password() {
-    request::<App, _, _>(|request, _ctx| async move {
+async fn unverified_sign_in_requires_otp_and_resend_works() {
+    request::<App, _, _>(|request, ctx| async move {
         let sign_up = request
             .post("/api/v1/auth/sign-up/email")
-            .json(&sign_up_json("delete-test@example.com", "my-password"))
+            .json(&sign_up_json("otp-flow@example.com", "correct-password"))
             .await;
         assert_eq!(sign_up.status_code(), 200);
-        let payload: serde_json::Value = sign_up.json();
-        let token = payload["data"]["token"]
-            .as_str()
-            .map(ToOwned::to_owned)
-            .unwrap_or_default();
+        let sign_up_payload: serde_json::Value = sign_up.json();
+        assert!(sign_up_payload["data"]["token"].is_null());
+
+        let sign_in_unverified = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "otp-flow@example.com",
+                "password": "correct-password",
+            }))
+            .await;
+        assert_eq!(sign_in_unverified.status_code(), 403);
+        let sign_in_error: serde_json::Value = sign_in_unverified.json();
+        assert_eq!(sign_in_error["code"], "EMAIL_NOT_VERIFIED");
+
+        let resend = request
+            .post("/api/v1/auth/resend-otp")
+            .json(&serde_json::json!({ "email": "otp-flow@example.com" }))
+            .await;
+        assert_eq!(resend.status_code(), 200);
+        let resend_payload: serde_json::Value = resend.json();
+        assert_eq!(resend_payload["success"], true);
+
+        let otp_code = get_otp_code(&ctx.db, "otp-flow@example.com").await;
+        let verify_response = request
+            .post("/api/v1/auth/verify-otp")
+            .json(&serde_json::json!({
+                "email": "otp-flow@example.com",
+                "otp": otp_code,
+            }))
+            .await;
+        assert_eq!(verify_response.status_code(), 200);
+        let verify_payload: serde_json::Value = verify_response.json();
+        assert!(verify_payload["data"]["token"].is_string());
+        assert_eq!(verify_payload["data"]["user"]["emailVerified"], true);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn delete_account_verifies_hashed_password() {
+    request::<App, _, _>(|request, ctx| async move {
+        let token = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "delete-test@example.com",
+            "my-password",
+            "Test User",
+        )
+        .await;
 
         let (auth_key, auth_value) = auth_header(&token);
 
@@ -435,6 +529,154 @@ async fn delete_account_verifies_hashed_password() {
             .json(&serde_json::json!({ "password": "my-password" }))
             .await;
         assert_eq!(delete_ok.status_code(), 200);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn uploads_auth_check_accepts_owned_variant_url() {
+    request::<App, _, _>(|request, ctx| async move {
+        let (auth_key, auth_value) = create_user_with_profile(
+            &request,
+            &ctx.db,
+            "variant-owner@example.com",
+            "Variant Owner",
+        )
+        .await;
+
+        let upload_payload = upload_png(&request, &auth_key, &auth_value).await;
+        let thumbnail_url = upload_payload["data"]["thumbnail_url"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .expect("thumbnail_url should be present");
+        let thumb_filename = thumbnail_url
+            .strip_prefix("/api/v1/uploads/")
+            .map(ToOwned::to_owned)
+            .expect("dev thumbnail URL shape");
+
+        let auth_check = request
+            .get("/api/v1/uploads/auth-check")
+            .add_header(auth_key, auth_value)
+            .add_header(
+                HeaderName::from_static("x-original-uri"),
+                HeaderValue::from_str(&format!("/uploads/{thumb_filename}")).expect("valid header"),
+            )
+            .await;
+
+        assert_eq!(auth_check.status_code(), 200);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn upload_returns_error_when_upload_row_insert_fails() {
+    request::<App, _, _>(|request, ctx| async move {
+        use sea_orm::ConnectionTrait;
+
+        let (auth_key, auth_value) =
+            create_user_with_profile(&request, &ctx.db, "insert-fail@example.com", "Insert Fail")
+                .await;
+
+        ctx.db
+            .execute_unprepared(
+                r"
+                CREATE OR REPLACE FUNCTION test_fail_uploads_insert() RETURNS trigger AS $$
+                BEGIN
+                  RAISE EXCEPTION 'forced uploads insert failure';
+                END;
+                $$ LANGUAGE plpgsql;
+
+                DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
+                CREATE TRIGGER trg_test_fail_uploads_insert
+                BEFORE INSERT ON uploads
+                FOR EACH ROW
+                EXECUTE FUNCTION test_fail_uploads_insert();
+                ",
+            )
+            .await
+            .expect("create insert-fail trigger");
+
+        let form = MultipartForm::new()
+            .add_text("context", "profile_gallery")
+            .add_part(
+                "file",
+                Part::bytes(tiny_png_bytes())
+                    .file_name("insert-fail.png")
+                    .mime_type("image/png"),
+            );
+        let upload = request
+            .post("/api/v1/uploads")
+            .add_header(auth_key, auth_value)
+            .multipart(form)
+            .await;
+
+        ctx.db
+            .execute_unprepared(
+                r"
+                DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
+                DROP FUNCTION IF EXISTS test_fail_uploads_insert();
+                ",
+            )
+            .await
+            .expect("drop insert-fail trigger");
+
+        assert_eq!(upload.status_code(), 500);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn delete_returns_error_when_upload_row_update_fails() {
+    request::<App, _, _>(|request, ctx| async move {
+        use sea_orm::ConnectionTrait;
+
+        let (auth_key, auth_value) =
+            create_user_with_profile(&request, &ctx.db, "update-fail@example.com", "Update Fail")
+                .await;
+        let upload_payload = upload_png(&request, &auth_key, &auth_value).await;
+        let filename = upload_payload["data"]["filename"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .expect("filename should be present");
+
+        ctx.db
+            .execute_unprepared(
+                r"
+                CREATE OR REPLACE FUNCTION test_fail_uploads_update() RETURNS trigger AS $$
+                BEGIN
+                  RAISE EXCEPTION 'forced uploads update failure';
+                END;
+                $$ LANGUAGE plpgsql;
+
+                DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
+                CREATE TRIGGER trg_test_fail_uploads_update
+                BEFORE UPDATE ON uploads
+                FOR EACH ROW
+                EXECUTE FUNCTION test_fail_uploads_update();
+                ",
+            )
+            .await
+            .expect("create update-fail trigger");
+
+        let delete = request
+            .delete(&format!("/api/v1/uploads/{filename}"))
+            .add_header(auth_key, auth_value)
+            .await;
+
+        ctx.db
+            .execute_unprepared(
+                r"
+                DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
+                DROP FUNCTION IF EXISTS test_fail_uploads_update();
+                ",
+            )
+            .await
+            .expect("drop update-fail trigger");
+
+        assert_eq!(delete.status_code(), 500);
     })
     .await;
 }

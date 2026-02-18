@@ -19,10 +19,9 @@ use loco_rs::{app::AppContext, prelude::*};
 use super::{
     error_response,
     state::{
-        create_session_db, extract_bearer_token, hash_session_token, is_valid_email,
-        normalize_email, otp_in_cooldown, require_auth_db, session_model_to_view, upsert_otp,
-        user_model_to_view, DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody,
-        SuccessResponse, VerifyOtpBody,
+        extract_bearer_token, hash_session_token, is_valid_email, normalize_email, otp_in_cooldown,
+        require_auth_db, upsert_otp, user_model_to_view, DataResponse, ResendOtpBody,
+        SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
     },
     ErrorSpec,
 };
@@ -61,14 +60,8 @@ pub(super) async fn sign_up(
         });
     }
 
-    let session = create_session_db(&ctx.db, &headers, user.id)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
     let data = serde_json::json!({
         "user": user_model_to_view(&user),
-        "token": session.token,
-        "session": session_model_to_view(&session.model),
     });
     Ok((axum::http::StatusCode::OK, Json(DataResponse { data })).into_response())
 }

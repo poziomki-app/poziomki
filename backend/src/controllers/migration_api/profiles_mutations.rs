@@ -145,27 +145,22 @@ pub(in crate::controllers::migration_api) async fn profile_create(
         sync_profile_tags(&ctx.db, profile_id, &tag_ids).await?;
     }
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        let tag_names = super::load_profile_tags(&ctx.db, profile_id)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|t| t.name)
-            .collect();
-        crate::search::index_profile(
-            &meili,
-            crate::search::ProfileDocument {
-                id: inserted.id.to_string(),
-                name: inserted.name.clone(),
-                bio: inserted.bio.as_deref().map(strip_bio_images),
-                age: inserted.age,
-                program: inserted.program.clone(),
-                profile_picture: inserted.profile_picture.clone(),
-                tags: tag_names,
-            },
-        );
-    }
+    // MEILI_COMPAT_REMOVE
+    let tag_names = super::load_profile_tags(&ctx.db, profile_id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    crate::search::index_profile_compat(crate::search::ProfileDocument {
+        id: inserted.id.to_string(),
+        name: inserted.name.clone(),
+        bio: inserted.bio.as_deref().map(strip_bio_images),
+        age: inserted.age,
+        program: inserted.program.clone(),
+        profile_picture: inserted.profile_picture.clone(),
+        tags: tag_names,
+    });
 
     let data = full_profile_response(&ctx.db, &inserted, &user.pid).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
@@ -300,8 +295,9 @@ pub(in crate::controllers::migration_api) async fn profile_update(
         Ok(data) => data,
         Err(response) => return Ok(*response),
     };
-    validate_update_payload(&headers, &payload)
-        .map_err(|r| loco_rs::Error::Message(format!("{r:?}")))?;
+    if let Err(response) = validate_update_payload(&headers, &payload) {
+        return Ok(*response);
+    }
 
     let profile_uuid = profile.id;
     let active = apply_profile_updates(profile, &payload);
@@ -313,27 +309,22 @@ pub(in crate::controllers::migration_api) async fn profile_update(
 
     maybe_sync_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        let tag_names = super::load_profile_tags(&ctx.db, profile_uuid)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|t| t.name)
-            .collect();
-        crate::search::index_profile(
-            &meili,
-            crate::search::ProfileDocument {
-                id: updated.id.to_string(),
-                name: updated.name.clone(),
-                bio: updated.bio.as_deref().map(strip_bio_images),
-                age: updated.age,
-                program: updated.program.clone(),
-                profile_picture: updated.profile_picture.clone(),
-                tags: tag_names,
-            },
-        );
-    }
+    // MEILI_COMPAT_REMOVE
+    let tag_names = super::load_profile_tags(&ctx.db, profile_uuid)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    crate::search::index_profile_compat(crate::search::ProfileDocument {
+        id: updated.id.to_string(),
+        name: updated.name.clone(),
+        bio: updated.bio.as_deref().map(strip_bio_images),
+        age: updated.age,
+        program: updated.program.clone(),
+        profile_picture: updated.profile_picture.clone(),
+        tags: tag_names,
+    });
 
     let data = full_profile_response(&ctx.db, &updated, &user.pid).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -356,10 +347,8 @@ pub(in crate::controllers::migration_api) async fn profile_delete(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        crate::search::delete_profile(&meili, profile_id_str);
-    }
+    // MEILI_COMPAT_REMOVE
+    crate::search::delete_profile_compat(profile_id_str);
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }

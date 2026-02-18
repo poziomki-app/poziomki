@@ -10,6 +10,14 @@
 
 a social app for university students, connecting people by shared interests and encouraging spending more time together through local events
 
+## technical docs
+
+- engineering roadmap: `ENGINEERING_ROADMAP.md`
+- matrix status: `chat/MATRIX_STATUS.md`
+- matrix reference: `chat/MATRIX_REFERENCE.md`
+- api migration: `backend/API_MIGRATION.md`
+- infrastructure scaling: `infra/SCALING_COSTS.md`
+
 ## license
 
 this project is available under AGPLv3 license

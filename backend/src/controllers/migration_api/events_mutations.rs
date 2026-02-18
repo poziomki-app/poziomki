@@ -98,22 +98,17 @@ pub(in crate::controllers::migration_api) async fn event_create(
 
     upsert_attendee(&ctx.db, event_id, validated.profile.id, "going").await?;
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        crate::search::index_event(
-            &meili,
-            crate::search::EventDocument {
-                id: inserted.id.to_string(),
-                title: inserted.title.clone(),
-                description: inserted.description.clone(),
-                location: inserted.location.clone(),
-                starts_at: inserted.starts_at.to_rfc3339(),
-                cover_image: inserted.cover_image.clone(),
-                creator_name: validated.profile.name.clone(),
-                geo: geo_from_event(&inserted),
-            },
-        );
-    }
+    // MEILI_COMPAT_REMOVE
+    crate::search::index_event_compat(crate::search::EventDocument {
+        id: inserted.id.to_string(),
+        title: inserted.title.clone(),
+        description: inserted.description.clone(),
+        location: inserted.location.clone(),
+        starts_at: inserted.starts_at.to_rfc3339(),
+        cover_image: inserted.cover_image.clone(),
+        creator_name: validated.profile.name.clone(),
+        geo: geo_from_event(&inserted),
+    });
 
     let data = build_event_response(&ctx.db, &inserted, &validated.profile.id).await?;
     Ok(created_event_response(data))
@@ -138,22 +133,17 @@ pub(in crate::controllers::migration_api) async fn event_update(
 
     maybe_sync_tags(&ctx.db, event_uuid, payload.tags, payload.tag_ids).await?;
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        crate::search::index_event(
-            &meili,
-            crate::search::EventDocument {
-                id: updated.id.to_string(),
-                title: updated.title.clone(),
-                description: updated.description.clone(),
-                location: updated.location.clone(),
-                starts_at: updated.starts_at.to_rfc3339(),
-                cover_image: updated.cover_image.clone(),
-                creator_name: profile.name.clone(),
-                geo: geo_from_event(&updated),
-            },
-        );
-    }
+    // MEILI_COMPAT_REMOVE
+    crate::search::index_event_compat(crate::search::EventDocument {
+        id: updated.id.to_string(),
+        title: updated.title.clone(),
+        description: updated.description.clone(),
+        location: updated.location.clone(),
+        starts_at: updated.starts_at.to_rfc3339(),
+        cover_image: updated.cover_image.clone(),
+        creator_name: profile.name.clone(),
+        geo: geo_from_event(&updated),
+    });
 
     let data = build_event_response(&ctx.db, &updated, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -195,10 +185,8 @@ pub(in crate::controllers::migration_api) async fn event_delete(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    // Sync to Meilisearch (fire-and-forget)
-    if let Ok(meili) = crate::search::create_client() {
-        crate::search::delete_event(&meili, event_uuid.to_string());
-    }
+    // MEILI_COMPAT_REMOVE
+    crate::search::delete_event_compat(event_uuid.to_string());
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }

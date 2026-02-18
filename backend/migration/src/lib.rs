@@ -13,6 +13,7 @@ mod m20250216_000009_add_profile_personalization;
 mod m20250217_000010_add_indexes;
 mod m20250218_000011_create_otp_codes;
 mod m20250218_000012_add_upload_variants;
+mod m20250218_000013_add_search_trgm_indexes;
 
 pub struct Migrator;
 
@@ -32,6 +33,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250217_000010_add_indexes::Migration),
             Box::new(m20250218_000011_create_otp_codes::Migration),
             Box::new(m20250218_000012_add_upload_variants::Migration),
+            Box::new(m20250218_000013_add_search_trgm_indexes::Migration),
             // inject-above (do not remove this comment)
         ]
     }

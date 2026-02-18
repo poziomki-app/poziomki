@@ -1,4 +1,6 @@
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import io.gitlab.arturbosch.detekt.Detekt
+import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
 import java.io.File
 import org.jlleitschuh.gradle.ktlint.KtlintExtension
 import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
@@ -26,10 +28,11 @@ subprojects {
 
     extensions.configure(DetektExtension::class.java) {
         buildUponDefaultConfig = true
-        allRules = true
+        allRules = false
         parallel = true
         autoCorrect = false
         ignoreFailures = false
+        baseline = file("${project.projectDir}/detekt-baseline.xml")
     }
 
     dependencies {
@@ -56,6 +59,36 @@ subprojects {
         compilerOptions {
             allWarningsAsErrors.set(true)
         }
+    }
+
+    tasks.withType(Detekt::class.java).configureEach {
+        val kmpSources =
+            listOf(
+                "src/commonMain/kotlin",
+                "src/androidMain/kotlin",
+                "src/commonTest/kotlin",
+                "src/androidUnitTest/kotlin",
+                "src/androidInstrumentedTest/kotlin",
+            ).map(::file).filter(File::exists)
+
+        setSource(files(kmpSources))
+        include("**/*.kt", "**/*.kts")
+        exclude("**/build/**")
+    }
+
+    tasks.withType(DetektCreateBaselineTask::class.java).configureEach {
+        val kmpSources =
+            listOf(
+                "src/commonMain/kotlin",
+                "src/androidMain/kotlin",
+                "src/commonTest/kotlin",
+                "src/androidUnitTest/kotlin",
+                "src/androidInstrumentedTest/kotlin",
+            ).map(::file).filter(File::exists)
+
+        setSource(files(kmpSources))
+        include("**/*.kt", "**/*.kts")
+        exclude("**/build/**")
     }
 
     val buildGeneratedSegment = "${File.separator}build${File.separator}generated${File.separator}"

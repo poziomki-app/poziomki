@@ -56,12 +56,7 @@ pub(super) async fn search(
         _ => None,
     };
 
-    let client = crate::search::create_client().map_err(|e| {
-        tracing::error!("Failed to create Meilisearch client: {e}");
-        loco_rs::Error::Message("Search service unavailable".to_string())
-    })?;
-
-    let mut results = crate::search::search_all(&client, &q, limit, geo.as_ref())
+    let mut results = crate::search::search_all(&ctx.db, &q, limit, geo.as_ref())
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");

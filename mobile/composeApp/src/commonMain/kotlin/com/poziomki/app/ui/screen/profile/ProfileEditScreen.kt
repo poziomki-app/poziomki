@@ -32,8 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -47,18 +47,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -67,9 +60,16 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.component.ButtonVariant
@@ -78,8 +78,8 @@ import com.poziomki.app.ui.component.PoziomkiSnackbar
 import com.poziomki.app.ui.component.PoziomkiTextField
 import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.SectionLabel
-import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.Background
+import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.MontserratFamily
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Overlay
@@ -661,6 +661,7 @@ private object BioImageVisualTransformation : VisualTransformation {
             AnnotatedString(transformed),
             object : OffsetMapping {
                 override fun originalToTransformed(offset: Int) = o2t[offset.coerceIn(0, src.length)]
+
                 override fun transformedToOriginal(offset: Int) = t2o[offset.coerceIn(0, tLen)]
             },
         )
