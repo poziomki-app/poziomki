@@ -88,7 +88,6 @@ pub(super) async fn sign_in(
     headers: HeaderMap,
     Json(payload): Json<SignInBody>,
 ) -> Result<Response> {
-    let _ = payload.remember_me;
     let email = normalize_email(&payload.email);
     if let Err(response) = enforce_rate_limit(&headers, AuthRateLimitAction::SignIn, &email) {
         return Ok(*response);

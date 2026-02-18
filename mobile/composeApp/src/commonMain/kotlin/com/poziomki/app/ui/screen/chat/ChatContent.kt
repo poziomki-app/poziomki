@@ -166,9 +166,10 @@ fun ChatContent(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp),
+                        .fillMaxWidth(),
             ) {
+                val itemPadding = Modifier.padding(horizontal = 10.dp)
+
                 LazyColumn(
                     state = timelineListState,
                     modifier = Modifier.fillMaxSize(),
@@ -183,7 +184,7 @@ fun ChatContent(
                         TextButton(
                             onClick = { onPaginateBackwards() },
                             enabled = state.hasMoreBackwards && !state.isPaginatingBackwards,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = itemPadding.fillMaxWidth(),
                         ) {
                             val label =
                                 when {
@@ -199,33 +200,36 @@ fun ChatContent(
                         items = state.timelineItems,
                         key = { index, item -> timelineItemKey(index, item) },
                     ) { index, item ->
-                        when (item) {
-                            is MatrixTimelineItem.DateDivider -> {
-                                DateDivider(timestampMillis = item.timestampMillis)
-                            }
+                        Box(modifier = itemPadding) {
+                            when (item) {
+                                is MatrixTimelineItem.DateDivider -> {
+                                    DateDivider(timestampMillis = item.timestampMillis)
+                                }
 
-                            is MatrixTimelineItem.Event -> {
-                                val previousEvent = state.timelineItems.getOrNull(index - 1) as? MatrixTimelineItem.Event
-                                MessageEventRow(
-                                    event = item,
-                                    groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
-                                    onToggleReaction = { emoji ->
-                                        onToggleReaction(item.eventOrTransactionId, emoji)
-                                    },
-                                    onReactionsClick = { selectedReactionEvent = item },
-                                    onFocusOnReply = { },
-                                    onSenderClick = { onNavigateToProfile(item.senderId) },
-                                    onActionsLongPress = { selectedActionEvent = item },
-                                    onSwipeReply = { onStartReply(item) },
-                                )
-                            }
+                                is MatrixTimelineItem.Event -> {
+                                    val previousEvent =
+                                        state.timelineItems.getOrNull(index - 1) as? MatrixTimelineItem.Event
+                                    MessageEventRow(
+                                        event = item,
+                                        groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
+                                        onToggleReaction = { emoji ->
+                                            onToggleReaction(item.eventOrTransactionId, emoji)
+                                        },
+                                        onReactionsClick = { selectedReactionEvent = item },
+                                        onFocusOnReply = { },
+                                        onSenderClick = { onNavigateToProfile(item.senderId) },
+                                        onActionsLongPress = { selectedActionEvent = item },
+                                        onSwipeReply = { onStartReply(item) },
+                                    )
+                                }
 
-                            MatrixTimelineItem.ReadMarker -> {
-                                NewMessagesDivider()
-                            }
+                                MatrixTimelineItem.ReadMarker -> {
+                                    NewMessagesDivider()
+                                }
 
-                            MatrixTimelineItem.TimelineStart -> {
-                                StatusDivider(text = "Początek rozmowy")
+                                MatrixTimelineItem.TimelineStart -> {
+                                    StatusDivider(text = "Początek rozmowy")
+                                }
                             }
                         }
                     }
@@ -235,7 +239,7 @@ fun ChatContent(
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = SurfaceColor,
-                                modifier = Modifier.padding(vertical = 8.dp),
+                                modifier = itemPadding.padding(vertical = 8.dp),
                             ) {
                                 Text(
                                     text = "Pisze: ${state.typingUserIds.joinToString()}",
@@ -263,7 +267,7 @@ fun ChatContent(
                         modifier =
                             Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(bottom = 10.dp, end = 8.dp),
+                                .padding(bottom = 10.dp, end = 18.dp),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp),

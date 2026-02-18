@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -87,7 +88,6 @@ fun EventsScreen(
             TimeFilter.NEARBY to "w pobliżu",
             TimeFilter.TODAY to "dzisiaj",
             TimeFilter.TOMORROW to "jutro",
-            TimeFilter.WEEK to "ten tydzień",
         )
 
     Column(
@@ -193,87 +193,76 @@ private fun EventCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = cardShape,
-        color = Color.Transparent,
+        color = Background,
         border = BorderStroke(1.dp, Border),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(SurfaceElevated, Background),
-                        ),
-                    ).clickable(onClick = onClick),
+        val coverImage = event.coverImage
+        Box(
+            modifier = Modifier.clickable(onClick = onClick),
         ) {
-            // Cover image with bookmark overlay
-            val coverImage = event.coverImage
-            Box {
-                if (coverImage != null) {
-                    AsyncImage(
-                        model = resolveImageUrl(coverImage),
-                        contentDescription = event.title,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1.6f)
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart = PoziomkiTheme.componentSizes.cardRadius,
-                                        topEnd = PoziomkiTheme.componentSizes.cardRadius,
-                                    ),
-                                ),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1.6f)
-                                .background(SurfaceElevated),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.CalendarMonth,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = TextMuted,
-                        )
-                    }
-                }
-
-                // Bookmark overlay
+            // Cover image / placeholder — fills the card
+            if (coverImage != null) {
+                AsyncImage(
+                    model = resolveImageUrl(coverImage),
+                    contentDescription = event.title,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.4f),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
                 Box(
                     modifier =
                         Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(PoziomkiTheme.spacing.sm)
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Overlay),
+                            .fillMaxWidth()
+                            .aspectRatio(1.4f)
+                            .background(SurfaceElevated),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.BookmarkBorder,
-                        contentDescription = "Zapisz",
-                        modifier = Modifier.size(18.dp),
-                        tint = TextPrimary,
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = TextMuted,
                     )
                 }
             }
 
-            // Content area
+            // Bottom gradient for text readability
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.75f)
+                        .background(
+                            Brush.verticalGradient(
+                                colors =
+                                    listOf(
+                                        Color.Transparent,
+                                        Background.copy(alpha = 0.5f),
+                                        Background.copy(alpha = 0.9f),
+                                        Background,
+                                    ),
+                            ),
+                        ),
+            )
+
+            // Content overlaid at bottom
             Column(
                 modifier =
-                    Modifier.padding(
-                        horizontal = PoziomkiTheme.spacing.md,
-                        vertical = PoziomkiTheme.spacing.sm,
-                    ),
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            horizontal = PoziomkiTheme.spacing.md,
+                            vertical = PoziomkiTheme.spacing.sm,
+                        ),
             ) {
                 // Title
                 Text(
                     text = event.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
@@ -286,7 +275,7 @@ private fun EventCard(
                     text = formatEventDate(event.startsAt),
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     color = TextSecondary,
                 )
 
@@ -296,7 +285,7 @@ private fun EventCard(
                         text = "od ${creator.name}",
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         color = TextMuted,
                     )
                 }
@@ -323,11 +312,30 @@ private fun EventCard(
                                 ),
                             fontFamily = NunitoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
+                            fontSize = 15.sp,
                             color = TextPrimary,
                         )
                     }
                 }
+            }
+
+            // Bookmark overlay
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(PoziomkiTheme.spacing.sm)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Overlay),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.BookmarkBorder,
+                    contentDescription = "Zapisz",
+                    modifier = Modifier.size(22.dp),
+                    tint = TextPrimary,
+                )
             }
         }
     }

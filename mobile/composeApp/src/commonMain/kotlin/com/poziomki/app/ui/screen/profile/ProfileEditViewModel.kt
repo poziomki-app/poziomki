@@ -20,6 +20,7 @@ data class ProfileEditState(
     val isUploading: Boolean = false,
     val isBioImageUploading: Boolean = false,
     val profileId: String = "",
+    val name: String = "",
     val bio: String = "",
     val program: String = "",
     val images: List<String> = emptyList(),
@@ -65,6 +66,7 @@ class ProfileEditViewModel(
                         _state.value.copy(
                             isLoading = false,
                             profileId = profile.id,
+                            name = profile.name,
                             bio = profile.bio ?: "",
                             program = profile.program ?: "",
                             images = profile.images,

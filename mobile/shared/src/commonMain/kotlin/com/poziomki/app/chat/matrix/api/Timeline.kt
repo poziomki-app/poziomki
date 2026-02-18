@@ -40,6 +40,7 @@ sealed interface MatrixTimelineItem {
         val eventId: String?,
         val senderId: String,
         val senderDisplayName: String?,
+        val senderAvatarUrl: String? = null,
         val isMine: Boolean,
         val body: String,
         val timestampMillis: Long,

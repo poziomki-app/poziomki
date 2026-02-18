@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,7 +43,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -64,6 +79,8 @@ import com.poziomki.app.ui.component.PoziomkiTextField
 import com.poziomki.app.ui.component.ScreenHeader
 import com.poziomki.app.ui.component.SectionLabel
 import com.poziomki.app.ui.theme.Border
+import com.poziomki.app.ui.theme.Background
+import com.poziomki.app.ui.theme.MontserratFamily
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.Overlay
 import com.poziomki.app.ui.theme.PoziomkiTheme
@@ -85,6 +102,8 @@ fun ProfileEditScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val nunito = NunitoFamily
+    var showGradientPicker by remember { mutableStateOf(false) }
+    var showBioEditor by remember { mutableStateOf(false) }
 
     val imagePicker =
         rememberSingleImagePicker { bytes ->
@@ -147,68 +166,52 @@ fun ProfileEditScreen(
                 // --- bio ---
                 SectionLabel("bio")
 
-                PoziomkiTextField(
-                    value = state.bio,
-                    onValueChange = { viewModel.updateBio(it.take(1500)) },
-                    placeholder = "Napisz coś o sobie...",
-                    singleLine = false,
-                    maxLines = 5,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .background(SurfaceColor, RoundedCornerShape(PoziomkiTheme.radius.md))
+                            .border(1.dp, Border, RoundedCornerShape(PoziomkiTheme.radius.md))
+                            .clip(RoundedCornerShape(PoziomkiTheme.radius.md))
+                            .clickable { showBioEditor = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    // Bio image button
-                    Row(
-                        modifier =
-                            Modifier
-                                .background(SurfaceColor, RoundedCornerShape(50))
-                                .border(1.dp, Border, RoundedCornerShape(50))
-                                .clip(RoundedCornerShape(50))
-                                .clickable(enabled = !state.isBioImageUploading) { bioImagePicker() }
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (state.isBioImageUploading) {
-                            CircularProgressIndicator(
-                                color = Primary,
-                                modifier = Modifier.size(14.dp),
-                                strokeWidth = 1.5.dp,
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
+                    if (state.bio.isBlank()) {
                         Text(
-                            text = "zdjęcie",
+                            text = "napisz coś o sobie...",
                             fontFamily = nunito,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16.sp,
                             color = TextMuted,
                         )
+                    } else {
+                        val displayBio =
+                            remember(state.bio) {
+                                state.bio.replace(Regex("""!\[\]\([^)]*\)"""), "\uD83D\uDCF7")
+                            }
+                        Text(
+                            text = displayBio,
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16.sp,
+                            color = TextPrimary,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "${state.bio.length}/1500",
-                        fontFamily = nunito,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 12.sp,
-                        color = TextMuted,
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
                 // --- kolor profilu ---
-                GradientPickerSection(
-                    selectedStart = state.gradientStart,
-                    selectedEnd = state.gradientEnd,
-                    onSelect = { start, end -> viewModel.updateGradient(start, end) },
+                SectionLabel("kolor profilu")
+
+                GradientCircle(
+                    gradientStart = state.gradientStart,
+                    gradientEnd = state.gradientEnd,
+                    size = 28.dp,
+                    onClick = { showGradientPicker = true },
                 )
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
@@ -309,6 +312,28 @@ fun ProfileEditScreen(
                 viewModel.clearSnackbar()
             }
         }
+    }
+
+    if (showBioEditor) {
+        BioEditorDialog(
+            bio = state.bio,
+            isBioImageUploading = state.isBioImageUploading,
+            onBioChange = { viewModel.updateBio(it.take(1500)) },
+            onAddImage = { bioImagePicker() },
+            onDismiss = { showBioEditor = false },
+        )
+    }
+
+    if (showGradientPicker) {
+        GradientPickerDialog(
+            name = state.name,
+            program = state.program,
+            bio = state.bio,
+            selectedStart = state.gradientStart,
+            selectedEnd = state.gradientEnd,
+            onSelect = { start, end -> viewModel.updateGradient(start, end) },
+            onDismiss = { showGradientPicker = false },
+        )
     }
 }
 
@@ -588,66 +613,349 @@ private val gradientPresets =
         GradientPreset("FC5C7D", "6A82FB", "candy"),
     )
 
-private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong(16)) }.getOrDefault(Color.Gray)
+private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong(16).toInt()) }.getOrDefault(Color.Gray)
 
-@OptIn(ExperimentalLayoutApi::class)
+private object BioImageVisualTransformation : VisualTransformation {
+    private val imageRegex = Regex("""!\[\]\([^)]*\)""")
+    private const val PLACEHOLDER = " \uD83D\uDCF7 "
+
+    override fun filter(text: AnnotatedString): TransformedText {
+        val src = text.text
+        val matches = imageRegex.findAll(src).toList()
+        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+
+        val sb = StringBuilder()
+        var srcPos = 0
+        val o2t = IntArray(src.length + 1)
+
+        for (match in matches) {
+            while (srcPos < match.range.first) {
+                o2t[srcPos] = sb.length
+                sb.append(src[srcPos])
+                srcPos++
+            }
+            val pStart = sb.length
+            sb.append(PLACEHOLDER)
+            for (i in match.range) {
+                o2t[i] = pStart
+            }
+            srcPos = match.range.last + 1
+        }
+        while (srcPos < src.length) {
+            o2t[srcPos] = sb.length
+            sb.append(src[srcPos])
+            srcPos++
+        }
+        o2t[src.length] = sb.length
+
+        val transformed = sb.toString()
+        val tLen = transformed.length
+        val t2o = IntArray(tLen + 1)
+        var oSearch = 0
+        for (tIdx in 0..tLen) {
+            while (oSearch < src.length && o2t[oSearch] < tIdx) oSearch++
+            t2o[tIdx] = oSearch
+        }
+
+        return TransformedText(
+            AnnotatedString(transformed),
+            object : OffsetMapping {
+                override fun originalToTransformed(offset: Int) = o2t[offset.coerceIn(0, src.length)]
+                override fun transformedToOriginal(offset: Int) = t2o[offset.coerceIn(0, tLen)]
+            },
+        )
+    }
+}
+
 @Composable
-private fun GradientPickerSection(
-    selectedStart: String?,
-    selectedEnd: String?,
-    onSelect: (String?, String?) -> Unit,
+private fun BioEditorDialog(
+    bio: String,
+    isBioImageUploading: Boolean,
+    onBioChange: (String) -> Unit,
+    onAddImage: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val nunito = NunitoFamily
+    val focusRequester = remember { FocusRequester() }
 
-    SectionLabel("kolor profilu")
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        // "brak" option
-        val isNone = selectedStart == null && selectedEnd == null
         Box(
             modifier =
                 Modifier
-                    .size(width = 64.dp, height = 40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(
-                        if (isNone) 2.dp else 1.dp,
-                        if (isNone) Primary else Border,
-                        RoundedCornerShape(10.dp),
-                    ).background(SurfaceColor)
-                    .clickable { onSelect(null, null) },
-            contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .imePadding()
+                    .background(Background),
         ) {
-            Text(
-                text = "brak",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Medium,
-                fontSize = 11.sp,
-                color = if (isNone) Primary else TextMuted,
+            Column(
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                // Top bar
+                Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
+                ScreenHeader(
+                    title = "bio",
+                    onBack = onDismiss,
+                )
+
+                // Text area — fills available space
+                BasicTextField(
+                    value = bio,
+                    onValueChange = onBioChange,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .focusRequester(focusRequester)
+                            .padding(horizontal = PoziomkiTheme.spacing.lg, vertical = PoziomkiTheme.spacing.md),
+                    textStyle =
+                        androidx.compose.ui.text.TextStyle(
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16.sp,
+                            color = TextPrimary,
+                            lineHeight = 24.sp,
+                        ),
+                    cursorBrush = SolidColor(Primary),
+                    visualTransformation = BioImageVisualTransformation,
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (bio.isEmpty()) {
+                                Text(
+                                    text = "napisz coś o sobie...",
+                                    fontFamily = nunito,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 16.sp,
+                                    color = TextMuted,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                )
+
+                // Bottom toolbar — image button + char counter
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(SurfaceColor)
+                            .padding(horizontal = PoziomkiTheme.spacing.md, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isBioImageUploading) {
+                        CircularProgressIndicator(
+                            color = Primary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Image,
+                            contentDescription = "Dodaj zdjęcie",
+                            tint = TextMuted,
+                            modifier =
+                                Modifier
+                                    .size(20.dp)
+                                    .clickable(onClick = onAddImage),
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${bio.length}/1500",
+                        fontFamily = nunito,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp,
+                        color =
+                            if (bio.length > 1400) {
+                                com.poziomki.app.ui.theme.Error
+                            } else {
+                                TextMuted
+                            },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GradientCircle(
+    gradientStart: String?,
+    gradientEnd: String?,
+    size: androidx.compose.ui.unit.Dp,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val hasGradient = gradientStart != null && gradientEnd != null
+    val bgModifier =
+        if (hasGradient) {
+            Modifier.background(
+                Brush.linearGradient(
+                    colors = listOf(parseHex(gradientStart!!), parseHex(gradientEnd!!)),
+                ),
+                CircleShape,
             )
+        } else {
+            Modifier.background(SurfaceColor, CircleShape)
         }
 
-        gradientPresets.forEach { preset ->
-            val isSelected = selectedStart == preset.start && selectedEnd == preset.end
+    Box(
+        modifier =
+            Modifier
+                .size(size)
+                .clip(CircleShape)
+                .border(
+                    if (isSelected) 2.dp else 1.dp,
+                    if (isSelected) Primary else Border,
+                    CircleShape,
+                ).then(bgModifier)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!hasGradient) {
+            Text(
+                text = "—",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = (size.value * 0.3f).sp,
+                color = TextMuted,
+            )
+        }
+    }
+}
+
+private fun blendWithBg(
+    color: Color,
+    amount: Float,
+): Color =
+    Color(
+        red = Background.red * (1f - amount) + color.red * amount,
+        green = Background.green * (1f - amount) + color.green * amount,
+        blue = Background.blue * (1f - amount) + color.blue * amount,
+        alpha = 1f,
+    )
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GradientPickerDialog(
+    name: String,
+    program: String,
+    bio: String,
+    selectedStart: String?,
+    selectedEnd: String?,
+    onSelect: (String?, String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val nunito = NunitoFamily
+    val montserrat = MontserratFamily
+
+    // Build darkened preview background from currently selected gradient
+    val previewStart = selectedStart?.let { blendWithBg(parseHex(it), 0.18f) }
+    val previewEnd = selectedEnd?.let { blendWithBg(parseHex(it), 0.18f) }
+    val previewBg =
+        if (previewStart != null && previewEnd != null) {
+            Modifier.background(
+                Brush.verticalGradient(colors = listOf(previewStart, previewEnd)),
+                RoundedCornerShape(20.dp),
+            )
+        } else {
+            Modifier.background(SurfaceColor, RoundedCornerShape(20.dp))
+        }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Background)
+                    .padding(horizontal = PoziomkiTheme.spacing.lg),
+        ) {
+            // Top bar with close
+            Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
+            ScreenHeader(
+                title = "kolor profilu",
+                onBack = onDismiss,
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+            // Mini profile preview
             Box(
                 modifier =
                     Modifier
-                        .size(width = 64.dp, height = 40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .border(
-                            if (isSelected) 2.dp else 1.dp,
-                            if (isSelected) Primary else Border,
-                            RoundedCornerShape(10.dp),
-                        ).background(
-                            Brush.linearGradient(
-                                colors = listOf(parseHex(preset.start), parseHex(preset.end)),
-                                start = Offset(0f, 0f),
-                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-                            ),
-                        ).clickable { onSelect(preset.start, preset.end) },
-            )
+                        .fillMaxWidth()
+                        .then(previewBg)
+                        .padding(PoziomkiTheme.spacing.lg),
+            ) {
+                Column {
+                    Text(
+                        text = name.ifBlank { "imię" },
+                        fontFamily = montserrat,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        color = TextPrimary,
+                    )
+                    if (program.isNotBlank()) {
+                        Text(
+                            text = program,
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = TextSecondary,
+                        )
+                    }
+                    if (bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = bio,
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = TextSecondary,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+            // Circles
+            val dotSize = 40.dp
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // "brak" option
+                GradientCircle(
+                    gradientStart = null,
+                    gradientEnd = null,
+                    size = dotSize,
+                    isSelected = selectedStart == null && selectedEnd == null,
+                    onClick = { onSelect(null, null) },
+                )
+
+                gradientPresets.forEach { preset ->
+                    GradientCircle(
+                        gradientStart = preset.start,
+                        gradientEnd = preset.end,
+                        size = dotSize,
+                        isSelected = selectedStart == preset.start && selectedEnd == preset.end,
+                        onClick = { onSelect(preset.start, preset.end) },
+                    )
+                }
+            }
         }
     }
 }

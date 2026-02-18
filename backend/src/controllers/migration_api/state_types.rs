@@ -12,8 +12,6 @@ pub(in crate::controllers::migration_api) struct SignUpBody {
 pub(in crate::controllers::migration_api) struct SignInBody {
     pub(in crate::controllers::migration_api) email: String,
     pub(in crate::controllers::migration_api) password: String,
-    #[serde(default)]
-    pub(in crate::controllers::migration_api) remember_me: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

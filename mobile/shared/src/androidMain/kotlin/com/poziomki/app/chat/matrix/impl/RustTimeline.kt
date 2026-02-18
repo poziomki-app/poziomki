@@ -319,6 +319,11 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
             is ProfileDetails.Ready -> profile.displayName
             else -> null
         }
+    val senderAvatarUrl =
+        when (val profile = event.senderProfile) {
+            is ProfileDetails.Ready -> profile.avatarUrl
+            else -> null
+        }
 
     val messageBody = timelineContentToText(event.content)
     val reactions =
@@ -363,6 +368,7 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         eventId = eventId,
         senderId = event.sender,
         senderDisplayName = senderDisplayName,
+        senderAvatarUrl = senderAvatarUrl,
         isMine = event.isOwn,
         body = messageBody,
         timestampMillis = event.timestamp.toLong(),

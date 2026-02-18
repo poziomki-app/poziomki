@@ -37,45 +37,26 @@ import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 
-private fun parseHexColor(hex: String?): Color? {
-    if (hex.isNullOrBlank()) return null
-    val clean = hex.trimStart('#')
-    if (clean.length != 6) return null
-    return runCatching { Color(("FF$clean").toLong(16).toInt()) }.getOrNull()
-}
-
 @Composable
 fun ProfileCard(
     name: String,
     program: String?,
     profilePicture: String?,
     tags: List<Tag>,
-    gradientStart: String? = null,
-    gradientEnd: String? = null,
     maxVisibleTags: Int = 2,
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val startColor = parseHexColor(gradientStart)
-    val endColor = parseHexColor(gradientEnd)
     val gradientBrush =
-        if (startColor != null && endColor != null) {
-            Brush.linearGradient(
-                colors = listOf(startColor, endColor),
-                start = Offset(0f, 0f),
-                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-            )
-        } else {
-            Brush.linearGradient(
-                colors =
-                    listOf(
-                        Color(0xFF161C26),
-                        Color(0xFF080B10),
-                    ),
-                start = Offset(0f, 0f),
-                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-            )
-        }
+        Brush.linearGradient(
+            colors =
+                listOf(
+                    Color(0xFF161C26),
+                    Color(0xFF080B10),
+                ),
+            start = Offset(0f, 0f),
+            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+        )
     Box(
         modifier =
             Modifier

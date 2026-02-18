@@ -56,6 +56,26 @@ import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.decodeImageBytes
 import com.poziomki.app.util.resolveImageUrl
 
+private fun parseHexColor(hex: String?): Color? {
+    if (hex.isNullOrBlank()) return null
+    val clean = hex.trimStart('#')
+    if (clean.length != 6) return null
+    return runCatching { Color(("FF$clean").toLong(16).toInt()) }.getOrNull()
+}
+
+private fun blendWithBackground(
+    color: Color,
+    amount: Float,
+): Color {
+    val bg = Background
+    return Color(
+        red = bg.red * (1f - amount) + color.red * amount,
+        green = bg.green * (1f - amount) + color.green * amount,
+        blue = bg.blue * (1f - amount) + color.blue * amount,
+        alpha = 1f,
+    )
+}
+
 sealed class ProfileImage {
     data class Bytes(
         val data: ByteArray,
@@ -75,17 +95,34 @@ fun ProfilePreview(
     tags: List<Tag>,
     images: List<ProfileImage>,
     emojiAvatar: String?,
+    gradientStart: String? = null,
+    gradientEnd: String? = null,
     onClose: () -> Unit,
     bottomContent: @Composable (() -> Unit)? = null,
 ) {
     val nunito = NunitoFamily
     val montserrat = MontserratFamily
+    val startColor = parseHexColor(gradientStart)
+    val endColor = parseHexColor(gradientEnd)
+    val hasGradient = startColor != null && endColor != null
+    val darkStart = startColor?.let { blendWithBackground(it, 0.18f) }
+    val darkEnd = endColor?.let { blendWithBackground(it, 0.18f) }
+    val pageBackground =
+        if (hasGradient && darkStart != null && darkEnd != null) {
+            Modifier.background(
+                Brush.verticalGradient(
+                    colors = listOf(darkStart, darkEnd),
+                ),
+            )
+        } else {
+            Modifier.background(Background)
+        }
 
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Background)
+                .then(pageBackground)
                 .verticalScroll(rememberScrollState()),
     ) {
         // Image carousel or avatar placeholder — rounded card with margin

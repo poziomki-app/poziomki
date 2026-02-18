@@ -259,8 +259,6 @@ fun ExploreScreen(
                                         program = profile.program,
                                         profilePicture = profile.profilePicture,
                                         tags = profile.tags,
-                                        gradientStart = profile.gradientStart,
-                                        gradientEnd = profile.gradientEnd,
                                         onClick = { onNavigateToProfile(profile.id) },
                                     )
                                 }

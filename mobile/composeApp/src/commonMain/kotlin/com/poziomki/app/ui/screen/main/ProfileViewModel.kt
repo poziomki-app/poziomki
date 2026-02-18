@@ -52,6 +52,8 @@ class ProfileViewModel(
                                     profilePicture = profileWithTags.profilePicture,
                                     images = profileWithTags.images,
                                     program = profileWithTags.program,
+                                    gradientStart = profileWithTags.gradientStart,
+                                    gradientEnd = profileWithTags.gradientEnd,
                                 ),
                             tags = profileWithTags.tags,
                             isLoading = false,

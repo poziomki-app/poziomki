@@ -303,7 +303,8 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
             let raw = msg.formatted();
             let formatted = String::from_utf8_lossy(&raw);
             let header_end = formatted.find("\r\n\r\n").unwrap_or(500);
-            tracing::info!("OTP email headers: {}", &formatted[..header_end]);
+            let preview = formatted.get(..header_end).unwrap_or(&formatted);
+            tracing::info!("OTP email headers: {preview}");
             msg
         }
         Err(e) => {

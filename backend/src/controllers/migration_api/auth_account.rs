@@ -5,24 +5,9 @@ use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use loco_rs::{app::AppContext, hash, prelude::*};
 
-use super::super::{
-    error_response,
-    state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse},
-    ErrorSpec,
-};
+use super::super::state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse};
+use super::auth_helpers::unauthorized_error;
 use crate::models::_entities::{profiles, sessions, users};
-
-fn unauthorized_error(headers: &HeaderMap, message: &str) -> Response {
-    error_response(
-        axum::http::StatusCode::UNAUTHORIZED,
-        headers,
-        ErrorSpec {
-            error: message.to_string(),
-            code: "UNAUTHORIZED",
-            details: None,
-        },
-    )
-}
 
 async fn delete_user_data(
     db: &DatabaseConnection,

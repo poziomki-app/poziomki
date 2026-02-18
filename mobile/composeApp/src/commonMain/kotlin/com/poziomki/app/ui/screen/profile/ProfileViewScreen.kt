@@ -60,7 +60,9 @@ fun ProfileViewScreen(
                 val images =
                     buildList {
                         p.profilePicture?.let { if (isImageUrl(it)) add(ProfileImage.Url(it)) }
-                        p.images.filter { isImageUrl(it) }.forEach { add(ProfileImage.Url(it)) }
+                        p.images
+                            .filter { isImageUrl(it) && it != p.profilePicture }
+                            .forEach { add(ProfileImage.Url(it)) }
                     }
                 val emoji = p.profilePicture?.takeUnless { isImageUrl(it) }
 
@@ -72,6 +74,8 @@ fun ProfileViewScreen(
                         tags = p.tags,
                         images = images,
                         emojiAvatar = emoji,
+                        gradientStart = p.gradientStart,
+                        gradientEnd = p.gradientEnd,
                         onClose = onBack,
                     )
 
