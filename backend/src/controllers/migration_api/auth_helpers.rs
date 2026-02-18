@@ -2,7 +2,7 @@ use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use lettre::{
     message::{header, Mailbox, MultiPart},
-    transport::smtp::authentication::Credentials,
+    transport::smtp::{authentication::Credentials, client::TlsParameters},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use loco_rs::{hash, prelude::*};
@@ -261,11 +261,21 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
     };
 
     let creds = Credentials::new(user, password);
-    let Ok(transport) = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host) else {
-        tracing::error!("Failed to create SMTP transport for {host}");
-        return;
+    // SMTP_TLS_NAME: hostname for TLS cert validation (when SMTP_HOST is a Docker service name
+    // like "stalwart" but the cert is issued for "mail.poziomki.app").
+    let tls_name = std::env::var("SMTP_TLS_NAME").unwrap_or_else(|_| host.clone());
+    let tls_params = match TlsParameters::new(tls_name.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create TLS parameters for {tls_name}: {e}");
+            return;
+        }
     };
-    let mailer = transport.port(port).credentials(creds).build();
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&host)
+        .port(port)
+        .tls(lettre::transport::smtp::client::Tls::Required(tls_params))
+        .credentials(creds)
+        .build();
 
     if let Err(e) = mailer.send(email).await {
         tracing::error!("Failed to send OTP email to {to}: {e}");
