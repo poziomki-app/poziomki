@@ -66,7 +66,7 @@ fn parse_upload_mime(headers: &HeaderMap, mime_type: &str) -> HandlerResult<()> 
         return Err(Box::new(bad_request(
             headers,
             "INVALID_FILE_TYPE",
-            "Allowed: image/jpeg, image/png, image/webp, image/avif",
+            "Allowed: image/jpeg, image/png, image/webp",
         )));
     }
 
@@ -141,20 +141,37 @@ async fn parse_text_field(
 
 async fn read_file_field(
     headers: &HeaderMap,
-    field: Field<'_>,
+    mut field: Field<'_>,
 ) -> HandlerResult<(String, Vec<u8>)> {
     let mime_type = field
         .content_type()
         .map(ToOwned::to_owned)
         .unwrap_or_default();
-    let bytes = field.bytes().await.map_err(|_| {
+
+    let max_size = max_upload_size_bytes();
+    let mut total_size = 0usize;
+    let mut bytes = Vec::new();
+
+    while let Some(chunk) = field.chunk().await.map_err(|_| {
         Box::new(bad_request(
             headers,
             "VALIDATION_ERROR",
             "Invalid file field",
         ))
-    })?;
-    Ok((mime_type, bytes.to_vec()))
+    })? {
+        let chunk_size = chunk.len();
+        total_size = total_size.saturating_add(chunk_size);
+        if total_size > max_size {
+            return Err(Box::new(bad_request(
+                headers,
+                "FILE_TOO_LARGE",
+                "Max: 10MB",
+            )));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+
+    Ok((mime_type, bytes))
 }
 
 async fn apply_context_field(
@@ -223,7 +240,7 @@ fn build_parsed_upload(headers: &HeaderMap, draft: UploadDraft) -> HandlerResult
         Box::new(bad_request(
             headers,
             "INVALID_FILE_TYPE",
-            "Allowed: image/jpeg, image/png, image/webp, image/avif",
+            "Allowed: image/jpeg, image/png, image/webp",
         ))
     })?;
 

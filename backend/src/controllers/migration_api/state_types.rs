@@ -1,4 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize a field as `Some(value)` when present in JSON (even if null),
+/// and `None` when absent. Used with `Option<Option<T>>` to distinguish
+/// "field absent" (outer None) from "field set to null" (Some(None)).
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub(in crate::controllers::migration_api) struct SignUpBody {
@@ -181,19 +192,19 @@ pub(in crate::controllers::migration_api) struct CreateEventBody {
 pub(in crate::controllers::migration_api) struct UpdateEventBody {
     #[serde(default)]
     pub(in crate::controllers::migration_api) title: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) description: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) cover_image: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) location: Option<Option<String>>,
     #[serde(default)]
     pub(in crate::controllers::migration_api) starts_at: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) ends_at: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) latitude: Option<Option<f64>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::controllers::migration_api) longitude: Option<Option<f64>>,
     #[serde(default)]
     pub(in crate::controllers::migration_api) tags: Option<Vec<String>>,
@@ -261,17 +272,22 @@ pub(in crate::controllers::migration_api) struct TagResponse {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub(in crate::controllers::migration_api) struct EventTagResponse {
+pub(in crate::controllers::migration_api) struct ScopedTagResponse {
     pub(in crate::controllers::migration_api) id: String,
     pub(in crate::controllers::migration_api) name: String,
     pub(in crate::controllers::migration_api) scope: TagScope,
 }
 
+pub(in crate::controllers::migration_api) type EventTagResponse = ScopedTagResponse;
+pub(in crate::controllers::migration_api) type MatchingTagResponse = ScopedTagResponse;
+
 #[derive(Clone, Debug, Serialize)]
-pub(in crate::controllers::migration_api) struct DegreeResponse {
+pub(in crate::controllers::migration_api) struct IdNameResponse {
     pub(in crate::controllers::migration_api) id: String,
     pub(in crate::controllers::migration_api) name: String,
 }
+
+pub(in crate::controllers::migration_api) type DegreeResponse = IdNameResponse;
 
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::controllers::migration_api) struct ProfileResponse {
@@ -370,13 +386,6 @@ pub(in crate::controllers::migration_api) struct AttendeeFullInfo {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub(in crate::controllers::migration_api) struct MatchingTagResponse {
-    pub(in crate::controllers::migration_api) id: String,
-    pub(in crate::controllers::migration_api) name: String,
-    pub(in crate::controllers::migration_api) scope: TagScope,
-}
-
-#[derive(Clone, Debug, Serialize)]
 pub(in crate::controllers::migration_api) struct ProfileRecommendation {
     pub(in crate::controllers::migration_api) id: String,
     #[serde(rename = "userId")]
@@ -406,12 +415,20 @@ pub(in crate::controllers::migration_api) struct UploadResponse {
     pub(in crate::controllers::migration_api) size: usize,
     #[serde(rename = "type")]
     pub(in crate::controllers::migration_api) mime_type: String,
+    #[serde(rename = "thumbnailUrl", skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) thumbnail_url: Option<String>,
+    #[serde(rename = "standardUrl", skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) standard_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) thumbhash: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub(in crate::controllers::migration_api) struct UploadUrlResponse {
+pub(in crate::controllers::migration_api) struct UrlResponse {
     pub(in crate::controllers::migration_api) url: String,
 }
+
+pub(in crate::controllers::migration_api) type UploadUrlResponse = UrlResponse;
 
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::controllers::migration_api) struct SessionListItem {

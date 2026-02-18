@@ -39,10 +39,6 @@ fn session_token_hash(token: &str) -> String {
     format!("{SESSION_TOKEN_HASH_PREFIX}{digest_hex}")
 }
 
-fn is_hashed_session_token(token: &str) -> bool {
-    token.starts_with(SESSION_TOKEN_HASH_PREFIX)
-}
-
 pub(in crate::controllers::migration_api) fn hash_session_token(token: &str) -> String {
     session_token_hash(token)
 }
@@ -52,32 +48,11 @@ pub(in crate::controllers::migration_api) async fn resolve_session_by_token(
     token: &str,
 ) -> std::result::Result<Option<sessions::Model>, loco_rs::Error> {
     let hashed = session_token_hash(token);
-    let hashed_session = sessions::Entity::find()
+    sessions::Entity::find()
         .filter(sessions::Column::Token.eq(&hashed))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-    if hashed_session.is_some() {
-        return Ok(hashed_session);
-    }
-
-    let legacy = sessions::Entity::find()
-        .filter(sessions::Column::Token.eq(token))
-        .one(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    if let Some(model) = legacy {
-        let mut active: sessions::ActiveModel = model.clone().into();
-        active.token = ActiveValue::Set(hashed);
-        let migrated = active
-            .update(db)
-            .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?;
-        return Ok(Some(migrated));
-    }
-
-    Ok(None)
+        .map_err(|e| loco_rs::Error::Any(e.into()))
 }
 
 pub(in crate::controllers::migration_api) async fn require_auth_db(
@@ -150,29 +125,6 @@ pub(in crate::controllers::migration_api) async fn create_session_db(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
     Ok(CreatedSession { model, token })
-}
-
-pub(in crate::controllers::migration_api) async fn migrate_legacy_session_tokens(
-    db: &DatabaseConnection,
-) -> std::result::Result<(), loco_rs::Error> {
-    let rows = sessions::Entity::find()
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    for row in rows {
-        if is_hashed_session_token(&row.token) {
-            continue;
-        }
-        let mut active: sessions::ActiveModel = row.clone().into();
-        active.token = ActiveValue::Set(session_token_hash(&row.token));
-        let _ = active
-            .update(db)
-            .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?;
-    }
-
-    Ok(())
 }
 
 pub(in crate::controllers::migration_api) fn session_model_to_view(

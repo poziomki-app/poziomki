@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
@@ -17,6 +17,8 @@ use super::{
     ErrorSpec,
 };
 use crate::models::_entities::{degrees, tags};
+
+const PUBLIC_CACHE_MEDIUM: HeaderValue = HeaderValue::from_static("public, max-age=1800");
 
 const fn scope_to_str(scope: TagScope) -> &'static str {
     match scope {
@@ -77,7 +79,11 @@ pub(super) async fn tags_search(
         .map(tag_model_to_response)
         .collect::<Vec<_>>();
 
-    Ok(Json(DataResponse { data }).into_response())
+    let mut response = Json(DataResponse { data }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PUBLIC_CACHE_MEDIUM);
+    Ok(response)
 }
 
 async fn validate_and_insert_tag(
@@ -217,5 +223,9 @@ pub(super) async fn degrees_search(
         })
         .collect::<Vec<_>>();
 
-    Ok(Json(DataResponse { data }).into_response())
+    let mut response = Json(DataResponse { data }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PUBLIC_CACHE_MEDIUM);
+    Ok(response)
 }

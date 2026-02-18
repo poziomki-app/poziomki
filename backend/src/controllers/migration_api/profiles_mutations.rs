@@ -12,8 +12,9 @@ use uuid::Uuid;
 use crate::controllers::migration_api::{
     error_response, extract_filename,
     state::{
-        require_auth_db, validate_profile_age, validate_profile_name, CreateProfileBody,
-        DataResponse, SuccessResponse, UpdateProfileBody,
+        require_auth_db, validate_profile_age, validate_profile_bio, validate_profile_name,
+        validate_profile_program, CreateProfileBody, DataResponse, SuccessResponse,
+        UpdateProfileBody,
     },
     ErrorSpec,
 };
@@ -39,6 +40,12 @@ fn validate_profile_fields(
         return Err(Box::new(validation_error(headers, msg)));
     }
     if let Err(msg) = validate_profile_age(payload.age) {
+        return Err(Box::new(validation_error(headers, msg)));
+    }
+    if let Err(msg) = validate_profile_bio(payload.bio.as_ref()) {
+        return Err(Box::new(validation_error(headers, msg)));
+    }
+    if let Err(msg) = validate_profile_program(payload.program.as_ref()) {
         return Err(Box::new(validation_error(headers, msg)));
     }
     Ok(())
@@ -177,6 +184,12 @@ fn validate_update_payload(
         if let Err(msg) = validate_profile_age(age) {
             return Err(Box::new(validation_error(headers, msg)));
         }
+    }
+    if let Err(msg) = validate_profile_bio(payload.bio.as_ref()) {
+        return Err(Box::new(validation_error(headers, msg)));
+    }
+    if let Err(msg) = validate_profile_program(payload.program.as_ref()) {
+        return Err(Box::new(validation_error(headers, msg)));
     }
     Ok(())
 }

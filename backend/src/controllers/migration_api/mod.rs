@@ -1,6 +1,11 @@
-use axum::{http::HeaderMap, response::IntoResponse, Json};
+use axum::{
+    http::{header, HeaderMap, HeaderValue},
+    response::IntoResponse,
+    Json,
+};
 use loco_rs::prelude::*;
 use serde::Serialize;
+use tower_http::set_header::SetResponseHeaderLayer;
 use uuid::Uuid;
 
 mod auth;
@@ -154,6 +159,10 @@ async fn not_implemented(headers: HeaderMap) -> Result<Response> {
     ))
 }
 
+fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
+    SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
+}
+
 fn auth_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/auth")
@@ -162,8 +171,6 @@ fn auth_routes() -> Routes {
         .add("/sign-in/email", post(auth::sign_in))
         .add("/verify-otp", post(auth::verify_otp))
         .add("/resend-otp", post(auth::resend_otp))
-        .add("/email-otp/verify-email", post(auth::verify_otp))
-        .add("/email-otp/send-verification-otp", post(auth::resend_otp))
         .add("/sign-out", post(auth::sign_out))
         .add("/sessions", get(auth::sessions))
         .add("/account", delete(auth::delete_account))
@@ -179,12 +186,14 @@ fn profiles_routes() -> Routes {
         .add("/{id}", patch(profiles::profile_update))
         .add("/{id}", delete(profiles::profile_delete))
         .add("/{id}/full", get(profiles::profile_get_full))
+        .layer(cache_layer("private, max-age=60"))
 }
 
 fn degrees_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/degrees")
         .add("", get(catalog::degrees_search))
+        .layer(cache_layer("public, max-age=1800"))
 }
 
 fn tags_routes() -> Routes {
@@ -192,6 +201,7 @@ fn tags_routes() -> Routes {
         .prefix("/api/v1/tags")
         .add("", get(catalog::tags_search))
         .add("", post(catalog::tags_create))
+        .layer(cache_layer("public, max-age=1800"))
 }
 
 fn events_routes() -> Routes {
@@ -206,6 +216,7 @@ fn events_routes() -> Routes {
         .add("/{id}/attendees", get(events::event_attendees))
         .add("/{id}/attend", post(events::event_attend))
         .add("/{id}/attend", delete(events::event_leave))
+        .layer(cache_layer("private, max-age=60"))
 }
 
 fn matching_routes() -> Routes {
@@ -213,6 +224,7 @@ fn matching_routes() -> Routes {
         .prefix("/api/v1/matching")
         .add("/profiles", get(matching::profiles_recommendations))
         .add("/events", get(matching::events_recommendations))
+        .layer(cache_layer("private, max-age=300"))
 }
 
 fn uploads_routes() -> Routes {
@@ -235,6 +247,7 @@ fn search_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1")
         .add("/search", get(search_api::search))
+        .layer(cache_layer("private, max-age=60"))
 }
 
 fn matrix_routes() -> Routes {
@@ -243,20 +256,13 @@ fn matrix_routes() -> Routes {
         .add("/config", get(matrix_config))
         .add("/session", post(matrix::create_session))
         .add("/events/{eventId}/room", get(not_implemented))
+        .layer(cache_layer("public, max-age=3600"))
 }
 
 fn push_gateway_routes() -> Routes {
     Routes::new()
         .prefix("/_matrix/push/v1")
         .add("/notify", post(push_gateway::notify))
-}
-
-pub(crate) fn reset_state() {
-    state::reset_state();
-}
-
-pub(crate) async fn migrate_legacy_session_tokens(ctx: &AppContext) -> Result<()> {
-    state::migrate_legacy_session_tokens(&ctx.db).await
 }
 
 pub fn routes() -> Vec<Routes> {

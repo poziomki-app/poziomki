@@ -3,6 +3,7 @@ pub use super::degrees::Entity as Degrees;
 pub use super::event_attendees::Entity as EventAttendees;
 pub use super::event_tags::Entity as EventTags;
 pub use super::events::Entity as Events;
+pub use super::otp_codes::Entity as OtpCodes;
 pub use super::profile_tags::Entity as ProfileTags;
 pub use super::profiles::Entity as Profiles;
 pub use super::sessions::Entity as Sessions;

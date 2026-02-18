@@ -17,6 +17,8 @@ pub struct Model {
     pub context_id: Option<String>,
     pub mime_type: String,
     pub deleted: bool,
+    pub thumbhash: Option<Vec<u8>>,
+    pub has_variants: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

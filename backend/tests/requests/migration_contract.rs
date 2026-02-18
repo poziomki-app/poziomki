@@ -16,6 +16,20 @@ fn sign_up_json(email: &str, password: &str) -> serde_json::Value {
     })
 }
 
+/// Query the OTP code from the database for a given email.
+async fn get_otp_code(db: &sea_orm::DatabaseConnection, email: &str) -> String {
+    use poziomki_backend::models::_entities::otp_codes;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    otp_codes::Entity::find()
+        .filter(otp_codes::Column::Email.eq(email))
+        .one(db)
+        .await
+        .expect("DB query failed")
+        .expect("No OTP found for email")
+        .code
+}
+
 #[tokio::test]
 #[serial]
 async fn health_endpoint_matches_contract() {
@@ -46,7 +60,10 @@ async fn root_endpoint_matches_contract() {
 #[serial]
 async fn matrix_session_requires_auth() {
     request::<App, _, _>(|request, _ctx| async move {
-        let response = request.post("/api/v1/matrix/session").await;
+        let response = request
+            .post("/api/v1/matrix/session")
+            .json(&serde_json::json!({}))
+            .await;
         assert_eq!(response.status_code(), 401);
 
         let payload: serde_json::Value = response.json();
@@ -273,7 +290,7 @@ async fn matching_and_uploads_endpoints_available() {
             .post("/api/v1/auth/sign-up/email")
             .json(&serde_json::json!({
                 "email": "match-a@example.com",
-                "name": "A",
+                "name": "Alice",
                 "password": "secret123",
             }))
             .await;
@@ -288,7 +305,7 @@ async fn matching_and_uploads_endpoints_available() {
             .post("/api/v1/auth/sign-up/email")
             .json(&serde_json::json!({
                 "email": "match-b@example.com",
-                "name": "B",
+                "name": "Bob",
                 "password": "secret123",
             }))
             .await;
@@ -305,13 +322,13 @@ async fn matching_and_uploads_endpoints_available() {
         let profile_a = request
             .post("/api/v1/profiles")
             .add_header(auth_key_a.clone(), auth_value_a.clone())
-            .json(&serde_json::json!({ "name": "A", "age": 21 }))
+            .json(&serde_json::json!({ "name": "Alice", "age": 21 }))
             .await;
         assert_eq!(profile_a.status_code(), 201);
         let profile_b = request
             .post("/api/v1/profiles")
             .add_header(auth_key_b.clone(), auth_value_b.clone())
-            .json(&serde_json::json!({ "name": "B", "age": 22 }))
+            .json(&serde_json::json!({ "name": "Bob", "age": 22 }))
             .await;
         assert_eq!(profile_b.status_code(), 201);
 
@@ -331,7 +348,10 @@ async fn matching_and_uploads_endpoints_available() {
         let uploads_auth_check_payload: serde_json::Value = uploads_auth_check_response.json();
         assert_eq!(uploads_auth_check_payload["code"], "MISSING_URI");
 
-        let missing_upload_response = request.get("/api/v1/uploads/missing.png").await;
+        let missing_upload_response = request
+            .get("/api/v1/uploads/missing.png")
+            .add_header(auth_key_a.clone(), auth_value_a.clone())
+            .await;
         assert_eq!(missing_upload_response.status_code(), 404);
     })
     .await;
@@ -340,12 +360,23 @@ async fn matching_and_uploads_endpoints_available() {
 #[tokio::test]
 #[serial]
 async fn sign_in_verifies_hashed_password() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request::<App, _, _>(|request, ctx| async move {
         let sign_up = request
             .post("/api/v1/auth/sign-up/email")
             .json(&sign_up_json("hash-test@example.com", "correct-password"))
             .await;
         assert_eq!(sign_up.status_code(), 200);
+
+        // Verify email via OTP before sign-in (email verification is required)
+        let otp_code = get_otp_code(&ctx.db, "hash-test@example.com").await;
+        let verify_response = request
+            .post("/api/v1/auth/verify-otp")
+            .json(&serde_json::json!({
+                "email": "hash-test@example.com",
+                "otp": otp_code,
+            }))
+            .await;
+        assert_eq!(verify_response.status_code(), 200);
 
         // sign in with the correct password succeeds
         let sign_in_ok = request

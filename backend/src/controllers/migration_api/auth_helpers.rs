@@ -6,13 +6,12 @@ use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use loco_rs::{hash, prelude::*};
-use subtle::ConstantTimeEq;
 
 use super::super::{
     error_response,
     state::{
-        create_session_db, lock_otp_state, normalize_email, session_model_to_view,
-        user_model_to_view, validate_signup_payload, DataResponse, SignUpBody,
+        create_session_db, normalize_email, session_model_to_view, upsert_otp, user_model_to_view,
+        validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
     },
     ErrorSpec,
 };
@@ -21,10 +20,7 @@ use crate::models::{
     users::{Model as UserModel, RegisterParams},
 };
 
-pub(super) const OTP_TTL_SECS: i64 = 60 * 10;
-pub(super) const OTP_MAX_ATTEMPTS: u8 = 5;
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
-const OTP_LENGTH: usize = 6;
 
 pub(super) fn unauthorized_error(headers: &HeaderMap, message: &str) -> Response {
     error_response(
@@ -38,7 +34,7 @@ pub(super) fn unauthorized_error(headers: &HeaderMap, message: &str) -> Response
     )
 }
 
-fn env_truthy(key: &str) -> bool {
+pub(super) fn env_truthy(key: &str) -> bool {
     std::env::var(key).ok().is_some_and(|value| {
         matches!(
             value.to_ascii_lowercase().as_str(),
@@ -47,13 +43,9 @@ fn env_truthy(key: &str) -> bool {
     })
 }
 
-fn otp_bypass_enabled() -> bool {
-    env_truthy("OTP_BYPASS_ENABLED")
-}
-
 pub(super) fn generate_otp_code() -> String {
     let value = (uuid::Uuid::new_v4().as_u128() % 1_000_000) as u32;
-    format!("{value:0OTP_LENGTH$}")
+    format!("{value:06}")
 }
 
 pub(super) fn invalid_otp_response(headers: &HeaderMap) -> Response {
@@ -66,34 +58,6 @@ pub(super) fn invalid_otp_response(headers: &HeaderMap) -> Response {
             details: None,
         },
     )
-}
-
-fn otp_bypass_matches(otp: &str) -> bool {
-    otp_bypass_enabled()
-        && std::env::var("OTP_BYPASS_CODE").ok().is_some_and(|code| {
-            code.len() == otp.len() && bool::from(otp.as_bytes().ct_eq(code.as_bytes()))
-        })
-}
-
-pub(super) fn verify_otp_from_state(email: &str, otp: &str, now: chrono::DateTime<Utc>) -> bool {
-    let mut state = lock_otp_state();
-    let mut result = false;
-
-    if let Some(saved) = state.otp_by_email.get_mut(email) {
-        if saved.expires_at <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
-            state.otp_by_email.remove(email);
-        } else if saved.code.len() != otp.len()
-            || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes()))
-        {
-            saved.attempts = saved.attempts.saturating_add(1);
-        } else {
-            state.otp_by_email.remove(email);
-            result = true;
-        }
-    }
-
-    drop(state);
-    result
 }
 
 pub(super) async fn create_user_or_error(
@@ -172,23 +136,10 @@ pub(super) async fn sign_in_success_or_unauthorized(
 
     if user.email_verified_at.is_none() {
         // Send a fresh OTP so the user can verify
-        let now = Utc::now();
         let code = generate_otp_code();
         let code_for_email = code.clone();
         let email_for_send = email.to_owned();
-        {
-            let mut state = lock_otp_state();
-            state.cleanup();
-            state.otp_by_email.insert(
-                email.to_owned(),
-                super::super::state::OtpEntry {
-                    code,
-                    expires_at: now + chrono::Duration::seconds(OTP_TTL_SECS),
-                    attempts: 0,
-                    last_sent_at: now,
-                },
-            );
-        }
+        upsert_otp(db, email, &code).await?;
         tokio::spawn(async move {
             send_otp_email(&email_for_send, &code_for_email).await;
         });
@@ -300,11 +251,7 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
         .multipart(MultiPart::alternative_plain_html(plain_body, html_body))
     {
         Ok(msg) => {
-            let raw = msg.formatted();
-            let formatted = String::from_utf8_lossy(&raw);
-            let header_end = formatted.find("\r\n\r\n").unwrap_or(500);
-            let preview = formatted.get(..header_end).unwrap_or(&formatted);
-            tracing::info!("OTP email headers: {preview}");
+            tracing::info!("OTP email prepared for delivery to {to}");
             msg
         }
         Err(e) => {
@@ -314,25 +261,11 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
     };
 
     let creds = Credentials::new(user, password);
-    // Accept self-signed certs for internal Docker network
-    let Ok(tls) = lettre::transport::smtp::client::TlsParameters::builder(host.clone())
-        .dangerous_accept_invalid_certs(true)
-        .dangerous_accept_invalid_hostnames(true)
-        .build()
-    else {
-        tracing::error!("Failed to build TLS parameters");
-        return;
-    };
-
     let Ok(transport) = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host) else {
         tracing::error!("Failed to create SMTP transport for {host}");
         return;
     };
-    let mailer = transport
-        .port(port)
-        .credentials(creds)
-        .tls(lettre::transport::smtp::client::Tls::Required(tls))
-        .build();
+    let mailer = transport.port(port).credentials(creds).build();
 
     if let Err(e) = mailer.send(email).await {
         tracing::error!("Failed to send OTP email to {to}: {e}");
@@ -351,7 +284,7 @@ pub(super) async fn verify_otp_inner(
         return Ok(invalid_otp_response(headers));
     };
 
-    let otp_ok = otp_bypass_matches(otp) || verify_otp_from_state(email, otp, Utc::now());
+    let otp_ok = verify_otp_db(db, email, otp).await;
     if !otp_ok {
         return Ok(invalid_otp_response(headers));
     }

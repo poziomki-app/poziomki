@@ -114,8 +114,8 @@ services:
       MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
       MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
       MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
-      OTP_BYPASS_ENABLED: ${OTP_BYPASS_ENABLED:-}
-      OTP_BYPASS_CODE: ${OTP_BYPASS_CODE:-}
+      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
+      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
       SMTP_ENABLE: ${SMTP_ENABLE:-false}
       SMTP_HOST: ${SMTP_HOST:-stalwart}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -162,7 +162,7 @@ services:
       - "127.0.0.1:3900:3900"
       - "127.0.0.1:3903:3903"
     environment:
-      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "false"
     volumes:
       - garage_data:/var/lib/garage/data
       - garage_meta:/var/lib/garage/meta
@@ -175,6 +175,38 @@ services:
       resources:
         limits:
           memory: 512m
+
+  dozzle:
+    image: amir20/dozzle:v8.14.8
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9100:9100"
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
 volumes:
   postgres_data:

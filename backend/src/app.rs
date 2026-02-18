@@ -38,9 +38,24 @@ impl Hooks for App {
         environment: &Environment,
         config: Config,
     ) -> Result<BootResult> {
-        controllers::migration_api::reset_state();
+        if environment == &Environment::Production {
+            for var in ["DATABASE_URL", "JWT_SECRET"] {
+                if std::env::var(var).unwrap_or_default().is_empty() {
+                    return Err(loco_rs::Error::Message(format!(
+                        "{var} must be set in production"
+                    )));
+                }
+            }
+            if std::env::var("ALLOWED_EMAIL_DOMAIN")
+                .unwrap_or_default()
+                .is_empty()
+            {
+                tracing::warn!(
+                    "ALLOWED_EMAIL_DOMAIN not set — defaulting to example.com (registration will be restricted)"
+                );
+            }
+        }
         let boot = create_app::<Self, Migrator>(mode, environment, config).await?;
-        controllers::migration_api::migrate_legacy_session_tokens(&boot.app_context).await?;
         Ok(boot)
     }
 
@@ -60,7 +75,6 @@ impl Hooks for App {
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
         app_support::truncate_all_tables(&ctx.db).await?;
-        controllers::migration_api::reset_state();
         Ok(())
     }
     async fn seed(ctx: &AppContext, base: &Path) -> Result<()> {

@@ -9,18 +9,18 @@ mod auth_session;
 
 use self::auth_helpers::{
     create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
-    sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS, OTP_TTL_SECS,
+    sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS,
 };
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use loco_rs::{app::AppContext, prelude::*};
 
 use super::{
     error_response,
     state::{
         create_session_db, extract_bearer_token, hash_session_token, is_valid_email,
-        lock_otp_state, normalize_email, require_auth_db, session_model_to_view,
+        normalize_email, otp_in_cooldown, require_auth_db, session_model_to_view, upsert_otp,
         user_model_to_view, DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody,
         SuccessResponse, VerifyOtpBody,
     },
@@ -50,22 +50,12 @@ pub(super) async fn sign_up(
 
     // Generate and send OTP for email verification
     {
-        let now = Utc::now();
         let code = generate_otp_code();
         let code_for_email = code.clone();
         let email_for_send = normalized_email.clone();
-        let mut otp_state = lock_otp_state();
-        otp_state.cleanup();
-        otp_state.otp_by_email.insert(
-            normalized_email.clone(),
-            super::state::OtpEntry {
-                code,
-                expires_at: now + Duration::seconds(OTP_TTL_SECS),
-                attempts: 0,
-                last_sent_at: now,
-            },
-        );
-        drop(otp_state);
+        upsert_otp(&ctx.db, &normalized_email, &code)
+            .await
+            .map_err(|e| loco_rs::Error::Any(e.into()))?;
         tokio::spawn(async move {
             send_otp_email(&email_for_send, &code_for_email).await;
         });
@@ -134,26 +124,14 @@ pub(super) async fn resend_otp(
     let exists = find_user_by_email(&ctx.db, &email).await?.is_some();
 
     if exists {
-        let now = Utc::now();
-        let mut state = lock_otp_state();
-        state.cleanup();
-        let in_cooldown = state.otp_by_email.get(&email).is_some_and(|entry| {
-            entry.last_sent_at + Duration::seconds(OTP_RESEND_COOLDOWN_SECS) > now
-        });
+        let in_cooldown = otp_in_cooldown(&ctx.db, &email, OTP_RESEND_COOLDOWN_SECS).await;
         if !in_cooldown {
             let code = generate_otp_code();
             let code_for_email = code.clone();
             let email_for_send = email.clone();
-            state.otp_by_email.insert(
-                email,
-                super::state::OtpEntry {
-                    code,
-                    expires_at: now + Duration::seconds(OTP_TTL_SECS),
-                    attempts: 0,
-                    last_sent_at: now,
-                },
-            );
-            drop(state);
+            upsert_otp(&ctx.db, &email, &code)
+                .await
+                .map_err(|e| loco_rs::Error::Any(e.into()))?;
             tokio::spawn(async move {
                 send_otp_email(&email_for_send, &code_for_email).await;
             });
@@ -170,11 +148,7 @@ pub(super) async fn sign_out(
     if let Some(token) = extract_bearer_token(&headers) {
         let hashed = hash_session_token(&token);
         let _ = sessions::Entity::delete_many()
-            .filter(
-                sea_orm::Condition::any()
-                    .add(sessions::Column::Token.eq(&hashed))
-                    .add(sessions::Column::Token.eq(&token)),
-            )
+            .filter(sessions::Column::Token.eq(&hashed))
             .exec(&ctx.db)
             .await;
     }

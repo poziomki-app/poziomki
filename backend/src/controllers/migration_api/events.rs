@@ -11,7 +11,7 @@ mod events_view;
 
 use axum::{
     extract::{Path, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
@@ -28,7 +28,9 @@ use events_view::attendee_info;
 pub(super) use events_mutations::{
     event_attend, event_create, event_delete, event_leave, event_update,
 };
-pub(super) use events_view::build_event_response;
+pub(super) use events_view::{build_event_response, build_event_responses};
+
+const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
 pub(super) async fn events_list(
     State(ctx): State<AppContext>,
@@ -51,12 +53,13 @@ pub(super) async fn events_list(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    let mut data = Vec::new();
-    for event in &all_events {
-        data.push(build_event_response(&ctx.db, event, &profile.id).await?);
-    }
+    let data = events_view::build_event_responses(&ctx.db, &all_events, &profile.id).await?;
 
-    Ok(Json(DataResponse { data }).into_response())
+    let mut response = Json(DataResponse { data }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+    Ok(response)
 }
 
 pub(super) async fn events_mine(
@@ -75,12 +78,13 @@ pub(super) async fn events_mine(
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    let mut data = Vec::new();
-    for event in &my_events {
-        data.push(build_event_response(&ctx.db, event, &profile.id).await?);
-    }
+    let data = events_view::build_event_responses(&ctx.db, &my_events, &profile.id).await?;
 
-    Ok(Json(DataResponse { data }).into_response())
+    let mut response = Json(DataResponse { data }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+    Ok(response)
 }
 
 pub(super) async fn event_get(
@@ -105,7 +109,11 @@ pub(super) async fn event_get(
     };
 
     let data = build_event_response(&ctx.db, &event, &profile.id).await?;
-    Ok(Json(DataResponse { data }).into_response())
+    let mut response = Json(DataResponse { data }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+    Ok(response)
 }
 
 pub(super) async fn event_attendees(

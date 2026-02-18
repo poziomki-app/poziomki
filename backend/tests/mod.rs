@@ -4,7 +4,4 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::unwrap_used)]
 
-mod models;
 mod requests;
-mod tasks;
-mod workers;

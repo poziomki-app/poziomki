@@ -2,7 +2,7 @@ FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
@@ -12,7 +12,7 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl libwebp7 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser \
     && chown appuser:appuser /app

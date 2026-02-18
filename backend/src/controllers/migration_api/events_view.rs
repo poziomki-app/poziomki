@@ -1,10 +1,13 @@
+use std::collections::{HashMap, HashSet};
+
 use axum::response::IntoResponse;
 use loco_rs::prelude::*;
 use sea_orm::QueryFilter;
 use uuid::Uuid;
 
 use crate::controllers::migration_api::state::{
-    AttendeeFullInfo, AttendeeStatus, DataResponse, EventResponse, EventTagResponse, ProfilePreview,
+    AttendeeFullInfo, AttendeeStatus, DataResponse, EventResponse, EventTagResponse,
+    ProfilePreview, TagScope,
 };
 use crate::models::_entities::{event_attendees, event_tags, events, profiles, tags};
 
@@ -18,98 +21,77 @@ fn status_from_str(s: &str) -> AttendeeStatus {
     }
 }
 
-async fn creator_preview(
-    db: &DatabaseConnection,
-    creator_id: Uuid,
-) -> std::result::Result<ProfilePreview, loco_rs::Error> {
-    let profile = profiles::Entity::find_by_id(creator_id)
-        .one(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    Ok(profile.map_or_else(
-        || ProfilePreview {
-            id: creator_id.to_string(),
-            name: "Unknown".to_string(),
-            profile_picture: None,
-        },
-        |p| ProfilePreview {
-            id: p.id.to_string(),
-            name: p.name.clone(),
-            profile_picture: p.profile_picture,
-        },
-    ))
-}
-
-async fn load_event_tags(
-    db: &DatabaseConnection,
-    event_id: Uuid,
-) -> std::result::Result<Vec<EventTagResponse>, loco_rs::Error> {
-    let links = event_tags::Entity::find()
-        .filter(event_tags::Column::EventId.eq(event_id))
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    let tag_ids: Vec<Uuid> = links.iter().map(|l| l.tag_id).collect();
-    if tag_ids.is_empty() {
-        return Ok(vec![]);
+fn scope_from_str(s: &str) -> TagScope {
+    match s {
+        "activity" => TagScope::Activity,
+        "event" => TagScope::Event,
+        _ => TagScope::Interest,
     }
-
-    let tag_models = tags::Entity::find()
-        .filter(tags::Column::Id.is_in(tag_ids))
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
-
-    Ok(tag_models
-        .iter()
-        .map(|t| EventTagResponse {
-            id: t.id.to_string(),
-            name: t.name.clone(),
-            scope: match t.scope.as_str() {
-                "activity" => crate::controllers::migration_api::state::TagScope::Activity,
-                "event" => crate::controllers::migration_api::state::TagScope::Event,
-                _ => crate::controllers::migration_api::state::TagScope::Interest,
-            },
-        })
-        .collect())
 }
 
+fn unknown_preview(id: Uuid) -> ProfilePreview {
+    ProfilePreview {
+        id: id.to_string(),
+        name: "Unknown".to_string(),
+        profile_picture: None,
+    }
+}
+
+#[derive(Clone)]
 struct AttendeeRow {
     profile: profiles::Model,
     status: AttendeeStatus,
+}
+
+struct EventBatchContext {
+    creators: HashMap<Uuid, ProfilePreview>,
+    attendees: HashMap<Uuid, Vec<AttendeeRow>>,
+    tags: HashMap<Uuid, Vec<EventTagResponse>>,
+}
+
+async fn load_profiles_by_ids(
+    db: &DatabaseConnection,
+    ids: &[Uuid],
+) -> std::result::Result<HashMap<Uuid, profiles::Model>, loco_rs::Error> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let models = profiles::Entity::find()
+        .filter(profiles::Column::Id.is_in(ids.to_vec()))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    Ok(models.into_iter().map(|m| (m.id, m)).collect())
 }
 
 async fn load_attendee_rows(
     db: &DatabaseConnection,
     event_id: Uuid,
 ) -> std::result::Result<Vec<AttendeeRow>, loco_rs::Error> {
-    let attendee_links = event_attendees::Entity::find()
+    let links = event_attendees::Entity::find()
         .filter(event_attendees::Column::EventId.eq(event_id))
         .all(db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
 
-    let profile_ids: Vec<Uuid> = attendee_links.iter().map(|a| a.profile_id).collect();
+    let profile_ids: HashSet<Uuid> = links.iter().map(|a| a.profile_id).collect();
     if profile_ids.is_empty() {
         return Ok(vec![]);
     }
 
-    let profile_models = profiles::Entity::find()
-        .filter(profiles::Column::Id.is_in(profile_ids))
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+    let profiles_map =
+        load_profiles_by_ids(db, &profile_ids.into_iter().collect::<Vec<_>>()).await?;
 
-    let mut rows: Vec<AttendeeRow> = attendee_links
+    let mut rows: Vec<AttendeeRow> = links
         .iter()
         .filter_map(|link| {
-            profile_models
-                .iter()
-                .find(|p| p.id == link.profile_id)
+            profiles_map
+                .get(&link.profile_id)
+                .cloned()
                 .map(|profile| AttendeeRow {
-                    profile: profile.clone(),
+                    profile,
                     status: status_from_str(&link.status),
                 })
         })
@@ -119,18 +101,117 @@ async fn load_attendee_rows(
     Ok(rows)
 }
 
-pub(in crate::controllers::migration_api) async fn build_event_response(
+async fn load_event_batch_context(
     db: &DatabaseConnection,
+    event_models: &[events::Model],
+) -> std::result::Result<EventBatchContext, loco_rs::Error> {
+    if event_models.is_empty() {
+        return Ok(EventBatchContext {
+            creators: HashMap::new(),
+            attendees: HashMap::new(),
+            tags: HashMap::new(),
+        });
+    }
+
+    let event_ids: Vec<Uuid> = event_models.iter().map(|e| e.id).collect();
+
+    let creator_ids: HashSet<Uuid> = event_models.iter().map(|e| e.creator_id).collect();
+    let creator_models =
+        load_profiles_by_ids(db, &creator_ids.into_iter().collect::<Vec<_>>()).await?;
+    let creators: HashMap<Uuid, ProfilePreview> = creator_models
+        .into_values()
+        .map(|profile| {
+            (
+                profile.id,
+                ProfilePreview {
+                    id: profile.id.to_string(),
+                    name: profile.name,
+                    profile_picture: profile.profile_picture,
+                },
+            )
+        })
+        .collect();
+
+    let attendee_links = event_attendees::Entity::find()
+        .filter(event_attendees::Column::EventId.is_in(event_ids.clone()))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let attendee_profile_ids: HashSet<Uuid> = attendee_links.iter().map(|a| a.profile_id).collect();
+    let attendee_profiles =
+        load_profiles_by_ids(db, &attendee_profile_ids.into_iter().collect::<Vec<_>>()).await?;
+
+    let mut attendees: HashMap<Uuid, Vec<AttendeeRow>> = HashMap::new();
+    for link in &attendee_links {
+        if let Some(profile) = attendee_profiles.get(&link.profile_id) {
+            attendees
+                .entry(link.event_id)
+                .or_default()
+                .push(AttendeeRow {
+                    profile: profile.clone(),
+                    status: status_from_str(&link.status),
+                });
+        }
+    }
+    for rows in attendees.values_mut() {
+        rows.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
+    }
+
+    let tag_links = event_tags::Entity::find()
+        .filter(event_tags::Column::EventId.is_in(event_ids))
+        .all(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let tag_ids: HashSet<Uuid> = tag_links.iter().map(|l| l.tag_id).collect();
+    let tag_models = if tag_ids.is_empty() {
+        HashMap::new()
+    } else {
+        tags::Entity::find()
+            .filter(tags::Column::Id.is_in(tag_ids))
+            .all(db)
+            .await
+            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .into_iter()
+            .map(|tag| (tag.id, tag))
+            .collect()
+    };
+
+    let mut tags_by_event: HashMap<Uuid, Vec<EventTagResponse>> = HashMap::new();
+    for link in &tag_links {
+        if let Some(tag) = tag_models.get(&link.tag_id) {
+            tags_by_event
+                .entry(link.event_id)
+                .or_default()
+                .push(EventTagResponse {
+                    id: tag.id.to_string(),
+                    name: tag.name.clone(),
+                    scope: scope_from_str(&tag.scope),
+                });
+        }
+    }
+
+    Ok(EventBatchContext {
+        creators,
+        attendees,
+        tags: tags_by_event,
+    })
+}
+
+fn build_from_context(
     event: &events::Model,
     profile_id: &Uuid,
-) -> std::result::Result<EventResponse, loco_rs::Error> {
-    let attendees = load_attendee_rows(db, event.id).await?;
-    let attendees_count = attendees
+    ctx: &EventBatchContext,
+) -> EventResponse {
+    let attendee_rows = ctx.attendees.get(&event.id).cloned().unwrap_or_default();
+
+    let attendees_count = attendee_rows
         .iter()
         .filter(|a| a.status == AttendeeStatus::Going)
         .count();
 
-    let attendees_preview = attendees
+    let attendees_preview = attendee_rows
         .iter()
         .filter(|a| a.status == AttendeeStatus::Going)
         .take(PREVIEW_LIMIT)
@@ -141,14 +222,19 @@ pub(in crate::controllers::migration_api) async fn build_event_response(
         })
         .collect::<Vec<_>>();
 
-    let is_attending = attendees
+    let is_attending = attendee_rows
         .iter()
         .any(|a| a.profile.id == *profile_id && a.status == AttendeeStatus::Going);
 
-    let creator = creator_preview(db, event.creator_id).await?;
-    let event_tags = load_event_tags(db, event.id).await?;
+    let creator = ctx
+        .creators
+        .get(&event.creator_id)
+        .cloned()
+        .unwrap_or_else(|| unknown_preview(event.creator_id));
 
-    Ok(EventResponse {
+    let event_tags = ctx.tags.get(&event.id).cloned().unwrap_or_default();
+
+    EventResponse {
         id: event.id.to_string(),
         title: event.title.clone(),
         description: event.description.clone(),
@@ -167,7 +253,31 @@ pub(in crate::controllers::migration_api) async fn build_event_response(
         is_attending,
         conversation_id: event.conversation_id.clone(),
         score: None,
-    })
+    }
+}
+
+pub(in crate::controllers::migration_api) async fn build_event_responses(
+    db: &DatabaseConnection,
+    event_models: &[events::Model],
+    profile_id: &Uuid,
+) -> std::result::Result<Vec<EventResponse>, loco_rs::Error> {
+    let batch_ctx = load_event_batch_context(db, event_models).await?;
+    Ok(event_models
+        .iter()
+        .map(|event| build_from_context(event, profile_id, &batch_ctx))
+        .collect())
+}
+
+pub(in crate::controllers::migration_api) async fn build_event_response(
+    db: &DatabaseConnection,
+    event: &events::Model,
+    profile_id: &Uuid,
+) -> std::result::Result<EventResponse, loco_rs::Error> {
+    let responses = build_event_responses(db, std::slice::from_ref(event), profile_id).await?;
+    responses
+        .into_iter()
+        .next()
+        .ok_or_else(|| loco_rs::Error::Message("Failed to build event response".to_string()))
 }
 
 pub(in crate::controllers::migration_api) async fn attendee_info(

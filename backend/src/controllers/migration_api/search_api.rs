@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
@@ -8,6 +8,8 @@ use loco_rs::{app::AppContext, prelude::*};
 use serde::Deserialize;
 
 use super::state::{require_auth_db, DataResponse};
+
+const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
 #[derive(Deserialize)]
 pub(super) struct SearchQuery {
@@ -29,6 +31,21 @@ pub(super) async fn search(
     };
 
     let limit = usize::from(query.limit.unwrap_or(10).clamp(1, 50));
+    let q = query.q.trim().to_string();
+
+    if q.is_empty() {
+        let data = crate::search::SearchResults {
+            profiles: vec![],
+            events: vec![],
+            tags: vec![],
+            degrees: vec![],
+        };
+        let mut response = Json(DataResponse { data }).into_response();
+        response
+            .headers_mut()
+            .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+        return Ok(response);
+    }
 
     let geo = match (query.lat, query.lng) {
         (Some(lat), Some(lng)) => Some(crate::search::GeoSearchParams {
@@ -44,7 +61,7 @@ pub(super) async fn search(
         loco_rs::Error::Message("Search service unavailable".to_string())
     })?;
 
-    let mut results = crate::search::search_all(&client, &query.q, limit, geo.as_ref())
+    let mut results = crate::search::search_all(&client, &q, limit, geo.as_ref())
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");
@@ -82,5 +99,9 @@ pub(super) async fn search(
         }
     }
 
-    Ok(Json(DataResponse { data: results }).into_response())
+    let mut response = Json(DataResponse { data: results }).into_response();
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+    Ok(response)
 }

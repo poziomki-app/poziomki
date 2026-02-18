@@ -18,7 +18,7 @@ pub(in crate::controllers::migration_api) const fn max_upload_size_bytes() -> us
 pub(in crate::controllers::migration_api) fn allowed_upload_mime(mime_type: &str) -> bool {
     matches!(
         mime_type,
-        "image/jpeg" | "image/png" | "image/webp" | "image/avif"
+        "image/avif" | "image/jpeg" | "image/png" | "image/webp"
     )
 }
 

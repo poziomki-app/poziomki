@@ -5,69 +5,116 @@ mod state_types;
 #[path = "state_uploads.rs"]
 mod state_uploads;
 
-use chrono::Utc;
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use chrono::{Duration, Utc};
+use loco_rs::prelude::*;
+use sea_orm::ActiveValue;
+use uuid::Uuid;
 
 use super::ErrorSpec;
+use crate::models::_entities::otp_codes;
 pub(super) use state_auth::*;
 pub(super) use state_types::*;
 pub(super) use state_uploads::*;
 
-// --- OTP in-memory state (sole remaining in-memory data) ---
+pub(super) const OTP_TTL_SECS: i64 = 60 * 10;
+pub(super) const OTP_MAX_ATTEMPTS: i16 = 5;
 
-const OTP_STATE_MAX_ENTRIES: usize = 5_000;
+// --- OTP database operations ---
 
-#[derive(Default)]
-pub(super) struct OtpState {
-    pub(super) otp_by_email: HashMap<String, OtpEntry>,
+/// Insert or replace an OTP code for the given email.
+pub(super) async fn upsert_otp(
+    db: &DatabaseConnection,
+    email: &str,
+    code: &str,
+) -> std::result::Result<(), loco_rs::Error> {
+    let now = Utc::now();
+    let expires_at = now + Duration::seconds(OTP_TTL_SECS);
+
+    // Delete any existing OTP for this email, then insert fresh
+    otp_codes::Entity::delete_many()
+        .filter(otp_codes::Column::Email.eq(email))
+        .exec(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+
+    let model = otp_codes::ActiveModel {
+        id: ActiveValue::Set(Uuid::new_v4()),
+        email: ActiveValue::Set(email.to_owned()),
+        code: ActiveValue::Set(code.to_owned()),
+        attempts: ActiveValue::Set(0),
+        expires_at: ActiveValue::Set(expires_at.into()),
+        last_sent_at: ActiveValue::Set(now.into()),
+        created_at: ActiveValue::Set(now.into()),
+    };
+    model
+        .insert(db)
+        .await
+        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+    Ok(())
 }
 
-impl OtpState {
-    /// Evict expired entries and enforce maximum capacity.
-    pub(super) fn cleanup(&mut self) {
-        let now = Utc::now();
-        self.otp_by_email.retain(|_, entry| entry.expires_at > now);
+/// Verify an OTP code against the database. Returns true if valid.
+/// On success, deletes the OTP row. On failure, increments attempts.
+pub(super) async fn verify_otp_db(db: &DatabaseConnection, email: &str, otp: &str) -> bool {
+    use subtle::ConstantTimeEq;
 
-        // If still over capacity, evict oldest entries by last_sent_at
-        if self.otp_by_email.len() > OTP_STATE_MAX_ENTRIES {
-            let mut entries: Vec<(String, chrono::DateTime<Utc>)> = self
-                .otp_by_email
-                .iter()
-                .map(|(k, v)| (k.clone(), v.last_sent_at))
-                .collect();
-            entries.sort_by_key(|(_, ts)| *ts);
-            let to_remove = self.otp_by_email.len() - OTP_STATE_MAX_ENTRIES;
-            for (key, _) in entries.into_iter().take(to_remove) {
-                self.otp_by_email.remove(&key);
-            }
-        }
+    let Ok(Some(saved)) = otp_codes::Entity::find()
+        .filter(otp_codes::Column::Email.eq(email))
+        .one(db)
+        .await
+    else {
+        return false;
+    };
+
+    let now = Utc::now();
+
+    // Expired or too many attempts — delete and reject
+    if saved.expires_at.with_timezone(&Utc) <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
+        let _ = otp_codes::Entity::delete_by_id(saved.id).exec(db).await;
+        return false;
     }
+
+    // Constant-time comparison
+    if saved.code.len() != otp.len() || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes())) {
+        // Increment attempts
+        let new_attempts = saved.attempts.saturating_add(1);
+        let mut active: otp_codes::ActiveModel = saved.into();
+        active.attempts = ActiveValue::Set(new_attempts);
+        let _ = active.update(db).await;
+        return false;
+    }
+
+    // Valid — delete the OTP row
+    let _ = otp_codes::Entity::delete_by_id(saved.id).exec(db).await;
+    true
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct OtpEntry {
-    pub(super) code: String,
-    pub(super) expires_at: chrono::DateTime<Utc>,
-    pub(super) attempts: u8,
-    pub(super) last_sent_at: chrono::DateTime<Utc>,
+/// Check if the OTP for this email is still within the resend cooldown.
+pub(super) async fn otp_in_cooldown(
+    db: &DatabaseConnection,
+    email: &str,
+    cooldown_secs: i64,
+) -> bool {
+    let now = Utc::now();
+    otp_codes::Entity::find()
+        .filter(otp_codes::Column::Email.eq(email))
+        .one(db)
+        .await
+        .ok()
+        .flatten()
+        .is_some_and(|entry| {
+            entry.last_sent_at.with_timezone(&Utc) + Duration::seconds(cooldown_secs) > now
+        })
 }
 
-static OTP_STATE: LazyLock<Mutex<OtpState>> = LazyLock::new(|| Mutex::new(OtpState::default()));
-
-pub(super) fn lock_otp_state() -> MutexGuard<'static, OtpState> {
-    OTP_STATE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-pub(super) fn reset_otp_state() {
-    let mut state = lock_otp_state();
-    *state = OtpState::default();
-}
-
-pub(super) fn reset_state() {
-    reset_otp_state();
+/// Clean up expired OTP entries (called periodically or at boot).
+#[allow(dead_code)]
+pub(super) async fn cleanup_expired_otps(db: &DatabaseConnection) {
+    let now = Utc::now();
+    let _ = otp_codes::Entity::delete_many()
+        .filter(otp_codes::Column::ExpiresAt.lte(now))
+        .exec(db)
+        .await;
 }
 
 // --- Auth validation helpers ---
@@ -139,4 +186,24 @@ pub(super) fn validate_profile_age(age: u8) -> std::result::Result<(), &'static 
         return Err("Age must be between 15 and 67");
     }
     Ok(())
+}
+
+pub(super) fn validate_profile_bio(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 5_000) {
+        Err("Bio must be at most 5000 characters")
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn validate_profile_program(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 200) {
+        Err("Program must be at most 200 characters")
+    } else {
+        Ok(())
+    }
 }
