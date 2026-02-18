@@ -88,6 +88,3 @@ insta = { version = "1.34", features = ["redactions", "yaml", "filters"] }
 [lints]
 workspace = true
 
-[patch.crates-io]
-sea-orm-migration = { path = "vendor/sea-orm-migration-patched" }
-selectors = { path = "vendor/selectors-patched" }
