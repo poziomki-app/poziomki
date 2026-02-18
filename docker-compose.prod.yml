@@ -122,6 +122,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
+      SMTP_TLS_NAME: ${SMTP_TLS_NAME:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s
