@@ -32,7 +32,7 @@ fun App() {
         val imageHttpClient = HttpClient(engine) {
             install(createClientPlugin("MatrixMediaAuth") {
                 onRequest { request, _ ->
-                    if ("/_matrix/" in request.url.encodedPath) {
+                    if (request.url.pathSegments.any { it == "_matrix" }) {
                         val token = (matrixClient.state.value as? MatrixClientState.Ready)?.accessToken
                         if (token != null) {
                             request.headers.append(HttpHeaders.Authorization, "Bearer $token")
