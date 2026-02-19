@@ -19,6 +19,10 @@ class AuthViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
 ) : ViewModel() {
+    private companion object {
+        private const val HTTP_NOT_FOUND = 404
+    }
+
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
@@ -51,8 +55,18 @@ class AuthViewModel(
                             }
 
                             is ApiResult.Error -> {
-                                _uiState.value = AuthUiState()
-                                onNeedsOnboarding()
+                                if (profileResult.code == "NOT_FOUND" || profileResult.status == HTTP_NOT_FOUND) {
+                                    _uiState.value = AuthUiState()
+                                    onNeedsOnboarding()
+                                } else {
+                                    val cachedProfileId = sessionManager.getProfileId()
+                                    if (cachedProfileId != null) {
+                                        _uiState.value = AuthUiState()
+                                        onSuccess()
+                                    } else {
+                                        _uiState.value = AuthUiState(error = profileResult.message)
+                                    }
+                                }
                             }
                         }
                     } else {

@@ -5,7 +5,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+
+data class SessionBootstrapState(
+    val isLoggedIn: Boolean,
+    val hasProfile: Boolean,
+)
 
 class SessionManager(
     private val dataStore: DataStore<Preferences>,
@@ -16,6 +22,7 @@ class SessionManager(
         val USER_EMAIL = stringPreferencesKey("user_email")
         val USER_NAME = stringPreferencesKey("user_name")
         val PROFILE_ID = stringPreferencesKey("profile_id")
+        val ONBOARDING_DRAFT = stringPreferencesKey("onboarding_draft")
     }
 
     val isLoggedIn: Flow<Boolean> =
@@ -57,6 +64,28 @@ class SessionManager(
             prefs[PROFILE_ID] = profileId
         }
     }
+
+    suspend fun getProfileId(): String? = dataStore.data.first()[PROFILE_ID]
+
+    suspend fun getBootstrapState(): SessionBootstrapState {
+        val prefs = dataStore.data.first()
+        return SessionBootstrapState(
+            isLoggedIn = prefs[USER_ID] != null,
+            hasProfile = prefs[PROFILE_ID] != null,
+        )
+    }
+
+    suspend fun saveOnboardingDraft(draftJson: String?) {
+        dataStore.edit { prefs ->
+            if (draftJson.isNullOrBlank()) {
+                prefs.remove(ONBOARDING_DRAFT)
+            } else {
+                prefs[ONBOARDING_DRAFT] = draftJson
+            }
+        }
+    }
+
+    suspend fun getOnboardingDraft(): String? = dataStore.data.first()[ONBOARDING_DRAFT]
 
     suspend fun clearSession() {
         tokenStore.clearToken()
