@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 
 class ChatViewModel(
@@ -39,6 +41,9 @@ class ChatViewModel(
     private var activeRoom: JoinedRoom? = null
     private var activeTimeline: Timeline? = null
     private var focusedTimeline: Timeline? = null
+    private val bindMutex = Mutex()
+    private var bindJob: Job? = null
+    private var bindingRoomId: String? = null
     private val roomJobs = mutableListOf<Job>()
     private val timelineJobs = mutableListOf<Job>()
     private var typingState = false
@@ -57,12 +62,41 @@ class ChatViewModel(
                 )
             return
         }
-        if (boundRoomId == roomId && activeRoom != null) return
+        val isAlreadyBound = boundRoomId == roomId && activeRoom != null
+        val isBindingSameRoom = bindingRoomId == roomId
+        val hasPendingBindForSameRoom = boundRoomId == roomId && bindJob?.isActive == true
+        if (isAlreadyBound || isBindingSameRoom || hasPendingBindForSameRoom) return
 
         boundRoomId = roomId
-        viewModelScope.launch {
-            bindRoom(roomId)
+        bindJob?.cancel()
+        bindJob =
+            viewModelScope.launch {
+                bindMutex.withLock {
+                    if (boundRoomId != roomId) return@withLock
+                    bindingRoomId = roomId
+                    try {
+                        bindRoom(roomId)
+                    } finally {
+                        if (bindingRoomId == roomId) {
+                            bindingRoomId = null
+                        }
+                    }
+                }
+            }
+    }
+
+    private suspend fun awaitJoinedRoom(
+        roomId: String,
+        attempts: Int = 12,
+        retryDelayMs: Long = 250L,
+    ): JoinedRoom? {
+        repeat(attempts) { attempt ->
+            matrixClient.getJoinedRoom(roomId)?.let { return it }
+            if (attempt < attempts - 1) {
+                delay(retryDelayMs)
+            }
         }
+        return null
     }
 
     fun onDraftChanged(value: String) {
@@ -272,6 +306,7 @@ class ChatViewModel(
     }
 
     override fun onCleared() {
+        bindJob?.cancel()
         clearTypingTimers()
         focusedTimeline?.close()
         focusedTimeline = null
@@ -313,7 +348,7 @@ class ChatViewModel(
         }
 
         val room =
-            matrixClient.getJoinedRoom(roomId) ?: run {
+            awaitJoinedRoom(roomId) ?: run {
                 _uiState.value =
                     ChatUiState(
                         roomId = roomId,

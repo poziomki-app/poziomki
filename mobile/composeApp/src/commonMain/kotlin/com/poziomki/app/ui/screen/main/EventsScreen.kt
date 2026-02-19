@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,8 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -183,6 +180,9 @@ fun EventsScreen(
     }
 }
 
+private const val COVER_ASPECT_W = 16f
+private const val COVER_ASPECT_H = 9f
+
 @Composable
 private fun EventCard(
     event: Event,
@@ -191,73 +191,73 @@ private fun EventCard(
     val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
         shape = cardShape,
-        color = Background,
+        color = SurfaceElevated,
         border = BorderStroke(1.dp, Border),
     ) {
-        val coverImage = event.coverImage
-        Box(
-            modifier = Modifier.clickable(onClick = onClick),
-        ) {
-            // Cover image / placeholder — fills the card
-            if (coverImage != null) {
-                AsyncImage(
-                    model = resolveImageUrl(coverImage),
-                    contentDescription = event.title,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1.4f),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
+        Column {
+            // Cover image area with bookmark overlay
+            Box {
+                val coverImage = event.coverImage
+                if (coverImage != null) {
+                    AsyncImage(
+                        model = resolveImageUrl(coverImage),
+                        contentDescription = event.title,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(COVER_ASPECT_W / COVER_ASPECT_H),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(COVER_ASPECT_W / COVER_ASPECT_H)
+                                .background(Background),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.CalendarMonth,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = TextMuted,
+                        )
+                    }
+                }
+
+                // Bookmark overlay
                 Box(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1.4f)
-                            .background(SurfaceElevated),
+                            .align(Alignment.TopEnd)
+                            .padding(PoziomkiTheme.spacing.sm)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Overlay),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = TextMuted,
+                        Icons.Filled.BookmarkBorder,
+                        contentDescription = "Zapisz",
+                        modifier = Modifier.size(22.dp),
+                        tint = TextPrimary,
                     )
                 }
             }
 
-            // Bottom gradient for text readability
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.75f)
-                        .background(
-                            Brush.verticalGradient(
-                                colors =
-                                    listOf(
-                                        Color.Transparent,
-                                        Background.copy(alpha = 0.5f),
-                                        Background.copy(alpha = 0.9f),
-                                        Background,
-                                    ),
-                            ),
-                        ),
-            )
-
-            // Content overlaid at bottom
+            // Metadata below the image
             Column(
                 modifier =
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(
-                            horizontal = PoziomkiTheme.spacing.md,
-                            vertical = PoziomkiTheme.spacing.sm,
-                        ),
+                    Modifier.padding(
+                        horizontal = PoziomkiTheme.spacing.md,
+                        vertical = PoziomkiTheme.spacing.sm,
+                    ),
             ) {
                 // Title
                 Text(
@@ -317,25 +317,6 @@ private fun EventCard(
                         )
                     }
                 }
-            }
-
-            // Bookmark overlay
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(PoziomkiTheme.spacing.sm)
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Overlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.BookmarkBorder,
-                    contentDescription = "Zapisz",
-                    modifier = Modifier.size(22.dp),
-                    tint = TextPrimary,
-                )
             }
         }
     }

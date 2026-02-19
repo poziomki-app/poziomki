@@ -256,16 +256,78 @@ fn build_from_context(
     }
 }
 
+/// Resolve a set of raw image filenames to signed URLs in parallel, returning a lookup map.
+async fn resolve_image_map(raw_values: HashSet<String>) -> HashMap<String, String> {
+    let resolve = crate::controllers::migration_api::resolve_image_url;
+    let futs: Vec<_> = raw_values
+        .into_iter()
+        .map(|raw| async move {
+            let resolved = resolve(&raw).await;
+            (raw, resolved)
+        })
+        .collect();
+    futures::future::join_all(futs).await.into_iter().collect()
+}
+
+fn collect_image_filenames(responses: &[EventResponse]) -> HashSet<String> {
+    let mut filenames = HashSet::new();
+    for r in responses {
+        if let Some(v) = &r.cover_image {
+            filenames.insert(v.clone());
+        }
+        if let Some(v) = &r.creator.profile_picture {
+            filenames.insert(v.clone());
+        }
+        for a in &r.attendees_preview {
+            if let Some(v) = &a.profile_picture {
+                filenames.insert(v.clone());
+            }
+        }
+    }
+    filenames
+}
+
+/// Resolve all image URLs (cover, creator, attendee previews) in event responses.
+async fn resolve_event_images(responses: &mut [EventResponse]) {
+    let filenames = collect_image_filenames(responses);
+    if filenames.is_empty() {
+        return;
+    }
+    let url_map = resolve_image_map(filenames).await;
+
+    for response in responses.iter_mut() {
+        if let Some(raw) = &response.cover_image {
+            if let Some(resolved) = url_map.get(raw.as_str()) {
+                response.cover_image = Some(resolved.clone());
+            }
+        }
+        if let Some(raw) = &response.creator.profile_picture {
+            if let Some(resolved) = url_map.get(raw.as_str()) {
+                response.creator.profile_picture = Some(resolved.clone());
+            }
+        }
+        for preview in &mut response.attendees_preview {
+            if let Some(raw) = &preview.profile_picture {
+                if let Some(resolved) = url_map.get(raw.as_str()) {
+                    preview.profile_picture = Some(resolved.clone());
+                }
+            }
+        }
+    }
+}
+
 pub(in crate::controllers::migration_api) async fn build_event_responses(
     db: &DatabaseConnection,
     event_models: &[events::Model],
     profile_id: &Uuid,
 ) -> std::result::Result<Vec<EventResponse>, loco_rs::Error> {
     let batch_ctx = load_event_batch_context(db, event_models).await?;
-    Ok(event_models
+    let mut responses: Vec<EventResponse> = event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))
-        .collect())
+        .collect();
+    resolve_event_images(&mut responses).await;
+    Ok(responses)
 }
 
 pub(in crate::controllers::migration_api) async fn build_event_response(
@@ -297,6 +359,12 @@ pub(in crate::controllers::migration_api) async fn attendee_info(
             .map_err(|e| loco_rs::Error::Any(e.into()))?
     };
 
+    let filenames: HashSet<String> = rows
+        .iter()
+        .filter_map(|r| r.profile.profile_picture.clone())
+        .collect();
+    let url_map = resolve_image_map(filenames).await;
+
     Ok(rows
         .into_iter()
         .map(|row| {
@@ -304,11 +372,17 @@ pub(in crate::controllers::migration_api) async fn attendee_info(
                 .iter()
                 .find(|u| u.id == row.profile.user_id)
                 .map_or(uuid::Uuid::nil(), |u| u.pid);
+            let profile_picture = row
+                .profile
+                .profile_picture
+                .as_ref()
+                .and_then(|raw| url_map.get(raw.as_str()))
+                .cloned();
             AttendeeFullInfo {
                 id: row.profile.id.to_string(),
                 user_id: user_pid.to_string(),
                 name: row.profile.name.clone(),
-                profile_picture: row.profile.profile_picture.clone(),
+                profile_picture,
                 status: row.status,
             }
         })

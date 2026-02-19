@@ -76,9 +76,7 @@ fun EventChatScreen(
     LaunchedEffect(eventState.event) {
         val event = eventState.event ?: return@LaunchedEffect
         if (event.conversationId == null && !eventState.isOpeningChat) {
-            eventDetailViewModel.openEventChat { roomId ->
-                chatViewModel.loadRoom(roomId)
-            }
+            eventDetailViewModel.openEventChat { }
         }
     }
 

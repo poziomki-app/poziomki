@@ -1,12 +1,11 @@
 use meilisearch_sdk::client::Client;
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, FromQueryResult,
-    QueryFilter, Statement,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-
-use crate::models::_entities::{profile_tags, tags};
+use std::{
+    collections::HashMap,
+    sync::{OnceLock, RwLock},
+    time::{Duration, Instant},
+};
 
 // MEILI_COMPAT_REMOVE: Meilisearch compatibility code in this file can be removed
 // wholesale once Postgres search fully replaces Meilisearch in production.
@@ -99,6 +98,16 @@ pub struct GeoSearchParams {
     pub radius_m: u32,
 }
 
+#[derive(Clone)]
+struct CacheEntry {
+    stored_at: Instant,
+    results: SearchResults,
+}
+
+const DEFAULT_SEARCH_CACHE_TTL_MS: u64 = 15_000;
+const DEFAULT_SEARCH_CACHE_MAX_ENTRIES: usize = 512;
+static SEARCH_CACHE: OnceLock<RwLock<HashMap<String, CacheEntry>>> = OnceLock::new();
+
 pub async fn search_all(
     db: &DatabaseConnection,
     query: &str,
@@ -131,25 +140,34 @@ async fn search_all_postgres(
         ));
     }
 
-    let pattern = format!("%{}%", query.to_ascii_lowercase());
+    let normalized_query = query.trim().to_ascii_lowercase();
+    let pattern = format!("%{normalized_query}%");
+    let cache_key = build_cache_key(&normalized_query, limit, geo);
+
+    if let Some(cached) = read_cached_results(&cache_key) {
+        return Ok(cached);
+    }
+
     let limit_i64 = i64::try_from(limit).unwrap_or(50);
-    let events_limit = geo.map_or(limit, |_| limit.saturating_mul(5).min(250));
-    let events_limit_i64 = i64::try_from(events_limit).unwrap_or(250);
 
     let profiles_fut = search_profiles_postgres(db, &pattern, limit_i64);
-    let events_fut = search_events_postgres(db, &pattern, events_limit_i64, limit, geo);
+    let events_fut = search_events_postgres(db, &pattern, limit_i64, geo);
     let tags_fut = search_tags_postgres(db, &pattern, limit_i64);
     let degrees_fut = search_degrees_postgres(db, &pattern, limit_i64);
 
     let (profiles, events, tags, degrees) =
         tokio::try_join!(profiles_fut, events_fut, tags_fut, degrees_fut)?;
 
-    Ok(SearchResults {
+    let results = SearchResults {
         profiles,
         events,
         tags,
         degrees,
-    })
+    };
+
+    write_cached_results(cache_key, &results);
+
+    Ok(results)
 }
 
 async fn search_profiles_postgres(
@@ -167,8 +185,13 @@ async fn search_profiles_postgres(
             p.age,
             p.program,
             p.profile_picture,
-            p.updated_at
+            COALESCE(
+                ARRAY_REMOVE(ARRAY_AGG(DISTINCT t_agg.name), NULL),
+                ARRAY[]::text[]
+            ) AS tags
         FROM profiles p
+        LEFT JOIN profile_tags pt_agg ON pt_agg.profile_id = p.id
+        LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
             LOWER(p.name) LIKE $1
             OR LOWER(COALESCE(p.bio, '')) LIKE $1
@@ -180,6 +203,8 @@ async fn search_profiles_postgres(
                 WHERE pt.profile_id = p.id
                   AND LOWER(COALESCE(t.name, '')) LIKE $1
             )
+        GROUP BY
+            p.id, p.name, p.bio, p.age, p.program, p.profile_picture, p.updated_at
         ORDER BY p.updated_at DESC
         LIMIT $2
         ",
@@ -188,9 +213,6 @@ async fn search_profiles_postgres(
     .all(db)
     .await
     .map_err(|e| loco_rs::Error::Message(format!("Profile search failed: {e}")))?;
-
-    let profile_ids: Vec<uuid::Uuid> = profile_rows.iter().map(|row| row.id).collect();
-    let profile_tag_names = load_profile_tag_names(db, &profile_ids).await?;
 
     Ok(profile_rows
         .into_iter()
@@ -201,7 +223,7 @@ async fn search_profiles_postgres(
             age: row.age,
             program: row.program,
             profile_picture: row.profile_picture,
-            tags: profile_tag_names.get(&row.id).cloned().unwrap_or_default(),
+            tags: row.tags,
         })
         .collect())
 }
@@ -209,56 +231,84 @@ async fn search_profiles_postgres(
 async fn search_events_postgres(
     db: &DatabaseConnection,
     pattern: &str,
-    events_limit_i64: i64,
-    limit: usize,
+    limit_i64: i64,
     geo: Option<&GeoSearchParams>,
 ) -> loco_rs::Result<Vec<EventDocument>> {
-    let mut event_rows = EventSearchRow::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        r"
-        WITH matched_events AS (
-            SELECT e.id
-            FROM events e
-            WHERE
-                LOWER(e.title) LIKE $1
-                OR LOWER(COALESCE(e.description, '')) LIKE $1
-                OR LOWER(COALESCE(e.location, '')) LIKE $1
-                OR EXISTS (
-                    SELECT 1
-                    FROM profiles p
-                    WHERE p.id = e.creator_id
-                      AND LOWER(COALESCE(p.name, '')) LIKE $1
-                )
-            ORDER BY e.starts_at ASC
-            LIMIT $2
-        )
-        SELECT
-            e.id,
-            e.title,
-            e.description,
-            e.location,
-            e.starts_at::text AS starts_at,
-            e.cover_image,
-            COALESCE(p.name, 'Unknown') AS creator_name,
-            e.latitude,
-            e.longitude
-        FROM matched_events m
-        JOIN events e ON e.id = m.id
-        LEFT JOIN profiles p ON p.id = e.creator_id
-        ORDER BY e.starts_at ASC
-        ",
-        vec![pattern.to_string().into(), events_limit_i64.into()],
-    ))
-    .all(db)
-    .await
+    let event_rows = match geo {
+        Some(geo_query) => {
+            EventSearchRow::find_by_statement(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r"
+                SELECT
+                    e.id,
+                    e.title,
+                    e.description,
+                    e.location,
+                    e.starts_at::text AS starts_at,
+                    e.cover_image,
+                    COALESCE(p.name, 'Unknown') AS creator_name,
+                    e.latitude,
+                    e.longitude
+                FROM events e
+                LEFT JOIN profiles p ON p.id = e.creator_id
+                WHERE
+                    (
+                        LOWER(e.title) LIKE $1
+                        OR LOWER(COALESCE(e.description, '')) LIKE $1
+                        OR LOWER(COALESCE(e.location, '')) LIKE $1
+                        OR LOWER(COALESCE(p.name, '')) LIKE $1
+                    )
+                    AND e.latitude IS NOT NULL
+                    AND e.longitude IS NOT NULL
+                    AND earth_box(ll_to_earth($2, $3), $4) @> ll_to_earth(e.latitude, e.longitude)
+                    AND earth_distance(ll_to_earth($2, $3), ll_to_earth(e.latitude, e.longitude)) <= $4
+                ORDER BY
+                    earth_distance(ll_to_earth($2, $3), ll_to_earth(e.latitude, e.longitude)) ASC,
+                    e.starts_at ASC
+                LIMIT $5
+                ",
+                vec![
+                    pattern.to_string().into(),
+                    geo_query.lat.into(),
+                    geo_query.lng.into(),
+                    i64::from(geo_query.radius_m).into(),
+                    limit_i64.into(),
+                ],
+            ))
+            .all(db)
+            .await
+        }
+        None => {
+            EventSearchRow::find_by_statement(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r"
+                SELECT
+                    e.id,
+                    e.title,
+                    e.description,
+                    e.location,
+                    e.starts_at::text AS starts_at,
+                    e.cover_image,
+                    COALESCE(p.name, 'Unknown') AS creator_name,
+                    e.latitude,
+                    e.longitude
+                FROM events e
+                LEFT JOIN profiles p ON p.id = e.creator_id
+                WHERE
+                    LOWER(e.title) LIKE $1
+                    OR LOWER(COALESCE(e.description, '')) LIKE $1
+                    OR LOWER(COALESCE(e.location, '')) LIKE $1
+                    OR LOWER(COALESCE(p.name, '')) LIKE $1
+                ORDER BY e.starts_at ASC
+                LIMIT $2
+                ",
+                vec![pattern.to_string().into(), limit_i64.into()],
+            ))
+            .all(db)
+            .await
+        }
+    }
     .map_err(|e| loco_rs::Error::Message(format!("Event search failed: {e}")))?;
-
-    if let Some(geo_query) = geo {
-        event_rows = filter_and_sort_events_by_geo(event_rows, geo_query);
-    }
-    if event_rows.len() > limit {
-        event_rows.truncate(limit);
-    }
 
     Ok(event_rows
         .into_iter()
@@ -346,84 +396,6 @@ async fn search_degrees_postgres(
         .collect())
 }
 
-async fn load_profile_tag_names(
-    db: &DatabaseConnection,
-    profile_ids: &[uuid::Uuid],
-) -> loco_rs::Result<HashMap<uuid::Uuid, Vec<String>>> {
-    if profile_ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let links = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.is_in(profile_ids.iter().copied()))
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Message(format!("Profile tag links failed: {e}")))?;
-
-    if links.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let tag_ids: HashSet<uuid::Uuid> = links.iter().map(|link| link.tag_id).collect();
-    let tags = tags::Entity::find()
-        .filter(tags::Column::Id.is_in(tag_ids.iter().copied()))
-        .all(db)
-        .await
-        .map_err(|e| loco_rs::Error::Message(format!("Tag fetch failed: {e}")))?;
-
-    let tag_name_by_id: HashMap<uuid::Uuid, String> =
-        tags.into_iter().map(|tag| (tag.id, tag.name)).collect();
-
-    let mut by_profile: HashMap<uuid::Uuid, Vec<String>> = HashMap::new();
-    for link in links {
-        if let Some(tag_name) = tag_name_by_id.get(&link.tag_id) {
-            by_profile
-                .entry(link.profile_id)
-                .or_default()
-                .push(tag_name.clone());
-        }
-    }
-
-    Ok(by_profile)
-}
-
-fn filter_and_sort_events_by_geo(
-    candidates: Vec<EventSearchRow>,
-    geo_query: &GeoSearchParams,
-) -> Vec<EventSearchRow> {
-    let mut with_distance: Vec<(f64, EventSearchRow)> = candidates
-        .into_iter()
-        .filter_map(|row| {
-            row.latitude.zip(row.longitude).and_then(|(lat, lng)| {
-                let meters = haversine_meters(geo_query.lat, geo_query.lng, lat, lng);
-                if meters <= f64::from(geo_query.radius_m) {
-                    Some((meters, row))
-                } else {
-                    None
-                }
-            })
-        })
-        .collect();
-
-    with_distance.sort_by(|(a, _), (b, _)| a.total_cmp(b));
-    with_distance.into_iter().map(|(_, row)| row).collect()
-}
-
-fn haversine_meters(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
-    let earth_radius_m = 6_371_000.0_f64;
-    let d_lat = (lat2 - lat1).to_radians();
-    let d_lng = (lng2 - lng1).to_radians();
-    let lat1_rad = lat1.to_radians();
-    let lat2_rad = lat2.to_radians();
-
-    let half_d_lat_sin = (d_lat / 2.0).sin();
-    let half_d_lng_sin_sq = (d_lng / 2.0).sin().powi(2);
-    let cos_product = lat1_rad.cos() * lat2_rad.cos();
-    let a = cos_product.mul_add(half_d_lng_sin_sq, half_d_lat_sin * half_d_lat_sin);
-    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-    earth_radius_m * c
-}
-
 #[derive(Debug, Clone, FromQueryResult)]
 struct ProfileSearchRow {
     id: uuid::Uuid,
@@ -432,6 +404,7 @@ struct ProfileSearchRow {
     age: i16,
     program: Option<String>,
     profile_picture: Option<String>,
+    tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, FromQueryResult)]
@@ -462,6 +435,96 @@ struct DegreeSearchRow {
     name: String,
 }
 
+fn cache_map() -> &'static RwLock<HashMap<String, CacheEntry>> {
+    SEARCH_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn search_cache_enabled() -> bool {
+    std::env::var("SEARCH_CACHE_ENABLED").map_or(true, |value| {
+        let normalized = value.trim().to_ascii_lowercase();
+        normalized == "1" || normalized == "true" || normalized == "yes"
+    })
+}
+
+fn search_cache_ttl() -> Duration {
+    let ttl_ms = std::env::var("SEARCH_CACHE_TTL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SEARCH_CACHE_TTL_MS);
+    Duration::from_millis(ttl_ms)
+}
+
+fn search_cache_max_entries() -> usize {
+    std::env::var("SEARCH_CACHE_MAX_ENTRIES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_SEARCH_CACHE_MAX_ENTRIES)
+}
+
+fn build_cache_key(query: &str, limit: usize, geo: Option<&GeoSearchParams>) -> String {
+    let geo_part = geo.map_or_else(
+        || "none".to_string(),
+        |g| format!("{:.4}:{:.4}:{}", g.lat, g.lng, g.radius_m),
+    );
+    format!("{query}|{limit}|{geo_part}")
+}
+
+fn read_cached_results(key: &str) -> Option<SearchResults> {
+    if !search_cache_enabled() {
+        return None;
+    }
+
+    let ttl = search_cache_ttl();
+    let entry = cache_map().read().ok()?.get(key)?.clone();
+    if entry.stored_at.elapsed() > ttl {
+        return None;
+    }
+    Some(entry.results)
+}
+
+fn write_cached_results(key: String, results: &SearchResults) {
+    if !search_cache_enabled() {
+        return;
+    }
+
+    let ttl = search_cache_ttl();
+    let max_entries = search_cache_max_entries();
+    let now = Instant::now();
+    let Ok(mut map) = cache_map().write() else {
+        return;
+    };
+
+    map.retain(|_, entry| now.duration_since(entry.stored_at) <= ttl);
+    map.insert(
+        key,
+        CacheEntry {
+            stored_at: now,
+            results: results.clone(),
+        },
+    );
+
+    if map.len() > max_entries {
+        let mut oldest_key: Option<String> = None;
+        let mut oldest_instant = now;
+        for (candidate_key, entry) in map.iter() {
+            if entry.stored_at <= oldest_instant {
+                oldest_instant = entry.stored_at;
+                oldest_key = Some(candidate_key.clone());
+            }
+        }
+        if let Some(k) = oldest_key {
+            map.remove(&k);
+        }
+    }
+}
+
+pub fn invalidate_postgres_cache() {
+    if let Ok(mut map) = cache_map().write() {
+        map.clear();
+    }
+}
+
 // --- MEILI_COMPAT_REMOVE: Client and compatibility sync ---
 
 pub fn create_client() -> Result<Client, meilisearch_sdk::errors::Error> {
@@ -477,36 +540,42 @@ pub fn create_client() -> Result<Client, meilisearch_sdk::errors::Error> {
 }
 
 pub fn index_profile_compat(doc: ProfileDocument) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         index_profile(&client, doc);
     }
 }
 
 pub fn index_event_compat(doc: EventDocument) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         index_event(&client, doc);
     }
 }
 
 pub fn index_tag_compat(doc: TagDocument) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         index_tag(&client, doc);
     }
 }
 
 pub fn index_degree_compat(doc: DegreeDocument) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         index_degree(&client, doc);
     }
 }
 
 pub fn delete_profile_compat(id: String) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         delete_profile(&client, id);
     }
 }
 
 pub fn delete_event_compat(id: String) {
+    invalidate_postgres_cache();
     if let Some(client) = maybe_meili_client() {
         delete_event(&client, id);
     }
