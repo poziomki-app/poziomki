@@ -70,9 +70,7 @@ impl Hooks for App {
         Ok(())
     }
 
-    fn register_tasks(tasks: &mut Tasks) {
-        tasks.register(tasks::seed_search::SeedSearch);
-    }
+    fn register_tasks(_tasks: &mut Tasks) {}
     async fn truncate(ctx: &AppContext) -> Result<()> {
         app_support::truncate_all_tables(&ctx.db).await?;
         Ok(())

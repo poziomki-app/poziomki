@@ -82,8 +82,7 @@ fun ExploreScreen(
                         val hasResults =
                             results.profiles.isNotEmpty() ||
                                 results.events.isNotEmpty() ||
-                                results.tags.isNotEmpty() ||
-                                results.degrees.isNotEmpty()
+                                results.tags.isNotEmpty()
 
                         if (!hasResults) {
                             EmptyView("brak wynik\u00f3w")
@@ -122,33 +121,6 @@ fun ExploreScreen(
                                                     )
                                                 }
                                             }
-                                        }
-                                    }
-                                }
-
-                                // Degrees section
-                                if (results.degrees.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = "kierunki",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = TextSecondary,
-                                            modifier = Modifier.padding(vertical = 4.dp),
-                                        )
-                                    }
-                                    items(results.degrees, key = { "d-${it.id}" }) { degree ->
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = SurfaceElevated,
-                                        ) {
-                                            Text(
-                                                text = degree.name,
-                                                fontFamily = NunitoFamily,
-                                                color = TextPrimary,
-                                                fontSize = 14.sp,
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                            )
                                         }
                                     }
                                 }

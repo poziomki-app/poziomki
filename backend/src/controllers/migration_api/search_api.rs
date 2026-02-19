@@ -38,7 +38,6 @@ pub(super) async fn search(
             profiles: vec![],
             events: vec![],
             tags: vec![],
-            degrees: vec![],
         };
         let mut response = Json(DataResponse { data }).into_response();
         response

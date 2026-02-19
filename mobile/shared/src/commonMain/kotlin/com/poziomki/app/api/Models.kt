@@ -298,7 +298,6 @@ data class SearchResults(
     val profiles: List<SearchProfile> = emptyList(),
     val events: List<SearchEvent> = emptyList(),
     val tags: List<SearchTag> = emptyList(),
-    val degrees: List<SearchDegree> = emptyList(),
 )
 
 @Serializable

@@ -175,14 +175,7 @@ pub(super) async fn tags_create(
 
     match validate_and_insert_tag(&ctx.db, &headers, payload).await {
         Ok(inserted) => {
-            // MEILI_COMPAT_REMOVE
-            crate::search::index_tag_compat(crate::search::TagDocument {
-                id: inserted.id.to_string(),
-                name: inserted.name.clone(),
-                scope: inserted.scope.clone(),
-                category: inserted.category.clone(),
-                emoji: inserted.emoji.clone(),
-            });
+            crate::search::invalidate_search_cache();
 
             let data = tag_model_to_response(&inserted);
             Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())

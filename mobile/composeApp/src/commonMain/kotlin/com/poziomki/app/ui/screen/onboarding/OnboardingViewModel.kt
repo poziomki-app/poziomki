@@ -5,13 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.CreateProfileRequest
-import com.poziomki.app.api.SearchDegree
+import com.poziomki.app.api.Degree
 import com.poziomki.app.api.Tag
 import com.poziomki.app.api.UpdateProfileRequest
+import com.poziomki.app.data.repository.DegreeRepository
 import com.poziomki.app.data.repository.TagRepository
 import com.poziomki.app.session.SessionManager
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +23,7 @@ data class OnboardingState(
     val bio: String = "",
     val selectedTagIds: Set<String> = emptySet(),
     val availableTags: List<Tag> = emptyList(),
-    val degreeSearchResults: List<SearchDegree> = emptyList(),
+    val degreeSearchResults: List<Degree> = emptyList(),
     val selectedAvatar: String? = null,
     val avatarImageBytes: ByteArray? = null,
     val galleryImages: List<ByteArray> = emptyList(),
@@ -36,14 +35,16 @@ class OnboardingViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val tagRepository: TagRepository,
+    private val degreeRepository: DegreeRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
 
-    private var degreeSearchJob: Job? = null
+    private var allDegrees: List<Degree> = emptyList()
 
     init {
         loadTags()
+        loadDegrees()
     }
 
     private fun loadTags() {
@@ -59,28 +60,29 @@ class OnboardingViewModel(
         }
     }
 
-    private fun searchDegrees(query: String) {
-        degreeSearchJob?.cancel()
+    private fun loadDegrees() {
+        viewModelScope.launch {
+            launch {
+                degreeRepository.observeDegrees().collect { degrees ->
+                    allDegrees = degrees
+                    // Re-filter if there's an active query
+                    val query = _state.value.program
+                    if (query.isNotBlank()) {
+                        filterDegrees(query)
+                    }
+                }
+            }
+            degreeRepository.refreshDegrees()
+        }
+    }
+
+    private fun filterDegrees(query: String) {
         if (query.isBlank()) {
             _state.value = _state.value.copy(degreeSearchResults = emptyList())
             return
         }
-        degreeSearchJob =
-            viewModelScope.launch {
-                delay(300)
-                when (val result = apiService.search(query)) {
-                    is ApiResult.Success -> {
-                        _state.value =
-                            _state.value.copy(
-                                degreeSearchResults = result.data.degrees,
-                            )
-                    }
-
-                    is ApiResult.Error -> {
-                        _state.value = _state.value.copy(degreeSearchResults = emptyList())
-                    }
-                }
-            }
+        val filtered = allDegrees.filter { it.name.contains(query, ignoreCase = true) }
+        _state.value = _state.value.copy(degreeSearchResults = filtered)
     }
 
     fun updateName(name: String) {
@@ -93,7 +95,7 @@ class OnboardingViewModel(
 
     fun updateProgram(program: String) {
         _state.value = _state.value.copy(program = program)
-        searchDegrees(program)
+        filterDegrees(program)
     }
 
     fun updateBio(bio: String) {
