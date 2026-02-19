@@ -38,6 +38,9 @@ class TagRepository(
         forceRefresh: Boolean = false,
     ): Boolean =
         withContext(Dispatchers.IO) {
+            if (scope == "interest") {
+                ensureInterestSeedIfEmpty()
+            }
             if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getTags(scope)) {
                 is ApiResult.Success -> {
@@ -61,4 +64,27 @@ class TagRepository(
                 }
             }
         }
+
+    suspend fun ensureInterestSeedIfEmpty() {
+        withContext(Dispatchers.IO) {
+            val hasInterestTags =
+                db.tagQueries
+                    .selectByScope("interest")
+                    .executeAsList()
+                    .isNotEmpty()
+            if (hasInterestTags) return@withContext
+
+            db.transaction {
+                LOCAL_ONBOARDING_INTEREST_TAGS.forEach { tag ->
+                    db.tagQueries.upsert(
+                        id = tag.id,
+                        name = tag.name,
+                        scope = tag.scope,
+                        category = tag.category,
+                        emoji = tag.emoji,
+                    )
+                }
+            }
+        }
+    }
 }

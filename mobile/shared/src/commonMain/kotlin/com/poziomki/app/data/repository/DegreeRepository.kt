@@ -30,6 +30,7 @@ class DegreeRepository(
 
     suspend fun refreshDegrees(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
+            ensureLocalSeedIfEmpty()
             if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getDegrees()) {
                 is ApiResult.Success -> {
@@ -50,4 +51,23 @@ class DegreeRepository(
                 }
             }
         }
+
+    suspend fun ensureLocalSeedIfEmpty() {
+        withContext(Dispatchers.IO) {
+            val hasAny =
+                db.degreeQueries
+                    .selectAll()
+                    .executeAsList()
+                    .isNotEmpty()
+            if (hasAny) return@withContext
+            db.transaction {
+                LOCAL_ONBOARDING_DEGREES.forEach { degree ->
+                    db.degreeQueries.upsert(
+                        id = degree.id,
+                        name = degree.name,
+                    )
+                }
+            }
+        }
+    }
 }

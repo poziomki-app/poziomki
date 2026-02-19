@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 data class OnboardingState(
     val name: String = "",
@@ -37,22 +40,87 @@ class OnboardingViewModel(
     private val tagRepository: TagRepository,
     private val degreeRepository: DegreeRepository,
 ) : ViewModel() {
+    @Serializable
+    private data class OnboardingDraft(
+        val name: String,
+        val age: String,
+        val program: String,
+        val bio: String,
+        val selectedTagIds: Set<String>,
+        val selectedAvatar: String?,
+    )
+
+    private data class MediaUploadResult(
+        val avatarUrl: String?,
+        val imageUrls: List<String>,
+        val failures: Int,
+    )
+
+    private companion object {
+        private const val MAX_MEDIA_BYTES = 900 * 1024
+    }
+
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
+    private val json = Json { ignoreUnknownKeys = true }
 
     private var allDegrees: List<Degree> = emptyList()
+    private var createdProfileId: String? = null
 
     init {
+        restoreDraft()
         loadTags()
         loadDegrees()
     }
 
+    private fun restoreDraft() {
+        viewModelScope.launch {
+            val draftRaw = sessionManager.getOnboardingDraft() ?: return@launch
+            val draft = runCatching { json.decodeFromString<OnboardingDraft>(draftRaw) }.getOrNull() ?: return@launch
+            _state.value =
+                _state.value.copy(
+                    name = draft.name,
+                    age = draft.age,
+                    program = draft.program,
+                    bio = draft.bio,
+                    selectedTagIds = draft.selectedTagIds,
+                    selectedAvatar = draft.selectedAvatar,
+                )
+            filterDegrees(draft.program)
+        }
+    }
+
+    private fun persistDraft(state: OnboardingState) {
+        val draft =
+            OnboardingDraft(
+                name = state.name,
+                age = state.age,
+                program = state.program,
+                bio = state.bio,
+                selectedTagIds = state.selectedTagIds,
+                selectedAvatar = state.selectedAvatar,
+            )
+        viewModelScope.launch {
+            sessionManager.saveOnboardingDraft(json.encodeToString(draft))
+        }
+    }
+
+    private fun updateState(
+        persist: Boolean = true,
+        transform: (OnboardingState) -> OnboardingState,
+    ) {
+        val next = transform(_state.value)
+        _state.value = next
+        if (persist) persistDraft(next)
+    }
+
     private fun loadTags() {
         viewModelScope.launch {
+            tagRepository.ensureInterestSeedIfEmpty()
             // Observe cached tags
             launch {
                 tagRepository.observeTags("interest").collect { tags ->
-                    _state.value = _state.value.copy(availableTags = tags)
+                    updateState(persist = false) { it.copy(availableTags = tags) }
                 }
             }
             // Refresh from network
@@ -62,6 +130,7 @@ class OnboardingViewModel(
 
     private fun loadDegrees() {
         viewModelScope.launch {
+            degreeRepository.ensureLocalSeedIfEmpty()
             launch {
                 degreeRepository.observeDegrees().collect { degrees ->
                     allDegrees = degrees
@@ -78,71 +147,83 @@ class OnboardingViewModel(
 
     private fun filterDegrees(query: String) {
         if (query.isBlank()) {
-            _state.value = _state.value.copy(degreeSearchResults = emptyList())
+            updateState(persist = false) { it.copy(degreeSearchResults = emptyList()) }
             return
         }
         val filtered = allDegrees.filter { it.name.contains(query, ignoreCase = true) }
-        _state.value = _state.value.copy(degreeSearchResults = filtered)
+        updateState(persist = false) { it.copy(degreeSearchResults = filtered) }
     }
 
     fun updateName(name: String) {
-        _state.value = _state.value.copy(name = name)
+        updateState { it.copy(name = name, error = null) }
     }
 
     fun updateAge(age: String) {
-        _state.value = _state.value.copy(age = age)
+        updateState { it.copy(age = age, error = null) }
     }
 
     fun updateProgram(program: String) {
-        _state.value = _state.value.copy(program = program)
+        updateState { it.copy(program = program, error = null) }
         filterDegrees(program)
     }
 
     fun updateBio(bio: String) {
-        _state.value = _state.value.copy(bio = bio)
+        updateState { it.copy(bio = bio, error = null) }
     }
 
     fun selectAvatar(emoji: String) {
-        _state.value = _state.value.copy(selectedAvatar = emoji, avatarImageBytes = null)
+        updateState { it.copy(selectedAvatar = emoji, avatarImageBytes = null, error = null) }
     }
 
     fun setAvatarImage(bytes: ByteArray) {
-        _state.value = _state.value.copy(avatarImageBytes = bytes, selectedAvatar = null)
+        if (bytes.size > MAX_MEDIA_BYTES) {
+            updateState { it.copy(error = "Avatar image is too large. Choose a smaller image.") }
+            return
+        }
+        updateState { it.copy(avatarImageBytes = bytes, selectedAvatar = null, error = null) }
     }
 
     fun clearAvatar() {
-        _state.value = _state.value.copy(selectedAvatar = null, avatarImageBytes = null)
+        updateState { it.copy(selectedAvatar = null, avatarImageBytes = null, error = null) }
     }
 
     fun clearAll() {
-        _state.value =
-            _state.value.copy(
+        updateState {
+            it.copy(
                 selectedAvatar = null,
                 avatarImageBytes = null,
                 galleryImages = emptyList(),
+                error = null,
             )
+        }
     }
 
     fun addGalleryImages(images: List<ByteArray>) {
-        val current = _state.value.galleryImages
-        val combined = (current + images).take(6)
-        _state.value = _state.value.copy(galleryImages = combined)
+        val tooLarge = images.any { it.size > MAX_MEDIA_BYTES }
+        if (tooLarge) {
+            updateState { it.copy(error = "One or more photos are too large. Choose smaller images.") }
+            return
+        }
+        val combined = (_state.value.galleryImages + images).take(6)
+        updateState { it.copy(galleryImages = combined, error = null) }
     }
 
     fun removeGalleryImage(index: Int) {
         val current = _state.value.galleryImages.toMutableList()
         if (index in current.indices) {
             current.removeAt(index)
-            _state.value = _state.value.copy(galleryImages = current)
+            updateState { it.copy(galleryImages = current, error = null) }
         }
     }
 
     fun toggleTag(tagId: String) {
         val current = _state.value.selectedTagIds
-        _state.value =
-            _state.value.copy(
+        updateState {
+            it.copy(
                 selectedTagIds = if (tagId in current) current - tagId else current + tagId,
+                error = null,
             )
+        }
     }
 
     fun createProfile(onComplete: () -> Unit) {
@@ -150,66 +231,131 @@ class OnboardingViewModel(
         val ageInt = s.age.toIntOrNull() ?: 20
 
         viewModelScope.launch {
-            _state.value = s.copy(isLoading = true)
-            val request =
-                CreateProfileRequest(
-                    name = s.name,
-                    age = ageInt,
-                    bio = s.bio.ifBlank { null },
-                    program = s.program.ifBlank { null },
-                    tagIds = s.selectedTagIds.toList(),
+            updateState(persist = false) { it.copy(isLoading = true, error = null) }
+            val profileId = ensureProfileExists(s, ageInt) ?: return@launch
+            val mediaResult = uploadMedia(s)
+            val mediaUpdated = updateProfileMedia(profileId, mediaResult.avatarUrl, mediaResult.imageUrls)
+            if (!mediaUpdated) return@launch
+            if (mediaResult.failures > 0) {
+                val uploadError =
+                    "Profile created, but ${mediaResult.failures} media upload(s) " +
+                        "failed. Retry with smaller files or better network."
+                updateState {
+                    it.copy(
+                        isLoading = false,
+                        error = uploadError,
+                    )
+                }
+                return@launch
+            }
+
+            sessionManager.saveOnboardingDraft(null)
+            updateState(persist = false) { it.copy(isLoading = false, error = null) }
+            onComplete()
+        }
+    }
+
+    private suspend fun ensureProfileExists(
+        state: OnboardingState,
+        age: Int,
+    ): String? {
+        val existing = createdProfileId
+        if (existing != null) return existing
+
+        return when (
+            val result =
+                apiService.createProfile(
+                    CreateProfileRequest(
+                        name = state.name,
+                        age = age,
+                        bio = state.bio.ifBlank { null },
+                        program = state.program.ifBlank { null },
+                        tagIds = state.selectedTagIds.toList(),
+                    ),
                 )
-            when (val result = apiService.createProfile(request)) {
-                is ApiResult.Success -> {
-                    val profileId = result.data.id
-                    sessionManager.saveProfileId(profileId)
+        ) {
+            is ApiResult.Success -> {
+                val id = result.data.id
+                createdProfileId = id
+                sessionManager.saveProfileId(id)
+                id
+            }
 
-                    // Upload avatar image if selected from gallery
-                    var avatarUrl: String? = s.selectedAvatar
-                    if (s.avatarImageBytes != null) {
-                        val uploadResult =
-                            apiService.uploadImage(
-                                s.avatarImageBytes,
-                                "avatar.jpg",
-                                "profile_picture",
-                            )
-                        if (uploadResult is ApiResult.Success) {
-                            avatarUrl = uploadResult.data.url
-                        }
-                    }
-
-                    // Upload gallery images
-                    val imageUrls =
-                        s.galleryImages.mapIndexedNotNull { i, bytes ->
-                            when (val r = apiService.uploadImage(bytes, "photo_$i.jpg", "profile_gallery")) {
-                                is ApiResult.Success -> r.data.url
-                                is ApiResult.Error -> null
-                            }
-                        }
-
-                    // Update profile with avatar and images
-                    if (avatarUrl != null || imageUrls.isNotEmpty()) {
-                        apiService.updateProfile(
-                            profileId,
-                            UpdateProfileRequest(
-                                profilePicture = avatarUrl,
-                                images = imageUrls.ifEmpty { null },
-                            ),
-                        )
-                    }
-
-                    _state.value = _state.value.copy(isLoading = false)
-                    onComplete()
-                }
-
-                is ApiResult.Error -> {
-                    _state.value = _state.value.copy(isLoading = false, error = result.message)
-                }
+            is ApiResult.Error -> {
+                updateState { it.copy(isLoading = false, error = result.message) }
+                null
             }
         }
     }
 
+    private suspend fun uploadMedia(state: OnboardingState): MediaUploadResult {
+        var avatarUrl: String? = state.selectedAvatar
+        var failures = 0
+
+        if (state.avatarImageBytes != null) {
+            when (
+                val result =
+                    apiService.uploadImage(
+                        state.avatarImageBytes,
+                        "avatar.jpg",
+                        "profile_picture",
+                    )
+            ) {
+                is ApiResult.Success -> avatarUrl = result.data.url
+                is ApiResult.Error -> failures++
+            }
+        }
+
+        val imageUrls =
+            state.galleryImages.mapIndexedNotNull { index, bytes ->
+                when (val result = apiService.uploadImage(bytes, "photo_$index.jpg", "profile_gallery")) {
+                    is ApiResult.Success -> {
+                        result.data.url
+                    }
+
+                    is ApiResult.Error -> {
+                        failures++
+                        null
+                    }
+                }
+            }
+
+        return MediaUploadResult(
+            avatarUrl = avatarUrl,
+            imageUrls = imageUrls,
+            failures = failures,
+        )
+    }
+
+    private suspend fun updateProfileMedia(
+        profileId: String,
+        avatarUrl: String?,
+        imageUrls: List<String>,
+    ): Boolean {
+        var success = true
+        if (avatarUrl != null || imageUrls.isNotEmpty()) {
+            val result =
+                apiService.updateProfile(
+                    profileId,
+                    UpdateProfileRequest(
+                        profilePicture = avatarUrl,
+                        images = imageUrls.ifEmpty { null },
+                    ),
+                )
+            if (result is ApiResult.Error) {
+                updateState {
+                    it.copy(
+                        isLoading = false,
+                        error = "Profile created, but media sync failed. Retry when online.",
+                    )
+                }
+                success = false
+            }
+        }
+        return success
+    }
+
     fun clearError() {
-        _state.value = _state.value.copy(error = null)
+        updateState { it.copy(error = null) }
     }
 }

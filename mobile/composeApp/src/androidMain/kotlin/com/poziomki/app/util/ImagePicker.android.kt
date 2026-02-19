@@ -12,6 +12,14 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import java.io.ByteArrayOutputStream
+import kotlin.math.sqrt
+
+private const val DEFAULT_MAX_DIMENSION = 1920
+private const val DEFAULT_JPEG_QUALITY = 85
+private const val DEFAULT_MAX_BYTES = 700 * 1024
+private const val MIN_JPEG_QUALITY = 50
+private const val QUALITY_STEP = 10
+private const val MIN_PIXEL_DIMENSION = 1
 
 @Composable
 actual fun rememberSingleImagePicker(onResult: (ByteArray?) -> Unit): () -> Unit {
@@ -75,8 +83,9 @@ actual fun decodeImageBytes(bytes: ByteArray): ImageBitmap? = BitmapFactory.deco
 private fun compressImage(
     context: android.content.Context,
     uri: Uri,
-    maxDimension: Int = 1920,
-    quality: Int = 85,
+    maxDimension: Int = DEFAULT_MAX_DIMENSION,
+    quality: Int = DEFAULT_JPEG_QUALITY,
+    maxBytes: Int = DEFAULT_MAX_BYTES,
 ): ByteArray? {
     return try {
         // Decode bounds first
@@ -100,9 +109,26 @@ private fun compressImage(
                 BitmapFactory.decodeStream(it, null, decodeOptions)
             } ?: return null
 
-        // Compress to JPEG
+        // Compress to JPEG and enforce a byte ceiling to keep memory footprint bounded.
         val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output)
+        var currentQuality = quality
+        bitmap.compress(Bitmap.CompressFormat.JPEG, currentQuality, output)
+        while (output.size() > maxBytes && currentQuality > MIN_JPEG_QUALITY) {
+            currentQuality -= QUALITY_STEP
+            output.reset()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, currentQuality, output)
+        }
+
+        if (output.size() > maxBytes) {
+            val scale = sqrt(maxBytes.toDouble() / output.size().toDouble()).coerceAtMost(1.0)
+            val resizedWidth = (bitmap.width * scale).toInt().coerceAtLeast(MIN_PIXEL_DIMENSION)
+            val resizedHeight = (bitmap.height * scale).toInt().coerceAtLeast(MIN_PIXEL_DIMENSION)
+            val resizedBitmap = Bitmap.createScaledBitmap(bitmap, resizedWidth, resizedHeight, true)
+            output.reset()
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, currentQuality, output)
+            resizedBitmap.recycle()
+        }
+
         bitmap.recycle()
         output.toByteArray()
     } catch (_: Exception) {
