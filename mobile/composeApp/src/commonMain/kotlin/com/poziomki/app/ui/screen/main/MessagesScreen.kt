@@ -52,6 +52,7 @@ import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
+import com.poziomki.app.util.appUserIdFromMatrixUserId
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -177,9 +178,16 @@ fun MessagesScreen(
                                 items(filteredRooms, key = { it.roomId }) { room ->
                                     val profilePicture =
                                         room.directUserId
-                                            ?.substringAfter("@")
-                                            ?.substringBefore(":")
-                                            ?.let { state.profilePictures[it] }
+                                            ?.let { directUserId ->
+                                                val localpart = directUserId.substringAfter("@").substringBefore(":")
+                                                val appUserId = appUserIdFromMatrixUserId(directUserId)
+                                                listOfNotNull(
+                                                    state.profilePictures[directUserId],
+                                                    state.profilePictures[directUserId.substringBefore(":")],
+                                                    state.profilePictures[localpart],
+                                                    appUserId?.let { state.profilePictures[it] },
+                                                ).firstOrNull()
+                                            }
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,

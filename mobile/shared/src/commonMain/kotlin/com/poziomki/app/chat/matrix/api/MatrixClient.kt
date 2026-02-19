@@ -17,6 +17,7 @@ sealed interface MatrixClientState {
         val userId: String,
         val homeserver: String,
         val deviceId: String,
+        val accessToken: String,
     ) : MatrixClientState
 
     data class Error(

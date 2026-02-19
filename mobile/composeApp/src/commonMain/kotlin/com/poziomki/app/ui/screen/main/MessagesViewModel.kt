@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
+import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.screen.main.messages.MessagesUiState
 import com.poziomki.app.util.matrixLocalpartFromUserId
@@ -115,10 +116,11 @@ class MessagesViewModel(
     private fun observeRooms() {
         viewModelScope.launch {
             matrixClient.rooms.collect { rooms ->
+                val deduplicatedRooms = deduplicateRooms(rooms)
                 _state.update { current ->
                     current.copy(
-                        rooms = rooms,
-                        isLoading = if (rooms.isNotEmpty()) false else current.isLoading,
+                        rooms = deduplicatedRooms,
+                        isLoading = if (deduplicatedRooms.isNotEmpty()) false else current.isLoading,
                     )
                 }
             }
@@ -131,7 +133,10 @@ class MessagesViewModel(
                 val pictureMap = mutableMapOf<String, String>()
                 userIdToPic.forEach { (userId, pic) ->
                     val localpart = matrixLocalpartFromUserId(userId)
+                    pictureMap[userId] = pic
+                    pictureMap[userId.lowercase()] = pic
                     pictureMap[localpart] = pic
+                    pictureMap["@$localpart"] = pic
                 }
                 _state.update { it.copy(profilePictures = pictureMap) }
             }
@@ -142,5 +147,32 @@ class MessagesViewModel(
         viewModelScope.launch {
             matchProfileRepository.refreshProfiles()
         }
+    }
+
+    private fun deduplicateRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
+        val deduplicated = LinkedHashMap<String, MatrixRoomSummary>()
+        rooms.forEach { room ->
+            val key =
+                if (room.isDirect) {
+                    room.directUserId
+                        ?.trim()
+                        ?.lowercase()
+                        ?.ifBlank { null }
+                        ?: room.roomId
+                } else {
+                    room.roomId
+                }
+            val existing = deduplicated[key]
+            if (existing == null) {
+                deduplicated[key] = room
+            } else {
+                val roomTs = room.latestTimestampMillis ?: Long.MIN_VALUE
+                val existingTs = existing.latestTimestampMillis ?: Long.MIN_VALUE
+                if (roomTs > existingTs) {
+                    deduplicated[key] = room
+                }
+            }
+        }
+        return deduplicated.values.toList()
     }
 }

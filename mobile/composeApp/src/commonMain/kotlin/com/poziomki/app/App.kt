@@ -9,6 +9,8 @@ import androidx.compose.runtime.remember
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
@@ -17,17 +19,32 @@ import com.poziomki.app.ui.navigation.Route
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.http.HttpHeaders
 import org.koin.compose.koinInject
 
 @Composable
 fun App() {
     val engine = koinInject<HttpClientEngine>()
+    val matrixClient = koinInject<MatrixClient>()
 
     setSingletonImageLoaderFactory { context ->
+        val imageHttpClient = HttpClient(engine) {
+            install(createClientPlugin("MatrixMediaAuth") {
+                onRequest { request, _ ->
+                    if ("/_matrix/" in request.url.encodedPath) {
+                        val token = (matrixClient.state.value as? MatrixClientState.Ready)?.accessToken
+                        if (token != null) {
+                            request.headers.append(HttpHeaders.Authorization, "Bearer $token")
+                        }
+                    }
+                }
+            })
+        }
         ImageLoader
             .Builder(context)
             .components {
-                add(KtorNetworkFetcherFactory(HttpClient(engine)))
+                add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()
     }
 

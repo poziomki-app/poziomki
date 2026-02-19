@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -27,13 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.poziomki.app.ui.component.UserAvatar
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
-import com.poziomki.app.ui.theme.Surface as SurfaceColor
 
 @Composable
 fun ChatScreen(
@@ -54,6 +54,7 @@ fun ChatScreen(
         topBar = {
             ChatTopBar(
                 title = state.roomDisplayName.ifBlank { "Chat" },
+                avatarUrl = state.roomAvatarUrl,
                 onBack = onBack,
             )
         },
@@ -83,8 +84,10 @@ fun ChatScreen(
 }
 
 @Composable
+@Suppress("FunctionNaming")
 private fun ChatTopBar(
     title: String,
+    avatarUrl: String?,
     onBack: () -> Unit,
 ) {
     Surface(
@@ -95,6 +98,7 @@ private fun ChatTopBar(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -106,19 +110,13 @@ private fun ChatTopBar(
                 )
             }
 
-            Surface(
-                modifier = Modifier.size(34.dp),
-                shape = CircleShape,
-                color = Primary.copy(alpha = 0.2f),
-            ) {
-                androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = title.firstOrNull()?.uppercase() ?: "?",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Primary,
-                    )
-                }
-            }
+            UserAvatar(
+                picture = avatarUrl,
+                displayName = title,
+                size = 34.dp,
+                backgroundColor = Primary.copy(alpha = 0.2f),
+                iconTint = Primary,
+            )
 
             Spacer(modifier = Modifier.width(10.dp))
 

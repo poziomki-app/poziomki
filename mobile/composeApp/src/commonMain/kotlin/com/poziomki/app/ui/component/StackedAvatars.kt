@@ -3,6 +3,7 @@ package com.poziomki.app.ui.component
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,9 +20,20 @@ fun StackedAvatars(
     maxAvatars: Int = 5,
 ) {
     val visible = imageUrls.take(maxAvatars)
-    Box(modifier = modifier) {
+    val step = avatarSize + overlapOffset
+    val totalWidth =
+        when {
+            visible.isEmpty() -> 0.dp
+            else -> avatarSize + (step * (visible.size - 1))
+        }
+
+    Box(
+        modifier =
+            modifier
+                .size(width = totalWidth, height = avatarSize),
+    ) {
         visible.forEachIndexed { index, url ->
-            val xOffset = (avatarSize + overlapOffset) * index
+            val xOffset = step * index
             UserAvatar(
                 picture = url,
                 displayName = null,

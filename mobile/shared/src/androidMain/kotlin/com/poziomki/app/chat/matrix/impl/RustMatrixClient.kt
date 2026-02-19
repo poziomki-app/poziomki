@@ -71,6 +71,8 @@ class RustMatrixClient(
 
     private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
     private var cachedConfig: MatrixConfigData? = null
+    private val dmRoomIdsByUserId = mutableMapOf<String, String>()
+    private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
 
     override suspend fun ensureStarted(): Result<Unit> =
         startStopMutex.withLock {
@@ -196,7 +198,7 @@ class RustMatrixClient(
 
                     client = newClient
                     syncService = newSyncService
-                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId())
+                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId(), accessToken)
                 }.onFailure { throwable ->
                     cleanupInternal()
                     if (!retried) {
@@ -259,14 +261,41 @@ class RustMatrixClient(
                 ensureStarted().getOrThrow()
                 val innerClient = client ?: error("Matrix client is not initialized")
                 val normalizedUserId = normalizeUserId(userId)
+                val cachedRoomId = synchronized(dmRoomIdsByUserId) { dmRoomIdsByUserId[normalizedUserId] }
+                if (!cachedRoomId.isNullOrBlank()) return@runCatching cachedRoomId
+
                 val existing = innerClient.getDmRoom(normalizedUserId)
-                if (existing != null) return@runCatching existing.id()
-                createRoomInternal(
-                    name = displayName,
-                    invitedUserIds = listOf(normalizedUserId),
-                    isDirect = true,
-                    preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
-                )
+                if (existing != null) {
+                    val existingRoomId = existing.id()
+                    synchronized(dmRoomIdsByUserId) {
+                        dmRoomIdsByUserId[normalizedUserId] = existingRoomId
+                    }
+                    return@runCatching existingRoomId
+                }
+
+                val existingFromSummary =
+                    _rooms.value
+                        .firstOrNull { summary ->
+                            summary.isDirect && summary.directUserId?.let(::normalizeUserId) == normalizedUserId
+                        }?.roomId
+                if (!existingFromSummary.isNullOrBlank()) {
+                    synchronized(dmRoomIdsByUserId) {
+                        dmRoomIdsByUserId[normalizedUserId] = existingFromSummary
+                    }
+                    return@runCatching existingFromSummary
+                }
+
+                val createdRoomId =
+                    createRoomInternal(
+                        name = displayName,
+                        invitedUserIds = listOf(normalizedUserId),
+                        isDirect = true,
+                        preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
+                    )
+                synchronized(dmRoomIdsByUserId) {
+                    dmRoomIdsByUserId[normalizedUserId] = createdRoomId
+                }
+                createdRoomId
             }
         }
 
@@ -325,25 +354,52 @@ class RustMatrixClient(
             )
     }
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     private fun publishRoomSummaries(roomsSnapshot: List<Room>) {
         scope.launch(Dispatchers.Default) {
-            val mappedRooms =
-                roomsSnapshot.mapNotNull { room ->
+            val mappedRooms = mutableListOf<MatrixRoomSummary>()
+            for (room in roomsSnapshot) {
+                val mappedRoom =
                     runCatching {
                         val info = room.roomInfo()
                         val latest = room.latestEvent()
+                        val directHero = info.heroes.firstOrNull() ?: room.heroes().firstOrNull()
 
                         val heroUserId =
                             if (info.isDirect) {
-                                info.heroes.firstOrNull()?.userId
+                                directHero?.userId
                             } else {
                                 null
                             }
 
+                        val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
+                        var resolvedAvatarUrl =
+                            info.avatarUrl
+                                ?: if (info.isDirect) {
+                                    directHero?.avatarUrl
+                                } else {
+                                    null
+                                }
+                                ?: normalizedDirectUserId?.let { normalized ->
+                                    synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId[normalized] }
+                                }
+
+                        if (resolvedAvatarUrl.isNullOrBlank() && info.isDirect && !heroUserId.isNullOrBlank()) {
+                            resolvedAvatarUrl =
+                                runCatching { room.memberAvatarUrl(heroUserId) }
+                                    .getOrNull()
+                                    ?.takeIf { it.isNotBlank() }
+                            if (!resolvedAvatarUrl.isNullOrBlank() && !normalizedDirectUserId.isNullOrBlank()) {
+                                synchronized(dmAvatarUrlsByUserId) {
+                                    dmAvatarUrlsByUserId[normalizedDirectUserId] = resolvedAvatarUrl
+                                }
+                            }
+                        }
+
                         MatrixRoomSummary(
                             roomId = info.id,
-                            displayName = info.displayName ?: room.displayName() ?: info.id,
-                            avatarUrl = info.avatarUrl,
+                            displayName = info.displayName ?: directHero?.displayName ?: room.displayName() ?: info.id,
+                            avatarUrl = resolvedAvatarUrl,
                             isDirect = info.isDirect,
                             directUserId = heroUserId,
                             unreadCount =
@@ -355,7 +411,21 @@ class RustMatrixClient(
                             latestTimestampMillis = latest.timestampMillis(),
                         )
                     }.getOrNull()
+
+                if (mappedRoom != null) {
+                    mappedRooms += mappedRoom
                 }
+            }
+
+            synchronized(dmRoomIdsByUserId) {
+                mappedRooms
+                    .asSequence()
+                    .filter { it.isDirect && !it.directUserId.isNullOrBlank() }
+                    .forEach { room ->
+                        val directUserId = room.directUserId ?: return@forEach
+                        dmRoomIdsByUserId[normalizeUserId(directUserId)] = room.roomId
+                    }
+            }
 
             _rooms.value = mappedRooms.sortedByDescending { it.latestTimestampMillis ?: Long.MIN_VALUE }
         }
@@ -427,6 +497,8 @@ class RustMatrixClient(
     private fun cleanupInternal() {
         openedRooms.values.forEach { room -> room.close() }
         openedRooms.clear()
+        synchronized(dmRoomIdsByUserId) { dmRoomIdsByUserId.clear() }
+        synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId.clear() }
 
         roomListSubscription?.streamHandle?.cancel()
         roomListSubscription?.roomListResult?.close()

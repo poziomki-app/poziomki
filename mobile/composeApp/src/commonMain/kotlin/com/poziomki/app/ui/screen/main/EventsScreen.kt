@@ -110,15 +110,11 @@ fun EventsScreen(
             placeholder = "szukaj wydarzeń...",
         )
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
         FilterTabs(
             tabs = timeFilterTabs,
             selected = state.activeFilter,
             onSelect = { viewModel.setTimeFilter(it) },
         )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
         // Content
         Box(modifier = Modifier.fillMaxSize()) {

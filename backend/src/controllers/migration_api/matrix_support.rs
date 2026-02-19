@@ -225,6 +225,80 @@ pub(super) async fn set_display_name(
     }
 }
 
+#[derive(Deserialize)]
+struct MediaUploadResponse {
+    content_uri: String,
+}
+
+pub(super) async fn upload_media(
+    http_client: &reqwest::Client,
+    homeserver: &str,
+    access_token: &str,
+    bytes: Vec<u8>,
+    content_type: &str,
+    filename: &str,
+) -> std::result::Result<String, String> {
+    let url = matrix_endpoint(
+        homeserver,
+        &format!("/_matrix/media/v3/upload?filename={filename}"),
+    );
+    let response = http_client
+        .post(&url)
+        .bearer_auth(access_token)
+        .header("Content-Type", content_type)
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    let body: MediaUploadResponse = response.json().await.map_err(|e| e.to_string())?;
+    Ok(body.content_uri)
+}
+
+pub(super) async fn set_avatar_url(
+    http_client: &reqwest::Client,
+    homeserver: &str,
+    access_token: &str,
+    user_id: &str,
+    avatar_url: &str,
+) -> std::result::Result<(), String> {
+    let encoded_user_id = user_id
+        .replace('%', "%25")
+        .replace('@', "%40")
+        .replace(':', "%3A");
+    let url = matrix_endpoint(
+        homeserver,
+        &format!("/_matrix/client/v3/profile/{encoded_user_id}/avatar_url"),
+    );
+    let response = http_client
+        .put(&url)
+        .bearer_auth(access_token)
+        .json(&json!({ "avatar_url": avatar_url }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("HTTP {}", response.status()))
+    }
+}
+
+pub(super) fn content_type_from_filename(filename: &str) -> Option<&'static str> {
+    let ext = std::path::Path::new(filename)
+        .extension()?
+        .to_ascii_lowercase();
+    match ext.to_str()? {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "webp" => Some("image/webp"),
+        "avif" => Some("image/avif"),
+        _ => None,
+    }
+}
+
 fn derive_matrix_password(user_pid: &str, pepper: &str) -> String {
     // HMAC accepts any key length, so new_from_slice never fails for SHA-256.
     #[allow(clippy::expect_used)]

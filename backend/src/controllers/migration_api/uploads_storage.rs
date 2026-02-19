@@ -31,7 +31,7 @@ struct StorageConfig {
 
 static STORAGE: OnceLock<Result<StorageConfig, String>> = OnceLock::new();
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(in crate::controllers::migration_api) struct StorageError {
     pub(in crate::controllers::migration_api) kind: Option<ErrorKind>,
 }
@@ -171,7 +171,9 @@ pub(super) async fn upload(
         })
 }
 
-pub(super) async fn read(filename: &str) -> Result<Vec<u8>, StorageError> {
+pub(in crate::controllers::migration_api) async fn read(
+    filename: &str,
+) -> Result<Vec<u8>, StorageError> {
     let config = storage().map_err(|_message| StorageError { kind: None })?;
     config
         .operator

@@ -1,5 +1,6 @@
 use axum::{extract::State, http::HeaderMap, Json};
 use loco_rs::{app::AppContext, prelude::*};
+use sea_orm::EntityTrait;
 use serde::Deserialize;
 
 pub(super) use super::matrix_support;
@@ -19,12 +20,22 @@ pub(super) async fn create_session(
     headers: HeaderMap,
     Json(payload): Json<MatrixSessionRequest>,
 ) -> Result<Response> {
-    let (user_pid, user_name) = {
+    let (user_pid, user_name, profile_picture) = {
         let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
             Ok(auth) => auth,
             Err(response) => return Ok(*response),
         };
-        (user.pid.to_string(), user.name)
+        let pic = {
+            use crate::models::_entities::profiles;
+            profiles::Entity::find()
+                .filter(profiles::Column::UserId.eq(user.id))
+                .one(&ctx.db)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|p| p.profile_picture)
+        };
+        (user.pid.to_string(), user.name, pic)
     };
 
     match do_create_session(
@@ -32,6 +43,7 @@ pub(super) async fn create_session(
         &user_name,
         payload.device_name.as_deref(),
         payload.device_id.as_deref(),
+        profile_picture.as_deref(),
         &headers,
     )
     .await
@@ -45,6 +57,7 @@ async fn do_create_session(
     user_name: &str,
     device_name: Option<&str>,
     device_id: Option<&str>,
+    profile_picture_filename: Option<&str>,
     headers: &HeaderMap,
 ) -> std::result::Result<Response, Response> {
     let internal_homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
@@ -101,7 +114,47 @@ async fn do_create_session(
         tracing::warn!(error = %e, "failed to set matrix display name");
     }
 
+    // Set the user's Matrix avatar (best-effort, don't fail the session)
+    if let Some(pic_filename) = profile_picture_filename {
+        if let Err(e) = sync_matrix_avatar(
+            &http_client,
+            &internal_homeserver,
+            &matrix_auth.access_token,
+            &matrix_auth.user_id,
+            pic_filename,
+        )
+        .await
+        {
+            tracing::warn!(error = %e, "failed to set matrix avatar");
+        }
+    }
+
     matrix_support::build_session_response(public_homeserver, matrix_auth, headers)
+}
+
+async fn sync_matrix_avatar(
+    http_client: &reqwest::Client,
+    homeserver: &str,
+    access_token: &str,
+    user_id: &str,
+    pic_filename: &str,
+) -> std::result::Result<(), String> {
+    let filename = super::extract_filename(pic_filename);
+    let content_type = matrix_support::content_type_from_filename(&filename)
+        .ok_or_else(|| format!("unsupported image type: {filename}"))?;
+    let bytes = super::uploads::uploads_storage::read(&filename)
+        .await
+        .map_err(|e| format!("failed to read {filename} from storage: {e:?}"))?;
+    let mxc_uri = matrix_support::upload_media(
+        http_client,
+        homeserver,
+        access_token,
+        bytes,
+        content_type,
+        &filename,
+    )
+    .await?;
+    matrix_support::set_avatar_url(http_client, homeserver, access_token, user_id, &mxc_uri).await
 }
 
 pub(super) fn chat_bootstrap_error(

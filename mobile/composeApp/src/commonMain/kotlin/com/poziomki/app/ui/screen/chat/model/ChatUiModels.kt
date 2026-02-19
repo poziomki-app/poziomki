@@ -21,6 +21,7 @@ sealed interface ComposerMode {
 data class ChatUiState(
     val roomId: String = "",
     val roomDisplayName: String = "",
+    val roomAvatarUrl: String? = null,
     val timelineMode: MatrixTimelineMode = MatrixTimelineMode.Live,
     val timelineItems: List<MatrixTimelineItem> = emptyList(),
     val isPaginatingBackwards: Boolean = false,

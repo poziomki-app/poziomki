@@ -364,6 +364,7 @@ class ChatViewModel(
             it.copy(
                 roomId = room.roomId,
                 roomDisplayName = "",
+                roomAvatarUrl = null,
                 timelineItems = emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
@@ -381,6 +382,16 @@ class ChatViewModel(
                 room.displayName.collectLatest { name ->
                     _uiState.update { current ->
                         current.copy(roomDisplayName = name)
+                    }
+                }
+            }
+
+        roomJobs +=
+            viewModelScope.launch {
+                matrixClient.rooms.collectLatest { summaries ->
+                    val summary = summaries.firstOrNull { it.roomId == room.roomId }
+                    _uiState.update { current ->
+                        current.copy(roomAvatarUrl = summary?.avatarUrl)
                     }
                 }
             }
