@@ -56,6 +56,8 @@ class RustMatrixClient(
 ) : MatrixClient {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val startStopMutex = Mutex()
+    private val roomCreationMutex = Mutex()
+    private val dmCreationMutex = Mutex()
 
     private val _state = MutableStateFlow<MatrixClientState>(MatrixClientState.Idle)
     override val state: StateFlow<MatrixClientState> = _state
@@ -252,32 +254,36 @@ class RustMatrixClient(
         userId: String,
         displayName: String?,
     ): Result<String> =
-        runCatching {
-            ensureStarted().getOrThrow()
-            val innerClient = client ?: error("Matrix client is not initialized")
-            val normalizedUserId = normalizeUserId(userId)
-            val existing = innerClient.getDmRoom(normalizedUserId)
-            if (existing != null) return@runCatching existing.id()
-            createRoomInternal(
-                name = displayName,
-                invitedUserIds = listOf(normalizedUserId),
-                isDirect = true,
-                preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
-            )
+        dmCreationMutex.withLock {
+            runCatching {
+                ensureStarted().getOrThrow()
+                val innerClient = client ?: error("Matrix client is not initialized")
+                val normalizedUserId = normalizeUserId(userId)
+                val existing = innerClient.getDmRoom(normalizedUserId)
+                if (existing != null) return@runCatching existing.id()
+                createRoomInternal(
+                    name = displayName,
+                    invitedUserIds = listOf(normalizedUserId),
+                    isDirect = true,
+                    preset = RoomPreset.TRUSTED_PRIVATE_CHAT,
+                )
+            }
         }
 
     override suspend fun createRoom(
         name: String,
         invitedUserIds: List<String>,
     ): Result<String> =
-        runCatching {
-            ensureStarted().getOrThrow()
-            createRoomInternal(
-                name = name.ifBlank { null },
-                invitedUserIds = invitedUserIds.map(::normalizeUserId),
-                isDirect = false,
-                preset = RoomPreset.PRIVATE_CHAT,
-            )
+        roomCreationMutex.withLock {
+            runCatching {
+                ensureStarted().getOrThrow()
+                createRoomInternal(
+                    name = name.ifBlank { null },
+                    invitedUserIds = invitedUserIds.map(::normalizeUserId),
+                    isDirect = false,
+                    preset = RoomPreset.PRIVATE_CHAT,
+                )
+            }
         }
 
     override suspend fun stop() {

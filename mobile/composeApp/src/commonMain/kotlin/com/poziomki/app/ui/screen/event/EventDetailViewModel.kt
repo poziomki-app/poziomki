@@ -20,6 +20,7 @@ data class EventDetailState(
     val attendees: List<EventAttendee> = emptyList(),
     val isLoading: Boolean = false,
     val isOpeningChat: Boolean = false,
+    val isUpdatingAttendance: Boolean = false,
     val error: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
@@ -70,9 +71,13 @@ class EventDetailViewModel(
     }
 
     fun attendEvent() {
+        if (_state.value.isUpdatingAttendance) return
         viewModelScope.launch {
+            _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.attendEvent(eventId)) {
-                is ApiResult.Success -> {}
+                is ApiResult.Success -> {
+                    eventRepository.refreshAttendees(eventId)
+                }
 
                 is ApiResult.Error -> {
                     _state.value =
@@ -82,13 +87,18 @@ class EventDetailViewModel(
                         )
                 }
             }
+            _state.value = _state.value.copy(isUpdatingAttendance = false)
         }
     }
 
     fun leaveEvent() {
+        if (_state.value.isUpdatingAttendance) return
         viewModelScope.launch {
+            _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.leaveEvent(eventId)) {
-                is ApiResult.Success -> {}
+                is ApiResult.Success -> {
+                    eventRepository.refreshAttendees(eventId)
+                }
 
                 is ApiResult.Error -> {
                     _state.value =
@@ -98,6 +108,7 @@ class EventDetailViewModel(
                         )
                 }
             }
+            _state.value = _state.value.copy(isUpdatingAttendance = false)
         }
     }
 

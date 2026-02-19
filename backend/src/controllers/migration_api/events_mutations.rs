@@ -160,7 +160,10 @@ pub(in crate::controllers::migration_api) async fn event_delete(
 
     crate::search::invalidate_search_cache();
 
-    Ok(Json(SuccessResponse { success: true }).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 async fn load_event_with_profile(
@@ -177,14 +180,17 @@ pub(in crate::controllers::migration_api) async fn event_attend(
     State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
-    Json(payload): Json<AttendEventBody>,
+    payload: Option<Json<AttendEventBody>>,
 ) -> Result<Response> {
     let (event, event_uuid, profile) = match load_event_with_profile(&ctx, &headers, &id).await {
         Ok(data) => data,
         Err(response) => return Ok(*response),
     };
 
-    let status_str = match payload.status.unwrap_or(AttendeeStatus::Going) {
+    let status_str = match payload
+        .and_then(|Json(body)| body.status)
+        .unwrap_or(AttendeeStatus::Going)
+    {
         AttendeeStatus::Going => "going",
         AttendeeStatus::Interested => "interested",
         AttendeeStatus::Invited => "invited",

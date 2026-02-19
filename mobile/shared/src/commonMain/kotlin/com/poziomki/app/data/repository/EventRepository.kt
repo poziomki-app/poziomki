@@ -19,7 +19,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,7 +34,16 @@ class EventRepository(
     private val pendingOps: PendingOperationsManager,
     private val matrixClient: MatrixClient,
 ) {
+    companion object {
+        private const val CREATE_EVENT_ONLINE_TIMEOUT_MS = 1500L
+        private const val NETWORK_STATUS_CODE = 0
+        private const val REQUEST_TIMEOUT_STATUS_CODE = 408
+        private const val TOO_MANY_REQUESTS_STATUS_CODE = 429
+        private const val SERVER_ERROR_MIN_STATUS_CODE = 500
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
+    private val eventRoomMutex = Mutex()
 
     fun observeEvents(): Flow<List<Event>> =
         db.eventQueries
@@ -137,33 +149,54 @@ class EventRepository(
 
     suspend fun createEvent(request: CreateEventRequest): ApiResult<Event> =
         withContext(Dispatchers.IO) {
+            val tempId = "local_${Clock.System.now().toEpochMilliseconds()}"
+            val tempEvent =
+                Event(
+                    id = tempId,
+                    title = request.title,
+                    description = request.description,
+                    location = request.location,
+                    latitude = request.latitude,
+                    longitude = request.longitude,
+                    startsAt = request.startsAt,
+                    endsAt = request.endsAt,
+                )
+            val now = Clock.System.now().toEpochMilliseconds()
+            upsertEvent(tempEvent, now, isDirty = true)
+
             if (connectivityMonitor.isOnline.value) {
-                when (val result = api.createEvent(request)) {
+                val onlineResult = withTimeoutOrNull(CREATE_EVENT_ONLINE_TIMEOUT_MS) { api.createEvent(request) }
+                when (onlineResult) {
                     is ApiResult.Success -> {
-                        val now = Clock.System.now().toEpochMilliseconds()
-                        upsertEvent(result.data, now)
-                        result
+                        db.eventQueries.deleteById(tempId)
+                        upsertEvent(onlineResult.data, Clock.System.now().toEpochMilliseconds())
+                        ApiResult.Success(onlineResult.data)
                     }
 
                     is ApiResult.Error -> {
-                        result
+                        if (shouldRetry(onlineResult.status)) {
+                            pendingOps.enqueue(
+                                type = "create_event",
+                                entityId = tempId,
+                                payload = json.encodeToString(request),
+                            )
+                            ApiResult.Success(tempEvent)
+                        } else {
+                            db.eventQueries.deleteById(tempId)
+                            onlineResult
+                        }
+                    }
+
+                    null -> {
+                        pendingOps.enqueue(
+                            type = "create_event",
+                            entityId = tempId,
+                            payload = json.encodeToString(request),
+                        )
+                        ApiResult.Success(tempEvent)
                     }
                 }
             } else {
-                val tempId = "local_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}"
-                val tempEvent =
-                    Event(
-                        id = tempId,
-                        title = request.title,
-                        description = request.description,
-                        location = request.location,
-                        latitude = request.latitude,
-                        longitude = request.longitude,
-                        startsAt = request.startsAt,
-                        endsAt = request.endsAt,
-                    )
-                val now = Clock.System.now().toEpochMilliseconds()
-                upsertEvent(tempEvent, now, isDirty = true)
                 pendingOps.enqueue(
                     type = "create_event",
                     entityId = tempId,
@@ -235,9 +268,10 @@ class EventRepository(
 
     suspend fun attendEvent(id: String): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
-            // Optimistic update
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
-            if (current != null) {
+            val previousAttending = current?.is_attending == 1L
+            val previousCount = current?.attendees_count ?: 0L
+            if (current != null && !previousAttending) {
                 db.eventQueries.updateAttendance(
                     is_attending = 1L,
                     attendees_count = current.attendees_count + 1,
@@ -246,11 +280,26 @@ class EventRepository(
             }
 
             if (connectivityMonitor.isOnline.value) {
-                val result = api.attendEvent(id)
-                if (result is ApiResult.Error) {
-                    pendingOps.enqueue("attend_event", id, "{}")
+                when (val result = api.attendEvent(id)) {
+                    is ApiResult.Success -> {
+                        upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                        ApiResult.Success(Unit)
+                    }
+
+                    is ApiResult.Error -> {
+                        restoreAttendance(
+                            id = id,
+                            isAttending = previousAttending,
+                            attendeesCount = previousCount,
+                        )
+                        if (shouldRetry(result.status)) {
+                            pendingOps.enqueue("attend_event", id, "{}")
+                            ApiResult.Success(Unit)
+                        } else {
+                            result
+                        }
+                    }
                 }
-                result
             } else {
                 pendingOps.enqueue("attend_event", id, "{}")
                 ApiResult.Success(Unit)
@@ -259,9 +308,10 @@ class EventRepository(
 
     suspend fun leaveEvent(id: String): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
-            // Optimistic update
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
-            if (current != null) {
+            val previousAttending = current?.is_attending == 1L
+            val previousCount = current?.attendees_count ?: 0L
+            if (current != null && previousAttending) {
                 db.eventQueries.updateAttendance(
                     is_attending = 0L,
                     attendees_count = maxOf(0L, current.attendees_count - 1),
@@ -270,11 +320,26 @@ class EventRepository(
             }
 
             if (connectivityMonitor.isOnline.value) {
-                val result = api.leaveEvent(id)
-                if (result is ApiResult.Error) {
-                    pendingOps.enqueue("leave_event", id, "{}")
+                when (val result = api.leaveEvent(id)) {
+                    is ApiResult.Success -> {
+                        upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                        ApiResult.Success(Unit)
+                    }
+
+                    is ApiResult.Error -> {
+                        restoreAttendance(
+                            id = id,
+                            isAttending = previousAttending,
+                            attendeesCount = previousCount,
+                        )
+                        if (shouldRetry(result.status)) {
+                            pendingOps.enqueue("leave_event", id, "{}")
+                            ApiResult.Success(Unit)
+                        } else {
+                            result
+                        }
+                    }
                 }
-                result
             } else {
                 pendingOps.enqueue("leave_event", id, "{}")
                 ApiResult.Success(Unit)
@@ -283,9 +348,24 @@ class EventRepository(
 
     suspend fun deleteEvent(id: String): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
+            val current = db.eventQueries.selectById(id).executeAsOneOrNull()
             db.eventQueries.deleteById(id)
             if (connectivityMonitor.isOnline.value) {
-                api.deleteEvent(id)
+                when (val result = api.deleteEvent(id)) {
+                    is ApiResult.Success -> {
+                        ApiResult.Success(Unit)
+                    }
+
+                    is ApiResult.Error -> {
+                        if (shouldRetry(result.status)) {
+                            pendingOps.enqueue("delete_event", id, "{}")
+                            ApiResult.Success(Unit)
+                        } else {
+                            current?.let(::restoreEvent)
+                            result
+                        }
+                    }
+                }
             } else {
                 pendingOps.enqueue("delete_event", id, "{}")
                 ApiResult.Success(Unit)
@@ -298,39 +378,83 @@ class EventRepository(
         attendeeUserIds: List<String>,
     ): Result<String> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val existingEvent = db.eventQueries.selectById(eventId).executeAsOneOrNull()
-                existingEvent?.conversation_id?.takeIf { it.startsWith("!") }?.let { existingRoomId ->
-                    return@runCatching existingRoomId
+            eventRoomMutex.withLock {
+                runCatching {
+                    val existingEvent = db.eventQueries.selectById(eventId).executeAsOneOrNull()
+                    existingEvent?.conversation_id?.takeIf { it.startsWith("!") }?.let { existingRoomId ->
+                        return@runCatching existingRoomId
+                    }
+
+                    matrixClient.ensureStarted().getOrThrow()
+                    val ownMatrixUserId = (matrixClient.state.value as? MatrixClientState.Ready)?.userId
+                    val ownLocalpart = ownMatrixUserId?.removePrefix("@")?.substringBefore(":")
+
+                    val invitedUsers =
+                        attendeeUserIds
+                            .map(String::trim)
+                            .filter(String::isNotEmpty)
+                            .filterNot { it == ownMatrixUserId || it == ownLocalpart }
+                            .distinct()
+
+                    val resolvedRoomName =
+                        fallbackName
+                            .trim()
+                            .ifBlank { "Wydarzenie" }
+
+                    val roomId =
+                        matrixClient
+                            .createRoom(
+                                name = resolvedRoomName,
+                                invitedUserIds = invitedUsers,
+                            ).getOrThrow()
+
+                    updateEventConversationId(eventId, roomId)
+                    roomId
                 }
-
-                matrixClient.ensureStarted().getOrThrow()
-                val ownMatrixUserId = (matrixClient.state.value as? MatrixClientState.Ready)?.userId
-                val ownLocalpart = ownMatrixUserId?.removePrefix("@")?.substringBefore(":")
-
-                val invitedUsers =
-                    attendeeUserIds
-                        .map(String::trim)
-                        .filter(String::isNotEmpty)
-                        .filterNot { it == ownMatrixUserId || it == ownLocalpart }
-                        .distinct()
-
-                val resolvedRoomName =
-                    fallbackName
-                        .trim()
-                        .ifBlank { "Wydarzenie" }
-
-                val roomId =
-                    matrixClient
-                        .createRoom(
-                            name = resolvedRoomName,
-                            invitedUserIds = invitedUsers,
-                        ).getOrThrow()
-
-                updateEventConversationId(eventId, roomId)
-                roomId
             }
         }
+
+    private fun shouldRetry(statusCode: Int): Boolean =
+        statusCode == NETWORK_STATUS_CODE ||
+            statusCode == REQUEST_TIMEOUT_STATUS_CODE ||
+            statusCode == TOO_MANY_REQUESTS_STATUS_CODE ||
+            statusCode >= SERVER_ERROR_MIN_STATUS_CODE
+
+    private fun restoreAttendance(
+        id: String,
+        isAttending: Boolean,
+        attendeesCount: Long,
+    ) {
+        db.eventQueries.updateAttendance(
+            is_attending = if (isAttending) 1L else 0L,
+            attendees_count = attendeesCount,
+            id = id,
+        )
+    }
+
+    private fun restoreEvent(event: com.poziomki.app.db.Event) {
+        db.eventQueries.upsert(
+            id = event.id,
+            title = event.title,
+            description = event.description,
+            cover_image = event.cover_image,
+            location = event.location,
+            latitude = event.latitude,
+            longitude = event.longitude,
+            starts_at = event.starts_at,
+            ends_at = event.ends_at,
+            creator_id = event.creator_id,
+            creator_name = event.creator_name,
+            creator_profile_picture = event.creator_profile_picture,
+            attendees_count = event.attendees_count,
+            is_attending = event.is_attending,
+            attendees_preview_json = event.attendees_preview_json,
+            created_at = event.created_at,
+            conversation_id = event.conversation_id,
+            cached_at = event.cached_at,
+            is_dirty = event.is_dirty,
+        )
+    }
 
     private fun upsertEvent(
         event: Event,

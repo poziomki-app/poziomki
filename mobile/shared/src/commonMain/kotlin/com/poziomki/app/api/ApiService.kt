@@ -64,11 +64,15 @@ class ApiService(
         request: UpdateEventRequest,
     ): ApiResult<Event> = client.patch("/api/v1/events/$id", request)
 
-    suspend fun deleteEvent(id: String): ApiResult<Unit> = client.delete("/api/v1/events/$id")
+    suspend fun deleteEvent(id: String): ApiResult<SuccessResponse> = client.delete("/api/v1/events/$id")
 
-    suspend fun attendEvent(id: String): ApiResult<Unit> = client.post("/api/v1/events/$id/attend")
+    suspend fun attendEvent(id: String): ApiResult<Event> =
+        client.post(
+            "/api/v1/events/$id/attend",
+            AttendEventRequest(),
+        )
 
-    suspend fun leaveEvent(id: String): ApiResult<Unit> = client.delete("/api/v1/events/$id/attend")
+    suspend fun leaveEvent(id: String): ApiResult<Event> = client.delete("/api/v1/events/$id/attend")
 
     // Uploads
 

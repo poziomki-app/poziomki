@@ -197,6 +197,11 @@ data class UpdateEventRequest(
 )
 
 @Serializable
+data class AttendEventRequest(
+    val status: String? = null,
+)
+
+@Serializable
 data class EventAttendee(
     val profileId: String,
     val userId: String? = null,

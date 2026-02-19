@@ -12,25 +12,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -54,6 +61,7 @@ import com.poziomki.app.util.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
+@Suppress("FunctionNaming", "LongMethod")
 fun EventChatScreen(
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
@@ -75,7 +83,7 @@ fun EventChatScreen(
     // Auto-open event chat if no conversation ID yet
     LaunchedEffect(eventState.event) {
         val event = eventState.event ?: return@LaunchedEffect
-        if (event.conversationId == null && !eventState.isOpeningChat) {
+        if (event.isAttending && event.conversationId == null && !eventState.isOpeningChat) {
             eventDetailViewModel.openEventChat { }
         }
     }
@@ -110,10 +118,13 @@ fun EventChatScreen(
                 resolveDisplayNames = chatViewModel::resolveDisplayNames,
                 headerContent = {
                     eventState.event?.let { event ->
-                        EventChatHeader(
+                        eventChatHeader(
                             event = event,
+                            isUpdatingAttendance = eventState.isUpdatingAttendance,
                             onBack = onBack,
                             onNavigateToProfile = onNavigateToProfile,
+                            onJoin = eventDetailViewModel::attendEvent,
+                            onLeave = eventDetailViewModel::leaveEvent,
                         )
                     }
                 },
@@ -123,11 +134,17 @@ fun EventChatScreen(
 }
 
 @Composable
-private fun EventChatHeader(
+@Suppress("LongMethod", "LongParameterList")
+private fun eventChatHeader(
     event: Event,
+    isUpdatingAttendance: Boolean,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
+    onJoin: () -> Unit,
+    onLeave: () -> Unit,
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Column(
         modifier =
             Modifier
@@ -176,6 +193,7 @@ private fun EventChatHeader(
                     Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopStart)
+                        .statusBarsPadding()
                         .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -188,26 +206,43 @@ private fun EventChatHeader(
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Filled.BookmarkBorder,
-                        contentDescription = "Zapisz",
-                        tint = Color.White,
-                    )
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "Więcej",
+                            tint = Color.White,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        if (event.isAttending) {
+                            DropdownMenuItem(
+                                text = { Text("Opuść wydarzenie") },
+                                onClick = {
+                                    showMenu = false
+                                    onLeave()
+                                },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Dołącz do wydarzenia") },
+                                onClick = {
+                                    showMenu = false
+                                    onJoin()
+                                },
+                            )
+                        }
+                    }
                 }
-                IconButton(onClick = { }) {
+                if (event.isAttending) {
                     Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = "Udostępnij",
-                        tint = Color.White,
-                    )
-                }
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Więcej",
-                        tint = Color.White,
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Dołączono",
+                        tint = Primary,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
@@ -308,6 +343,25 @@ private fun EventChatHeader(
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                 )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            if (event.isAttending) {
+                OutlinedButton(
+                    onClick = onLeave,
+                    enabled = !isUpdatingAttendance,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Opuść")
+                }
+            } else {
+                Button(
+                    onClick = onJoin,
+                    enabled = !isUpdatingAttendance,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Dołącz")
+                }
             }
         }
     }
