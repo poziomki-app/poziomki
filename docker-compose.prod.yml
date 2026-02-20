@@ -33,32 +33,28 @@ services:
       - /tmp
       - /run
 
-  tuwunel:
-    image: jevolk/tuwunel:latest
+  synapse:
+    image: matrixdotorg/synapse:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6167:6167"
+      - "127.0.0.1:6167:8008"
     environment:
-      TUWUNEL_SERVER_NAME: "chat.poziomki.app"
-      TUWUNEL_PORT: "6167"
-      TUWUNEL_ADDRESS: "0.0.0.0"
-      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
-      TUWUNEL_ALLOW_REGISTRATION: "true"
-      TUWUNEL_REGISTRATION_TOKEN: "${MATRIX_REGISTRATION_TOKEN:-poziomki-prod-token}"
-      TUWUNEL_ALLOW_FEDERATION: "false"
-      TUWUNEL_CREATE_ADMIN_ROOM: "true"
-      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
-      TUWUNEL_LOG: "warn"
+      SYNAPSE_CONFIG_DIR: /data
     volumes:
-      - tuwunel_data:/var/lib/tuwunel
+      - synapse_data:/data
+      - ./synapse/homeserver.yaml:/data/homeserver.yaml:ro
+      - ./synapse/log.config:/data/log.config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fSs", "http://localhost:8008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 768m
 
   api:
     build:
@@ -68,8 +64,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      tuwunel:
-        condition: service_started
+      synapse:
+        condition: service_healthy
       stalwart:
         condition: service_started
     ports:
@@ -89,7 +85,7 @@ services:
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://synapse:8008}
       MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
       MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
       MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
@@ -122,9 +118,6 @@ services:
   stalwart:
     image: stalwartlabs/stalwart:latest
     restart: unless-stopped
-    ports:
-      - "25:25"
-      - "127.0.0.1:8443:443"
     volumes:
       - stalwart_data:/opt/stalwart
     security_opt:
@@ -192,5 +185,5 @@ volumes:
   postgres_data:
   garage_data:
   garage_meta:
-  tuwunel_data:
+  synapse_data:
   stalwart_data:

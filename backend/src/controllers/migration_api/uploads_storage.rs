@@ -185,6 +185,19 @@ pub(in crate::controllers::migration_api) async fn read(
         })
 }
 
+pub(in crate::controllers::migration_api) async fn exists(
+    filename: &str,
+) -> Result<bool, StorageError> {
+    let config = storage().map_err(|_message| StorageError { kind: None })?;
+    match config.operator.stat(filename).await {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(StorageError {
+            kind: Some(err.kind()),
+        }),
+    }
+}
+
 pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
     let config = storage().map_err(|_message| StorageError { kind: None })?;
     config

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -66,6 +68,7 @@ internal fun MessageEventRow(
     onSenderClick: () -> Unit,
     onActionsLongPress: () -> Unit,
     onSwipeReply: () -> Unit,
+    avatarOverride: String? = null,
 ) {
     val horizontalAlignment = if (event.isMine) Alignment.End else Alignment.Start
     val bubbleColor = if (event.isMine) Primary.copy(alpha = 0.68f) else SurfaceColor
@@ -131,7 +134,7 @@ internal fun MessageEventRow(
                             .padding(start = 8.dp)
                             .size(30.dp)
                             .graphicsLayer {
-                                alpha = 0.35f + (0.65f * swipeProgress)
+                                alpha = swipeProgress
                             },
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -179,26 +182,53 @@ internal fun MessageEventRow(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (event.isMine) {
-                        // Mine: bubble only, right-aligned
-                        Surface(
-                            color = bubbleColor,
-                            shape = bubbleShape,
-                            modifier =
-                                Modifier
-                                    .widthIn(max = maxBubbleWidth)
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick = onActionsLongPress,
-                                    ),
-                        ) {
-                            BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
+                        // Mine: bubble + reactions, right-aligned
+                        Column(horizontalAlignment = Alignment.End) {
+                            Surface(
+                                color = bubbleColor,
+                                shape = bubbleShape,
+                                modifier =
+                                    Modifier
+                                        .widthIn(max = maxBubbleWidth)
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = onActionsLongPress,
+                                        ),
+                            ) {
+                                BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
+                            }
+                            if (event.reactions.isNotEmpty()) {
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.Start)
+                                            .offset(y = (-6).dp)
+                                            .padding(start = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    event.reactions.forEach { reaction ->
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = SurfaceColor,
+                                            modifier = Modifier.clickable { onReactionsClick() },
+                                        ) {
+                                            Text(
+                                                text = reaction.emoji,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } else {
                         // Not mine: avatar + bubble row
                         Row(verticalAlignment = Alignment.Bottom) {
                             if (showAvatar) {
                                 UserAvatar(
-                                    picture = event.senderAvatarUrl,
+                                    picture = avatarOverride,
+                                    fallbackPicture = event.senderAvatarUrl,
                                     displayName = event.senderDisplayName,
                                     size = AvatarSize,
                                     modifier = Modifier.clickable(onClick = onSenderClick),
@@ -207,40 +237,42 @@ internal fun MessageEventRow(
                                 Spacer(modifier = Modifier.width(AvatarSize))
                             }
                             Spacer(modifier = Modifier.width(AvatarSpacing))
-                            Surface(
-                                color = bubbleColor,
-                                shape = bubbleShape,
-                                modifier =
-                                    Modifier
-                                        .widthIn(max = maxBubbleWidth - AvatarSize - AvatarSpacing)
-                                        .combinedClickable(
-                                            onClick = {},
-                                            onLongClick = onActionsLongPress,
-                                        ),
-                            ) {
-                                BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
-                            }
-                        }
-                    }
-
-                    if (event.reactions.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            event.reactions.forEach { reaction ->
+                            Column {
                                 Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = if (reaction.reactedByMe) Primary.copy(alpha = 0.22f) else SurfaceColor,
-                                    modifier = Modifier.clickable { onReactionsClick() },
+                                    color = bubbleColor,
+                                    shape = bubbleShape,
+                                    modifier =
+                                        Modifier
+                                            .widthIn(max = maxBubbleWidth - AvatarSize - AvatarSpacing)
+                                            .combinedClickable(
+                                                onClick = {},
+                                                onLongClick = onActionsLongPress,
+                                            ),
                                 ) {
-                                    Text(
-                                        text = "${reaction.emoji} ${reaction.count}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    )
+                                    BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
+                                }
+                                if (event.reactions.isNotEmpty()) {
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .offset(y = (-6).dp)
+                                                .padding(start = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        event.reactions.forEach { reaction ->
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = SurfaceColor,
+                                                modifier = Modifier.clickable { onReactionsClick() },
+                                            ) {
+                                                Text(
+                                                    text = reaction.emoji,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -256,7 +288,12 @@ private fun BubbleContent(
     event: MatrixTimelineItem.Event,
     onFocusOnReply: () -> Unit,
 ) {
-    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(
+        modifier =
+            Modifier
+                .width(IntrinsicSize.Max)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
         event.inReplyTo?.let { reply ->
             ReplyReference(
                 reply = reply,
@@ -271,8 +308,7 @@ private fun BubbleContent(
             color = TextPrimary,
         )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -280,13 +316,18 @@ private fun BubbleContent(
                 style = MaterialTheme.typography.labelSmall,
                 color = TextSecondary,
             )
-            if (event.isMine && event.readByCount > 0) {
+            if (event.isMine) {
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "✓",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Primary,
-                    fontWeight = FontWeight.Bold,
+                Icon(
+                    imageVector =
+                        if (event.readByCount > 0) {
+                            Icons.Filled.CheckCircle
+                        } else {
+                            Icons.Filled.Check
+                        },
+                    contentDescription = null,
+                    tint = if (event.readByCount > 0) Primary else TextSecondary,
+                    modifier = Modifier.size(14.dp),
                 )
             }
         }
@@ -313,7 +354,7 @@ private fun ReplyReference(
                         .background(if (isMine) Primary else Border, CircleShape),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Text(
                     text = reply.senderDisplayName ?: "wiadomość",
                     style = MaterialTheme.typography.labelSmall,

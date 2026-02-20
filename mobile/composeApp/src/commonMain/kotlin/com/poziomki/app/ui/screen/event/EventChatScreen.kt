@@ -20,16 +20,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +50,6 @@ import com.poziomki.app.ui.screen.chat.ChatViewModel
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.ui.theme.Primary
-import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 import com.poziomki.app.util.formatEventDateFull
 import com.poziomki.app.util.pluralizePolish
@@ -88,6 +84,22 @@ fun EventChatScreen(
         }
     }
 
+    // Map Matrix sender IDs → Poziomki profile picture URLs from event attendees.
+    // Key: normalized user UUID (lowercase, no hyphens), matching the Matrix localpart
+    // format "poziomki_{uuid}".
+    val avatarOverrides =
+        remember(eventState.attendees) {
+            eventState.attendees
+                .filter { !it.userId.isNullOrBlank() && !it.profilePicture.isNullOrBlank() }
+                .associate { attendee ->
+                    val key =
+                        attendee.userId!!
+                            .filter { it.isLetterOrDigit() }
+                            .lowercase()
+                    key to attendee.profilePicture!!
+                }
+        }
+
     Column(modifier = Modifier.fillMaxSize().background(Background)) {
         if (eventState.isLoading && eventState.event == null) {
             Box(
@@ -116,11 +128,11 @@ fun EventChatScreen(
                 onClearError = chatViewModel::clearError,
                 onNavigateToProfile = onNavigateToProfile,
                 resolveDisplayNames = chatViewModel::resolveDisplayNames,
+                avatarOverrides = avatarOverrides,
                 headerContent = {
                     eventState.event?.let { event ->
                         eventChatHeader(
                             event = event,
-                            isUpdatingAttendance = eventState.isUpdatingAttendance,
                             onBack = onBack,
                             onNavigateToProfile = onNavigateToProfile,
                             onJoin = eventDetailViewModel::attendEvent,
@@ -137,7 +149,6 @@ fun EventChatScreen(
 @Suppress("LongMethod", "LongParameterList")
 private fun eventChatHeader(
     event: Event,
-    isUpdatingAttendance: Boolean,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     onJoin: () -> Unit,
@@ -145,124 +156,120 @@ private fun eventChatHeader(
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Column(
+    // Cover image with overlaid navigation, title, and metadata
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = PoziomkiTheme.spacing.md),
+                .aspectRatio(1f),
     ) {
-        // Cover image with overlaid navigation and title
+        val coverImage = event.coverImage
+        if (coverImage != null) {
+            AsyncImage(
+                model = resolveImageUrl(coverImage),
+                contentDescription = event.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+
+        // Gradient overlay — fades to Background for seamless transition
         Box(
             modifier =
                 Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops =
+                                arrayOf(
+                                    0f to Color.Black.copy(alpha = 0.3f),
+                                    0.2f to Color.Transparent,
+                                    0.45f to Background.copy(alpha = 0.3f),
+                                    0.65f to Background.copy(alpha = 0.65f),
+                                    0.8f to Background.copy(alpha = 0.85f),
+                                    1f to Background,
+                                ),
+                        ),
+                    ),
+        )
+
+        // Navigation controls at top
+        Row(
+            modifier =
+                Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.8f),
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            val coverImage = event.coverImage
-            if (coverImage != null) {
-                AsyncImage(
-                    model = resolveImageUrl(coverImage),
-                    contentDescription = event.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Wstecz",
+                    tint = Color.White,
                 )
             }
 
-            // Gradient overlay
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors =
-                                    listOf(
-                                        Color.Black.copy(alpha = 0.3f),
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.65f),
-                                    ),
-                                startY = 0f,
-                                endY = Float.POSITIVE_INFINITY,
-                            ),
-                        ),
-            )
-
-            // Navigation controls at top
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
+            Spacer(modifier = Modifier.weight(1f))
+            Box {
+                IconButton(onClick = { showMenu = true }) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Wstecz",
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "Więcej",
                         tint = Color.White,
                     )
                 }
-
-                Spacer(modifier = Modifier.weight(1f))
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = "Więcej",
-                            tint = Color.White,
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    if (event.isAttending) {
+                        DropdownMenuItem(
+                            text = { Text("Opuść wydarzenie") },
+                            onClick = {
+                                showMenu = false
+                                onLeave()
+                            },
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Dołącz do wydarzenia") },
+                            onClick = {
+                                showMenu = false
+                                onJoin()
+                            },
                         )
                     }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                    ) {
-                        if (event.isAttending) {
-                            DropdownMenuItem(
-                                text = { Text("Opuść wydarzenie") },
-                                onClick = {
-                                    showMenu = false
-                                    onLeave()
-                                },
-                            )
-                        } else {
-                            DropdownMenuItem(
-                                text = { Text("Dołącz do wydarzenia") },
-                                onClick = {
-                                    showMenu = false
-                                    onJoin()
-                                },
-                            )
-                        }
-                    }
-                }
-                if (event.isAttending) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = "Dołączono",
-                        tint = Primary,
-                        modifier = Modifier.size(20.dp),
-                    )
                 }
             }
+            if (event.isAttending) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = "Dołączono",
+                    tint = Primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
 
-            // Title at bottom of image on gradient
+        // Title and metadata overlaid on gradient
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = PoziomkiTheme.spacing.md, vertical = PoziomkiTheme.spacing.sm),
+        ) {
+            // Title
             Text(
                 text = event.title,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = PoziomkiTheme.spacing.md, vertical = PoziomkiTheme.spacing.sm),
             )
-        }
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
 
-        Column(modifier = Modifier.padding(horizontal = PoziomkiTheme.spacing.sm)) {
             // Creator
             event.creator?.let { creator ->
                 Row(
@@ -272,7 +279,7 @@ private fun eventChatHeader(
                     UserAvatar(
                         picture = creator.profilePicture,
                         displayName = creator.name,
-                        size = 40.dp,
+                        size = 36.dp,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -301,26 +308,6 @@ private fun eventChatHeader(
                 )
             }
 
-            // Location
-            val location = event.location
-            if (location != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = TextSecondary,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = location,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                    )
-                }
-            }
-
             Spacer(modifier = Modifier.height(2.dp))
 
             // Participants
@@ -343,25 +330,6 @@ private fun eventChatHeader(
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                 )
-            }
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-            if (event.isAttending) {
-                OutlinedButton(
-                    onClick = onLeave,
-                    enabled = !isUpdatingAttendance,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Opuść")
-                }
-            } else {
-                Button(
-                    onClick = onJoin,
-                    enabled = !isUpdatingAttendance,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Dołącz")
-                }
             }
         }
     }

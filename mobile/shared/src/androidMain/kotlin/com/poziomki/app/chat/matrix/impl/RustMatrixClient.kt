@@ -46,7 +46,6 @@ import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk.BackupDownloadStrategy
 import java.io.File
-import java.net.URI
 import java.util.UUID
 
 class RustMatrixClient(
@@ -179,6 +178,9 @@ class RustMatrixClient(
                     val newSyncService = newClient.syncService().finish()
                     newSyncService.start()
 
+                    // Enable send queues so outgoing messages are flushed to the homeserver.
+                    runCatching { newClient.enableAllSendQueues(true) }
+
                     // Give E2EE startup tasks time to recover keys before we expose timelines.
                     withTimeoutOrNull(20_000) {
                         runCatching { newClient.encryption().waitForE2eeInitializationTasks() }
@@ -198,7 +200,7 @@ class RustMatrixClient(
 
                     client = newClient
                     syncService = newSyncService
-                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId(), accessToken)
+                    _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId())
                 }.onFailure { throwable ->
                     cleanupInternal()
                     if (!retried) {
@@ -239,6 +241,11 @@ class RustMatrixClient(
 
         val innerClient = client ?: return null
         val room = innerClient.getRoom(roomId) ?: return null
+
+        // Auto-join if we've been invited
+        if (room.membership() == Membership.INVITED) {
+            runCatching { room.join() }.getOrElse { return null }
+        }
         if (room.membership() != Membership.JOINED) return null
 
         val liveTimeline = runCatching { room.timeline() }.getOrElse { return null }
@@ -315,6 +322,34 @@ class RustMatrixClient(
             }
         }
 
+    override suspend fun getMediaThumbnail(
+        mxcUrl: String,
+        width: Long,
+        height: Long,
+    ): ByteArray? {
+        val c = client ?: return null
+        return runCatching {
+            val mediaSource = org.matrix.rustcomponents.sdk.MediaSource.fromUrl(mxcUrl)
+            try {
+                c.getMediaThumbnail(mediaSource, width.toULong(), height.toULong())
+            } finally {
+                mediaSource.destroy()
+            }
+        }.getOrNull()
+    }
+
+    override suspend fun getMediaContent(mxcUrl: String): ByteArray? {
+        val c = client ?: return null
+        return runCatching {
+            val mediaSource = org.matrix.rustcomponents.sdk.MediaSource.fromUrl(mxcUrl)
+            try {
+                c.getMediaContent(mediaSource)
+            } finally {
+                mediaSource.destroy()
+            }
+        }.getOrNull()
+    }
+
     override suspend fun stop() {
         startStopMutex.withLock {
             cleanupInternal()
@@ -356,6 +391,13 @@ class RustMatrixClient(
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
     private fun publishRoomSummaries(roomsSnapshot: List<Room>) {
+        // Auto-join any rooms where we're invited
+        for (room in roomsSnapshot) {
+            if (room.membership() == Membership.INVITED) {
+                scope.launch { runCatching { room.join() } }
+            }
+        }
+
         scope.launch(Dispatchers.Default) {
             val mappedRooms = mutableListOf<MatrixRoomSummary>()
             for (room in roomsSnapshot) {
@@ -614,20 +656,13 @@ class RustMatrixClient(
         if (value.isEmpty()) return value
         if (value.startsWith("@")) return value
 
-        val homeserver =
+        val serverName =
             (state.value as? MatrixClientState.Ready)
-                ?.homeserver
-                ?.let(::extractServerNameFromHomeserver)
+                ?.userId
+                ?.substringAfter(':', "")
+                ?.ifBlank { null }
                 ?: return value
-        return "@$value:$homeserver"
-    }
-
-    private fun extractServerNameFromHomeserver(homeserver: String): String? {
-        val normalized = if (homeserver.contains("://")) homeserver else "https://$homeserver"
-        return runCatching {
-            val uri = URI(normalized)
-            uri.authority
-        }.getOrNull()?.ifBlank { null }
+        return "@$value:$serverName"
     }
 }
 

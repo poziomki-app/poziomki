@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
@@ -393,6 +394,7 @@ class EventRepository(
                         attendeeUserIds
                             .map(String::trim)
                             .filter(String::isNotEmpty)
+                            .map(::matrixLocalpartFromUserId)
                             .filterNot { it == ownMatrixUserId || it == ownLocalpart }
                             .distinct()
 

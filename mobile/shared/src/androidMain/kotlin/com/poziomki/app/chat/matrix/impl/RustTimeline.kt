@@ -24,6 +24,7 @@ import org.matrix.rustcomponents.sdk.FileInfo
 import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.MessageType
 import org.matrix.rustcomponents.sdk.MsgLikeKind
+import org.matrix.rustcomponents.sdk.PaginationStatusListener
 import org.matrix.rustcomponents.sdk.ProfileDetails
 import org.matrix.rustcomponents.sdk.ReceiptType
 import org.matrix.rustcomponents.sdk.TimelineDiff
@@ -34,6 +35,7 @@ import org.matrix.rustcomponents.sdk.UploadParameters
 import org.matrix.rustcomponents.sdk.UploadSource
 import org.matrix.rustcomponents.sdk.VirtualTimelineItem
 import org.matrix.rustcomponents.sdk.messageEventContentFromMarkdown
+import uniffi.matrix_sdk.RoomPaginationStatus
 
 class RustTimeline(
     private val inner: org.matrix.rustcomponents.sdk.Timeline,
@@ -53,6 +55,7 @@ class RustTimeline(
     override val hasMoreBackwards: StateFlow<Boolean> = _hasMoreBackwards
 
     private var listenerHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
+    private var paginationStatusHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
 
     init {
         coroutineScope.launch(Dispatchers.Default) {
@@ -66,6 +69,38 @@ class RustTimeline(
                 )
             }.onSuccess { handle ->
                 listenerHandle = handle
+            }
+        }
+
+        // Fetch room members so senderProfile resolves to ProfileDetails.Ready (with avatarUrl)
+        coroutineScope.launch(Dispatchers.Default) {
+            runCatching { inner.fetchMembers() }
+        }
+
+        // For live timelines, subscribe to back-pagination status so the SDK can
+        // auto-paginate and we get accurate hasMoreBackwards / isPaginatingBackwards.
+        if (mode == MatrixTimelineMode.Live) {
+            coroutineScope.launch(Dispatchers.Default) {
+                runCatching {
+                    inner.subscribeToBackPaginationStatus(
+                        object : PaginationStatusListener {
+                            override fun onUpdate(status: RoomPaginationStatus) {
+                                when (status) {
+                                    is RoomPaginationStatus.Idle -> {
+                                        _isPaginatingBackwards.value = false
+                                        _hasMoreBackwards.value = !status.hitTimelineStart
+                                    }
+                                    is RoomPaginationStatus.Paginating -> {
+                                        _isPaginatingBackwards.value = true
+                                        _hasMoreBackwards.value = true
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }.onSuccess { handle ->
+                    paginationStatusHandle = handle
+                }
             }
         }
     }
@@ -275,6 +310,7 @@ class RustTimeline(
         }
 
     override fun close() {
+        paginationStatusHandle?.cancel()
         listenerHandle?.cancel()
         inner.close()
     }

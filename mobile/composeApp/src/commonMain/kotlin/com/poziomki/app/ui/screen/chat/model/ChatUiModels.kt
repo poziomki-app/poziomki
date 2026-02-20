@@ -22,6 +22,7 @@ data class ChatUiState(
     val roomId: String = "",
     val roomDisplayName: String = "",
     val roomAvatarUrl: String? = null,
+    val avatarOverrides: Map<String, String> = emptyMap(),
     val timelineMode: MatrixTimelineMode = MatrixTimelineMode.Live,
     val timelineItems: List<MatrixTimelineItem> = emptyList(),
     val isPaginatingBackwards: Boolean = false,

@@ -78,6 +78,7 @@ fun ChatScreen(
             onClearError = viewModel::clearError,
             onNavigateToProfile = onNavigateToProfile,
             resolveDisplayNames = viewModel::resolveDisplayNames,
+            avatarOverrides = state.avatarOverrides,
             modifier = Modifier.padding(padding),
         )
     }

@@ -21,7 +21,8 @@ Last updated: 2026-02-18
 
 ## Deploy
 
-- **APK deploy:** `/deploy-apk` - builds debug APK, uploads via `scp poziomki:/var/www/download/poziomki-rs-debug.apk`, install link: `https://mobile.poziomki.app/download/poziomki-rs-debug.apk`
+- **APK signing:** Release signing config is in `~/.gradle/gradle.properties` (keystore: `mobile/poziomki-release.jks`). Builds are auto-signed when these properties are set.
+- **APK deploy:** `/deploy-apk` - builds release APK, uploads via `scp poziomki:/var/www/download/`, install link: `https://mobile.poziomki.app/download/`
 - **Backend deploy (Docker only):** `ssh poziomki` then `cd /home/ubuntu/poziomki-rs && docker compose -f docker-compose.prod.yml up -d --build`
 - **Server:** `ssh poziomki` (ubuntu user, key auth). Caddy reverse-proxies `rs.poziomki.app` (API:5150), `cdn-rs.poziomki.app` (Garage:3900), `chat.poziomki.app` (Tuwunel:6167), `mobile.poziomki.app` (downloads + API).
 - **Observability:** Dozzle logs at `127.0.0.1:8088`, node-exporter metrics at `127.0.0.1:9100` (SSH tunnel when needed).

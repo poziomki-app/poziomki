@@ -187,7 +187,7 @@ fun MessagesScreen(
                                                     state.profilePictures[localpart],
                                                     appUserId?.let { state.profilePictures[it] },
                                                 ).firstOrNull()
-                                            }
+                                            } ?: state.profilePicturesByName[room.displayName.trim().lowercase()]
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,
@@ -248,7 +248,8 @@ private fun RoomRow(
                 },
         ) {
             UserAvatar(
-                picture = profilePictureUrl ?: room.avatarUrl,
+                picture = profilePictureUrl,
+                fallbackPicture = room.avatarUrl,
                 displayName = room.displayName,
             )
             if (room.unreadCount > 0) {

@@ -2,6 +2,7 @@ use axum::{extract::State, http::HeaderMap, Json};
 use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::EntityTrait;
 use serde::Deserialize;
+use std::time::Duration;
 
 pub(super) use super::matrix_support;
 use super::{error_response, state::require_auth_db, ErrorSpec};
@@ -155,6 +156,64 @@ async fn sync_matrix_avatar(
     )
     .await?;
     matrix_support::set_avatar_url(http_client, homeserver, access_token, user_id, &mxc_uri).await
+}
+
+pub(super) async fn sync_profile_avatar_best_effort(
+    user_pid: &uuid::Uuid,
+    profile_picture_filename: Option<&str>,
+) {
+    let Some(pic_filename) = profile_picture_filename else {
+        return;
+    };
+
+    let Some(internal_homeserver) = matrix_support::resolve_homeserver() else {
+        return;
+    };
+
+    let config = match matrix_support::build_conn_config(&user_pid.to_string(), None, None) {
+        Ok(config) => config,
+        Err(error) => {
+            tracing::warn!(%error, "matrix avatar sync skipped: matrix bootstrap is not configured");
+            return;
+        }
+    };
+
+    let http_client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => {
+            tracing::warn!(error = %error, "matrix avatar sync skipped: failed to build http client");
+            return;
+        }
+    };
+
+    let matrix_auth =
+        match matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config).await {
+            Ok(auth) => auth,
+            Err(error) => {
+                tracing::warn!(
+                    status_code = error.status_code,
+                    errcode = error.errcode,
+                    message = error.message,
+                    "matrix avatar sync skipped: failed to authenticate"
+                );
+                return;
+            }
+        };
+
+    if let Err(error) = sync_matrix_avatar(
+        &http_client,
+        &internal_homeserver,
+        &matrix_auth.access_token,
+        &matrix_auth.user_id,
+        pic_filename,
+    )
+    .await
+    {
+        tracing::warn!(%error, "failed to sync matrix avatar after profile update");
+    }
 }
 
 pub(super) fn chat_bootstrap_error(

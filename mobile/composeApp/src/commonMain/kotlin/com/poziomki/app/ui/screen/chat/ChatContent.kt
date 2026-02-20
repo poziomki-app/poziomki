@@ -74,6 +74,7 @@ import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
 import com.poziomki.app.util.PickedFile
+import com.poziomki.app.util.appUserIdFromMatrixUserId
 import com.poziomki.app.util.rememberSingleFilePicker
 import com.poziomki.app.util.rememberSingleImagePicker
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -105,6 +106,7 @@ fun ChatContent(
     onNavigateToProfile: (String) -> Unit,
     resolveDisplayNames: suspend (List<String>) -> Map<String, String>,
     modifier: Modifier = Modifier,
+    avatarOverrides: Map<String, String> = emptyMap(),
     headerContent: (@Composable () -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -116,20 +118,17 @@ fun ChatContent(
     val pickImage = rememberSingleImagePicker { bytes -> bytes?.let(onSendImageAttachment) }
     val pickFile = rememberSingleFilePicker { file -> file?.let(onSendFileAttachment) }
 
+    // In reversed layout, index 0 = newest (bottom of screen).
+    // "Away from latest" means the first visible item is not near index 0.
     LaunchedEffect(timelineListState) {
         snapshotFlow {
             val layoutInfo = timelineListState.layoutInfo
-            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index
-            val totalItems = layoutInfo.totalItemsCount
-            Triple(
-                lastVisibleIndex,
-                totalItems,
-                totalItems > 0 && (lastVisibleIndex ?: -1) >= (totalItems - 2),
-            )
+            val firstVisibleIndex = layoutInfo.visibleItemsInfo.firstOrNull()?.index
+            firstVisibleIndex
         }.distinctUntilChanged()
-            .collect { (lastVisibleIndex, _, atLatest) ->
-                onViewportChanged(lastVisibleIndex)
-                if (atLatest) {
+            .collect { firstVisibleIndex ->
+                onViewportChanged(firstVisibleIndex)
+                if (firstVisibleIndex == null || firstVisibleIndex == 0) {
                     onMarkAsRead()
                 }
             }
@@ -173,11 +172,71 @@ fun ChatContent(
 
                 LazyColumn(
                     state = timelineListState,
+                    reverseLayout = true,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    if (headerContent != null) {
-                        item(key = "event_header") {
-                            headerContent()
+                    // In reverseLayout, first items render at the BOTTOM of the screen.
+                    // Order: typing indicator (bottom) → timeline items → pagination button (top)
+
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
+                    item {
+                        if (state.typingUserIds.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = SurfaceColor,
+                                modifier = itemPadding.padding(vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = "Pisze: ${state.typingUserIds.joinToString()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    // Reverse items: SDK gives oldest-first, but reverseLayout renders
+                    // index 0 at the bottom, so we need newest-first.
+                    val reversedItems = state.timelineItems.asReversed()
+
+                    itemsIndexed(
+                        items = reversedItems,
+                        key = { index, item -> timelineItemKey(index, item) },
+                    ) { index, item ->
+                        Box(modifier = itemPadding) {
+                            when (item) {
+                                is MatrixTimelineItem.DateDivider -> {
+                                    DateDivider(timestampMillis = item.timestampMillis)
+                                }
+
+                                is MatrixTimelineItem.Event -> {
+                                    // "Visually previous" (above) = older event = index + 1 in reversed list
+                                    val previousEvent =
+                                        reversedItems.getOrNull(index + 1) as? MatrixTimelineItem.Event
+                                    MessageEventRow(
+                                        event = item,
+                                        groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
+                                        onToggleReaction = { emoji ->
+                                            onToggleReaction(item.eventOrTransactionId, emoji)
+                                        },
+                                        onReactionsClick = { selectedReactionEvent = item },
+                                        onFocusOnReply = { },
+                                        onSenderClick = { onNavigateToProfile(item.senderId) },
+                                        onActionsLongPress = { selectedActionEvent = item },
+                                        onSwipeReply = { onStartReply(item) },
+                                        avatarOverride = resolveAvatarOverride(item.senderId, avatarOverrides),
+                                    )
+                                }
+
+                                MatrixTimelineItem.ReadMarker -> {
+                                    NewMessagesDivider()
+                                }
+
+                                MatrixTimelineItem.TimelineStart -> {
+                                    StatusDivider(text = "Początek rozmowy")
+                                }
+                            }
                         }
                     }
 
@@ -197,69 +256,18 @@ fun ChatContent(
                         }
                     }
 
-                    itemsIndexed(
-                        items = state.timelineItems,
-                        key = { index, item -> timelineItemKey(index, item) },
-                    ) { index, item ->
-                        Box(modifier = itemPadding) {
-                            when (item) {
-                                is MatrixTimelineItem.DateDivider -> {
-                                    DateDivider(timestampMillis = item.timestampMillis)
-                                }
-
-                                is MatrixTimelineItem.Event -> {
-                                    val previousEvent =
-                                        state.timelineItems.getOrNull(index - 1) as? MatrixTimelineItem.Event
-                                    MessageEventRow(
-                                        event = item,
-                                        groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
-                                        onToggleReaction = { emoji ->
-                                            onToggleReaction(item.eventOrTransactionId, emoji)
-                                        },
-                                        onReactionsClick = { selectedReactionEvent = item },
-                                        onFocusOnReply = { },
-                                        onSenderClick = { onNavigateToProfile(item.senderId) },
-                                        onActionsLongPress = { selectedActionEvent = item },
-                                        onSwipeReply = { onStartReply(item) },
-                                    )
-                                }
-
-                                MatrixTimelineItem.ReadMarker -> {
-                                    NewMessagesDivider()
-                                }
-
-                                MatrixTimelineItem.TimelineStart -> {
-                                    StatusDivider(text = "Początek rozmowy")
-                                }
-                            }
+                    if (headerContent != null) {
+                        item(key = "event_header") {
+                            headerContent()
                         }
                     }
-
-                    item {
-                        if (state.typingUserIds.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = SurfaceColor,
-                                modifier = itemPadding.padding(vertical = 8.dp),
-                            ) {
-                                Text(
-                                    text = "Pisze: ${state.typingUserIds.joinToString()}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                )
-                            }
-                        }
-                    }
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
                 if (state.isAwayFromLatest && state.unreadBelowCount > 0) {
                     FloatingActionButton(
                         onClick = {
                             coroutineScope.launch {
-                                val lastIndex = (timelineListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                                timelineListState.animateScrollToItem(lastIndex)
+                                timelineListState.animateScrollToItem(0)
                                 onJumpToLatest()
                             }
                         },
@@ -806,3 +814,35 @@ internal fun timelineItemKey(
         MatrixTimelineItem.ReadMarker -> "read_$index"
         MatrixTimelineItem.TimelineStart -> "start_$index"
     }
+
+/**
+ * Resolve a Poziomki profile picture URL for a Matrix sender ID.
+ *
+ * Matrix sender IDs look like `@poziomki_{uuid}:{server}`.
+ * The [overrides] map is keyed by the normalized UUID (lowercase alphanum, no hyphens)
+ * derived from the Poziomki user ID.
+ */
+internal fun resolveAvatarOverride(
+    senderId: String,
+    overrides: Map<String, String>,
+): String? {
+    if (overrides.isEmpty()) return null
+    val matrixUserId = senderId.trim()
+    val localpart = matrixUserId.removePrefix("@").substringBefore(":")
+    val uuid = localpart.removePrefix("poziomki_")
+    val appUserId = appUserIdFromMatrixUserId(matrixUserId)
+    val candidates =
+        listOfNotNull(
+            matrixUserId,
+            matrixUserId.lowercase(),
+            matrixUserId.substringBefore(":"),
+            matrixUserId.substringBefore(":").lowercase(),
+            localpart,
+            "@$localpart",
+            uuid,
+            uuid.lowercase(),
+            appUserId,
+            appUserId?.lowercase(),
+        )
+    return candidates.firstNotNullOfOrNull { overrides[it] }
+}

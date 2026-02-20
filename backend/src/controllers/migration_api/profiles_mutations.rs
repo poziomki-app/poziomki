@@ -6,19 +6,19 @@ use axum::{
 };
 use chrono::Utc;
 use loco_rs::{app::AppContext, prelude::*};
-use sea_orm::{ActiveValue, QueryFilter};
+use sea_orm::{ActiveValue, ColumnTrait, QueryFilter};
 use uuid::Uuid;
 
 use crate::controllers::migration_api::{
     error_response, extract_filename,
     state::{
-        require_auth_db, validate_profile_age, validate_profile_bio, validate_profile_name,
-        validate_profile_program, CreateProfileBody, DataResponse, SuccessResponse,
-        UpdateProfileBody,
+        require_auth_db, validate_filename, validate_profile_age, validate_profile_bio,
+        validate_profile_name, validate_profile_program, CreateProfileBody, DataResponse,
+        SuccessResponse, UpdateProfileBody,
     },
     ErrorSpec,
 };
-use crate::models::_entities::profiles;
+use crate::models::_entities::{profiles, uploads};
 
 use super::{
     full_profile_response, not_found_profile, parse_tag_uuids, sync_profile_tags, validation_error,
@@ -89,9 +89,63 @@ async fn validate_create(
     Ok(user)
 }
 
+fn uploads_unavailable(headers: &HeaderMap) -> Box<Response> {
+    Box::new(error_response(
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        headers,
+        ErrorSpec {
+            error: "Upload storage is temporarily unavailable".to_string(),
+            code: "UPLOADS_UNAVAILABLE",
+            details: None,
+        },
+    ))
+}
+
+async fn validate_profile_picture_reference(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    owner_profile_id: Option<Uuid>,
+    raw_picture: &str,
+) -> std::result::Result<String, Box<Response>> {
+    let filename = extract_filename(raw_picture);
+    if let Err(message) = validate_filename(&filename) {
+        return Err(Box::new(validation_error(headers, message)));
+    }
+
+    if let Some(profile_id) = owner_profile_id {
+        let owned_upload = uploads::Entity::find()
+            .filter(uploads::Column::OwnerId.eq(Some(profile_id)))
+            .filter(uploads::Column::Filename.eq(filename.clone()))
+            .filter(uploads::Column::Deleted.eq(false))
+            .one(db)
+            .await
+            .map_err(|_| uploads_unavailable(headers))?;
+
+        if owned_upload.is_none() {
+            return Err(Box::new(validation_error(
+                headers,
+                "Profile picture must reference your uploaded image",
+            )));
+        }
+    }
+
+    let exists = super::super::uploads::uploads_storage::exists(&filename)
+        .await
+        .map_err(|_| uploads_unavailable(headers))?;
+    if !exists {
+        return Err(Box::new(validation_error(
+            headers,
+            "Profile picture file was not found in upload storage",
+        )));
+    }
+
+    Ok(filename)
+}
+
 fn build_create_model(
     user: &crate::models::_entities::users::Model,
     payload: &CreateProfileBody,
+    profile_picture: Option<String>,
 ) -> (profiles::ActiveModel, Uuid) {
     let now = Utc::now();
     let profile_id = Uuid::new_v4();
@@ -105,7 +159,7 @@ fn build_create_model(
         name: ActiveValue::Set(payload.name.trim().to_string()),
         bio: ActiveValue::Set(payload.bio.clone()),
         age: ActiveValue::Set(i16::from(payload.age)),
-        profile_picture: ActiveValue::Set(payload.profile_picture.as_deref().map(extract_filename)),
+        profile_picture: ActiveValue::Set(profile_picture),
         images: ActiveValue::Set(images_json),
         program: ActiveValue::Set(payload.program.clone()),
         gradient_start: ActiveValue::Set(payload.gradient_start.clone()),
@@ -125,8 +179,18 @@ pub(in crate::controllers::migration_api) async fn profile_create(
         Ok(u) => u,
         Err(response) => return Ok(*response),
     };
+    let requested_profile_picture = match payload.profile_picture.as_deref() {
+        Some(raw_picture) => {
+            match validate_profile_picture_reference(&ctx.db, &headers, None, raw_picture).await {
+                Ok(filename) => Some(filename),
+                Err(response) => return Ok(*response),
+            }
+        }
+        None => None,
+    };
+    let should_sync_matrix_avatar = requested_profile_picture.is_some();
 
-    let (model, profile_id) = build_create_model(&user, &payload);
+    let (model, profile_id) = build_create_model(&user, &payload, requested_profile_picture);
     let inserted = model
         .insert(&ctx.db)
         .await
@@ -138,6 +202,18 @@ pub(in crate::controllers::migration_api) async fn profile_create(
     }
 
     crate::search::invalidate_search_cache();
+
+    if should_sync_matrix_avatar {
+        let user_pid = user.pid;
+        let profile_picture = inserted.profile_picture.clone();
+        tokio::spawn(async move {
+            super::super::matrix::sync_profile_avatar_best_effort(
+                &user_pid,
+                profile_picture.as_deref(),
+            )
+            .await;
+        });
+    }
 
     let data = full_profile_response(&ctx.db, &inserted, &user.pid).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
@@ -169,6 +245,7 @@ fn validate_update_payload(
 fn apply_profile_updates(
     profile: profiles::Model,
     payload: &UpdateProfileBody,
+    profile_picture: Option<String>,
 ) -> profiles::ActiveModel {
     let mut active: profiles::ActiveModel = profile.into();
 
@@ -184,8 +261,8 @@ fn apply_profile_updates(
     if let Some(program) = &payload.program {
         active.program = ActiveValue::Set(Some(program.clone()));
     }
-    if let Some(pic) = &payload.profile_picture {
-        active.profile_picture = ActiveValue::Set(Some(extract_filename(pic)));
+    if let Some(pic) = profile_picture {
+        active.profile_picture = ActiveValue::Set(Some(pic));
     }
     if let Some(images) = &payload.images {
         let filenames: Vec<String> = images.iter().map(|s| extract_filename(s)).collect();
@@ -275,9 +352,26 @@ pub(in crate::controllers::migration_api) async fn profile_update(
     if let Err(response) = validate_update_payload(&headers, &payload) {
         return Ok(*response);
     }
+    let requested_profile_picture = match payload.profile_picture.as_deref() {
+        Some(raw_picture) => {
+            match validate_profile_picture_reference(
+                &ctx.db,
+                &headers,
+                Some(profile.id),
+                raw_picture,
+            )
+            .await
+            {
+                Ok(filename) => Some(filename),
+                Err(response) => return Ok(*response),
+            }
+        }
+        None => None,
+    };
+    let should_sync_matrix_avatar = requested_profile_picture.is_some();
 
     let profile_uuid = profile.id;
-    let active = apply_profile_updates(profile, &payload);
+    let active = apply_profile_updates(profile, &payload, requested_profile_picture);
 
     let updated = active
         .update(&ctx.db)
@@ -287,6 +381,18 @@ pub(in crate::controllers::migration_api) async fn profile_update(
     maybe_sync_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
 
     crate::search::invalidate_search_cache();
+
+    if should_sync_matrix_avatar {
+        let user_pid = user.pid;
+        let profile_picture = updated.profile_picture.clone();
+        tokio::spawn(async move {
+            super::super::matrix::sync_profile_avatar_best_effort(
+                &user_pid,
+                profile_picture.as_deref(),
+            )
+            .await;
+        });
+    }
 
     let data = full_profile_response(&ctx.db, &updated, &user.pid).await?;
     Ok(Json(DataResponse { data }).into_response())

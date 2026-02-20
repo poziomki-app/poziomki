@@ -11,4 +11,5 @@ data class MessagesUiState(
     val error: String? = null,
     val refreshError: String? = null,
     val profilePictures: Map<String, String> = emptyMap(),
+    val profilePicturesByName: Map<String, String> = emptyMap(),
 )

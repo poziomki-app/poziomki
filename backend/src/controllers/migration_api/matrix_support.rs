@@ -45,6 +45,13 @@ struct MatrixErrorBody {
     error: Option<String>,
 }
 
+/// UIA (User-Interactive Authentication) response from Synapse.
+/// Returned with HTTP 401 when additional auth stages are needed.
+#[derive(Clone, Debug, Deserialize)]
+struct UiaResponse {
+    session: String,
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct MatrixRequestError {
     pub(super) status_code: u16,
@@ -230,6 +237,12 @@ struct MediaUploadResponse {
     content_uri: String,
 }
 
+/// Upload media to the homeserver content repository.
+///
+/// Uses `POST /_matrix/media/v3/upload` which is the correct, non-deprecated
+/// upload endpoint per the Matrix spec (MSC3916 only moved *download/thumbnail*
+/// to `/_matrix/client/v1/media/`; upload was already authenticated and stays
+/// under the media namespace).
 pub(super) async fn upload_media(
     http_client: &reqwest::Client,
     homeserver: &str,
@@ -319,22 +332,23 @@ fn normalize_device_name(name: Option<&str>) -> String {
     }
 }
 
+/// Pass the device ID through with minimal sanitisation.
+/// The mobile client generates clean IDs (e.g. `POZ<hex>`); uppercasing or
+/// stripping characters here caused mismatches with the SDK crypto store
+/// which is keyed by the exact device ID returned by the homeserver.
 fn normalize_device_id(device_id: Option<&str>) -> Option<String> {
     let trimmed = device_id.map(str::trim).unwrap_or_default();
     if trimmed.is_empty() {
         return None;
     }
 
-    let normalized: String = trimmed
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(*ch, '_' | '-' | '.'))
-        .take(64)
-        .collect();
-    if normalized.is_empty() {
+    // Matrix spec allows printable ASCII in device IDs; just length-bound.
+    let bounded: String = trimmed.chars().take(64).collect();
+    if bounded.is_empty() {
         return None;
     }
 
-    Some(normalized.to_ascii_uppercase())
+    Some(bounded)
 }
 
 fn matrix_localpart_from_user_id(user_id: &str) -> String {
@@ -384,6 +398,10 @@ async fn register_matrix_user(
     config: &MatrixConnConfig,
 ) -> std::result::Result<MatrixAuthResponse, MatrixRequestError> {
     let url = matrix_endpoint(homeserver, "/_matrix/client/v3/register");
+
+    // Step 1: Send registration with token auth.
+    // Some homeservers (Tuwunel) complete in one step.
+    // Synapse uses UIA and may require additional stages (e.g. m.login.dummy).
     let payload = json!({
         "username": config.localpart.as_str(),
         "password": config.password.as_str(),
@@ -396,7 +414,103 @@ async fn register_matrix_user(
         },
     });
     let payload = with_device_id(payload, config.device_id.as_deref());
-    execute_matrix_auth_request(http_client, &url, payload).await
+
+    match execute_matrix_register_request(http_client, &url, &payload).await {
+        Ok(result) => Ok(result),
+        Err(RegisterStepResult::UiaNeeded(uia)) => {
+            // Step 2: Complete remaining UIA stages (typically m.login.dummy).
+            complete_uia_registration(http_client, &url, &payload, &uia).await
+        }
+        Err(RegisterStepResult::Error(e)) => Err(e),
+    }
+}
+
+/// Completes UIA registration by sending dummy auth for any remaining stages.
+async fn complete_uia_registration(
+    http_client: &reqwest::Client,
+    url: &str,
+    base_payload: &serde_json::Value,
+    uia: &UiaResponse,
+) -> std::result::Result<MatrixAuthResponse, MatrixRequestError> {
+    let mut payload = base_payload.clone();
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "auth".to_string(),
+            json!({
+                "type": "m.login.dummy",
+                "session": uia.session,
+            }),
+        );
+    }
+    match execute_matrix_register_request(http_client, url, &payload).await {
+        Ok(result) => Ok(result),
+        Err(RegisterStepResult::UiaNeeded(_)) => Err(MatrixRequestError {
+            status_code: 502,
+            errcode: None,
+            message: "UIA registration did not complete after dummy stage".to_string(),
+        }),
+        Err(RegisterStepResult::Error(e)) => Err(e),
+    }
+}
+
+enum RegisterStepResult {
+    UiaNeeded(UiaResponse),
+    Error(MatrixRequestError),
+}
+
+/// Sends a registration request and distinguishes between success, UIA challenge, and error.
+async fn execute_matrix_register_request(
+    http_client: &reqwest::Client,
+    url: &str,
+    payload: &serde_json::Value,
+) -> std::result::Result<MatrixAuthResponse, RegisterStepResult> {
+    let response = http_client
+        .post(url)
+        .json(payload)
+        .send()
+        .await
+        .map_err(|error| {
+            RegisterStepResult::Error(MatrixRequestError {
+                status_code: 503,
+                errcode: None,
+                message: error.to_string(),
+            })
+        })?;
+
+    let status = response.status();
+    if status.is_success() {
+        return response
+            .json::<MatrixAuthResponse>()
+            .await
+            .map_err(|error| {
+                RegisterStepResult::Error(MatrixRequestError {
+                    status_code: 502,
+                    errcode: None,
+                    message: format!("invalid matrix auth response: {error}"),
+                })
+            });
+    }
+
+    // HTTP 401 with a session field = UIA challenge, not a real error.
+    let status_code = status.as_u16();
+    let body_text = response.text().await.unwrap_or_else(|_| String::new());
+
+    if status_code == 401 {
+        if let Ok(uia) = serde_json::from_str::<UiaResponse>(&body_text) {
+            if !uia.session.is_empty() {
+                return Err(RegisterStepResult::UiaNeeded(uia));
+            }
+        }
+    }
+
+    let parsed_error = serde_json::from_str::<MatrixErrorBody>(&body_text).ok();
+    Err(RegisterStepResult::Error(MatrixRequestError {
+        status_code,
+        errcode: parsed_error.as_ref().and_then(|body| body.errcode.clone()),
+        message: parsed_error
+            .and_then(|body| body.error)
+            .unwrap_or(body_text),
+    }))
 }
 
 fn with_device_id(mut payload: serde_json::Value, device_id: Option<&str>) -> serde_json::Value {

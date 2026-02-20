@@ -8,6 +8,7 @@ import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.screen.main.messages.MessagesUiState
 import com.poziomki.app.util.matrixLocalpartFromUserId
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,10 @@ class MessagesViewModel(
     private val matrixClient: MatrixClient,
     private val matchProfileRepository: MatchProfileRepository,
 ) : ViewModel() {
+    private companion object {
+        const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
+    }
+
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
 
@@ -25,8 +30,10 @@ class MessagesViewModel(
         observeClientState()
         observeRooms()
         observeProfilePictures()
+        observeProfilePicturesByName()
         refresh()
         refreshProfilePictures()
+        refreshProfilePicturesPeriodically()
     }
 
     fun refresh() {
@@ -143,9 +150,42 @@ class MessagesViewModel(
         }
     }
 
+    private fun observeProfilePicturesByName() {
+        viewModelScope.launch {
+            matchProfileRepository.observeProfiles().collect { profiles ->
+                val byName =
+                    profiles
+                        .asSequence()
+                        .filter { !it.name.isBlank() && !it.profilePicture.isNullOrBlank() }
+                        .groupBy { it.name.trim().lowercase() }
+                        .mapNotNull { (name, sameNameProfiles) ->
+                            val uniquePictures =
+                                sameNameProfiles
+                                    .mapNotNull { it.profilePicture?.takeIf { picture -> picture.isNotBlank() } }
+                                    .distinct()
+                            if (uniquePictures.size == 1) {
+                                name to uniquePictures.first()
+                            } else {
+                                null
+                            }
+                        }.toMap()
+                _state.update { it.copy(profilePicturesByName = byName) }
+            }
+        }
+    }
+
     private fun refreshProfilePictures() {
         viewModelScope.launch {
             matchProfileRepository.refreshProfiles()
+        }
+    }
+
+    private fun refreshProfilePicturesPeriodically() {
+        viewModelScope.launch {
+            while (true) {
+                delay(PROFILE_PICTURE_REFRESH_INTERVAL_MS)
+                matchProfileRepository.refreshProfiles(forceRefresh = true)
+            }
         }
     }
 

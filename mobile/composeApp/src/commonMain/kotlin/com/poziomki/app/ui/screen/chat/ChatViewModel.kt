@@ -5,12 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.chat.matrix.api.Timeline
+import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.chat.timeline.TimelineController
 import com.poziomki.app.ui.screen.chat.model.ChatUiState
 import com.poziomki.app.ui.screen.chat.model.ComposerMode
 import com.poziomki.app.util.PickedFile
+import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +30,7 @@ import kotlinx.datetime.Clock
 class ChatViewModel(
     private val matrixClient: MatrixClient,
     private val roomComposerDraftStore: RoomComposerDraftStore,
+    private val matchProfileRepository: MatchProfileRepository,
 ) : ViewModel() {
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
@@ -51,13 +56,22 @@ class ChatViewModel(
     private var typingStopJob: Job? = null
     private var lastVisibleTimelineIndex: Int? = null
     private var totalTimelineItemCount: Int = 0
+    private var latestRoomSummaries: List<MatrixRoomSummary> = emptyList()
+    private var activeDirectUserId: String? = null
+    private var latestAvatarByName: Map<String, String> = emptyMap()
+
+    init {
+        observeAvatarOverrides()
+    }
 
     fun loadRoom(roomId: String) {
         if (roomId.isBlank()) return
         if (!roomId.startsWith("!")) {
+            val avatarOverrides = _uiState.value.avatarOverrides
             _uiState.value =
                 ChatUiState(
                     roomId = roomId,
+                    avatarOverrides = avatarOverrides,
                     error = "Invalid chat route id. Expected Matrix room id (!...)",
                 )
             return
@@ -203,6 +217,19 @@ class ChatViewModel(
     ) {
         viewModelScope.launch {
             val timeline = activeTimeline ?: return@launch
+
+            // Enforce one reaction per user: remove existing different reaction first
+            val event =
+                _uiState.value.timelineItems
+                    .filterIsInstance<MatrixTimelineItem.Event>()
+                    .find { it.eventOrTransactionId == eventOrTransactionId }
+            event
+                ?.reactions
+                ?.filter { it.reactedByMe && it.emoji != emoji }
+                ?.forEach { existing ->
+                    timeline.toggleReaction(eventOrTransactionId, existing.emoji)
+                }
+
             timeline.toggleReaction(eventOrTransactionId, emoji).onFailure { throwable ->
                 _uiState.update {
                     it.copy(error = throwable.message ?: "Failed to toggle reaction")
@@ -228,11 +255,11 @@ class ChatViewModel(
         }
     }
 
-    fun onTimelineViewportChanged(lastVisibleItemIndex: Int?) {
-        lastVisibleTimelineIndex = lastVisibleItemIndex
+    fun onTimelineViewportChanged(firstVisibleItemIndex: Int?) {
+        lastVisibleTimelineIndex = firstVisibleItemIndex
         _uiState.update { current ->
             current.copy(
-                isAwayFromLatest = isAwayFromLatest(lastVisibleItemIndex = lastVisibleItemIndex, totalItems = totalTimelineItemCount),
+                isAwayFromLatest = isAwayFromLatest(firstVisibleItemIndex = firstVisibleItemIndex, totalItems = totalTimelineItemCount),
             )
         }
     }
@@ -328,19 +355,24 @@ class ChatViewModel(
         activeRoom = null
         clearTypingTimers()
         typingState = false
+        activeDirectUserId = null
 
+        val avatarOverrides = _uiState.value.avatarOverrides
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
+                avatarOverrides = avatarOverrides,
                 isLoading = true,
             )
         lastVisibleTimelineIndex = null
         totalTimelineItemCount = 0
 
         matrixClient.ensureStarted().getOrElse { throwable ->
+            val currentOverrides = _uiState.value.avatarOverrides
             _uiState.value =
                 ChatUiState(
                     roomId = roomId,
+                    avatarOverrides = currentOverrides,
                     isLoading = false,
                     error = throwable.message ?: "Failed to initialize Matrix",
                 )
@@ -349,9 +381,11 @@ class ChatViewModel(
 
         val room =
             awaitJoinedRoom(roomId) ?: run {
+                val currentOverrides = _uiState.value.avatarOverrides
                 _uiState.value =
                     ChatUiState(
                         roomId = roomId,
+                        avatarOverrides = currentOverrides,
                         isLoading = false,
                         error = "Room not found or user is not joined",
                     )
@@ -381,7 +415,11 @@ class ChatViewModel(
             viewModelScope.launch {
                 room.displayName.collectLatest { name ->
                     _uiState.update { current ->
-                        current.copy(roomDisplayName = name)
+                        val byNameAvatar = latestAvatarByName[name.trim().lowercase()]
+                        current.copy(
+                            roomDisplayName = name,
+                            roomAvatarUrl = current.roomAvatarUrl ?: byNameAvatar,
+                        )
                     }
                 }
             }
@@ -389,9 +427,15 @@ class ChatViewModel(
         roomJobs +=
             viewModelScope.launch {
                 matrixClient.rooms.collectLatest { summaries ->
+                    latestRoomSummaries = summaries
                     val summary = summaries.firstOrNull { it.roomId == room.roomId }
+                    activeDirectUserId = summary?.directUserId
                     _uiState.update { current ->
-                        current.copy(roomAvatarUrl = summary?.avatarUrl)
+                        val roomAvatar =
+                            summary?.avatarUrl
+                                ?: summary?.directUserId?.let { resolveAvatarOverride(it, current.avatarOverrides) }
+                                ?: latestAvatarByName[current.roomDisplayName.trim().lowercase()]
+                        current.copy(roomAvatarUrl = roomAvatar)
                     }
                 }
             }
@@ -551,17 +595,46 @@ class ChatViewModel(
         timelineJobs.forEach { it.cancel() }
         timelineJobs.clear()
 
+        // Auto-paginate on first bind for live timelines to fill the screen with messages.
+        if (timeline.mode == MatrixTimelineMode.Live) {
+            timelineJobs +=
+                viewModelScope.launch {
+                    timeline.paginateBackwards()
+                }
+        }
+
         timelineJobs +=
             viewModelScope.launch {
                 timeline.items.collectLatest { items ->
                     totalTimelineItemCount = items.size
                     val unreadBelowCount = computeUnreadBelowCount(items)
                     _uiState.update { current ->
+                        val timelineAvatar =
+                            items
+                                .asSequence()
+                                .filterIsInstance<MatrixTimelineItem.Event>()
+                                .filter { !it.isMine }
+                                .mapNotNull { event ->
+                                    resolveAvatarOverride(event.senderId, current.avatarOverrides)
+                                        ?: event.senderAvatarUrl
+                                }.firstOrNull()
+                        val summaryAvatar =
+                            latestRoomSummaries
+                                .firstOrNull { it.roomId == current.roomId }
+                                ?.let { summary ->
+                                    summary.avatarUrl
+                                        ?: summary.directUserId?.let { resolveAvatarOverride(it, current.avatarOverrides) }
+                                }
                         current.copy(
                             timelineItems = items,
+                            roomAvatarUrl =
+                                summaryAvatar
+                                    ?: current.roomAvatarUrl
+                                    ?: timelineAvatar
+                                    ?: latestAvatarByName[current.roomDisplayName.trim().lowercase()],
                             isAwayFromLatest =
                                 isAwayFromLatest(
-                                    lastVisibleItemIndex = lastVisibleTimelineIndex,
+                                    firstVisibleItemIndex = lastVisibleTimelineIndex,
                                     totalItems = items.size,
                                 ),
                             unreadBelowCount = unreadBelowCount,
@@ -591,6 +664,53 @@ class ChatViewModel(
             }
     }
 
+    private fun observeAvatarOverrides() {
+        viewModelScope.launch {
+            matchProfileRepository.observeProfiles().collect { profiles ->
+                val overrides = mutableMapOf<String, String>()
+                profiles.forEach { profile ->
+                    val userId = profile.userId
+                    val pic = profile.profilePicture ?: return@forEach
+                    if (pic.isBlank()) return@forEach
+                    val localpart = matrixLocalpartFromUserId(userId)
+                    val normalizedUserId = userId.filter { it.isLetterOrDigit() }.lowercase()
+                    overrides[userId] = pic
+                    overrides[userId.lowercase()] = pic
+                    overrides[normalizedUserId] = pic
+                    overrides[localpart] = pic
+                    overrides["@$localpart"] = pic
+                }
+                val byName =
+                    profiles
+                        .asSequence()
+                        .filter { !it.name.isBlank() && !it.profilePicture.isNullOrBlank() }
+                        .groupBy { it.name.trim().lowercase() }
+                        .mapNotNull { (name, sameNameProfiles) ->
+                            val uniquePictures =
+                                sameNameProfiles
+                                    .mapNotNull { it.profilePicture?.takeIf { picture -> picture.isNotBlank() } }
+                                    .distinct()
+                            if (uniquePictures.size == 1) {
+                                name to uniquePictures.first()
+                            } else {
+                                null
+                            }
+                        }.toMap()
+                latestAvatarByName = byName
+                _uiState.update { current ->
+                    val roomAvatar =
+                        current.roomAvatarUrl
+                            ?: activeDirectUserId?.let { resolveAvatarOverride(it, overrides) }
+                            ?: byName[current.roomDisplayName.trim().lowercase()]
+                    current.copy(
+                        avatarOverrides = overrides,
+                        roomAvatarUrl = roomAvatar,
+                    )
+                }
+            }
+        }
+    }
+
     private fun computeUnreadBelowCount(items: List<com.poziomki.app.chat.matrix.api.MatrixTimelineItem>): Int {
         val readMarkerIndex = items.indexOfLast { it == com.poziomki.app.chat.matrix.api.MatrixTimelineItem.ReadMarker }
         if (readMarkerIndex < 0) return 0
@@ -599,13 +719,13 @@ class ChatViewModel(
             .count { it is com.poziomki.app.chat.matrix.api.MatrixTimelineItem.Event }
     }
 
+    // In reversed layout, index 0 = newest message at the bottom.
+    // "Away from latest" means the first visible item index is > 0.
     private fun isAwayFromLatest(
-        lastVisibleItemIndex: Int?,
-        totalItems: Int,
+        firstVisibleItemIndex: Int?,
+        @Suppress("UNUSED_PARAMETER") totalItems: Int,
     ): Boolean {
-        if (totalItems <= 1) return false
-        val index = lastVisibleItemIndex ?: return false
-        val latestIndex = totalItems - 1
-        return index < (latestIndex - 1)
+        val index = firstVisibleItemIndex ?: return false
+        return index > 0
     }
 }
