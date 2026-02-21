@@ -8,6 +8,7 @@ import com.poziomki.app.chat.draft.SqlDelightRoomComposerDraftStore
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.DegreeRepository
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.data.repository.SettingsRepository
@@ -41,6 +42,7 @@ val sharedModule =
         single { PoziomkiDatabase(get()) }
         single { CacheManager(get()) }
         single { PendingOperationsManager(get()) }
+        single { ChatRoomRepository(get(), get()) }
         single { EventRepository(get(), get(), get(), get(), get()) }
         single { ProfileRepository(get(), get(), get(), get()) }
         single { TagRepository(get(), get()) }

@@ -138,4 +138,31 @@ class ApiService(
         deviceId: String? = null,
     ): ApiResult<MatrixSessionData> =
         client.post("/api/v1/matrix/session", MatrixSessionRequest(deviceName = deviceName, deviceId = deviceId))
+
+    suspend fun getMatrixEventRoom(eventId: String): ApiResult<MatrixRoomResolveData> =
+        client.get("/api/v1/matrix/events/$eventId/room")
+
+    suspend fun resolveMatrixDirectRoom(
+        targetUserId: String,
+        targetDisplayName: String? = null,
+    ): ApiResult<MatrixRoomResolveData> =
+        client.post(
+            "/api/v1/matrix/dm",
+            MatrixDirectRoomRequest(
+                targetUserId = targetUserId,
+                targetDisplayName = targetDisplayName,
+            ),
+        )
+
+    suspend fun resolveMatrixDirectRoomPlural(
+        targetUserId: String,
+        targetDisplayName: String? = null,
+    ): ApiResult<MatrixRoomResolveData> =
+        client.post(
+            "/api/v1/matrix/dms",
+            MatrixDirectRoomRequest(
+                targetUserId = targetUserId,
+                targetDisplayName = targetDisplayName,
+            ),
+        )
 }
