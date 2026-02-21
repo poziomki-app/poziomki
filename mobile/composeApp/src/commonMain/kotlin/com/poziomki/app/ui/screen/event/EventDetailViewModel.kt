@@ -115,6 +115,14 @@ class EventDetailViewModel(
     fun openEventChat(onNavigateToChat: (String) -> Unit) {
         val currentEvent = _state.value.event ?: return
         if (_state.value.isOpeningChat) return
+        if (!currentEvent.isAttending) {
+            _state.value =
+                _state.value.copy(
+                    snackbarMessage = "Najpierw dołącz do wydarzenia, aby otworzyć czat",
+                    snackbarType = SnackbarType.ERROR,
+                )
+            return
+        }
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isOpeningChat = true, error = null)

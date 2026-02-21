@@ -60,6 +60,7 @@ import com.adamglin.phosphoricons.regular.ChatCircle
 import com.adamglin.phosphoricons.regular.User
 import com.adamglin.phosphoricons.regular.UsersThree
 import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.component.OfflineBanner
 import com.poziomki.app.ui.screen.auth.LoginScreen
 import com.poziomki.app.ui.screen.auth.RegisterScreen
@@ -81,7 +82,6 @@ import com.poziomki.app.ui.screen.profile.ProfileViewScreen
 import com.poziomki.app.ui.theme.Background
 import com.poziomki.app.ui.theme.Primary
 import com.poziomki.app.ui.theme.TextMuted
-import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -108,6 +108,7 @@ fun AppNavigation(
     navController: NavHostController = rememberNavController(),
 ) {
     val matrixClient = koinInject<MatrixClient>()
+    val chatRoomRepository = koinInject<ChatRoomRepository>()
     val navigationScope = rememberCoroutineScope()
 
     // Navigate to auth screen only on actual logout (true → false), not on initial composition.
@@ -136,9 +137,8 @@ fun AppNavigation(
 
     val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
         if (userId.isBlank()) return@navigateToDm
-        val matrixLocalpart = matrixLocalpartFromUserId(userId)
         navigationScope.launch {
-            val roomId = matrixClient.createDM(matrixLocalpart, displayName).getOrNull() ?: return@launch
+            val roomId = chatRoomRepository.resolveDirectRoom(userId, displayName).getOrNull() ?: return@launch
             navController.navigate(Route.Chat(roomId))
         }
     }

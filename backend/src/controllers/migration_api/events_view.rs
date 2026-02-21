@@ -287,6 +287,16 @@ fn collect_image_filenames(responses: &[EventResponse]) -> HashSet<String> {
     filenames
 }
 
+fn replace_resolved_image(value: &mut Option<String>, url_map: &HashMap<String, String>) {
+    if let Some(resolved) = value
+        .as_ref()
+        .and_then(|raw| url_map.get(raw.as_str()))
+        .cloned()
+    {
+        *value = Some(resolved);
+    }
+}
+
 /// Resolve all image URLs (cover, creator, attendee previews) in event responses.
 async fn resolve_event_images(responses: &mut [EventResponse]) {
     let filenames = collect_image_filenames(responses);
@@ -296,22 +306,10 @@ async fn resolve_event_images(responses: &mut [EventResponse]) {
     let url_map = resolve_image_map(filenames).await;
 
     for response in responses.iter_mut() {
-        if let Some(raw) = &response.cover_image {
-            if let Some(resolved) = url_map.get(raw.as_str()) {
-                response.cover_image = Some(resolved.clone());
-            }
-        }
-        if let Some(raw) = &response.creator.profile_picture {
-            if let Some(resolved) = url_map.get(raw.as_str()) {
-                response.creator.profile_picture = Some(resolved.clone());
-            }
-        }
+        replace_resolved_image(&mut response.cover_image, &url_map);
+        replace_resolved_image(&mut response.creator.profile_picture, &url_map);
         for preview in &mut response.attendees_preview {
-            if let Some(raw) = &preview.profile_picture {
-                if let Some(resolved) = url_map.get(raw.as_str()) {
-                    preview.profile_picture = Some(resolved.clone());
-                }
-            }
+            replace_resolved_image(&mut preview.profile_picture, &url_map);
         }
     }
 }

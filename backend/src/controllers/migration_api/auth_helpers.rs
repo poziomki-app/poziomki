@@ -190,47 +190,66 @@ fn otp_email_html(code: &str) -> String {
     )
 }
 
-pub(super) async fn send_otp_email(to: &str, code: &str) {
-    if !env_truthy("SMTP_ENABLE") {
-        tracing::debug!("SMTP disabled, skipping OTP email to {to}");
-        return;
-    }
+struct SmtpSettings {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    from: String,
+    tls_name: String,
+}
 
+fn smtp_settings() -> SmtpSettings {
     let host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".into());
-    let port: u16 = std::env::var("SMTP_PORT")
+    let port = std::env::var("SMTP_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(587);
     let user = std::env::var("SMTP_USER").unwrap_or_default();
     let password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
     let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
+    let tls_name = std::env::var("SMTP_TLS_NAME").unwrap_or_else(|_| host.clone());
+    SmtpSettings {
+        host,
+        port,
+        user,
+        password,
+        from,
+        tls_name,
+    }
+}
 
+fn parse_from_mailbox(from: &str) -> Option<Mailbox> {
     let Ok(from_addr) = from.parse() else {
         tracing::error!("Invalid SMTP_FROM address: {from}");
-        return;
+        return None;
     };
-    let from_mbox = Mailbox::new(
-        Some("poziomki \u{2013} poznajmy si\u{0119}!".to_string()),
+    Some(Mailbox::new(
+        Some("poziomki – poznajmy się!".to_string()),
         from_addr,
-    );
+    ))
+}
+
+fn parse_recipient_mailbox(to: &str) -> Option<Mailbox> {
     let Ok(to_addr) = to.parse() else {
         tracing::error!("Invalid recipient address: {to}");
-        return;
+        return None;
     };
+    Some(to_addr)
+}
 
+fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str, to: &str) -> Option<Message> {
     let html_body = otp_email_html(code);
     let plain_body = format!(
-        "Tw\u{00f3}j kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzi\u{0107} swoje konto.\nKod wygasa za 10 minut.\n\n2026 poziomki 🩵"
+        "Twój kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzić swoje konto.\nKod wygasa za 10 minut.\n\n2026 poziomki 🩵"
     );
-
-    // Generate a proper Message-ID with our domain (not container hostname)
     let msg_id = format!("<{}@poziomki.app>", uuid::Uuid::new_v4());
 
-    let email = match Message::builder()
+    match Message::builder()
         .from(from_mbox)
-        .to(to_addr)
-        .message_id(Some(msg_id.clone()))
-        .subject(format!("Tw\u{00f3}j kod logowania to {code}"))
+        .to(to_mbox)
+        .message_id(Some(msg_id))
+        .subject(format!("Twój kod logowania to {code}"))
         .raw_header(header::HeaderValue::new(
             header::HeaderName::new_from_ascii_str("Auto-Submitted"),
             "auto-generated".to_owned(),
@@ -251,33 +270,60 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
     {
         Ok(msg) => {
             tracing::info!("OTP email prepared for delivery to {to}");
-            msg
+            Some(msg)
         }
-        Err(e) => {
-            tracing::error!("Failed to build OTP email: {e}");
-            return;
+        Err(error) => {
+            tracing::error!("Failed to build OTP email: {error}");
+            None
         }
-    };
+    }
+}
 
-    let creds = Credentials::new(user, password);
-    // SMTP_TLS_NAME: hostname for TLS cert validation (when SMTP_HOST is a Docker service name
-    // like "stalwart" but the cert is issued for "mail.poziomki.app").
-    let tls_name = std::env::var("SMTP_TLS_NAME").unwrap_or_else(|_| host.clone());
-    let tls_params = match TlsParameters::new(tls_name.clone()) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!("Failed to create TLS parameters for {tls_name}: {e}");
-            return;
+fn smtp_tls_params(tls_name: &str) -> Option<TlsParameters> {
+    match TlsParameters::new(tls_name.to_string()) {
+        Ok(params) => Some(params),
+        Err(error) => {
+            tracing::error!("Failed to create TLS parameters for {tls_name}: {error}");
+            None
         }
-    };
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&host)
-        .port(port)
+    }
+}
+
+fn build_smtp_mailer(
+    settings: &SmtpSettings,
+    tls_params: TlsParameters,
+) -> AsyncSmtpTransport<Tokio1Executor> {
+    let creds = Credentials::new(settings.user.clone(), settings.password.clone());
+    AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&settings.host)
+        .port(settings.port)
         .tls(lettre::transport::smtp::client::Tls::Required(tls_params))
         .credentials(creds)
-        .build();
+        .build()
+}
 
-    if let Err(e) = mailer.send(email).await {
-        tracing::error!("Failed to send OTP email to {to}: {e}");
+pub(super) async fn send_otp_email(to: &str, code: &str) {
+    if !env_truthy("SMTP_ENABLE") {
+        tracing::debug!("SMTP disabled, skipping OTP email to {to}");
+        return;
+    }
+
+    let settings = smtp_settings();
+    let Some(from_mbox) = parse_from_mailbox(&settings.from) else {
+        return;
+    };
+    let Some(to_mbox) = parse_recipient_mailbox(to) else {
+        return;
+    };
+    let Some(email) = build_otp_email(from_mbox, to_mbox, code, to) else {
+        return;
+    };
+    let Some(tls_params) = smtp_tls_params(&settings.tls_name) else {
+        return;
+    };
+    let mailer = build_smtp_mailer(&settings, tls_params);
+
+    if let Err(error) = mailer.send(email).await {
+        tracing::error!("Failed to send OTP email to {to}: {error}");
     } else {
         tracing::info!("OTP email sent to {to}");
     }

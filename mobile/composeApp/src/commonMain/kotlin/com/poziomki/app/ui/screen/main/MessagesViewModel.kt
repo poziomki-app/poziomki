@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
+import com.poziomki.app.ui.screen.main.messages.buildProfilePicturesByName
+import com.poziomki.app.ui.screen.main.messages.buildProfilePicturesByUserId
 import com.poziomki.app.ui.screen.main.messages.MessagesUiState
-import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +21,7 @@ import kotlinx.coroutines.launch
 class MessagesViewModel(
     private val matrixClient: MatrixClient,
     private val matchProfileRepository: MatchProfileRepository,
+    private val eventRepository: EventRepository,
 ) : ViewModel() {
     private companion object {
         const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
@@ -29,6 +33,7 @@ class MessagesViewModel(
     init {
         observeClientState()
         observeRooms()
+        observeEventRooms()
         observeProfilePictures()
         observeProfilePicturesByName()
         refresh()
@@ -140,15 +145,7 @@ class MessagesViewModel(
     private fun observeProfilePictures() {
         viewModelScope.launch {
             matchProfileRepository.observeProfilePicturesByUserId().collect { userIdToPic ->
-                val pictureMap = mutableMapOf<String, String>()
-                userIdToPic.forEach { (userId, pic) ->
-                    val localpart = matrixLocalpartFromUserId(userId)
-                    pictureMap[userId] = pic
-                    pictureMap[userId.lowercase()] = pic
-                    pictureMap[localpart] = pic
-                    pictureMap["@$localpart"] = pic
-                }
-                _state.update { it.copy(profilePictures = pictureMap) }
+                _state.update { it.copy(profilePictures = buildProfilePicturesByUserId(userIdToPic)) }
             }
         }
     }
@@ -156,23 +153,15 @@ class MessagesViewModel(
     private fun observeProfilePicturesByName() {
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
-                val byName =
-                    profiles
-                        .asSequence()
-                        .filter { !it.name.isBlank() && !it.profilePicture.isNullOrBlank() }
-                        .groupBy { it.name.trim().lowercase() }
-                        .mapNotNull { (name, sameNameProfiles) ->
-                            val uniquePictures =
-                                sameNameProfiles
-                                    .mapNotNull { it.profilePicture?.takeIf { picture -> picture.isNotBlank() } }
-                                    .distinct()
-                            if (uniquePictures.size == 1) {
-                                name to uniquePictures.first()
-                            } else {
-                                null
-                            }
-                        }.toMap()
-                _state.update { it.copy(profilePicturesByName = byName) }
+                _state.update { it.copy(profilePicturesByName = buildProfilePicturesByName(profiles)) }
+            }
+        }
+    }
+
+    private fun observeEventRooms() {
+        viewModelScope.launch {
+            eventRepository.observeEventConversationIds().collect { eventRoomIds ->
+                _state.update { it.copy(eventRoomIds = eventRoomIds) }
             }
         }
     }
@@ -185,7 +174,7 @@ class MessagesViewModel(
 
     private fun refreshProfilePicturesPeriodically() {
         viewModelScope.launch {
-            while (true) {
+            while (isActive) {
                 delay(PROFILE_PICTURE_REFRESH_INTERVAL_MS)
                 matchProfileRepository.refreshProfiles(forceRefresh = true)
             }

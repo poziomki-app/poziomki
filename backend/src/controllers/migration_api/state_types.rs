@@ -415,9 +415,9 @@ pub(in crate::controllers::migration_api) struct UploadResponse {
     pub(in crate::controllers::migration_api) size: usize,
     #[serde(rename = "type")]
     pub(in crate::controllers::migration_api) mime_type: String,
-    #[serde(rename = "thumbnailUrl", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::controllers::migration_api) thumbnail_url: Option<String>,
-    #[serde(rename = "standardUrl", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::controllers::migration_api) standard_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::controllers::migration_api) thumbhash: Option<String>,
