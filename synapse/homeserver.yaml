@@ -1,0 +1,52 @@
+## Synapse homeserver config for Poziomki
+## Replaces Tuwunel — same server_name so user IDs stay compatible.
+
+server_name: "chat.poziomki.app"
+pid_file: /data/homeserver.pid
+
+listeners:
+  - port: 8008
+    type: http
+    tls: false
+    x_forwarded: true
+    resources:
+      - names: [client]
+        compress: false
+
+database:
+  name: sqlite3
+  args:
+    database: /data/homeserver.db
+
+log_config: "/data/log.config"
+media_store_path: /data/media_store
+signing_key_path: /data/signing.key
+
+## Registration — token-gated, same flow as Tuwunel
+enable_registration: true
+registration_requires_token: true
+
+## Refresh tokens — backend expects these
+refreshable_access_token_lifetime: 5m
+refresh_token_lifetime: 24h
+nonrefreshable_access_token_lifetime: 24h
+
+## Admin API — needed to create registration tokens on first run
+## Use the same value as MATRIX_REGISTRATION_TOKEN for convenience
+registration_shared_secret_path: /data/registration_shared_secret
+
+## Disable federation (same as Tuwunel config)
+federation_domain_whitelist: []
+
+## Suppress federation key warning since we disabled it intentionally
+suppress_key_server_warning: true
+trusted_key_servers: []
+
+## Media config
+max_upload_size: 50M
+
+## Misc
+report_stats: false
+
+## Enable authenticated media (Matrix v1.11)
+enable_authenticated_media: true

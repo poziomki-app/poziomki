@@ -2,7 +2,10 @@
 
 Last verified: 2026-02-18
 
-This is the canonical status and delivery plan for Matrix chat integration in Poziomki RS.
+This is an implementation-state snapshot for Matrix chat integration in Poziomki RS.
+Canonical execution playbook: `docs/chat/CHAT_IMPLEMENTATION_CHECKLIST.md`.
+Docs index and precedence: `docs/chat/README.md`.
+Two-agent parallel mode: `docs/chat/AGENT_SPLIT_PLAN.md`.
 
 ## 1. Scope
 

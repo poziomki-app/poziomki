@@ -123,8 +123,11 @@ class MessagesViewModel(
     private fun observeRooms() {
         viewModelScope.launch {
             matrixClient.rooms.collect { rooms ->
-                val deduplicatedRooms = deduplicateRooms(rooms)
+                val deduplicatedRooms = deduplicateAndSortRooms(rooms)
                 _state.update { current ->
+                    if (current.rooms == deduplicatedRooms && (!current.isLoading || deduplicatedRooms.isEmpty())) {
+                        return@update current
+                    }
                     current.copy(
                         rooms = deduplicatedRooms,
                         isLoading = if (deduplicatedRooms.isNotEmpty()) false else current.isLoading,
@@ -189,30 +192,56 @@ class MessagesViewModel(
         }
     }
 
-    private fun deduplicateRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
+    private fun deduplicateAndSortRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
         val deduplicated = LinkedHashMap<String, MatrixRoomSummary>()
         rooms.forEach { room ->
-            val key =
-                if (room.isDirect) {
-                    room.directUserId
-                        ?.trim()
-                        ?.lowercase()
-                        ?.ifBlank { null }
-                        ?: room.roomId
-                } else {
-                    room.roomId
-                }
+            val key = stableRoomKey(room)
             val existing = deduplicated[key]
             if (existing == null) {
                 deduplicated[key] = room
             } else {
-                val roomTs = room.latestTimestampMillis ?: Long.MIN_VALUE
-                val existingTs = existing.latestTimestampMillis ?: Long.MIN_VALUE
-                if (roomTs > existingTs) {
+                if (isPreferredRoomCandidate(candidate = room, current = existing)) {
                     deduplicated[key] = room
                 }
             }
         }
-        return deduplicated.values.toList()
+        return deduplicated.values.sortedWith(roomSortComparator)
     }
+
+    private fun stableRoomKey(room: MatrixRoomSummary): String =
+        if (room.isDirect) {
+            room.directUserId
+                ?.trim()
+                ?.lowercase()
+                ?.ifBlank { null }
+                ?: room.roomId
+        } else {
+            room.roomId
+        }
+
+    private fun isPreferredRoomCandidate(
+        candidate: MatrixRoomSummary,
+        current: MatrixRoomSummary,
+    ): Boolean {
+        val candidateTs = candidate.latestTimestampMillis ?: Long.MIN_VALUE
+        val currentTs = current.latestTimestampMillis ?: Long.MIN_VALUE
+        if (candidateTs != currentTs) return candidateTs > currentTs
+        if (candidate.unreadCount != current.unreadCount) return candidate.unreadCount > current.unreadCount
+
+        val candidateHasMessage = !candidate.latestMessage.isNullOrBlank()
+        val currentHasMessage = !current.latestMessage.isNullOrBlank()
+        if (candidateHasMessage != currentHasMessage) return candidateHasMessage
+
+        val candidateHasAvatar = !candidate.avatarUrl.isNullOrBlank()
+        val currentHasAvatar = !current.avatarUrl.isNullOrBlank()
+        if (candidateHasAvatar != currentHasAvatar) return candidateHasAvatar
+
+        return candidate.roomId < current.roomId
+    }
+
+    private val roomSortComparator: Comparator<MatrixRoomSummary> =
+        compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
+            .thenByDescending { it.unreadCount }
+            .thenBy { stableRoomKey(it) }
+            .thenBy { it.roomId }
 }

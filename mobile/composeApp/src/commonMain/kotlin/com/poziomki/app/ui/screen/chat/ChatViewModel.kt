@@ -394,11 +394,20 @@ class ChatViewModel(
 
         activeRoom = room
         val restoredDraft = roomComposerDraftStore.getDraft(room.roomId)
+        val initialSummary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
+        val initialDisplayName = initialSummary?.displayName?.takeIf { it.isNotBlank() }.orEmpty()
+        val initialAvatar =
+            resolveRoomAvatar(
+                summary = initialSummary,
+                overrides = _uiState.value.avatarOverrides,
+                roomDisplayName = initialDisplayName,
+                currentAvatar = null,
+            )
         _uiState.update {
             it.copy(
                 roomId = room.roomId,
-                roomDisplayName = "",
-                roomAvatarUrl = null,
+                roomDisplayName = initialDisplayName,
+                roomAvatarUrl = initialAvatar,
                 timelineItems = emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
@@ -415,10 +424,16 @@ class ChatViewModel(
             viewModelScope.launch {
                 room.displayName.collectLatest { name ->
                     _uiState.update { current ->
-                        val byNameAvatar = latestAvatarByName[name.trim().lowercase()]
+                        val summary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
                         current.copy(
                             roomDisplayName = name,
-                            roomAvatarUrl = current.roomAvatarUrl ?: byNameAvatar,
+                            roomAvatarUrl =
+                                resolveRoomAvatar(
+                                    summary = summary,
+                                    overrides = current.avatarOverrides,
+                                    roomDisplayName = name,
+                                    currentAvatar = current.roomAvatarUrl,
+                                ),
                         )
                     }
                 }
@@ -429,13 +444,17 @@ class ChatViewModel(
                 matrixClient.rooms.collectLatest { summaries ->
                     latestRoomSummaries = summaries
                     val summary = summaries.firstOrNull { it.roomId == room.roomId }
-                    activeDirectUserId = summary?.directUserId
+                    activeDirectUserId = summary?.directUserId ?: activeDirectUserId
                     _uiState.update { current ->
-                        val roomAvatar =
-                            summary?.avatarUrl
-                                ?: summary?.directUserId?.let { resolveAvatarOverride(it, current.avatarOverrides) }
-                                ?: latestAvatarByName[current.roomDisplayName.trim().lowercase()]
-                        current.copy(roomAvatarUrl = roomAvatar)
+                        current.copy(
+                            roomAvatarUrl =
+                                resolveRoomAvatar(
+                                    summary = summary,
+                                    overrides = current.avatarOverrides,
+                                    roomDisplayName = current.roomDisplayName,
+                                    currentAvatar = current.roomAvatarUrl,
+                                ),
+                        )
                     }
                 }
             }
@@ -618,20 +637,17 @@ class ChatViewModel(
                                     resolveAvatarOverride(event.senderId, current.avatarOverrides)
                                         ?: event.senderAvatarUrl
                                 }.firstOrNull()
-                        val summaryAvatar =
-                            latestRoomSummaries
-                                .firstOrNull { it.roomId == current.roomId }
-                                ?.let { summary ->
-                                    summary.avatarUrl
-                                        ?: summary.directUserId?.let { resolveAvatarOverride(it, current.avatarOverrides) }
-                                }
+                        val summary = latestRoomSummaries.firstOrNull { it.roomId == current.roomId }
                         current.copy(
                             timelineItems = items,
                             roomAvatarUrl =
-                                summaryAvatar
-                                    ?: current.roomAvatarUrl
-                                    ?: timelineAvatar
-                                    ?: latestAvatarByName[current.roomDisplayName.trim().lowercase()],
+                                resolveRoomAvatar(
+                                    summary = summary,
+                                    overrides = current.avatarOverrides,
+                                    roomDisplayName = current.roomDisplayName,
+                                    currentAvatar = current.roomAvatarUrl,
+                                    timelineAvatar = timelineAvatar,
+                                ),
                             isAwayFromLatest =
                                 isAwayFromLatest(
                                     firstVisibleItemIndex = lastVisibleTimelineIndex,
@@ -698,17 +714,37 @@ class ChatViewModel(
                         }.toMap()
                 latestAvatarByName = byName
                 _uiState.update { current ->
-                    val roomAvatar =
-                        current.roomAvatarUrl
-                            ?: activeDirectUserId?.let { resolveAvatarOverride(it, overrides) }
-                            ?: byName[current.roomDisplayName.trim().lowercase()]
+                    val summary = latestRoomSummaries.firstOrNull { it.roomId == current.roomId }
                     current.copy(
                         avatarOverrides = overrides,
-                        roomAvatarUrl = roomAvatar,
+                        roomAvatarUrl =
+                            resolveRoomAvatar(
+                                summary = summary,
+                                overrides = overrides,
+                                roomDisplayName = current.roomDisplayName,
+                                currentAvatar = current.roomAvatarUrl,
+                                directUserIdFallback = activeDirectUserId,
+                            ),
                     )
                 }
             }
         }
+    }
+
+    private fun resolveRoomAvatar(
+        summary: MatrixRoomSummary?,
+        overrides: Map<String, String>,
+        roomDisplayName: String,
+        currentAvatar: String?,
+        timelineAvatar: String? = null,
+        directUserIdFallback: String? = null,
+    ): String? {
+        val directUserId = summary?.directUserId ?: directUserIdFallback
+        val summaryAvatar =
+            summary?.avatarUrl
+                ?: directUserId?.let { resolveAvatarOverride(it, overrides) }
+        val byNameAvatar = latestAvatarByName[roomDisplayName.trim().lowercase()]
+        return summaryAvatar ?: currentAvatar ?: timelineAvatar ?: byNameAvatar
     }
 
     private fun computeUnreadBelowCount(items: List<com.poziomki.app.chat.matrix.api.MatrixTimelineItem>): Int {

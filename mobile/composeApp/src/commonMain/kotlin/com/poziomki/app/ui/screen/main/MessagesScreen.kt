@@ -175,7 +175,7 @@ fun MessagesScreen(
                                         .fillMaxSize()
                                         .padding(horizontal = PoziomkiTheme.spacing.lg),
                             ) {
-                                items(filteredRooms, key = { it.roomId }) { room ->
+                                items(filteredRooms, key = { roomListItemKey(it) }) { room ->
                                     val profilePicture =
                                         room.directUserId
                                             ?.let { directUserId ->
@@ -320,3 +320,14 @@ private fun formatRoomTimestamp(timestampMillis: Long): String {
         "${dateTime.dayOfMonth}.${dateTime.monthNumber.toString().padStart(2, '0')}"
     }
 }
+
+private fun roomListItemKey(room: MatrixRoomSummary): String =
+    if (room.isDirect) {
+        room.directUserId
+            ?.trim()
+            ?.lowercase()
+            ?.ifBlank { null }
+            ?: room.roomId
+    } else {
+        room.roomId
+    }

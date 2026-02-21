@@ -72,6 +72,10 @@ class RustMatrixClient(
     private var cachedConfig: MatrixConfigData? = null
     private val dmRoomIdsByUserId = mutableMapOf<String, String>()
     private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
+    private val roomSummaryComparator: Comparator<MatrixRoomSummary> =
+        compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
+            .thenByDescending { it.unreadCount }
+            .thenBy { it.roomId }
 
     override suspend fun ensureStarted(): Result<Unit> =
         startStopMutex.withLock {
@@ -469,7 +473,10 @@ class RustMatrixClient(
                     }
             }
 
-            _rooms.value = mappedRooms.sortedByDescending { it.latestTimestampMillis ?: Long.MIN_VALUE }
+            val sortedRooms = mappedRooms.sortedWith(roomSummaryComparator)
+            if (_rooms.value != sortedRooms) {
+                _rooms.value = sortedRooms
+            }
         }
     }
 

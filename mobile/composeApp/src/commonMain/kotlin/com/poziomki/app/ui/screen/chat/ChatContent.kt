@@ -202,7 +202,7 @@ fun ChatContent(
 
                     itemsIndexed(
                         items = reversedItems,
-                        key = { index, item -> timelineItemKey(index, item) },
+                        key = { _, item -> timelineItemKey(item) },
                     ) { index, item ->
                         Box(modifier = itemPadding) {
                             when (item) {
@@ -804,15 +804,12 @@ internal fun formatDate(timestampMillis: Long): String {
     return "$day.$month.$year"
 }
 
-internal fun timelineItemKey(
-    index: Int,
-    item: MatrixTimelineItem,
-): String =
+internal fun timelineItemKey(item: MatrixTimelineItem): String =
     when (item) {
         is MatrixTimelineItem.Event -> "event_${item.eventOrTransactionId}"
-        is MatrixTimelineItem.DateDivider -> "date_${item.timestampMillis}_$index"
-        MatrixTimelineItem.ReadMarker -> "read_$index"
-        MatrixTimelineItem.TimelineStart -> "start_$index"
+        is MatrixTimelineItem.DateDivider -> "date_${item.timestampMillis}"
+        MatrixTimelineItem.ReadMarker -> "read_marker"
+        MatrixTimelineItem.TimelineStart -> "timeline_start"
     }
 
 /**
