@@ -3,6 +3,7 @@ pub mod degrees;
 pub mod event_attendees;
 pub mod event_tags;
 pub mod events;
+pub mod matrix_dm_rooms;
 pub mod profile_tags;
 pub mod profiles;
 pub mod sessions;

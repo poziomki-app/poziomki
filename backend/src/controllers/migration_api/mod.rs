@@ -147,18 +147,6 @@ async fn matrix_config() -> Result<Response> {
     .into_response())
 }
 
-async fn not_implemented(headers: HeaderMap) -> Result<Response> {
-    Ok(error_response(
-        axum::http::StatusCode::NOT_IMPLEMENTED,
-        &headers,
-        ErrorSpec {
-            error: "Endpoint is not implemented in Rust yet".to_string(),
-            code: "NOT_IMPLEMENTED",
-            details: None,
-        },
-    ))
-}
-
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
 }
@@ -250,13 +238,26 @@ fn search_routes() -> Routes {
         .layer(cache_layer("private, max-age=60"))
 }
 
-fn matrix_routes() -> Routes {
+fn matrix_config_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/matrix")
         .add("/config", get(matrix_config))
-        .add("/session", post(matrix::create_session))
-        .add("/events/{eventId}/room", get(not_implemented))
         .layer(cache_layer("public, max-age=3600"))
+}
+
+fn matrix_session_routes() -> Routes {
+    Routes::new()
+        .prefix("/api/v1/matrix")
+        .add("/session", post(matrix::create_session))
+        .layer(cache_layer("no-store"))
+}
+
+fn matrix_room_routes() -> Routes {
+    Routes::new()
+        .prefix("/api/v1/matrix")
+        .add("/events/{eventId}/room", get(matrix::resolve_event_room))
+        .add("/dms", post(matrix::resolve_dm_room))
+        .layer(cache_layer("no-store"))
 }
 
 fn push_gateway_routes() -> Routes {
@@ -279,7 +280,9 @@ pub fn routes() -> Vec<Routes> {
         uploads_routes(),
         settings_routes(),
         search_routes(),
-        matrix_routes(),
+        matrix_config_routes(),
+        matrix_session_routes(),
+        matrix_room_routes(),
         push_gateway_routes(),
     ]
 }

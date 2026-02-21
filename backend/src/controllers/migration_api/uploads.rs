@@ -22,6 +22,7 @@ use super::state::{
     create_upload_filename, is_production_mode, require_auth_db, validate_filename, DataResponse,
     SuccessResponse, UploadResponse, UploadUrlResponse,
 };
+use super::{error_response, ErrorSpec};
 use crate::models::_entities::{profiles, uploads};
 use uploads_multipart::HandlerError;
 use uploads_support::{
@@ -43,6 +44,40 @@ impl serde::Serialize for AuthCheckResponse {
         state.serialize_field("ok", &self.ok)?;
         state.end()
     }
+}
+
+fn internal_upload_error(headers: &HeaderMap, message: &str) -> HandlerError {
+    Box::new(error_response(
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        headers,
+        ErrorSpec {
+            error: message.to_string(),
+            code: "INTERNAL_ERROR",
+            details: None,
+        },
+    ))
+}
+
+fn dev_upload_url(filename: &str) -> String {
+    format!("/api/v1/uploads/{filename}")
+}
+
+async fn public_upload_url(headers: &HeaderMap, filename: &str) -> String {
+    if is_production_mode() {
+        storage_signed_url(headers, filename)
+            .await
+            .unwrap_or_else(|_| dev_upload_url(filename))
+    } else {
+        dev_upload_url(filename)
+    }
+}
+
+async fn fallback_variant_urls(
+    headers: &HeaderMap,
+    original_filename: &str,
+) -> (Option<String>, Option<String>) {
+    let fallback = public_upload_url(headers, original_filename).await;
+    (Some(fallback.clone()), Some(fallback))
 }
 
 async fn require_auth_profile(
@@ -156,7 +191,18 @@ pub(super) async fn auth_check(
     let response: std::result::Result<Response, HandlerError> = async {
         let profile = require_auth_profile(&ctx.db, &headers).await?;
         let filename = extract_filename_from_original_uri(&headers)?;
-        let _upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
+        match load_owned_upload(&ctx.db, &headers, &filename, profile.id).await {
+            Ok(_upload) => {}
+            Err(owned_err) => {
+                let has_owned_original =
+                    load_owned_original_for_variant(&ctx.db, &headers, &filename, profile.id)
+                        .await?
+                        .is_some();
+                if !has_owned_original {
+                    return Err(owned_err);
+                }
+            }
+        }
 
         Ok(Json(AuthCheckResponse { ok: true }).into_response())
     }
@@ -223,22 +269,18 @@ pub(super) async fn file_upload(
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
+        let thumb_name = uploads_resize::variant_filename(&filename, "thumb");
+        let std_name = uploads_resize::variant_filename(&filename, "std");
         storage_upload(&headers, &filename, &parsed.bytes, &parsed.mime_type).await?;
 
         // Generate image variants (thumbnail + standard WebP)
         let variants = uploads_resize::generate_variants(&parsed.bytes, &parsed.mime_type).await;
 
         let mut thumbhash_bytes: Option<Vec<u8>> = None;
-        let mut has_variants = false;
-        let mut thumbnail_url: Option<String> = None;
-        let mut standard_url: Option<String> = None;
         let mut thumbhash_b64: Option<String> = None;
 
-        match variants {
+        let (has_variants, thumbnail_url, standard_url) = match variants {
             Ok(v) => {
-                let thumb_name = uploads_resize::variant_filename(&filename, "thumb");
-                let std_name = uploads_resize::variant_filename(&filename, "std");
-
                 let (thumb_upload, std_upload) = tokio::join!(
                     storage_upload(&headers, &thumb_name, &v.thumbnail, "image/webp"),
                     storage_upload(&headers, &std_name, &v.standard, "image/webp")
@@ -247,21 +289,14 @@ pub(super) async fn file_upload(
                 let thumb_ok = thumb_upload.is_ok();
                 let std_ok = std_upload.is_ok();
 
-                has_variants = thumb_ok && std_ok;
+                let has_variants = thumb_ok && std_ok;
                 thumbhash_bytes = Some(v.thumbhash.clone());
                 thumbhash_b64 = Some(uploads_resize::encode_thumbhash_base64(&v.thumbhash));
 
                 if has_variants {
-                    thumbnail_url = if is_production_mode() {
-                        storage_signed_url(&headers, &thumb_name).await.ok()
-                    } else {
-                        Some(format!("/api/v1/uploads/{thumb_name}"))
-                    };
-                    standard_url = if is_production_mode() {
-                        storage_signed_url(&headers, &std_name).await.ok()
-                    } else {
-                        Some(format!("/api/v1/uploads/{std_name}"))
-                    };
+                    let thumbnail_url = Some(public_upload_url(&headers, &thumb_name).await);
+                    let standard_url = Some(public_upload_url(&headers, &std_name).await);
+                    (true, thumbnail_url, standard_url)
                 } else {
                     if thumb_ok {
                         let _ = uploads_storage::delete(&thumb_name).await;
@@ -275,12 +310,22 @@ pub(super) async fn file_upload(
                         std_ok,
                         "variant upload incomplete; cleaned partial variant files"
                     );
+                    let (fallback_thumb, fallback_std) =
+                        fallback_variant_urls(&headers, &filename).await;
+                    (false, fallback_thumb, fallback_std)
                 }
             }
             Err(err) => {
-                tracing::warn!(filename = %filename, error = %err, "image variant generation failed");
+                tracing::warn!(
+                    filename = %filename,
+                    error = %err,
+                    "image variant generation failed"
+                );
+                let (fallback_thumb, fallback_std) =
+                    fallback_variant_urls(&headers, &filename).await;
+                (false, fallback_thumb, fallback_std)
             }
-        }
+        };
 
         // Store upload record in DB
         let context_str = format!("{:?}", parsed.context).to_ascii_lowercase();
@@ -298,13 +343,18 @@ pub(super) async fn file_upload(
             created_at: ActiveValue::Set(now.into()),
             updated_at: ActiveValue::Set(now.into()),
         };
-        let _ = upload.insert(&ctx.db).await;
+        if let Err(error) = upload.insert(&ctx.db).await {
+            tracing::warn!(filename = %filename, %error, "failed to insert upload row");
+            let _ = uploads_storage::delete(&filename).await;
+            let _ = uploads_storage::delete(&thumb_name).await;
+            let _ = uploads_storage::delete(&std_name).await;
+            return Err(internal_upload_error(
+                &headers,
+                "Failed to save upload metadata",
+            ));
+        }
 
-        let url = if is_production_mode() {
-            storage_signed_url(&headers, &filename).await?
-        } else {
-            format!("/api/v1/uploads/{filename}")
-        };
+        let url = public_upload_url(&headers, &filename).await;
 
         Ok(Json(DataResponse {
             data: UploadResponse {
@@ -349,7 +399,13 @@ pub(super) async fn file_delete(
         let mut active: uploads::ActiveModel = upload.into();
         active.deleted = ActiveValue::Set(true);
         active.updated_at = ActiveValue::Set(Utc::now().into());
-        let _ = active.update(&ctx.db).await;
+        if let Err(error) = active.update(&ctx.db).await {
+            tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
+            return Err(internal_upload_error(
+                &headers,
+                "Failed to update upload metadata",
+            ));
+        }
 
         Ok(Json(SuccessResponse { success: true }).into_response())
     }
