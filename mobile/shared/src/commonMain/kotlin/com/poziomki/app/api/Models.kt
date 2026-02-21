@@ -296,6 +296,22 @@ data class MatrixSessionData(
     val expiresAt: Long? = null,
 )
 
+@Serializable
+data class MatrixRoomResolveData(
+    @SerialName("roomId")
+    val roomId: String? = null,
+    @SerialName("room_id")
+    val roomIdSnakeCase: String? = null,
+)
+
+@Serializable
+data class MatrixDirectRoomRequest(
+    @SerialName("targetUserId")
+    val targetUserId: String,
+    @SerialName("targetDisplayName")
+    val targetDisplayName: String? = null,
+)
+
 // Search models
 
 @Serializable

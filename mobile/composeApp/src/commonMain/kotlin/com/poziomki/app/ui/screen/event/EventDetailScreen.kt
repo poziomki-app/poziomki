@@ -157,7 +157,7 @@ fun EventDetailScreen(
 
                                 OutlinedButton(
                                     onClick = { viewModel.openEventChat(onNavigateToChat) },
-                                    enabled = !state.isOpeningChat,
+                                    enabled = event.isAttending && !state.isOpeningChat,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     if (state.isOpeningChat) {
@@ -171,7 +171,7 @@ fun EventDetailScreen(
                                             contentDescription = null,
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Czat wydarzenia")
+                                        Text(if (event.isAttending) "Czat wydarzenia" else "Dołącz, aby czatować")
                                     }
                                 }
 

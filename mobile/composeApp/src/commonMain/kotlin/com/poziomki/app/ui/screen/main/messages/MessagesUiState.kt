@@ -12,4 +12,5 @@ data class MessagesUiState(
     val refreshError: String? = null,
     val profilePictures: Map<String, String> = emptyMap(),
     val profilePicturesByName: Map<String, String> = emptyMap(),
+    val eventRoomIds: Set<String> = emptySet(),
 )
