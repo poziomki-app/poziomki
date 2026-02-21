@@ -138,6 +138,135 @@ fn push_target_host(pushkey: &str) -> String {
         .unwrap_or_else(|| "invalid".to_string())
 }
 
+fn gateway_auth_error(headers: &HeaderMap, query: &PushGatewayAuthQuery) -> Option<Response> {
+    let Some(expected_token) = push_gateway_token() else {
+        tracing::error!("PUSH_GATEWAY_TOKEN is not configured");
+        return Some(error_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Push gateway is not configured",
+        ));
+    };
+    if !token_matches(&expected_token, provided_gateway_token(headers, query)) {
+        return Some(error_response(StatusCode::UNAUTHORIZED, "Unauthorized"));
+    }
+    None
+}
+
+fn configured_allowed_hosts() -> Option<HashSet<String>> {
+    let allowed_hosts = allowed_push_hosts();
+    if allowed_hosts.is_empty() {
+        tracing::error!("No push target allowlist configured");
+        return None;
+    }
+    Some(allowed_hosts)
+}
+
+fn build_push_http_client() -> std::result::Result<reqwest::Client, loco_rs::Error> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|error| loco_rs::Error::Any(error.into()))
+}
+
+fn notification_title(notification: &PushNotification) -> &str {
+    notification
+        .sender_display_name
+        .as_deref()
+        .or(notification.sender.as_deref())
+        .unwrap_or("New message")
+}
+
+fn notification_body_raw(notification: &PushNotification) -> String {
+    serde_json::json!({
+        "event_id": notification.event_id,
+        "room_id": notification.room_id,
+        "sender": notification.sender,
+    })
+    .to_string()
+}
+
+async fn deliver_notification_to_device(
+    http_client: &reqwest::Client,
+    allowed_hosts: &HashSet<String>,
+    notification: &PushNotification,
+    device: &PushDevice,
+    title: &str,
+    body_raw: &str,
+) -> bool {
+    let target_host = push_target_host(&device.pushkey);
+    if reject_unallowed_pushkey(&device.pushkey, &target_host, allowed_hosts) {
+        return false;
+    }
+
+    let response =
+        match send_device_notification(http_client, &device.pushkey, title, body_raw).await {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::warn!(
+                    pushkey_host = %target_host,
+                    error = %err,
+                    "failed to deliver push notification to ntfy"
+                );
+                return false;
+            }
+        };
+
+    log_delivery_response(&target_host, notification, &response)
+}
+
+fn reject_unallowed_pushkey(
+    pushkey: &str,
+    target_host: &str,
+    allowed_hosts: &HashSet<String>,
+) -> bool {
+    if is_allowed_pushkey(pushkey, allowed_hosts) {
+        return false;
+    }
+    tracing::warn!(
+        pushkey_host = %target_host,
+        "push notification rejected: pushkey host not allowed"
+    );
+    true
+}
+
+async fn send_device_notification(
+    http_client: &reqwest::Client,
+    pushkey: &str,
+    title: &str,
+    body_raw: &str,
+) -> std::result::Result<reqwest::Response, reqwest::Error> {
+    http_client
+        .post(pushkey)
+        .header("Title", title)
+        .header("Priority", "4")
+        .header("Tags", "speech_balloon")
+        .body(body_raw.to_string())
+        .send()
+        .await
+}
+
+fn log_delivery_response(
+    target_host: &str,
+    notification: &PushNotification,
+    response: &reqwest::Response,
+) -> bool {
+    if response.status().is_success() {
+        tracing::debug!(
+            pushkey_host = %target_host,
+            event_id = ?notification.event_id,
+            "push notification delivered to ntfy"
+        );
+        return true;
+    }
+
+    tracing::warn!(
+        pushkey_host = %target_host,
+        status = %response.status(),
+        "ntfy rejected push notification"
+    );
+    false
+}
+
 /// Matrix push gateway endpoint: `POST /_matrix/push/v1/notify`
 ///
 /// Called by the homeserver (Tuwunel) when a user has a registered pusher.
@@ -147,91 +276,34 @@ pub(super) async fn notify(
     Query(query): Query<PushGatewayAuthQuery>,
     Json(payload): Json<MatrixPushRequest>,
 ) -> Result<Response> {
-    let Some(expected_token) = push_gateway_token() else {
-        tracing::error!("PUSH_GATEWAY_TOKEN is not configured");
+    if let Some(response) = gateway_auth_error(&headers, &query) {
+        return Ok(response);
+    }
+    let Some(allowed_hosts) = configured_allowed_hosts() else {
         return Ok(error_response(
             StatusCode::SERVICE_UNAVAILABLE,
             "Push gateway is not configured",
         ));
     };
 
-    if !token_matches(&expected_token, provided_gateway_token(&headers, &query)) {
-        return Ok(error_response(StatusCode::UNAUTHORIZED, "Unauthorized"));
-    }
-
-    let allowed_hosts = allowed_push_hosts();
-    if allowed_hosts.is_empty() {
-        tracing::error!("No push target allowlist configured");
-        return Ok(error_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Push gateway is not configured",
-        ));
-    }
-
     let notification = &payload.notification;
-    let http_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|error| loco_rs::Error::Any(error.into()))?;
+    let http_client = build_push_http_client()?;
     let mut rejected = Vec::new();
-
-    let title = notification
-        .sender_display_name
-        .as_deref()
-        .or(notification.sender.as_deref())
-        .unwrap_or("New message");
-
-    let body = serde_json::json!({
-        "event_id": notification.event_id,
-        "room_id": notification.room_id,
-        "sender": notification.sender,
-    });
-    let body_raw = body.to_string();
+    let title = notification_title(notification);
+    let body_raw = notification_body_raw(notification);
 
     for device in &notification.devices {
-        let target_host = push_target_host(&device.pushkey);
-        if !is_allowed_pushkey(&device.pushkey, &allowed_hosts) {
-            tracing::warn!(
-                pushkey_host = %target_host,
-                "push notification rejected: pushkey host not allowed"
-            );
+        let delivered = deliver_notification_to_device(
+            &http_client,
+            &allowed_hosts,
+            notification,
+            device,
+            title,
+            &body_raw,
+        )
+        .await;
+        if !delivered {
             rejected.push(device.pushkey.clone());
-            continue;
-        }
-
-        let result = http_client
-            .post(&device.pushkey)
-            .header("Title", title)
-            .header("Priority", "4")
-            .header("Tags", "speech_balloon")
-            .body(body_raw.clone())
-            .send()
-            .await;
-
-        match result {
-            Ok(resp) if resp.status().is_success() => {
-                tracing::debug!(
-                    pushkey_host = %target_host,
-                    event_id = ?notification.event_id,
-                    "push notification delivered to ntfy"
-                );
-            }
-            Ok(resp) => {
-                tracing::warn!(
-                    pushkey_host = %target_host,
-                    status = %resp.status(),
-                    "ntfy rejected push notification"
-                );
-                rejected.push(device.pushkey.clone());
-            }
-            Err(err) => {
-                tracing::warn!(
-                    pushkey_host = %target_host,
-                    error = %err,
-                    "failed to deliver push notification to ntfy"
-                );
-                rejected.push(device.pushkey.clone());
-            }
         }
     }
 

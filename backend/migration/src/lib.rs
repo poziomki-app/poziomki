@@ -16,6 +16,7 @@ mod m20250218_000012_add_upload_variants;
 mod m20250218_000013_add_search_trgm_indexes;
 mod m20260219_000014_add_search_geo_indexes;
 mod m20260219_000015_add_fts_tsvector;
+mod m20260221_000016_create_matrix_dm_rooms;
 
 pub struct Migrator;
 
@@ -38,6 +39,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250218_000013_add_search_trgm_indexes::Migration),
             Box::new(m20260219_000014_add_search_geo_indexes::Migration),
             Box::new(m20260219_000015_add_fts_tsvector::Migration),
+            Box::new(m20260221_000016_create_matrix_dm_rooms::Migration),
             // inject-above (do not remove this comment)
         ]
     }

@@ -1,11 +1,26 @@
-use axum::{extract::State, http::HeaderMap, Json};
+use axum::{
+    extract::{Path, State},
+    http::HeaderMap,
+    Json,
+};
 use loco_rs::{app::AppContext, prelude::*};
-use sea_orm::EntityTrait;
-use serde::Deserialize;
-use std::time::Duration;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub(super) use super::matrix_support;
 use super::{error_response, state::require_auth_db, ErrorSpec};
+use crate::models::_entities::{events, profiles};
+
+mod dm_rooms;
+mod event_rooms;
+mod membership;
+mod session;
+
+pub(super) const PENDING_PREFIX: &str = "pending:";
+pub(super) const EVENT_PENDING_RETRIES: usize = 20;
+pub(super) const DM_PENDING_RETRIES: usize = 20;
+pub(super) const PENDING_SLEEP_MS: u64 = 250;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,52 +31,80 @@ pub(super) struct MatrixSessionRequest {
     device_id: Option<String>,
 }
 
-pub(super) async fn create_session(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-    Json(payload): Json<MatrixSessionRequest>,
-) -> Result<Response> {
-    let (user_pid, user_name, profile_picture) = {
-        let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
-            Ok(auth) => auth,
-            Err(response) => return Ok(*response),
-        };
-        let pic = {
-            use crate::models::_entities::profiles;
-            profiles::Entity::find()
-                .filter(profiles::Column::UserId.eq(user.id))
-                .one(&ctx.db)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|p| p.profile_picture)
-        };
-        (user.pid.to_string(), user.name, pic)
-    };
-
-    match do_create_session(
-        &user_pid,
-        &user_name,
-        payload.device_name.as_deref(),
-        payload.device_id.as_deref(),
-        profile_picture.as_deref(),
-        &headers,
-    )
-    .await
-    {
-        Ok(response) | Err(response) => Ok(response),
-    }
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MatrixDmRoomRequest {
+    user_id: String,
 }
 
-async fn do_create_session(
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MatrixRoomData {
+    room_id: String,
+}
+
+pub(super) struct MatrixBootstrap {
+    pub(super) http_client: reqwest::Client,
+    pub(super) homeserver: String,
+    pub(super) auth: matrix_support::MatrixAuthResponse,
+}
+
+pub(super) async fn create_session(
+    state: State<AppContext>,
+    headers: HeaderMap,
+    payload: Json<MatrixSessionRequest>,
+) -> Result<Response> {
+    session::create_session(state, headers, payload).await
+}
+
+pub(super) async fn resolve_event_room(
+    state: State<AppContext>,
+    headers: HeaderMap,
+    event_id: Path<String>,
+) -> Result<Response> {
+    event_rooms::resolve_event_room(state, headers, event_id).await
+}
+
+pub(super) async fn resolve_dm_room(
+    state: State<AppContext>,
+    headers: HeaderMap,
+    payload: Json<MatrixDmRoomRequest>,
+) -> Result<Response> {
+    dm_rooms::resolve_dm_room(state, headers, payload).await
+}
+
+pub(super) async fn sync_event_membership_after_attend(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    event: &events::Model,
+    profile: &profiles::Model,
+) {
+    membership::sync_event_membership_after_attend(db, headers, event, profile).await;
+}
+
+pub(super) async fn sync_event_membership_after_leave(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    event: &events::Model,
+    profile: &profiles::Model,
+) {
+    membership::sync_event_membership_after_leave(db, headers, event, profile).await;
+}
+
+pub(super) async fn sync_profile_avatar_best_effort(
+    user_pid: &Uuid,
+    profile_picture_filename: Option<&str>,
+) {
+    session::sync_profile_avatar_best_effort(user_pid, profile_picture_filename).await;
+}
+
+pub(super) async fn bootstrap_matrix_auth(
     user_pid: &str,
-    user_name: &str,
+    headers: &HeaderMap,
     device_name: Option<&str>,
     device_id: Option<&str>,
-    profile_picture_filename: Option<&str>,
-    headers: &HeaderMap,
-) -> std::result::Result<Response, Response> {
-    let internal_homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
+) -> std::result::Result<MatrixBootstrap, Response> {
+    let homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
         chat_bootstrap_error(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             headers,
@@ -70,12 +113,9 @@ async fn do_create_session(
         )
     })?;
 
-    let public_homeserver =
-        matrix_support::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
-
     let config =
         matrix_support::build_conn_config(user_pid, device_name, device_id).map_err(|error| {
-            tracing::warn!(%error, "matrix session bootstrap is not configured");
+            tracing::warn!(%error, "matrix bootstrap is not configured");
             chat_bootstrap_error(
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 headers,
@@ -84,15 +124,14 @@ async fn do_create_session(
             )
         })?;
     let http_client = matrix_support::init_http_client(headers)?;
-
-    let matrix_auth = matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config)
+    let auth = matrix_support::try_matrix_auth(&http_client, &homeserver, &config)
         .await
         .map_err(|error| {
             tracing::warn!(
                 status_code = error.status_code,
                 errcode = error.errcode,
                 message = error.message,
-                "matrix session bootstrap failed"
+                "matrix bootstrap failed"
             );
             chat_bootstrap_error(
                 axum::http::StatusCode::BAD_GATEWAY,
@@ -102,118 +141,105 @@ async fn do_create_session(
             )
         })?;
 
-    // Set the user's Matrix display name (best-effort, don't fail the session)
-    if let Err(e) = matrix_support::set_display_name(
-        &http_client,
-        &internal_homeserver,
-        &matrix_auth.access_token,
-        &matrix_auth.user_id,
-        user_name,
-    )
-    .await
-    {
-        tracing::warn!(error = %e, "failed to set matrix display name");
-    }
-
-    // Set the user's Matrix avatar (best-effort, don't fail the session)
-    if let Some(pic_filename) = profile_picture_filename {
-        if let Err(e) = sync_matrix_avatar(
-            &http_client,
-            &internal_homeserver,
-            &matrix_auth.access_token,
-            &matrix_auth.user_id,
-            pic_filename,
-        )
-        .await
-        {
-            tracing::warn!(error = %e, "failed to set matrix avatar");
-        }
-    }
-
-    matrix_support::build_session_response(public_homeserver, matrix_auth, headers)
-}
-
-async fn sync_matrix_avatar(
-    http_client: &reqwest::Client,
-    homeserver: &str,
-    access_token: &str,
-    user_id: &str,
-    pic_filename: &str,
-) -> std::result::Result<(), String> {
-    let filename = super::extract_filename(pic_filename);
-    let content_type = matrix_support::content_type_from_filename(&filename)
-        .ok_or_else(|| format!("unsupported image type: {filename}"))?;
-    let bytes = super::uploads::uploads_storage::read(&filename)
-        .await
-        .map_err(|e| format!("failed to read {filename} from storage: {e:?}"))?;
-    let mxc_uri = matrix_support::upload_media(
+    Ok(MatrixBootstrap {
         http_client,
         homeserver,
-        access_token,
-        bytes,
-        content_type,
-        &filename,
-    )
-    .await?;
-    matrix_support::set_avatar_url(http_client, homeserver, access_token, user_id, &mxc_uri).await
+        auth,
+    })
 }
 
-pub(super) async fn sync_profile_avatar_best_effort(
-    user_pid: &uuid::Uuid,
-    profile_picture_filename: Option<&str>,
-) {
-    let Some(pic_filename) = profile_picture_filename else {
-        return;
-    };
+pub(super) fn is_matrix_room_id(value: &str) -> bool {
+    value.starts_with('!')
+}
 
-    let Some(internal_homeserver) = matrix_support::resolve_homeserver() else {
-        return;
-    };
+pub(super) fn build_pending_token() -> String {
+    format!("{PENDING_PREFIX}{}", Uuid::new_v4().simple())
+}
 
-    let config = match matrix_support::build_conn_config(&user_pid.to_string(), None, None) {
-        Ok(config) => config,
-        Err(error) => {
-            tracing::warn!(%error, "matrix avatar sync skipped: matrix bootstrap is not configured");
-            return;
-        }
-    };
+pub(super) async fn require_auth_profile_for_matrix(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+) -> std::result::Result<(profiles::Model, Uuid), Response> {
+    let (_session, user) = require_auth_db(db, headers)
+        .await
+        .map_err(|response| *response)?;
+    let profile = profiles::Entity::find()
+        .filter(profiles::Column::UserId.eq(user.id))
+        .one(db)
+        .await
+        .map_err(|_error| profile_not_found_response(headers))?
+        .ok_or_else(|| profile_not_found_response(headers))?;
+    Ok((profile, user.pid))
+}
 
-    let http_client = match reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-    {
-        Ok(client) => client,
-        Err(error) => {
-            tracing::warn!(error = %error, "matrix avatar sync skipped: failed to build http client");
-            return;
-        }
-    };
+pub(super) async fn load_event_for_matrix(
+    db: &DatabaseConnection,
+    headers: &HeaderMap,
+    event_id: &str,
+) -> std::result::Result<(events::Model, Uuid), Response> {
+    let event_uuid = Uuid::parse_str(event_id).map_err(|_error| {
+        error_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            headers,
+            ErrorSpec {
+                error: "Invalid event ID".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        )
+    })?;
 
-    let matrix_auth =
-        match matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config).await {
-            Ok(auth) => auth,
-            Err(error) => {
-                tracing::warn!(
-                    status_code = error.status_code,
-                    errcode = error.errcode,
-                    message = error.message,
-                    "matrix avatar sync skipped: failed to authenticate"
-                );
-                return;
-            }
-        };
+    let event = events::Entity::find_by_id(event_uuid)
+        .one(db)
+        .await
+        .map_err(|_error| {
+            error_response(
+                axum::http::StatusCode::NOT_FOUND,
+                headers,
+                ErrorSpec {
+                    error: format!("Event '{event_id}' not found"),
+                    code: "NOT_FOUND",
+                    details: None,
+                },
+            )
+        })?
+        .ok_or_else(|| {
+            error_response(
+                axum::http::StatusCode::NOT_FOUND,
+                headers,
+                ErrorSpec {
+                    error: format!("Event '{event_id}' not found"),
+                    code: "NOT_FOUND",
+                    details: None,
+                },
+            )
+        })?;
 
-    if let Err(error) = sync_matrix_avatar(
-        &http_client,
-        &internal_homeserver,
-        &matrix_auth.access_token,
-        &matrix_auth.user_id,
-        pic_filename,
+    Ok((event, event_uuid))
+}
+
+fn profile_not_found_response(headers: &HeaderMap) -> Response {
+    error_response(
+        axum::http::StatusCode::NOT_FOUND,
+        headers,
+        ErrorSpec {
+            error: "Profile not found. Create a profile first.".to_string(),
+            code: "NOT_FOUND",
+            details: None,
+        },
     )
-    .await
-    {
-        tracing::warn!(%error, "failed to sync matrix avatar after profile update");
-    }
+}
+
+pub(super) fn forbidden_response(headers: &HeaderMap, message: &str) -> Response {
+    error_response(
+        axum::http::StatusCode::FORBIDDEN,
+        headers,
+        ErrorSpec {
+            error: message.to_string(),
+            code: "FORBIDDEN",
+            details: None,
+        },
+    )
 }
 
 pub(super) fn chat_bootstrap_error(
