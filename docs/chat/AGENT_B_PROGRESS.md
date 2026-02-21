@@ -12,17 +12,16 @@ Worktree: `../poziomki-rs-agent-b`
 
 - [x] `P0-EVT-02` Mobile event room authority migration path
   - Implemented backend-first event room resolver call (`GET /api/v1/matrix/events/{eventId}/room`) in `EventRepository.ensureEventRoom(...)`.
-  - Added fallback to legacy local Matrix creation only when backend route is unavailable (`404/405/501`) to keep app functional before backend PR lands.
+  - Removed local legacy room creation fallback; event-room authority is backend-only.
 
 - [x] `P0-EVT-03` Attendee-only access for event chat entry points
   - Added guard in `EventDetailViewModel.openEventChat(...)`.
   - Disabled event chat CTA in `EventDetailScreen` for non-attendees.
   - Added explicit non-attendee UI state in `EventChatScreen`.
 
-- [x] `P0-DM-02` Mobile DM start through backend canonical mapping (adapter mode)
+- [x] `P0-DM-02` Mobile DM start through backend canonical mapping
   - Added `ChatRoomRepository.resolveDirectRoom(...)`.
-  - Navigation "Wiadomość" flow now goes through repository (backend-first + fallback).
-  - Temporary endpoint assumptions used until Agent A contract freeze (`/api/v1/matrix/dm` then `/api/v1/matrix/dms`).
+  - Navigation "Wiadomość" flow now goes through backend canonical resolver only (`POST /api/v1/matrix/dms`).
 
 - [x] `P0-UX-01` Distinguish event rooms in messages categories
   - `MessagesViewModel` now tracks event room IDs from `EventRepository.observeEventConversationIds()`.
@@ -62,9 +61,8 @@ Worktree: `../poziomki-rs-agent-b`
 - Android compile blocked by environment (`ANDROID_HOME` / `local.properties` sdk.dir missing) ⚠️
 
 ## Contract/Integration Follow-ups
-- Confirm canonical DM endpoint and payload with Agent A and replace temporary dual-route adapter.
-- Remove legacy event-room fallback after Agent A ships `P0-EVT-01`.
-- Finalize membership sync behavior after Agent A defines join/leave side effects for `P0-EVT-04`.
+- Finalize explicit invite-policy UX for edge cases (`P1-INV-01`).
+- Add mobile-side automated regression tests for DM/event invariants (`P1-TEST-01` follow-up).
 
 ## Maintainability Refactor (2026-02-21)
 - Extracted shared Matrix room resolution helpers to remove duplicated fallback/status logic:
@@ -92,7 +90,6 @@ Worktree: `../poziomki-rs-agent-b`
   - `mobile/shared/src/commonMain/kotlin/com/poziomki/app/data/repository/EventRoomManager.kt`
 - `EventRoomManager` now owns:
   - backend-first event room resolution (`GET /matrix/events/{eventId}/room` + status handling)
-  - legacy fallback room creation (invite mapping + room naming)
   - conversation id persistence updates
   - attend/leave Matrix membership reconciliation refresh flow
 - `EventRepository` now delegates:
@@ -102,6 +99,17 @@ Worktree: `../poziomki-rs-agent-b`
 
 ### Refactor Validation
 - `./gradlew :shared:compileCommonMainKotlinMetadata` ✅ after extraction
+
+## Post-Merge Canonicalization Pass (2026-02-21)
+- Removed mobile temporary compatibility paths that could create canonical-room drift:
+  - removed `/api/v1/matrix/dm` probe and fallback; DM resolution now uses `/api/v1/matrix/dms` only.
+  - removed local legacy event-room creation fallback; event-room resolution is backend-authoritative.
+- Simplified DI/contracts after fallback removal:
+  - `ChatRoomRepository` no longer depends on `MatrixClient`.
+  - `EventRepository.ensureEventRoom(...)` / `EventRoomManager.ensureEventRoom(...)` signatures reduced to required inputs only.
+- Added backend regression tests (compile-validated) for invariants:
+  - DM symmetry for both directions.
+  - Event chat access symmetry across attend/leave transitions.
 
 ## EventRepository Refactor Pass 3 (2026-02-21)
 - Extracted event mutation/offline-queue logic from `EventRepository` into:

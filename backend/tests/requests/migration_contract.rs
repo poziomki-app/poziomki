@@ -350,6 +350,195 @@ async fn matrix_dm_endpoint_returns_existing_canonical_mapping() {
 
 #[tokio::test]
 #[serial]
+async fn matrix_dm_endpoint_is_symmetric_for_both_users() {
+    request::<App, _, _>(|request, ctx| async move {
+        use poziomki_backend::models::_entities::{matrix_dm_rooms, users};
+        use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+
+        let token_a = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "dm-symmetric-a@example.com",
+            "secret123",
+            "Alice",
+        )
+        .await;
+        let token_b = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "dm-symmetric-b@example.com",
+            "secret123",
+            "Bob",
+        )
+        .await;
+
+        let user_a = users::Entity::find()
+            .filter(users::Column::Email.eq("dm-symmetric-a@example.com"))
+            .one(&ctx.db)
+            .await
+            .expect("query user A")
+            .expect("user A exists");
+        let user_b = users::Entity::find()
+            .filter(users::Column::Email.eq("dm-symmetric-b@example.com"))
+            .one(&ctx.db)
+            .await
+            .expect("query user B")
+            .expect("user B exists");
+
+        let (low, high) = if user_a.pid <= user_b.pid {
+            (user_a.pid, user_b.pid)
+        } else {
+            (user_b.pid, user_a.pid)
+        };
+
+        let mapping = matrix_dm_rooms::ActiveModel {
+            id: ActiveValue::Set(uuid::Uuid::new_v4()),
+            user_low_pid: ActiveValue::Set(low),
+            user_high_pid: ActiveValue::Set(high),
+            room_id: ActiveValue::Set("!dmsymmetric:chat.poziomki.app".to_string()),
+            created_at: ActiveValue::Set(Utc::now().into()),
+            updated_at: ActiveValue::Set(Utc::now().into()),
+        };
+        mapping.insert(&ctx.db).await.expect("insert dm mapping");
+
+        let (auth_key_a, auth_value_a) = auth_header(&token_a);
+        let response_a = request
+            .post("/api/v1/matrix/dms")
+            .add_header(auth_key_a, auth_value_a)
+            .json(&serde_json::json!({ "userId": user_b.pid.to_string() }))
+            .await;
+        assert_eq!(response_a.status_code(), 200);
+        let payload_a: serde_json::Value = response_a.json();
+        assert_eq!(
+            payload_a["data"]["roomId"],
+            "!dmsymmetric:chat.poziomki.app"
+        );
+
+        let (auth_key_b, auth_value_b) = auth_header(&token_b);
+        let response_b = request
+            .post("/api/v1/matrix/dms")
+            .add_header(auth_key_b, auth_value_b)
+            .json(&serde_json::json!({ "userId": user_a.pid.to_string() }))
+            .await;
+        assert_eq!(response_b.status_code(), 200);
+        let payload_b: serde_json::Value = response_b.json();
+        assert_eq!(
+            payload_b["data"]["roomId"],
+            "!dmsymmetric:chat.poziomki.app"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn matrix_event_room_access_tracks_attendance() {
+    request::<App, _, _>(|request, ctx| async move {
+        use poziomki_backend::models::_entities::events;
+        use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+        use uuid::Uuid;
+
+        let owner_token = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "event-access-owner@example.com",
+            "secret123",
+            "Owner",
+        )
+        .await;
+        let attendee_token = sign_up_and_verify(
+            &request,
+            &ctx.db,
+            "event-access-attendee@example.com",
+            "secret123",
+            "Attendee",
+        )
+        .await;
+
+        let (owner_auth_key, owner_auth_value) = auth_header(&owner_token);
+        let owner_profile = request
+            .post("/api/v1/profiles")
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({ "name": "Owner", "age": 24 }))
+            .await;
+        assert_eq!(owner_profile.status_code(), 201);
+
+        let (attendee_auth_key, attendee_auth_value) = auth_header(&attendee_token);
+        let attendee_profile = request
+            .post("/api/v1/profiles")
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .json(&serde_json::json!({ "name": "Attendee", "age": 23 }))
+            .await;
+        assert_eq!(attendee_profile.status_code(), 201);
+
+        let create_event = request
+            .post("/api/v1/events")
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "title": "Attendance gate room",
+                "startsAt": "2031-01-10T12:00:00Z",
+            }))
+            .await;
+        assert_eq!(create_event.status_code(), 201);
+        let created_payload: serde_json::Value = create_event.json();
+        let event_id = created_payload["data"]["id"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .expect("event id should exist");
+
+        let event_uuid = Uuid::parse_str(&event_id).expect("valid event UUID");
+        let model = events::Entity::find_by_id(event_uuid)
+            .one(&ctx.db)
+            .await
+            .expect("query event")
+            .expect("event exists");
+        let mut active: events::ActiveModel = model.into();
+        active.conversation_id =
+            ActiveValue::Set(Some("!eventaccess:chat.poziomki.app".to_string()));
+        active.updated_at = ActiveValue::Set(Utc::now().into());
+        active.update(&ctx.db).await.expect("update event");
+
+        let pre_attend = request
+            .get(&format!("/api/v1/matrix/events/{event_id}/room"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(pre_attend.status_code(), 403);
+
+        let attend = request
+            .post(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .json(&serde_json::json!({ "status": "going" }))
+            .await;
+        assert_eq!(attend.status_code(), 200);
+
+        let post_attend = request
+            .get(&format!("/api/v1/matrix/events/{event_id}/room"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(post_attend.status_code(), 200);
+        let room_payload: serde_json::Value = post_attend.json();
+        assert_eq!(
+            room_payload["data"]["roomId"],
+            "!eventaccess:chat.poziomki.app"
+        );
+
+        let leave = request
+            .delete(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(leave.status_code(), 200);
+
+        let post_leave = request
+            .get(&format!("/api/v1/matrix/events/{event_id}/room"))
+            .add_header(attendee_auth_key, attendee_auth_value)
+            .await;
+        assert_eq!(post_leave.status_code(), 403);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn events_flow_matches_phase_3_contract() {
     request::<App, _, _>(|request, ctx| async move {
         let owner_token =

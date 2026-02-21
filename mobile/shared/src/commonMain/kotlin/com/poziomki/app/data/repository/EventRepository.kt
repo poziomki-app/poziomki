@@ -166,14 +166,10 @@ class EventRepository(
 
     suspend fun ensureEventRoom(
         eventId: String,
-        fallbackName: String,
-        attendeeUserIds: List<String>,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             eventRoomManager.ensureEventRoom(
                 eventId = eventId,
-                fallbackName = fallbackName,
-                attendeeUserIds = attendeeUserIds,
             )
         }
 }

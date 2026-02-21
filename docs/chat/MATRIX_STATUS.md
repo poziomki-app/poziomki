@@ -1,6 +1,6 @@
 # Matrix Chat Status
 
-Last verified: 2026-02-18
+Last verified: 2026-02-21
 
 This is an implementation-state snapshot for Matrix chat integration in Poziomki RS.
 Canonical execution playbook: `docs/chat/CHAT_IMPLEMENTATION_CHECKLIST.md`.
@@ -87,11 +87,9 @@ Not yet implemented:
 - `mobile/shared/src/iosMain/kotlin/com/poziomki/app/di/PlatformModule.ios.kt:24`
 - `mobile/shared/src/commonMain/kotlin/com/poziomki/app/chat/matrix/api/NoopMatrixClient.kt`
 
-2. Backend event-to-room mapping endpoint is present but still returns not implemented.
-- Route wiring: `backend/src/controllers/migration_api/mod.rs:258`
-- Handler: `backend/src/controllers/migration_api/mod.rs:150`
-
-This keeps event room authority partly client-local and risks divergence across devices/clients.
+2. End-to-end runtime verification matrix is still incomplete in CI/prod-like environments.
+- New backend contract tests compile, but local runtime execution in this environment is blocked by DB pool provisioning (`PoolTimedOut`).
+- Cross-device/prod verification still required for full P0 closure (`DM symmetry`, `Event symmetry`, `Join/leave sync`, `Race test`).
 
 ## MEDIUM
 
@@ -118,7 +116,7 @@ This keeps event room authority partly client-local and risks divergence across 
 ## P0 - Hard blockers for cross-platform reliability
 
 1. Replace iOS `NoopMatrixClient` with real implementation path.
-2. Implement backend `eventId <-> roomId` mapping endpoint and migrate mobile to server-authoritative flow.
+2. Complete full verification matrix in production-like setup (including concurrent open/race scenarios).
 
 ## P1 - User-facing reliability and trust
 

@@ -130,8 +130,6 @@ class EventDetailViewModel(
             val roomResult =
                 eventRepository.ensureEventRoom(
                     eventId = eventId,
-                    fallbackName = currentEvent.title,
-                    attendeeUserIds = _state.value.attendees.mapNotNull { it.userId },
                 )
 
             roomResult

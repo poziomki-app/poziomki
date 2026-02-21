@@ -144,25 +144,11 @@ class ApiService(
 
     suspend fun resolveMatrixDirectRoom(
         targetUserId: String,
-        targetDisplayName: String? = null,
-    ): ApiResult<MatrixRoomResolveData> =
-        client.post(
-            "/api/v1/matrix/dm",
-            MatrixDirectRoomRequest(
-                targetUserId = targetUserId,
-                targetDisplayName = targetDisplayName,
-            ),
-        )
-
-    suspend fun resolveMatrixDirectRoomPlural(
-        targetUserId: String,
-        targetDisplayName: String? = null,
     ): ApiResult<MatrixRoomResolveData> =
         client.post(
             "/api/v1/matrix/dms",
             MatrixDirectRoomRequest(
                 targetUserId = targetUserId,
-                targetDisplayName = targetDisplayName,
             ),
         )
 }

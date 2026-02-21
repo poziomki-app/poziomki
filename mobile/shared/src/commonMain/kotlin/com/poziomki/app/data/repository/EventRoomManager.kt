@@ -3,11 +3,8 @@ package com.poziomki.app.data.repository
 import com.poziomki.app.api.ApiResult
 import com.poziomki.app.api.ApiService
 import com.poziomki.app.api.resolveRoomId
-import com.poziomki.app.api.supportsLegacyMatrixFallback
 import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.db.PoziomkiDatabase
-import com.poziomki.app.util.matrixLocalpartFromUserId
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -24,8 +21,6 @@ internal class EventRoomManager(
 
     suspend fun ensureEventRoom(
         eventId: String,
-        fallbackName: String,
-        attendeeUserIds: List<String>,
     ): Result<String> =
         eventRoomMutex.withLock {
             runCatching {
@@ -34,12 +29,7 @@ internal class EventRoomManager(
                     return@runCatching existingRoomId
                 }
 
-                resolveEventRoomViaBackend(eventId)?.let { roomId ->
-                    updateEventConversationId(eventId, roomId)
-                    return@runCatching roomId
-                }
-
-                val roomId = createLegacyEventRoom(fallbackName, attendeeUserIds).getOrThrow()
+                val roomId = resolveEventRoomViaBackend(eventId)
                 updateEventConversationId(eventId, roomId)
                 roomId
             }
@@ -62,7 +52,7 @@ internal class EventRoomManager(
         matrixClient.refreshRooms()
     }
 
-    private suspend fun resolveEventRoomViaBackend(eventId: String): String? =
+    private suspend fun resolveEventRoomViaBackend(eventId: String): String =
         when (val backendResult = api.getMatrixEventRoom(eventId)) {
             is ApiResult.Success -> {
                 backendResult.data.resolveRoomId()
@@ -73,40 +63,9 @@ internal class EventRoomManager(
                 if (backendResult.status == 401 || backendResult.status == 403) {
                     throw IllegalStateException(EVENT_CHAT_ACCESS_DENIED_MESSAGE)
                 }
-                if (backendResult.supportsLegacyMatrixFallback()) {
-                    null
-                } else {
-                    throw IllegalStateException(backendResult.message)
-                }
+                throw IllegalStateException(backendResult.message)
             }
         }
-
-    private suspend fun createLegacyEventRoom(
-        fallbackName: String,
-        attendeeUserIds: List<String>,
-    ): Result<String> {
-        matrixClient.ensureStarted().getOrThrow()
-        val ownMatrixUserId = (matrixClient.state.value as? MatrixClientState.Ready)?.userId
-        val ownLocalpart = ownMatrixUserId?.removePrefix("@")?.substringBefore(":")
-
-        val invitedUsers =
-            attendeeUserIds
-                .map(String::trim)
-                .filter(String::isNotEmpty)
-                .map(::matrixLocalpartFromUserId)
-                .filterNot { it == ownMatrixUserId || it == ownLocalpart }
-                .distinct()
-
-        val resolvedRoomName =
-            fallbackName
-                .trim()
-                .ifBlank { "Wydarzenie" }
-
-        return matrixClient.createRoom(
-            name = resolvedRoomName,
-            invitedUserIds = invitedUsers,
-        )
-    }
 
     private fun updateEventConversationId(
         eventId: String,

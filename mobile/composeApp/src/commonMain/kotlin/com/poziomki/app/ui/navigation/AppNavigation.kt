@@ -135,10 +135,10 @@ fun AppNavigation(
         }
     }
 
-    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
+    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, _ ->
         if (userId.isBlank()) return@navigateToDm
         navigationScope.launch {
-            val roomId = chatRoomRepository.resolveDirectRoom(userId, displayName).getOrNull() ?: return@launch
+            val roomId = chatRoomRepository.resolveDirectRoom(userId).getOrNull() ?: return@launch
             navController.navigate(Route.Chat(roomId))
         }
     }

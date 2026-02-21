@@ -42,7 +42,7 @@ val sharedModule =
         single { PoziomkiDatabase(get()) }
         single { CacheManager(get()) }
         single { PendingOperationsManager(get()) }
-        single { ChatRoomRepository(get(), get()) }
+        single { ChatRoomRepository(get()) }
         single { EventRepository(get(), get(), get(), get(), get()) }
         single { ProfileRepository(get(), get(), get(), get()) }
         single { TagRepository(get(), get()) }
