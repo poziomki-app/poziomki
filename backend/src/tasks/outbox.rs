@@ -140,7 +140,7 @@ async fn enqueue_job(topic: &str, payload: String) -> Result<()> {
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3::jsonb, 0, $4, NOW(), NOW(), NOW())
+        VALUES ($1::uuid, $2, $3::jsonb, 0, $4, NOW(), NOW(), NOW())
         ",
     )
     .bind::<Text, _>(uuid::Uuid::new_v4().to_string())
