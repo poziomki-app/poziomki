@@ -1,8 +1,6 @@
-use loco_rs::cli;
-use migration::Migrator;
-use poziomki_backend::app::App;
-
 #[tokio::main]
-async fn main() -> loco_rs::Result<()> {
-    cli::main::<App, Migrator>().await
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    poziomki_backend::app::run_api_server()
+        .await
+        .map_err(Into::into)
 }

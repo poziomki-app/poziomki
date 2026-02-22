@@ -143,7 +143,7 @@ fun ChatContent(
     ) {
         if (state.error != null) {
             Text(
-                text = state.error ?: "",
+                text = state.error,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier =
@@ -531,6 +531,7 @@ private fun MessageActionDialog(
     }
 }
 
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReactionBreakdownSheet(

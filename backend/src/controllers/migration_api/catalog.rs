@@ -1,12 +1,20 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{ActiveValue, QueryFilter, QuerySelect, Select};
 use uuid::Uuid;
+
+type Result<T> = crate::error::AppResult<T>;
 
 use super::{
     error_response,
@@ -17,6 +25,7 @@ use super::{
     ErrorSpec,
 };
 use crate::models::_entities::{degrees, tags};
+use sea_orm::DatabaseConnection;
 
 const PUBLIC_CACHE_MEDIUM: HeaderValue = HeaderValue::from_static("public, max-age=1800");
 
@@ -72,7 +81,7 @@ pub(super) async fn tags_search(
         .limit(limit)
         .all(&ctx.db)
         .await
-        .map_err(|e: sea_orm::DbErr| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e: sea_orm::DbErr| crate::error::AppError::Any(e.into()))?;
 
     let data = all_tags
         .iter()
@@ -201,7 +210,7 @@ pub(super) async fn degrees_search(
         .limit(limit)
         .all(&ctx.db)
         .await
-        .map_err(|e: sea_orm::DbErr| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e: sea_orm::DbErr| crate::error::AppError::Any(e.into()))?;
 
     let data = all_degrees
         .iter()

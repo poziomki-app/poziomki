@@ -1,8 +1,13 @@
 use axum::http::HeaderMap;
-use loco_rs::prelude::Response;
+use axum::response::Response;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 
 use super::{error_response, ErrorSpec};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 const AUTH_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const AUTH_SIGN_UP_MAX_ATTEMPTS: u32 = 12;
@@ -78,7 +83,7 @@ async fn upsert_attempt(
 ) -> std::result::Result<i64, sea_orm::DbErr> {
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         INSERT INTO auth_rate_limits (rate_key, window_start, attempts, updated_at)
         VALUES ($1, NOW(), 1, NOW())
         ON CONFLICT (rate_key) DO UPDATE
@@ -95,7 +100,7 @@ async fn upsert_attempt(
             END,
             updated_at = NOW()
         RETURNING attempts
-        "#,
+        ",
         vec![key.to_string().into(), window_secs.into()],
     );
 

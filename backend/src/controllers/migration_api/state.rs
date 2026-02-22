@@ -6,12 +6,18 @@ mod state_types;
 mod state_uploads;
 
 use chrono::{Duration, Utc};
-use loco_rs::prelude::*;
 use sea_orm::ActiveValue;
+use sea_orm::DatabaseConnection;
 use uuid::Uuid;
 
 use super::ErrorSpec;
+use crate::error::AppError;
 use crate::models::_entities::otp_codes;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 pub(super) use state_auth::*;
 pub(super) use state_types::*;
 pub(super) use state_uploads::*;
@@ -26,7 +32,7 @@ pub(super) async fn upsert_otp(
     db: &DatabaseConnection,
     email: &str,
     code: &str,
-) -> std::result::Result<(), loco_rs::Error> {
+) -> std::result::Result<(), crate::error::AppError> {
     let now = Utc::now();
     let expires_at = now + Duration::seconds(OTP_TTL_SECS);
 
@@ -35,7 +41,7 @@ pub(super) async fn upsert_otp(
         .filter(otp_codes::Column::Email.eq(email))
         .exec(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     let model = otp_codes::ActiveModel {
         id: ActiveValue::Set(Uuid::new_v4()),
@@ -49,7 +55,7 @@ pub(super) async fn upsert_otp(
     model
         .insert(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
     Ok(())
 }
 

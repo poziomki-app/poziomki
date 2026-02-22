@@ -1,13 +1,21 @@
 #[path = "profiles_mutations.rs"]
 mod profiles_mutations;
 
+type Result<T> = crate::error::AppResult<T>;
+
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
     response::IntoResponse,
     Json,
 };
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
@@ -19,6 +27,7 @@ use super::{
     ErrorSpec,
 };
 use crate::models::_entities::{profile_tags, profiles, tags};
+use sea_orm::DatabaseConnection;
 
 pub(super) use profiles_mutations::{profile_create, profile_delete, profile_update};
 
@@ -86,12 +95,12 @@ async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> Prof
 async fn load_profile_tags(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<TagResponse>, loco_rs::Error> {
+) -> std::result::Result<Vec<TagResponse>, crate::error::AppError> {
     let tag_links = profile_tags::Entity::find()
         .filter(profile_tags::Column::ProfileId.eq(profile_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids: Vec<Uuid> = tag_links.iter().map(|link| link.tag_id).collect();
     if tag_ids.is_empty() {
@@ -102,7 +111,7 @@ async fn load_profile_tags(
         .filter(tags::Column::Id.is_in(tag_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(tag_models
         .iter()
@@ -121,7 +130,7 @@ async fn full_profile_response(
     db: &DatabaseConnection,
     profile: &profiles::Model,
     user_pid: &Uuid,
-) -> std::result::Result<FullProfileResponse, loco_rs::Error> {
+) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
     let profile_tags = load_profile_tags(db, profile.id).await?;
 
     let profile_picture = match &profile.profile_picture {
@@ -157,12 +166,12 @@ async fn sync_profile_tags(
     db: &DatabaseConnection,
     profile_id: Uuid,
     tag_ids: &[Uuid],
-) -> std::result::Result<(), loco_rs::Error> {
+) -> std::result::Result<(), crate::error::AppError> {
     profile_tags::Entity::delete_many()
         .filter(profile_tags::Column::ProfileId.eq(profile_id))
         .exec(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     for tag_id in tag_ids {
         let link = profile_tags::ActiveModel {
@@ -171,7 +180,7 @@ async fn sync_profile_tags(
         };
         link.insert(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?;
+            .map_err(|e| crate::error::AppError::Any(e.into()))?;
     }
 
     Ok(())
@@ -197,7 +206,7 @@ pub(super) async fn profile_me(
         .filter(profiles::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = match profile {
         Some(ref p) => Some(full_profile_response(&ctx.db, p, &user.pid).await?),
@@ -218,12 +227,12 @@ pub(super) async fn profile_get(
     };
 
     let profile_uuid = Uuid::parse_str(&id)
-        .map_err(|_| loco_rs::Error::Message("Invalid profile ID".to_string()))?;
+        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
     let profile = profiles::Entity::find_by_id(profile_uuid)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
@@ -232,7 +241,7 @@ pub(super) async fn profile_get(
     let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
 
     let data = profile_to_response(&profile, &user_pid).await;
@@ -250,12 +259,12 @@ pub(super) async fn profile_get_full(
     };
 
     let profile_uuid = Uuid::parse_str(&id)
-        .map_err(|_| loco_rs::Error::Message("Invalid profile ID".to_string()))?;
+        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
     let profile = profiles::Entity::find_by_id(profile_uuid)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
@@ -264,7 +273,7 @@ pub(super) async fn profile_get_full(
     let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
 
     let data = full_profile_response(&ctx.db, &profile, &user_pid).await?;

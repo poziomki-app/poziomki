@@ -1,6 +1,6 @@
 use axum::http::HeaderMap;
+use axum::response::Response;
 use chrono::{Duration, Utc};
-use loco_rs::prelude::*;
 use sea_orm::ActiveValue;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
@@ -8,7 +8,14 @@ use uuid::Uuid;
 
 use super::super::{error_response, ErrorSpec};
 use super::{SessionView, UserView};
+use crate::error::AppError;
 use crate::models::_entities::{sessions, users};
+use sea_orm::DatabaseConnection;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
@@ -46,13 +53,13 @@ pub(in crate::controllers::migration_api) fn hash_session_token(token: &str) -> 
 pub(in crate::controllers::migration_api) async fn resolve_session_by_token(
     db: &DatabaseConnection,
     token: &str,
-) -> std::result::Result<Option<sessions::Model>, loco_rs::Error> {
+) -> std::result::Result<Option<sessions::Model>, AppError> {
     let hashed = session_token_hash(token);
     sessions::Entity::find()
         .filter(sessions::Column::Token.eq(&hashed))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| AppError::Any(e.into()))
 }
 
 pub(in crate::controllers::migration_api) async fn require_auth_db(
@@ -95,7 +102,7 @@ pub(in crate::controllers::migration_api) async fn create_session_db(
     db: &DatabaseConnection,
     headers: &HeaderMap,
     user_id: i32,
-) -> std::result::Result<CreatedSession, loco_rs::Error> {
+) -> std::result::Result<CreatedSession, AppError> {
     let now = Utc::now();
     let session_id = Uuid::new_v4();
     let secret = Uuid::new_v4().simple().to_string();
@@ -123,7 +130,7 @@ pub(in crate::controllers::migration_api) async fn create_session_db(
     let model = session
         .insert(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
     Ok(CreatedSession { model, token })
 }
 

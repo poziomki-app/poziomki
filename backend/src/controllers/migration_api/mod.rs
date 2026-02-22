@@ -1,13 +1,22 @@
 use axum::{
     extract::State,
     http::{header, HeaderMap, HeaderValue},
-    response::IntoResponse,
-    Json,
+    response::{IntoResponse, Response},
+    routing::{delete, get, patch, post},
+    Json, Router,
 };
-use loco_rs::prelude::*;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use serde::Serialize;
 use tower_http::set_header::SetResponseHeaderLayer;
 use uuid::Uuid;
+
+use crate::app::AppContext;
+
+type Result<T> = crate::error::AppResult<T>;
 
 mod auth;
 mod catalog;
@@ -192,151 +201,133 @@ fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
 }
 
-fn auth_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/auth")
-        .add("/get-session", get(auth::get_session))
-        .add("/sign-up/email", post(auth::sign_up))
-        .add("/sign-in/email", post(auth::sign_in))
-        .add("/verify-otp", post(auth::verify_otp))
-        .add("/resend-otp", post(auth::resend_otp))
-        .add("/sign-out", post(auth::sign_out))
-        .add("/sessions", get(auth::sessions))
-        .add("/account", delete(auth::delete_account))
-        .add("/export", get(auth::export_data))
+fn auth_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/get-session", get(auth::get_session))
+        .route("/sign-up/email", post(auth::sign_up))
+        .route("/sign-in/email", post(auth::sign_in))
+        .route("/verify-otp", post(auth::verify_otp))
+        .route("/resend-otp", post(auth::resend_otp))
+        .route("/sign-out", post(auth::sign_out))
+        .route("/sessions", get(auth::sessions))
+        .route("/account", delete(auth::delete_account))
+        .route("/export", get(auth::export_data))
 }
 
-fn profiles_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/profiles")
-        .add("/me", get(profiles::profile_me))
-        .add("", post(profiles::profile_create))
-        .add("/{id}", get(profiles::profile_get))
-        .add("/{id}", patch(profiles::profile_update))
-        .add("/{id}", delete(profiles::profile_delete))
-        .add("/{id}/full", get(profiles::profile_get_full))
+fn profiles_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/me", get(profiles::profile_me))
+        .route("/", post(profiles::profile_create))
+        .route("/{id}", get(profiles::profile_get))
+        .route("/{id}", patch(profiles::profile_update))
+        .route("/{id}", delete(profiles::profile_delete))
+        .route("/{id}/full", get(profiles::profile_get_full))
         .layer(cache_layer("private, max-age=60"))
 }
 
-fn degrees_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/degrees")
-        .add("", get(catalog::degrees_search))
+fn degrees_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/", get(catalog::degrees_search))
         .layer(cache_layer("public, max-age=1800"))
 }
 
-fn tags_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/tags")
-        .add("", get(catalog::tags_search))
-        .add("", post(catalog::tags_create))
+fn tags_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/", get(catalog::tags_search).post(catalog::tags_create))
         .layer(cache_layer("public, max-age=1800"))
 }
 
-fn events_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/events")
-        .add("", get(events::events_list))
-        .add("", post(events::event_create))
-        .add("/mine", get(events::events_mine))
-        .add("/{id}", get(events::event_get))
-        .add("/{id}", patch(events::event_update))
-        .add("/{id}", delete(events::event_delete))
-        .add("/{id}/attendees", get(events::event_attendees))
-        .add("/{id}/attend", post(events::event_attend))
-        .add("/{id}/attend", delete(events::event_leave))
+fn events_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/", get(events::events_list).post(events::event_create))
+        .route("/mine", get(events::events_mine))
+        .route("/{id}", get(events::event_get))
+        .route("/{id}", patch(events::event_update))
+        .route("/{id}", delete(events::event_delete))
+        .route("/{id}/attendees", get(events::event_attendees))
+        .route("/{id}/attend", post(events::event_attend))
+        .route("/{id}/attend", delete(events::event_leave))
         .layer(cache_layer("private, max-age=60"))
 }
 
-fn matching_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/matching")
-        .add("/profiles", get(matching::profiles_recommendations))
-        .add("/events", get(matching::events_recommendations))
+fn matching_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/profiles", get(matching::profiles_recommendations))
+        .route("/events", get(matching::events_recommendations))
         .layer(cache_layer("private, max-age=300"))
 }
 
-fn uploads_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/uploads")
-        .add("/auth-check", get(uploads::auth_check))
-        .add("/presign", post(uploads::file_upload_presign))
-        .add("/complete", post(uploads::file_upload_complete))
-        .add("/{filename}/status", get(uploads::file_status))
-        .add("", post(uploads::file_upload))
-        .add("/{filename}", get(uploads::file_get))
-        .add("/{filename}", delete(uploads::file_delete))
+fn uploads_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/auth-check", get(uploads::auth_check))
+        .route("/presign", post(uploads::file_upload_presign))
+        .route("/complete", post(uploads::file_upload_complete))
+        .route("/{filename}/status", get(uploads::file_status))
+        .route("/", post(uploads::file_upload))
+        .route("/{filename}", get(uploads::file_get))
+        .route("/{filename}", delete(uploads::file_delete))
 }
 
-fn settings_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/settings")
-        .add("", get(settings::settings_get))
-        .add("", patch(settings::settings_update))
+fn settings_routes() -> Router<AppContext> {
+    Router::new().route(
+        "/",
+        get(settings::settings_get).patch(settings::settings_update),
+    )
 }
 
-fn search_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1")
-        .add("/search", get(search_api::search))
+fn search_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/search", get(search_api::search))
         .layer(cache_layer("private, max-age=60"))
 }
 
-fn matrix_config_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/matrix")
-        .add("/config", get(matrix_config))
+fn matrix_config_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/config", get(matrix_config))
         .layer(cache_layer("public, max-age=3600"))
 }
 
-fn matrix_session_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/matrix")
-        .add("/session", post(matrix::create_session))
+fn matrix_session_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/session", post(matrix::create_session))
         .layer(cache_layer("no-store"))
 }
 
-fn matrix_room_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/matrix")
-        .add("/events/{eventId}/room", get(matrix::resolve_event_room))
-        .add("/dms", post(matrix::resolve_dm_room))
+fn matrix_room_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/events/{eventId}/room", get(matrix::resolve_event_room))
+        .route("/dms", post(matrix::resolve_dm_room))
         .layer(cache_layer("no-store"))
 }
 
-fn push_gateway_routes() -> Routes {
-    Routes::new()
-        .prefix("/_matrix/push/v1")
-        .add("/notify", post(push_gateway::notify))
+fn push_gateway_routes() -> Router<AppContext> {
+    Router::new().route("/notify", post(push_gateway::notify))
 }
 
-fn ops_routes() -> Routes {
-    Routes::new()
-        .prefix("/api/v1/ops")
-        .add("/outbox/status", get(outbox_status))
+fn ops_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/outbox/status", get(outbox_status))
         .layer(cache_layer("no-store"))
 }
 
-pub fn routes() -> Vec<Routes> {
-    vec![
-        Routes::new()
-            .add("/health", get(health))
-            .add("/", get(root)),
-        auth_routes(),
-        profiles_routes(),
-        degrees_routes(),
-        tags_routes(),
-        events_routes(),
-        matching_routes(),
-        uploads_routes(),
-        settings_routes(),
-        search_routes(),
-        matrix_config_routes(),
-        matrix_session_routes(),
-        matrix_room_routes(),
-        push_gateway_routes(),
-        ops_routes(),
-    ]
+pub fn router() -> Router<AppContext> {
+    Router::new()
+        .route("/health", get(health))
+        .route("/", get(root))
+        .nest("/api/v1/auth", auth_routes())
+        .nest("/api/v1/profiles", profiles_routes())
+        .nest("/api/v1/degrees", degrees_routes())
+        .nest("/api/v1/tags", tags_routes())
+        .nest("/api/v1/events", events_routes())
+        .nest("/api/v1/matching", matching_routes())
+        .nest("/api/v1/uploads", uploads_routes())
+        .nest("/api/v1/settings", settings_routes())
+        .nest("/api/v1", search_routes())
+        .nest("/api/v1/matrix", matrix_config_routes())
+        .nest("/api/v1/matrix", matrix_session_routes())
+        .nest("/api/v1/matrix", matrix_room_routes())
+        .nest("/_matrix/push/v1", push_gateway_routes())
+        .nest("/api/v1/ops", ops_routes())
 }
 
 pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {

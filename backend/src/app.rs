@@ -1,84 +1,210 @@
-use async_trait::async_trait;
-use loco_rs::{
-    app::{AppContext, Hooks, Initializer},
-    bgworker::Queue,
-    boot::{create_app, BootResult, StartMode},
-    config::Config,
-    controller::AppRoutes,
-    db,
-    environment::Environment,
-    task::Tasks,
-    Result,
-};
 use migration::Migrator;
-use std::path::Path;
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sea_orm_migration::MigratorTrait;
+use std::time::Duration;
 
-#[allow(unused_imports)]
-use crate::{app_support, controllers, models::_entities::users, tasks};
+#[derive(Clone, Debug)]
+pub struct AppContext {
+    pub db: DatabaseConnection,
+}
 
-pub struct App;
-#[async_trait]
-impl Hooks for App {
-    fn app_name() -> &'static str {
-        env!("CARGO_CRATE_NAME")
-    }
+#[derive(Clone, Debug)]
+struct RuntimeConfig {
+    binding: String,
+    port: u16,
+    auto_migrate: bool,
+}
 
-    fn app_version() -> String {
-        format!(
-            "{} ({})",
-            env!("CARGO_PKG_VERSION"),
-            option_env!("BUILD_SHA")
-                .or(option_env!("GITHUB_SHA"))
-                .unwrap_or("dev")
+fn env_truthy(key: &str, default: bool) -> bool {
+    std::env::var(key).ok().map_or(default, |value| {
+        matches!(
+            value.to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
         )
+    })
+}
+
+fn resolve_binding() -> String {
+    std::env::var("SERVER_BINDING")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            if cfg!(test) {
+                "127.0.0.1".to_string()
+            } else {
+                "0.0.0.0".to_string()
+            }
+        })
+}
+
+fn resolve_port() -> crate::error::AppResult<u16> {
+    if let Ok(raw) = std::env::var("PORT") {
+        return raw
+            .parse::<u16>()
+            .map_err(|e| crate::error::AppError::Message(format!("invalid PORT: {e}")));
+    }
+    Ok(5150)
+}
+
+fn init_tracing_once() -> crate::error::AppResult<()> {
+    use std::sync::OnceLock;
+
+    static TRACING_INIT: OnceLock<()> = OnceLock::new();
+    if TRACING_INIT.get().is_some() {
+        return Ok(());
     }
 
-    async fn boot(
-        mode: StartMode,
-        environment: &Environment,
-        config: Config,
-    ) -> Result<BootResult> {
-        if environment == &Environment::Production {
-            for var in ["DATABASE_URL", "JWT_SECRET"] {
-                if std::env::var(var).unwrap_or_default().is_empty() {
-                    return Err(loco_rs::Error::Message(format!(
-                        "{var} must be set in production"
-                    )));
-                }
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let filter = tracing_subscriber::EnvFilter::try_new(level)
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .try_init()
+        .map_err(|e| crate::error::AppError::Message(format!("logger init failed: {e}")))?;
+
+    let _ = TRACING_INIT.set(());
+    Ok(())
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(stream) => stream,
+            Err(error) => {
+                tracing::warn!(%error, "failed to install SIGTERM handler; falling back to ctrl_c");
+                let _ = tokio::signal::ctrl_c().await;
+                return;
             }
-            if std::env::var("ALLOWED_EMAIL_DOMAIN")
-                .unwrap_or_default()
-                .is_empty()
-            {
-                tracing::warn!(
-                    "ALLOWED_EMAIL_DOMAIN not set — defaulting to example.com (registration will be restricted)"
-                );
-            }
+        };
+
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = sigterm.recv() => {}
         }
-        let boot = create_app::<Self, Migrator>(mode, environment, config).await?;
-        Ok(boot)
     }
 
-    async fn initializers(_ctx: &AppContext) -> Result<Vec<Box<dyn Initializer>>> {
-        Ok(vec![])
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+fn load_runtime_config() -> crate::error::AppResult<RuntimeConfig> {
+    let binding = resolve_binding();
+    let port = resolve_port()?;
+    let auto_migrate = env_truthy("AUTO_MIGRATE", true);
+
+    if std::env::var("DATABASE_URL").unwrap_or_default().is_empty() {
+        return Err(crate::error::AppError::message("DATABASE_URL must be set"));
     }
 
-    fn routes(_ctx: &AppContext) -> AppRoutes {
-        AppRoutes::empty().add_routes(controllers::migration_api::routes())
-    }
-    async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
-        tracing::info!("Custom background workers are run via dedicated worker binary");
-        Ok(())
+    if std::env::var("JWT_SECRET").unwrap_or_default().is_empty() {
+        return Err(crate::error::AppError::message("JWT_SECRET must be set"));
     }
 
-    fn register_tasks(_tasks: &mut Tasks) {}
-    async fn truncate(ctx: &AppContext) -> Result<()> {
-        app_support::truncate_all_tables(&ctx.db).await?;
-        Ok(())
+    Ok(RuntimeConfig {
+        binding,
+        port,
+        auto_migrate,
+    })
+}
+
+async fn connect_db() -> crate::error::AppResult<DatabaseConnection> {
+    let database_url = std::env::var("DATABASE_URL")
+        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
+
+    let mut opts = ConnectOptions::new(database_url);
+    opts.max_connections(
+        std::env::var("DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20),
+    );
+    opts.min_connections(
+        std::env::var("DB_MIN_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1),
+    );
+    opts.connect_timeout(Duration::from_millis(
+        std::env::var("DB_CONNECT_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(5_000),
+    ));
+    opts.idle_timeout(Duration::from_millis(
+        std::env::var("DB_IDLE_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10_000),
+    ));
+    opts.sqlx_logging(env_truthy("DB_ENABLE_LOGGING", false));
+
+    Database::connect(opts)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))
+}
+
+async fn build_app_context(auto_migrate: bool) -> crate::error::AppResult<AppContext> {
+    let db = connect_db().await?;
+    if auto_migrate {
+        Migrator::up(&db, None)
+            .await
+            .map_err(|e| crate::error::AppError::Any(e.into()))?;
     }
-    async fn seed(ctx: &AppContext, base: &Path) -> Result<()> {
-        db::seed::<users::ActiveModel>(&ctx.db, &base.join("users.yaml").display().to_string())
-            .await?;
-        Ok(())
-    }
+    Ok(AppContext { db })
+}
+
+pub async fn build_test_app_context() -> crate::error::AppResult<AppContext> {
+    build_app_context(true).await
+}
+
+pub async fn reset_test_database(ctx: &AppContext) -> crate::error::AppResult<()> {
+    crate::app_support::truncate_all_tables(&ctx.db).await
+}
+
+pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
+    crate::controllers::migration_api::router().with_state(ctx)
+}
+
+pub async fn run_api_server() -> crate::error::AppResult<()> {
+    let _ = dotenvy::dotenv();
+    init_tracing_once()?;
+    let cfg = load_runtime_config()?;
+    let ctx = build_app_context(cfg.auto_migrate).await?;
+    let router = build_router_with_state(ctx);
+
+    let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let addr = listener.local_addr().map_or_else(
+        |_| format!("{}:{}", cfg.binding, cfg.port),
+        |a| a.to_string(),
+    );
+
+    tracing::info!(addr = %addr, "Poziomki API server started (Axum)");
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    tracing::info!("Poziomki API server stopping");
+    Ok(())
+}
+
+pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
+    let _ = dotenvy::dotenv();
+    init_tracing_once()?;
+    let cfg = load_runtime_config()?;
+    let ctx = build_app_context(cfg.auto_migrate).await?;
+
+    crate::tasks::start_background_workers(&ctx)?;
+    tracing::info!("Poziomki outbox worker process started");
+    shutdown_signal().await;
+    tracing::info!("Poziomki outbox worker process stopping");
+    Ok(())
 }

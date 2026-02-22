@@ -63,8 +63,8 @@ fun ProfileCard(
 
     val backgroundBrush =
         if (hasProfileGradient) {
-            val darkStart = blendWithBackground(startColor!!, 0.18f)
-            val darkEnd = blendWithBackground(endColor!!, 0.18f)
+            val darkStart = blendWithBackground(startColor, 0.18f)
+            val darkEnd = blendWithBackground(endColor, 0.18f)
             Brush.linearGradient(
                 colors = listOf(darkStart, darkEnd),
                 start = Offset(0f, 0f),

@@ -1,9 +1,14 @@
 use std::time::Duration;
 
 use axum::http::HeaderMap;
+use axum::response::Response;
 use chrono::Utc;
-use loco_rs::prelude::*;
 use sea_orm::{sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use tokio::time::sleep;
 use uuid::Uuid;
 
@@ -27,7 +32,7 @@ pub(super) async fn ensure_event_room(
         let current_event = events::Entity::find_by_id(event_id)
             .one(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))
+            .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::event_room_internal_error(headers, "Failed to resolve event room")
             })?
@@ -71,7 +76,7 @@ pub(super) async fn ensure_event_room(
             let took_over =
                 claim_event_pending_token(db, event_id, Some(&existing_pending), &takeover_pending)
                     .await
-                    .map_err(|e| loco_rs::Error::Any(e.into()))
+                    .map_err(|e| crate::error::AppError::Any(e.into()))
                     .map_err(|_error| {
                         super::event_room_internal_error(headers, "Failed to resolve event room")
                     })?;
@@ -101,7 +106,7 @@ pub(super) async fn ensure_event_room(
             &pending_token,
         )
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to resolve event room")
         })?;
@@ -154,7 +159,7 @@ async fn create_and_finalize_event_room(
 
     let finalized = finalize_event_pending_token(db, event_id, pending_token, &room_id)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to finalize event room mapping")
         })?;
@@ -169,7 +174,7 @@ async fn create_and_finalize_event_room(
     let fallback_room_id = events::Entity::find_by_id(event_id)
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to resolve canonical event room")
         })?

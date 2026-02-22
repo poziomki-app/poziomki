@@ -1,8 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use axum::response::IntoResponse;
-use loco_rs::prelude::*;
+use axum::response::Response;
 use sea_orm::QueryFilter;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use uuid::Uuid;
 
 use crate::controllers::migration_api::state::{
@@ -10,6 +15,7 @@ use crate::controllers::migration_api::state::{
     ProfilePreview, TagScope,
 };
 use crate::models::_entities::{event_attendees, event_tags, events, profiles, tags};
+use sea_orm::DatabaseConnection;
 
 const PREVIEW_LIMIT: usize = 5;
 
@@ -52,7 +58,7 @@ struct EventBatchContext {
 async fn load_profiles_by_ids(
     db: &DatabaseConnection,
     ids: &[Uuid],
-) -> std::result::Result<HashMap<Uuid, profiles::Model>, loco_rs::Error> {
+) -> std::result::Result<HashMap<Uuid, profiles::Model>, crate::error::AppError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -61,7 +67,7 @@ async fn load_profiles_by_ids(
         .filter(profiles::Column::Id.is_in(ids.to_vec()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(models.into_iter().map(|m| (m.id, m)).collect())
 }
@@ -69,12 +75,12 @@ async fn load_profiles_by_ids(
 async fn load_attendee_rows(
     db: &DatabaseConnection,
     event_id: Uuid,
-) -> std::result::Result<Vec<AttendeeRow>, loco_rs::Error> {
+) -> std::result::Result<Vec<AttendeeRow>, crate::error::AppError> {
     let links = event_attendees::Entity::find()
         .filter(event_attendees::Column::EventId.eq(event_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let profile_ids: HashSet<Uuid> = links.iter().map(|a| a.profile_id).collect();
     if profile_ids.is_empty() {
@@ -104,7 +110,7 @@ async fn load_attendee_rows(
 async fn load_event_batch_context(
     db: &DatabaseConnection,
     event_models: &[events::Model],
-) -> std::result::Result<EventBatchContext, loco_rs::Error> {
+) -> std::result::Result<EventBatchContext, crate::error::AppError> {
     if event_models.is_empty() {
         return Ok(EventBatchContext {
             creators: HashMap::new(),
@@ -136,7 +142,7 @@ async fn load_event_batch_context(
         .filter(event_attendees::Column::EventId.is_in(event_ids.clone()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let attendee_profile_ids: HashSet<Uuid> = attendee_links.iter().map(|a| a.profile_id).collect();
     let attendee_profiles =
@@ -162,7 +168,7 @@ async fn load_event_batch_context(
         .filter(event_tags::Column::EventId.is_in(event_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids: HashSet<Uuid> = tag_links.iter().map(|l| l.tag_id).collect();
     let tag_models = if tag_ids.is_empty() {
@@ -172,7 +178,7 @@ async fn load_event_batch_context(
             .filter(tags::Column::Id.is_in(tag_ids))
             .all(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .map_err(|e| crate::error::AppError::Any(e.into()))?
             .into_iter()
             .map(|tag| (tag.id, tag))
             .collect()
@@ -318,7 +324,7 @@ pub(in crate::controllers::migration_api) async fn build_event_responses(
     db: &DatabaseConnection,
     event_models: &[events::Model],
     profile_id: &Uuid,
-) -> std::result::Result<Vec<EventResponse>, loco_rs::Error> {
+) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
     let batch_ctx = load_event_batch_context(db, event_models).await?;
     let mut responses: Vec<EventResponse> = event_models
         .iter()
@@ -332,18 +338,17 @@ pub(in crate::controllers::migration_api) async fn build_event_response(
     db: &DatabaseConnection,
     event: &events::Model,
     profile_id: &Uuid,
-) -> std::result::Result<EventResponse, loco_rs::Error> {
+) -> std::result::Result<EventResponse, crate::error::AppError> {
     let responses = build_event_responses(db, std::slice::from_ref(event), profile_id).await?;
-    responses
-        .into_iter()
-        .next()
-        .ok_or_else(|| loco_rs::Error::Message("Failed to build event response".to_string()))
+    responses.into_iter().next().ok_or_else(|| {
+        crate::error::AppError::Message("Failed to build event response".to_string())
+    })
 }
 
 pub(in crate::controllers::migration_api) async fn attendee_info(
     db: &DatabaseConnection,
     event_id: Uuid,
-) -> std::result::Result<Vec<AttendeeFullInfo>, loco_rs::Error> {
+) -> std::result::Result<Vec<AttendeeFullInfo>, crate::error::AppError> {
     let rows = load_attendee_rows(db, event_id).await?;
 
     let user_ids: Vec<i32> = rows.iter().map(|r| r.profile.user_id).collect();
@@ -354,7 +359,7 @@ pub(in crate::controllers::migration_api) async fn attendee_info(
             .filter(crate::models::_entities::users::Column::Id.is_in(user_ids))
             .all(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .map_err(|e| crate::error::AppError::Any(e.into()))?
     };
 
     let filenames: HashSet<String> = rows

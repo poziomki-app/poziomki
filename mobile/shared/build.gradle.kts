@@ -1,9 +1,6 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.androidKmpLibrary)
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.sqldelight)
 }
@@ -14,11 +11,10 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
-        }
+    androidLibrary {
+        namespace = "com.poziomki.shared"
+        compileSdk = 35
+        minSdk = 24
     }
 
     listOf(
@@ -56,24 +52,6 @@ kotlin {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
-    }
-}
-
-android {
-    namespace = "com.poziomki.shared"
-    compileSdk = 35
-
-    defaultConfig {
-        minSdk = 24
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    lint {
-        abortOnError = true
-        checkDependencies = true
-        warningsAsErrors = true
     }
 }
 

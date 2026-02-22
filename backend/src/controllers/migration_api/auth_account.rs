@@ -1,18 +1,28 @@
 #[path = "auth_export_queries.rs"]
 mod auth_export_queries;
 
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use loco_rs::{app::AppContext, hash, prelude::*};
 
 use super::super::state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse};
 use super::auth_helpers::unauthorized_error;
 use crate::models::_entities::{profiles, sessions, users};
+use crate::security;
+use sea_orm::DatabaseConnection;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
+
+type Result<T> = crate::error::AppResult<T>;
 
 async fn delete_user_data(
     db: &DatabaseConnection,
     user_id: i32,
-) -> std::result::Result<(), loco_rs::Error> {
+) -> std::result::Result<(), crate::error::AppError> {
     let _ = profiles::Entity::delete_many()
         .filter(profiles::Column::UserId.eq(user_id))
         .exec(db)
@@ -35,7 +45,8 @@ pub(in crate::controllers::migration_api) async fn delete_account(
         Err(response) => return Ok(*response),
     };
 
-    if payload.password.is_empty() || !hash::verify_password(&payload.password, &user.password) {
+    if payload.password.is_empty() || !security::verify_password(&payload.password, &user.password)
+    {
         return Ok(unauthorized_error(&headers, "Invalid password"));
     }
 
@@ -57,7 +68,7 @@ pub(in crate::controllers::migration_api) async fn export_data(
         .filter(profiles::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let profile_id = profile.as_ref().map(|p| p.id);
 
@@ -115,7 +126,7 @@ async fn load_profile_data(
         Vec<serde_json::Value>,
         Vec<serde_json::Value>,
     ),
-    loco_rs::Error,
+    crate::error::AppError,
 > {
     let Some(pid) = profile_id else {
         return Ok((vec![], vec![], vec![], vec![]));

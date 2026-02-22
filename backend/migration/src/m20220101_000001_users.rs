@@ -1,4 +1,3 @@
-use loco_rs::schema::*;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -7,35 +6,98 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, m: &SchemaManager) -> Result<(), DbErr> {
-        create_table(
-            m,
-            "users",
-            &[
-                ("id", ColType::PkAuto),
-                ("pid", ColType::Uuid),
-                ("email", ColType::StringUniq),
-                ("password", ColType::String),
-                ("api_key", ColType::StringUniq),
-                ("name", ColType::String),
-                ("reset_token", ColType::StringNull),
-                ("reset_sent_at", ColType::TimestampWithTimeZoneNull),
-                ("email_verification_token", ColType::StringNull),
-                (
-                    "email_verification_sent_at",
-                    ColType::TimestampWithTimeZoneNull,
-                ),
-                ("email_verified_at", ColType::TimestampWithTimeZoneNull),
-                ("magic_link_token", ColType::StringNull),
-                ("magic_link_expiration", ColType::TimestampWithTimeZoneNull),
-            ],
-            &[],
+        m.create_table(
+            Table::create()
+                .table(Users::Table)
+                .if_not_exists()
+                .col(
+                    ColumnDef::new(Users::CreatedAt)
+                        .timestamp_with_time_zone()
+                        .not_null()
+                        .default(Expr::current_timestamp()),
+                )
+                .col(
+                    ColumnDef::new(Users::UpdatedAt)
+                        .timestamp_with_time_zone()
+                        .not_null()
+                        .default(Expr::current_timestamp()),
+                )
+                .col(
+                    ColumnDef::new(Users::Id)
+                        .integer()
+                        .not_null()
+                        .auto_increment()
+                        .primary_key(),
+                )
+                .col(ColumnDef::new(Users::Pid).uuid().not_null())
+                .col(
+                    ColumnDef::new(Users::Email)
+                        .string()
+                        .not_null()
+                        .unique_key(),
+                )
+                .col(ColumnDef::new(Users::Password).string().not_null())
+                .col(
+                    ColumnDef::new(Users::ApiKey)
+                        .string()
+                        .not_null()
+                        .unique_key(),
+                )
+                .col(ColumnDef::new(Users::Name).string().not_null())
+                .col(ColumnDef::new(Users::ResetToken).string().null())
+                .col(
+                    ColumnDef::new(Users::ResetSentAt)
+                        .timestamp_with_time_zone()
+                        .null(),
+                )
+                .col(
+                    ColumnDef::new(Users::EmailVerificationToken)
+                        .string()
+                        .null(),
+                )
+                .col(
+                    ColumnDef::new(Users::EmailVerificationSentAt)
+                        .timestamp_with_time_zone()
+                        .null(),
+                )
+                .col(
+                    ColumnDef::new(Users::EmailVerifiedAt)
+                        .timestamp_with_time_zone()
+                        .null(),
+                )
+                .col(ColumnDef::new(Users::MagicLinkToken).string().null())
+                .col(
+                    ColumnDef::new(Users::MagicLinkExpiration)
+                        .timestamp_with_time_zone()
+                        .null(),
+                )
+                .to_owned(),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     async fn down(&self, m: &SchemaManager) -> Result<(), DbErr> {
-        drop_table(m, "users").await?;
-        Ok(())
+        m.drop_table(Table::drop().table(Users::Table).to_owned())
+            .await
     }
+}
+
+#[derive(DeriveIden)]
+enum Users {
+    Table,
+    CreatedAt,
+    UpdatedAt,
+    Id,
+    Pid,
+    Email,
+    Password,
+    ApiKey,
+    Name,
+    ResetToken,
+    ResetSentAt,
+    EmailVerificationToken,
+    EmailVerificationSentAt,
+    EmailVerifiedAt,
+    MagicLinkToken,
+    MagicLinkExpiration,
 }

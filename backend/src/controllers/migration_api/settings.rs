@@ -1,11 +1,19 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
 
+type Result<T> = crate::error::AppResult<T>;
+
 use super::state::{require_auth_db, DataResponse};
 use crate::models::_entities::user_settings;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
@@ -74,7 +82,7 @@ pub(super) async fn settings_get(
         .filter(user_settings::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = settings
         .as_ref()
@@ -143,20 +151,20 @@ pub(super) async fn settings_update(
         .filter(user_settings::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let updated = if let Some(record) = existing {
         let active = apply_settings_update(record, &body);
         active
             .update(&ctx.db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .map_err(|e| crate::error::AppError::Any(e.into()))?
     } else {
         let new_settings = create_new_settings(user.id, &body);
         new_settings
             .insert(&ctx.db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .map_err(|e| crate::error::AppError::Any(e.into()))?
     };
 
     let data = model_to_response(&updated);

@@ -786,7 +786,7 @@ private fun LatestEventValue.previewText(): String? =
         LatestEventValue.None -> null
         is LatestEventValue.Remote -> this.content.toPreviewText()
         is LatestEventValue.Local -> this.content.toPreviewText()
-        is LatestEventValue.RemoteInvite -> "Room invite"
+        is LatestEventValue.RemoteInvite -> "Zaproszenie"
     }
 
 private fun LatestEventValue.timestampMillis(): Long? =
@@ -797,24 +797,36 @@ private fun LatestEventValue.timestampMillis(): Long? =
         is LatestEventValue.RemoteInvite -> this.timestamp.toLong()
     }
 
+@Suppress("CyclomaticComplexMethod")
 private fun TimelineItemContent.toPreviewText(): String? =
     when (this) {
         is TimelineItemContent.MsgLike -> {
             when (val kind = this.content.kind) {
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Message -> kind.content.body
-                org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Message removed"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Poll: ${kind.question}"
+                org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Wiadomość usunięta"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Ankieta: ${kind.question}"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Encrypted message"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> "Unsupported message"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Wiadomość zaszyfrowana"
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> null
             }
         }
 
-        // State events should not appear as room preview text
-        TimelineItemContent.CallInvite,
+        is TimelineItemContent.RoomMembership -> {
+            when (this.change) {
+                org.matrix.rustcomponents.sdk.MembershipChange.JOINED,
+                org.matrix.rustcomponents.sdk.MembershipChange.INVITATION_ACCEPTED,
+                -> "Rozpoczęto rozmowę"
+                org.matrix.rustcomponents.sdk.MembershipChange.LEFT ->
+                    "${this.userDisplayName ?: this.userId} opuścił(a) rozmowę"
+                org.matrix.rustcomponents.sdk.MembershipChange.INVITED -> "Zaproszenie wysłane"
+                else -> null
+            }
+        }
+
+        TimelineItemContent.CallInvite -> "Połączenie"
+
         TimelineItemContent.RtcNotification,
         is TimelineItemContent.ProfileChange,
-        is TimelineItemContent.RoomMembership,
         is TimelineItemContent.State,
         is TimelineItemContent.FailedToParseMessageLike,
         is TimelineItemContent.FailedToParseState,

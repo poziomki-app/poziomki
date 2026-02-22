@@ -1,15 +1,17 @@
 use std::{collections::HashSet, time::Duration};
 
+use axum::response::Response;
 use axum::{
     extract::Query,
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use url::Url;
+
+type Result<T> = crate::error::AppResult<T>;
 
 #[derive(Debug, Deserialize)]
 pub(in crate::controllers::migration_api) struct MatrixPushRequest {
@@ -161,11 +163,11 @@ fn configured_allowed_hosts() -> Option<HashSet<String>> {
     Some(allowed_hosts)
 }
 
-fn build_push_http_client() -> std::result::Result<reqwest::Client, loco_rs::Error> {
+fn build_push_http_client() -> std::result::Result<reqwest::Client, crate::error::AppError> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|error| loco_rs::Error::Any(error.into()))
+        .map_err(|error| crate::error::AppError::Any(error.into()))
 }
 
 fn notification_title(notification: &PushNotification) -> &str {

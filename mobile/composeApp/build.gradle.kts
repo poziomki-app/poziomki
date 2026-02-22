@@ -1,9 +1,6 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidKmpLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinxSerialization)
@@ -14,11 +11,10 @@ kotlin {
         allWarningsAsErrors.set(true)
     }
 
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
-        }
+    androidLibrary {
+        namespace = "com.poziomki.app.ui"
+        compileSdk = 35
+        minSdk = 24
     }
 
     listOf(
@@ -62,84 +58,4 @@ kotlin {
             implementation(libs.phosphor.icons)
         }
     }
-}
-
-android {
-    namespace = "com.poziomki.app"
-    compileSdk = 35
-
-    buildFeatures {
-        buildConfig = true
-    }
-
-    defaultConfig {
-        applicationId = "com.poziomki.rs.app"
-        minSdk = 24
-        targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.4.1"
-
-        val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
-        buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
-
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
-        }
-    }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    lint {
-        abortOnError = true
-        checkDependencies = true
-        warningsAsErrors = true
-    }
-}
-
-val releaseStoreFile = providers.gradleProperty("releaseStoreFile").orNull
-val releaseStorePassword = providers.gradleProperty("releaseStorePassword").orNull
-val releaseKeyAlias = providers.gradleProperty("releaseKeyAlias").orNull
-val releaseKeyPassword = providers.gradleProperty("releaseKeyPassword").orNull
-
-if (
-    !releaseStoreFile.isNullOrBlank() &&
-    !releaseStorePassword.isNullOrBlank() &&
-    !releaseKeyAlias.isNullOrBlank() &&
-    !releaseKeyPassword.isNullOrBlank()
-) {
-    android.signingConfigs.create("release") {
-        storeFile = file(releaseStoreFile)
-        storePassword = releaseStorePassword
-        keyAlias = releaseKeyAlias
-        keyPassword = releaseKeyPassword
-    }
-    android.buildTypes.getByName("release").signingConfig = android.signingConfigs.getByName("release")
-}
-
-dependencies {
-    debugImplementation(libs.androidx.compose.ui.tooling)
 }

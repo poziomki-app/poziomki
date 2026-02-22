@@ -1,20 +1,26 @@
-use loco_rs::prelude::*;
+use sea_orm::DatabaseConnection;
 use sea_orm::QueryFilter;
 use uuid::Uuid;
 
+use crate::error::AppError;
 use crate::models::_entities::{
     event_attendees, event_tags, events, profile_tags, sessions, tags, uploads, user_settings,
+};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
 };
 
 pub(super) async fn load_user_tags(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let pt_rows = profile_tags::Entity::find()
         .filter(profile_tags::Column::ProfileId.eq(profile_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     let tag_ids: Vec<Uuid> = pt_rows.iter().map(|pt| pt.tag_id).collect();
     if tag_ids.is_empty() {
@@ -25,7 +31,7 @@ pub(super) async fn load_user_tags(
         .filter(tags::Column::Id.is_in(tag_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(tag_rows
         .iter()
@@ -44,12 +50,12 @@ pub(super) async fn load_user_tags(
 pub(super) async fn load_created_events(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let event_rows = events::Entity::find()
         .filter(events::Column::CreatorId.eq(profile_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     let mut result = Vec::with_capacity(event_rows.len());
     for event in &event_rows {
@@ -72,12 +78,12 @@ pub(super) async fn load_created_events(
 async fn load_tags_for_event(
     db: &DatabaseConnection,
     event_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let et_rows = event_tags::Entity::find()
         .filter(event_tags::Column::EventId.eq(event_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     let tag_ids: Vec<Uuid> = et_rows.iter().map(|et| et.tag_id).collect();
     if tag_ids.is_empty() {
@@ -88,7 +94,7 @@ async fn load_tags_for_event(
         .filter(tags::Column::Id.is_in(tag_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(tag_rows
         .iter()
@@ -104,12 +110,12 @@ async fn load_tags_for_event(
 pub(super) async fn load_attended_events(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let att_rows = event_attendees::Entity::find()
         .filter(event_attendees::Column::ProfileId.eq(profile_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     let event_ids: Vec<Uuid> = att_rows.iter().map(|a| a.event_id).collect();
     if event_ids.is_empty() {
@@ -120,7 +126,7 @@ pub(super) async fn load_attended_events(
         .filter(events::Column::Id.is_in(event_ids.clone()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(att_rows
         .iter()
@@ -139,12 +145,12 @@ pub(super) async fn load_attended_events(
 pub(super) async fn load_user_sessions(
     db: &DatabaseConnection,
     user_id: i32,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let session_rows = sessions::Entity::find()
         .filter(sessions::Column::UserId.eq(user_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(session_rows
         .iter()
@@ -163,13 +169,13 @@ pub(super) async fn load_user_sessions(
 pub(super) async fn load_user_uploads(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Vec<serde_json::Value>, AppError> {
     let upload_rows = uploads::Entity::find()
         .filter(uploads::Column::OwnerId.eq(profile_id))
         .filter(uploads::Column::Deleted.eq(false))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(upload_rows
         .iter()
@@ -188,12 +194,12 @@ pub(super) async fn load_user_uploads(
 pub(super) async fn load_user_settings(
     db: &DatabaseConnection,
     user_id: i32,
-) -> std::result::Result<Option<serde_json::Value>, loco_rs::Error> {
+) -> std::result::Result<Option<serde_json::Value>, AppError> {
     let settings = user_settings::Entity::find()
         .filter(user_settings::Column::UserId.eq(user_id))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| AppError::Any(e.into()))?;
 
     Ok(settings.map(|s| {
         serde_json::json!({

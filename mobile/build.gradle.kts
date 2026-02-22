@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.androidApplication) apply false
-    alias(libs.plugins.androidLibrary) apply false
+    alias(libs.plugins.androidKmpLibrary) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.detekt) apply false
@@ -66,6 +66,7 @@ subprojects {
             listOf(
                 "src/commonMain/kotlin",
                 "src/androidMain/kotlin",
+                "src/main/kotlin",
                 "src/commonTest/kotlin",
                 "src/androidUnitTest/kotlin",
                 "src/androidInstrumentedTest/kotlin",
@@ -81,6 +82,7 @@ subprojects {
             listOf(
                 "src/commonMain/kotlin",
                 "src/androidMain/kotlin",
+                "src/main/kotlin",
                 "src/commonTest/kotlin",
                 "src/androidUnitTest/kotlin",
                 "src/androidInstrumentedTest/kotlin",

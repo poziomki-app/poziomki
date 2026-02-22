@@ -429,7 +429,7 @@ class ChatViewModel(
                             when {
                                 summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
                                 name.isNotBlank() -> name
-                                !summary?.displayName.isNullOrBlank() -> summary?.displayName
+                                !summary?.displayName.isNullOrBlank() -> summary.displayName
                                 else -> current.roomDisplayName
                             }.orEmpty()
                         current.copy(
@@ -457,7 +457,7 @@ class ChatViewModel(
                             when {
                                 summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
                                 current.roomDisplayName.isNotBlank() -> current.roomDisplayName
-                                !summary?.displayName.isNullOrBlank() -> summary?.displayName
+                                !summary?.displayName.isNullOrBlank() -> summary.displayName
                                 else -> current.roomDisplayName
                             }.orEmpty()
                         current.copy(

@@ -84,6 +84,7 @@ class NtfyPushService :
         }
     }
 
+    @Suppress("DEPRECATION")
     private suspend fun connectSse(url: String) {
         httpClient.prepareGet(url).execute { response ->
             val channel = response.bodyAsChannel()

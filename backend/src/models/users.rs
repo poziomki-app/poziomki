@@ -1,10 +1,48 @@
-use async_trait::async_trait;
-use loco_rs::{auth::jwt, hash, prelude::*};
+use sea_orm::{
+    ActiveModelBehavior, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait,
+    DatabaseConnection, DbErr, EntityTrait, QueryFilter, TransactionTrait,
+};
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 use uuid::Uuid;
+use validator::Validate;
 
 pub use super::_entities::users::{self, ActiveModel, Entity, Model};
+use crate::security;
+
+#[derive(Debug)]
+pub enum ModelError {
+    EntityNotFound,
+    EntityAlreadyExists,
+    Validation(String),
+    Any(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl std::fmt::Display for ModelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EntityNotFound => write!(f, "entity not found"),
+            Self::EntityAlreadyExists => write!(f, "entity already exists"),
+            Self::Validation(msg) => write!(f, "validation error: {msg}"),
+            Self::Any(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for ModelError {}
+
+impl From<DbErr> for ModelError {
+    fn from(value: DbErr) -> Self {
+        Self::Any(value.into())
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for ModelError {
+    fn from(value: jsonwebtoken::errors::Error) -> Self {
+        Self::Any(value.into())
+    }
+}
+
+pub type ModelResult<T> = std::result::Result<T, ModelError>;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RegisterParams {
@@ -14,20 +52,21 @@ pub struct RegisterParams {
 }
 
 #[derive(Debug, Validate, Deserialize)]
-pub struct Validator {
+struct ValidatorInput {
     #[validate(length(min = 1, message = "Name is required."))]
     pub name: String,
     #[validate(email(message = "invalid email"))]
     pub email: String,
 }
 
-impl Validatable for ActiveModel {
-    fn validator(&self) -> Box<dyn Validate> {
-        Box::new(Validator {
-            name: self.name.as_ref().to_owned(),
-            email: self.email.as_ref().to_owned(),
-        })
-    }
+fn validate_active_model(model: &ActiveModel) -> std::result::Result<(), DbErr> {
+    let input = ValidatorInput {
+        name: model.name.as_ref().to_owned(),
+        email: model.email.as_ref().to_owned(),
+    };
+    input
+        .validate()
+        .map_err(|e| DbErr::Custom(format!("validation failed: {e}")))
 }
 
 #[async_trait::async_trait]
@@ -36,7 +75,7 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
     where
         C: ConnectionTrait,
     {
-        self.validate()?;
+        validate_active_model(&self)?;
         if insert {
             let mut this = self;
             this.pid = ActiveValue::Set(Uuid::new_v4());
@@ -48,77 +87,29 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
     }
 }
 
-#[async_trait]
-impl Authenticable for Model {
-    async fn find_by_api_key(db: &DatabaseConnection, api_key: &str) -> ModelResult<Self> {
-        let user = users::Entity::find()
-            .filter(
-                model::query::condition()
-                    .eq(users::Column::ApiKey, api_key)
-                    .build(),
-            )
-            .one(db)
-            .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
-    }
-
-    async fn find_by_claims_key(db: &DatabaseConnection, claims_key: &str) -> ModelResult<Self> {
-        Self::find_by_pid(db, claims_key).await
-    }
-}
-
 impl Model {
-    /// finds a user by the provided email
-    ///
-    /// # Errors
-    ///
-    /// When could not find user by the given token or DB query error
     pub async fn find_by_email(db: &DatabaseConnection, email: &str) -> ModelResult<Self> {
         let user = users::Entity::find()
-            .filter(
-                model::query::condition()
-                    .eq(users::Column::Email, email)
-                    .build(),
-            )
+            .filter(users::Column::Email.eq(email))
             .one(db)
             .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
+        user.ok_or(ModelError::EntityNotFound)
     }
 
-    /// finds a user by the provided pid
-    ///
-    /// # Errors
-    ///
-    /// When could not find user  or DB query error
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> ModelResult<Self> {
         let parse_uuid = Uuid::parse_str(pid).map_err(|e| ModelError::Any(e.into()))?;
         let user = users::Entity::find()
-            .filter(
-                model::query::condition()
-                    .eq(users::Column::Pid, parse_uuid)
-                    .build(),
-            )
+            .filter(users::Column::Pid.eq(parse_uuid))
             .one(db)
             .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
+        user.ok_or(ModelError::EntityNotFound)
     }
 
-    /// Verifies whether the provided plain password matches the hashed password
-    ///
-    /// # Errors
-    ///
-    /// when could not verify password
     #[must_use]
     pub fn verify_password(&self, password: &str) -> bool {
-        hash::verify_password(password, &self.password)
+        security::verify_password(password, &self.password)
     }
 
-    /// Asynchronously creates a user with a password and saves it to the
-    /// database.
-    ///
-    /// # Errors
-    ///
-    /// When could not save the user into the DB
     pub async fn create_with_password(
         db: &DatabaseConnection,
         params: &RegisterParams,
@@ -126,20 +117,16 @@ impl Model {
         let txn = db.begin().await?;
 
         if users::Entity::find()
-            .filter(
-                model::query::condition()
-                    .eq(users::Column::Email, &params.email)
-                    .build(),
-            )
+            .filter(users::Column::Email.eq(&params.email))
             .one(&txn)
             .await?
             .is_some()
         {
-            return Err(ModelError::EntityAlreadyExists {});
+            return Err(ModelError::EntityAlreadyExists);
         }
 
-        let password_hash =
-            hash::hash_password(&params.password).map_err(|e| ModelError::Any(e.into()))?;
+        let password_hash = security::hash_password(&params.password)
+            .map_err(|e| ModelError::Validation(e.to_string()))?;
         let user = users::ActiveModel {
             email: ActiveValue::set(params.email.clone()),
             password: ActiveValue::set(password_hash),
@@ -154,14 +141,8 @@ impl Model {
         Ok(user)
     }
 
-    /// Creates a JWT
-    ///
-    /// # Errors
-    ///
-    /// when could not convert user claims to jwt token
     pub fn generate_jwt(&self, secret: &str, expiration: u64) -> ModelResult<String> {
-        jwt::JWT::new(secret)
-            .generate_token(expiration, self.pid.to_string(), Map::new())
+        security::generate_user_jwt(secret, expiration, self.pid.to_string())
             .map_err(ModelError::from)
     }
 }

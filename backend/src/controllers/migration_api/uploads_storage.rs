@@ -26,7 +26,7 @@ pub(in crate::controllers::migration_api) struct StorageError {
     pub(in crate::controllers::migration_api) kind: Option<StorageErrorKind>,
 }
 
-fn storage_error(kind: Option<StorageErrorKind>) -> StorageError {
+const fn storage_error(kind: Option<StorageErrorKind>) -> StorageError {
     StorageError { kind }
 }
 
@@ -130,7 +130,7 @@ fn rewrite_signed_url(url: &str, public_url: &str) -> String {
     })
 }
 
-fn map_s3_error(err: &S3Error) -> StorageError {
+const fn map_s3_error(err: &S3Error) -> StorageError {
     match err {
         S3Error::HttpFailWithBody(404, _) => storage_error(Some(StorageErrorKind::NotFound)),
         _ => storage_error(None),

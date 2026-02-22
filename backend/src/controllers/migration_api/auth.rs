@@ -12,9 +12,12 @@ use self::auth_helpers::{
     sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS,
 };
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
 
 use super::{
     error_response,
@@ -27,6 +30,8 @@ use super::{
 };
 use crate::models::_entities::sessions;
 use crate::tasks::enqueue_otp_email;
+
+type Result<T> = crate::error::AppResult<T>;
 
 pub(super) use auth_account::{delete_account, export_data};
 pub(super) use auth_session::get_session;
@@ -58,7 +63,7 @@ pub(super) async fn sign_up(
         let code = generate_otp_code();
         upsert_otp(&ctx.db, &normalized_email, &code)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?;
+            .map_err(|e| crate::error::AppError::Any(e.into()))?;
         if let Err(error) = enqueue_otp_email(&ctx.db, &normalized_email, &code).await {
             tracing::error!(%error, email = %normalized_email, "failed to enqueue OTP email after sign up");
         }
@@ -132,7 +137,7 @@ pub(super) async fn resend_otp(
             let code = generate_otp_code();
             upsert_otp(&ctx.db, &email, &code)
                 .await
-                .map_err(|e| loco_rs::Error::Any(e.into()))?;
+                .map_err(|e| crate::error::AppError::Any(e.into()))?;
             if let Err(error) = enqueue_otp_email(&ctx.db, &email, &code).await {
                 tracing::error!(%error, email = %email, "failed to enqueue OTP email after resend");
             }
@@ -142,7 +147,7 @@ pub(super) async fn resend_otp(
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
-pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
+pub(super) async fn deliver_otp_email_job(to: &str, code: &str) {
     send_otp_email(to, code).await;
 }
 
@@ -175,7 +180,7 @@ pub(super) async fn sessions(
         .filter(sessions::Column::ExpiresAt.gt(now))
         .all(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let user_pid = user.pid.to_string();
     let data = user_sessions

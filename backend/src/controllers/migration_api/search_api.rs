@@ -1,16 +1,18 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
 };
-use loco_rs::{app::AppContext, prelude::*};
 use serde::Deserialize;
 use std::collections::HashMap;
 
 use super::state::{require_auth_db, DataResponse};
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
+type Result<T> = crate::error::AppResult<T>;
 
 #[derive(Deserialize)]
 pub(super) struct SearchQuery {
@@ -109,7 +111,7 @@ pub(super) async fn search(
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");
-            loco_rs::Error::Message("Search failed".to_string())
+            crate::error::AppError::Message("Search failed".to_string())
         })?;
 
     // Collect all image URLs and resolve in batch.

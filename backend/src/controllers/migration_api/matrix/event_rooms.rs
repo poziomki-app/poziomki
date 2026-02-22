@@ -1,10 +1,13 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
     response::IntoResponse,
     Json,
 };
-use loco_rs::{app::AppContext, prelude::*};
+
+type Result<T> = crate::error::AppResult<T>;
 
 use super::super::{state::DataResponse, ErrorSpec};
 use super::{

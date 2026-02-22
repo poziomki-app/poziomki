@@ -1,10 +1,15 @@
 use std::time::Duration;
 
 use axum::http::HeaderMap;
+use axum::response::Response;
 use chrono::Utc;
-use loco_rs::prelude::*;
 use sea_orm::{
     sea_query::Expr, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
 };
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -30,7 +35,7 @@ pub(super) async fn ensure_dm_room(
             .filter(matrix_dm_rooms::Column::UserHighPid.eq(user_high_pid))
             .one(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))
+            .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::dm_room_internal_error(headers, "Failed to resolve DM room")
             })?;
@@ -55,7 +60,7 @@ pub(super) async fn ensure_dm_room(
                 &takeover_pending,
             )
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))
+            .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::dm_room_internal_error(headers, "Failed to resolve DM room")
             })?;
@@ -80,7 +85,7 @@ pub(super) async fn ensure_dm_room(
         let pending_token = build_pending_token();
         let inserted = insert_dm_pending_row(db, user_low_pid, user_high_pid, &pending_token)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))
+            .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::dm_room_internal_error(headers, "Failed to reserve DM room mapping")
             })?;
@@ -126,7 +131,7 @@ async fn create_and_finalize_dm_room(
     let finalized =
         finalize_dm_pending_token(db, user_low_pid, user_high_pid, pending_token, &room_id)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))
+            .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::dm_room_internal_error(headers, "Failed to finalize DM room mapping")
             })?;
@@ -140,7 +145,7 @@ async fn create_and_finalize_dm_room(
         .filter(matrix_dm_rooms::Column::UserHighPid.eq(user_high_pid))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::dm_room_internal_error(headers, "Failed to resolve canonical DM room")
         })?

@@ -23,4 +23,4 @@ COPY --from=builder --chown=appuser:appuser /app/config ./config
 
 USER appuser
 EXPOSE 5150
-CMD ["poziomki_backend-cli", "start", "-e", "production"]
+CMD ["poziomki_backend-cli"]

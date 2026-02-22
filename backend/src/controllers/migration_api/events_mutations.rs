@@ -1,3 +1,5 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
@@ -5,9 +7,15 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{ActiveValue, QueryFilter};
 use uuid::Uuid;
+
+type Result<T> = crate::error::AppResult<T>;
 
 use crate::controllers::migration_api::state::{
     AttendEventBody, AttendeeStatus, CreateEventBody, DataResponse, SuccessResponse,
@@ -83,7 +91,7 @@ pub(in crate::controllers::migration_api) async fn event_create(
     let inserted = model
         .insert(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids = resolve_event_tag_ids(&ctx.db, payload.tags, payload.tag_ids).await;
     if !tag_ids.is_empty() {
@@ -113,7 +121,7 @@ pub(in crate::controllers::migration_api) async fn event_update(
     let updated = active
         .update(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     maybe_sync_tags(&ctx.db, event_uuid, payload.tags, payload.tag_ids).await?;
 
@@ -157,7 +165,7 @@ pub(in crate::controllers::migration_api) async fn event_delete(
     events::Entity::delete_by_id(event_uuid)
         .exec(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     crate::search::invalidate_search_cache();
 
@@ -244,7 +252,7 @@ pub(in crate::controllers::migration_api) async fn event_leave(
         .filter(event_attendees::Column::ProfileId.eq(profile.id))
         .exec(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     if let Err(error) =
         enqueue_matrix_event_membership_sync(&ctx.db, &event.id, &profile.id, true).await
     {

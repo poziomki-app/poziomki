@@ -1,5 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+type Result<T> = crate::error::AppResult<T>;
+
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue},
@@ -7,7 +11,11 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
 use uuid::Uuid;
 
@@ -16,6 +24,7 @@ use super::state::{
     TagScope,
 };
 use crate::models::_entities::{event_tags, events, profile_tags, profiles, tags, users};
+use sea_orm::DatabaseConnection;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
@@ -30,12 +39,12 @@ fn scope_from_str(s: &str) -> TagScope {
 async fn load_profile_tag_ids(
     db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<HashSet<Uuid>, loco_rs::Error> {
+) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
     let tag_links = profile_tags::Entity::find()
         .filter(profile_tags::Column::ProfileId.eq(profile_id))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     Ok(tag_links.iter().map(|l| l.tag_id).collect())
 }
 
@@ -44,7 +53,7 @@ async fn load_profile_tag_ids(
 async fn batch_load_profile_tags(
     db: &DatabaseConnection,
     profile_ids: &[Uuid],
-) -> std::result::Result<HashMap<Uuid, Vec<MatchingTagResponse>>, loco_rs::Error> {
+) -> std::result::Result<HashMap<Uuid, Vec<MatchingTagResponse>>, crate::error::AppError> {
     if profile_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -53,7 +62,7 @@ async fn batch_load_profile_tags(
         .filter(profile_tags::Column::ProfileId.is_in(profile_ids.to_vec()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let all_tag_ids: HashSet<Uuid> = all_links.iter().map(|l| l.tag_id).collect();
     let tag_models = if all_tag_ids.is_empty() {
@@ -63,7 +72,7 @@ async fn batch_load_profile_tags(
             .filter(tags::Column::Id.is_in(all_tag_ids))
             .all(db)
             .await
-            .map_err(|e| loco_rs::Error::Any(e.into()))?
+            .map_err(|e| crate::error::AppError::Any(e.into()))?
     };
 
     let tag_by_id: HashMap<Uuid, &tags::Model> = tag_models.iter().map(|t| (t.id, t)).collect();
@@ -88,7 +97,7 @@ async fn batch_load_profile_tags(
 async fn batch_load_profile_tag_ids(
     db: &DatabaseConnection,
     profile_ids: &[Uuid],
-) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, loco_rs::Error> {
+) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
     if profile_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -97,7 +106,7 @@ async fn batch_load_profile_tag_ids(
         .filter(profile_tags::Column::ProfileId.is_in(profile_ids.to_vec()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
     for link in &all_links {
@@ -112,7 +121,7 @@ async fn batch_load_profile_tag_ids(
 async fn load_users_by_ids(
     db: &DatabaseConnection,
     user_ids: &[i32],
-) -> std::result::Result<Vec<users::Model>, loco_rs::Error> {
+) -> std::result::Result<Vec<users::Model>, crate::error::AppError> {
     if user_ids.is_empty() {
         return Ok(vec![]);
     }
@@ -120,7 +129,7 @@ async fn load_users_by_ids(
         .filter(users::Column::Id.is_in(user_ids.to_vec()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
 }
 
 /// Haversine distance between two (lat, lng) points in kilometres.
@@ -169,7 +178,7 @@ pub(super) async fn profiles_recommendations(
         .filter(profiles::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let my_tag_ids = match &my_profile {
         Some(p) => load_profile_tag_ids(&ctx.db, p.id).await?,
@@ -183,7 +192,7 @@ pub(super) async fn profiles_recommendations(
         .limit(200)
         .all(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     // Batch-load all candidate tag IDs in one query
     let candidate_ids: Vec<Uuid> = candidates.iter().map(|c| c.id).collect();
@@ -274,7 +283,7 @@ pub(super) async fn profiles_recommendations(
 async fn batch_load_event_tag_ids(
     db: &DatabaseConnection,
     event_ids: &[Uuid],
-) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, loco_rs::Error> {
+) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
     if event_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -282,7 +291,7 @@ async fn batch_load_event_tag_ids(
         .filter(event_tags::Column::EventId.is_in(event_ids.to_vec()))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
     for link in &all_links {
         result.entry(link.event_id).or_default().insert(link.tag_id);
@@ -307,7 +316,7 @@ pub(super) async fn events_recommendations(
         .filter(profiles::Column::UserId.eq(user.id))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let my_profile_id = my_profile.as_ref().map_or(Uuid::nil(), |p| p.id);
 
@@ -325,7 +334,7 @@ pub(super) async fn events_recommendations(
         .limit(100)
         .all(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     // Batch-load all event tag IDs in one query
     let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();

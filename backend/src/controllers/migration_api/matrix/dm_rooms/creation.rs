@@ -1,5 +1,5 @@
 use axum::http::HeaderMap;
-use loco_rs::prelude::*;
+use axum::response::Response;
 use uuid::Uuid;
 
 use super::super::{bootstrap_matrix_auth, matrix_support};

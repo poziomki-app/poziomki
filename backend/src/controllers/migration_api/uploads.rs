@@ -7,6 +7,10 @@ pub(super) mod uploads_storage;
 #[path = "uploads_support.rs"]
 mod uploads_support;
 
+type Result<T> = crate::error::AppResult<T>;
+
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Multipart, Path, State},
     http::{header, HeaderMap, HeaderValue},
@@ -15,8 +19,12 @@ use axum::{
 };
 use base64::Engine;
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use uuid::Uuid;
 
 use super::state::{
@@ -28,6 +36,7 @@ use super::state::{
 use super::{error_response, ErrorSpec};
 use crate::models::_entities::{profiles, uploads};
 use crate::tasks::enqueue_upload_variants_generation;
+use sea_orm::DatabaseConnection;
 use uploads_multipart::HandlerError;
 use uploads_support::{
     bad_request, forbidden, not_found, storage_delete, storage_read, storage_signed_put_url,
@@ -50,8 +59,8 @@ impl serde::Serialize for AuthCheckResponse {
     }
 }
 
-fn internal_upload_error(headers: &HeaderMap, message: &str) -> HandlerError {
-    Box::new(error_response(
+fn internal_upload_error(headers: &HeaderMap, message: &str) -> Response {
+    error_response(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         headers,
         ErrorSpec {
@@ -59,7 +68,7 @@ fn internal_upload_error(headers: &HeaderMap, message: &str) -> HandlerError {
             code: "INTERNAL_ERROR",
             details: None,
         },
-    ))
+    )
 }
 
 fn dev_upload_url(filename: &str) -> String {
@@ -302,10 +311,10 @@ pub(super) async fn file_upload(
         if let Err(error) = upload.insert(&ctx.db).await {
             tracing::warn!(filename = %filename, %error, "failed to insert upload row");
             let _ = uploads_storage::delete(&filename).await;
-            return Err(internal_upload_error(
+            return Err(Box::new(internal_upload_error(
                 &headers,
                 "Failed to save upload metadata",
-            ));
+            )));
         }
 
         if let Err(error) = enqueue_upload_variants_generation(&ctx.db, &upload_id).await {
@@ -403,7 +412,7 @@ pub(super) async fn file_upload_presign(
         };
         upload.insert(&ctx.db).await.map_err(|error| {
             tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
-            internal_upload_error(&headers, "Failed to save upload metadata")
+            Box::new(internal_upload_error(&headers, "Failed to save upload metadata"))
         })?;
 
         Ok(Json(DataResponse {
@@ -527,7 +536,7 @@ pub(super) async fn file_status(
     Ok(response.unwrap_or_else(|r| *r))
 }
 
-pub(crate) async fn generate_upload_variants_job(
+pub(super) async fn generate_upload_variants_job(
     db: &DatabaseConnection,
     upload_id: Uuid,
 ) -> std::result::Result<(), String> {
@@ -613,10 +622,10 @@ pub(super) async fn file_delete(
         active.updated_at = ActiveValue::Set(Utc::now().into());
         if let Err(error) = active.update(&ctx.db).await {
             tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
-            return Err(internal_upload_error(
+            return Err(Box::new(internal_upload_error(
                 &headers,
                 "Failed to update upload metadata",
-            ));
+            )));
         }
 
         Ok(Json(SuccessResponse { success: true }).into_response())

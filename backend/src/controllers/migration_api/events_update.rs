@@ -1,11 +1,17 @@
+use crate::app::AppContext;
 use axum::http::HeaderMap;
+use axum::response::Response;
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::ActiveValue;
 use uuid::Uuid;
 
 use crate::controllers::migration_api::state::UpdateEventBody;
 use crate::models::_entities::{events, profiles};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 use super::events_support::{
     self, forbidden, load_event, require_auth_profile, validate_event_description,

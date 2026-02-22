@@ -1,3 +1,4 @@
+use axum::response::Response;
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use lettre::{
@@ -5,7 +6,11 @@ use lettre::{
     transport::smtp::{authentication::Credentials, client::TlsParameters},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
-use loco_rs::{hash, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 use super::super::{
     error_response,
@@ -17,9 +22,11 @@ use super::super::{
 };
 use crate::models::{
     _entities::users,
-    users::{Model as UserModel, RegisterParams},
+    users::{Model as UserModel, ModelError, RegisterParams},
 };
+use crate::security;
 use crate::tasks::enqueue_otp_email;
+use sea_orm::DatabaseConnection;
 
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
 
@@ -115,14 +122,14 @@ async fn find_authenticated_user(
     db: &DatabaseConnection,
     email: &str,
     password: &str,
-) -> std::result::Result<Option<users::Model>, loco_rs::Error> {
+) -> std::result::Result<Option<users::Model>, crate::error::AppError> {
     let user = users::Entity::find()
         .filter(users::Column::Email.eq(email))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    Ok(user.filter(|u| hash::verify_password(password, &u.password)))
+    Ok(user.filter(|u| security::verify_password(password, &u.password)))
 }
 
 pub(super) async fn sign_in_success_or_unauthorized(
@@ -130,7 +137,7 @@ pub(super) async fn sign_in_success_or_unauthorized(
     headers: &HeaderMap,
     email: &str,
     password: &str,
-) -> std::result::Result<Response, loco_rs::Error> {
+) -> std::result::Result<Response, crate::error::AppError> {
     let Some(user) = find_authenticated_user(db, email, password).await? else {
         return Ok(unauthorized_error(headers, "Authentication failed"));
     };
@@ -166,12 +173,12 @@ pub(super) async fn sign_in_success_or_unauthorized(
 pub(super) async fn find_user_by_email(
     db: &DatabaseConnection,
     email: &str,
-) -> std::result::Result<Option<users::Model>, loco_rs::Error> {
+) -> std::result::Result<Option<users::Model>, crate::error::AppError> {
     users::Entity::find()
         .filter(users::Column::Email.eq(email))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))
 }
 
 fn otp_email_html(code: &str) -> String {
@@ -333,7 +340,7 @@ pub(super) async fn verify_otp_inner(
     headers: &HeaderMap,
     email: &str,
     otp: &str,
-) -> std::result::Result<Response, loco_rs::Error> {
+) -> std::result::Result<Response, crate::error::AppError> {
     let Some(user) = find_user_by_email(db, email).await? else {
         return Ok(invalid_otp_response(headers));
     };

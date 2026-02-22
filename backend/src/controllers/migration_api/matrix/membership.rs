@@ -3,6 +3,11 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 
 use super::{bootstrap_matrix_auth, chat_bootstrap_error, is_matrix_room_id, matrix_support};
 use crate::models::_entities::{events, profiles, users};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 pub(super) async fn sync_event_membership_after_attend_result(
     db: &DatabaseConnection,
@@ -95,7 +100,7 @@ pub(super) async fn ensure_profile_joined_event_room(
     event: &events::Model,
     profile: &profiles::Model,
     room_id: &str,
-) -> std::result::Result<(), loco_rs::prelude::Response> {
+) -> std::result::Result<(), axum::response::Response> {
     ensure_profile_joined_room_best_effort(db, headers, event, profile, room_id)
         .await
         .map_err(|error| {

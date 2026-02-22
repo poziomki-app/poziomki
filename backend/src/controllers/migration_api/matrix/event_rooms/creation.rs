@@ -1,7 +1,12 @@
 use std::collections::HashSet;
 
 use axum::http::HeaderMap;
-use loco_rs::prelude::*;
+use axum::response::Response;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
@@ -78,7 +83,7 @@ pub(super) async fn can_access_event_chat(
     event_id: Uuid,
     creator_profile_id: Uuid,
     requester_profile_id: Uuid,
-) -> std::result::Result<bool, loco_rs::Error> {
+) -> std::result::Result<bool, crate::error::AppError> {
     if requester_profile_id == creator_profile_id {
         return Ok(true);
     }
@@ -89,7 +94,7 @@ pub(super) async fn can_access_event_chat(
         .filter(event_attendees::Column::Status.eq("going"))
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(attendee.is_some())
 }
@@ -98,13 +103,13 @@ async fn load_event_attendee_user_pids(
     db: &DatabaseConnection,
     event_id: Uuid,
     creator_profile_id: Uuid,
-) -> std::result::Result<HashSet<Uuid>, loco_rs::Error> {
+) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
     let attendee_rows = event_attendees::Entity::find()
         .filter(event_attendees::Column::EventId.eq(event_id))
         .filter(event_attendees::Column::Status.eq("going"))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let mut profile_ids: HashSet<Uuid> = attendee_rows
         .into_iter()
@@ -116,7 +121,7 @@ async fn load_event_attendee_user_pids(
         .filter(profiles::Column::Id.is_in(profile_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_ids: Vec<i32> = profile_models
         .into_iter()
         .map(|profile| profile.user_id)
@@ -129,7 +134,7 @@ async fn load_event_attendee_user_pids(
         .filter(users::Column::Id.is_in(user_ids))
         .all(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(user_models.into_iter().map(|user| user.pid).collect())
 }

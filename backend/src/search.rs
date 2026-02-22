@@ -1,3 +1,4 @@
+use crate::error::{AppError, AppResult};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -77,9 +78,9 @@ pub async fn search_all(
     query: &str,
     limit: usize,
     geo: Option<&GeoSearchParams>,
-) -> loco_rs::Result<SearchResults> {
+) -> AppResult<SearchResults> {
     if db.get_database_backend() != DbBackend::Postgres {
-        return Err(loco_rs::Error::Message(
+        return Err(AppError::Message(
             "Search requires a PostgreSQL database".to_string(),
         ));
     }
@@ -125,7 +126,7 @@ async fn search_profiles_postgres(
     query: &str,
     pattern: &str,
     limit_i64: i64,
-) -> loco_rs::Result<Vec<ProfileDocument>> {
+) -> AppResult<Vec<ProfileDocument>> {
     let profile_rows = ProfileSearchRow::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r"
@@ -168,7 +169,7 @@ async fn search_profiles_postgres(
     ))
     .all(db)
     .await
-    .map_err(|e| loco_rs::Error::Message(format!("Profile search failed: {e}")))?;
+    .map_err(|e| AppError::Message(format!("Profile search failed: {e}")))?;
 
     Ok(profile_rows
         .into_iter()
@@ -190,7 +191,7 @@ async fn search_events_postgres(
     pattern: &str,
     limit_i64: i64,
     geo: Option<&GeoSearchParams>,
-) -> loco_rs::Result<Vec<EventDocument>> {
+) -> AppResult<Vec<EventDocument>> {
     let event_rows = match geo {
         Some(geo_query) => {
             EventSearchRow::find_by_statement(Statement::from_sql_and_values(
@@ -271,7 +272,7 @@ async fn search_events_postgres(
             .await
         }
     }
-    .map_err(|e| loco_rs::Error::Message(format!("Event search failed: {e}")))?;
+    .map_err(|e| AppError::Message(format!("Event search failed: {e}")))?;
 
     Ok(event_rows
         .into_iter()
@@ -295,7 +296,7 @@ async fn search_tags_postgres(
     db: &DatabaseConnection,
     pattern: &str,
     limit_i64: i64,
-) -> loco_rs::Result<Vec<TagDocument>> {
+) -> AppResult<Vec<TagDocument>> {
     let rows = TagSearchRow::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r"
@@ -314,7 +315,7 @@ async fn search_tags_postgres(
     ))
     .all(db)
     .await
-    .map_err(|e| loco_rs::Error::Message(format!("Tag search failed: {e}")))?;
+    .map_err(|e| AppError::Message(format!("Tag search failed: {e}")))?;
 
     Ok(rows
         .into_iter()

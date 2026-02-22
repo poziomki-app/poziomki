@@ -795,10 +795,10 @@ private fun GradientCircle(
 ) {
     val hasGradient = gradientStart != null && gradientEnd != null
     val bgModifier =
-        if (hasGradient) {
+        if (gradientStart != null && gradientEnd != null) {
             Modifier.background(
                 Brush.linearGradient(
-                    colors = listOf(parseHex(gradientStart!!), parseHex(gradientEnd!!)),
+                    colors = listOf(parseHex(gradientStart), parseHex(gradientEnd)),
                 ),
                 CircleShape,
             )

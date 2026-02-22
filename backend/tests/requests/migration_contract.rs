@@ -1,11 +1,10 @@
 use axum::http::{HeaderName, HeaderValue};
 use axum_test::multipart::{MultipartForm, Part};
+use axum_test::TestServer;
 use base64::Engine as _;
 use chrono::Utc;
-use loco_rs::testing::prelude::*;
-use loco_rs::TestServer;
-use poziomki_backend::app::App;
 use serial_test::serial;
+use std::future::Future;
 
 fn auth_header(token: &str) -> (HeaderName, HeaderValue) {
     let value = HeaderValue::from_str(&format!("Bearer {token}")).unwrap();
@@ -24,6 +23,23 @@ fn tiny_png_bytes() -> Vec<u8> {
     base64::engine::general_purpose::STANDARD
         .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2p9N8AAAAASUVORK5CYII=")
         .expect("valid embedded png")
+}
+
+async fn request<F, Fut>(f: F)
+where
+    F: FnOnce(TestServer, poziomki_backend::app::AppContext) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    let _ = dotenvy::dotenv();
+    let ctx = poziomki_backend::app::build_test_app_context()
+        .await
+        .expect("build test app context");
+    poziomki_backend::app::reset_test_database(&ctx)
+        .await
+        .expect("truncate test tables");
+    let server = TestServer::new(poziomki_backend::app::build_router_with_state(ctx.clone()))
+        .expect("create axum test server");
+    f(server, ctx).await;
 }
 
 async fn create_user_with_profile(
@@ -120,7 +136,7 @@ async fn sign_up_and_verify(
 #[tokio::test]
 #[serial]
 async fn health_endpoint_matches_contract() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request.get("/health").await;
         assert_eq!(response.status_code(), 200);
         response.assert_json(&serde_json::json!({ "status": "ok" }));
@@ -131,7 +147,7 @@ async fn health_endpoint_matches_contract() {
 #[tokio::test]
 #[serial]
 async fn root_endpoint_matches_contract() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request.get("/").await;
         assert_eq!(response.status_code(), 200);
 
@@ -146,7 +162,7 @@ async fn root_endpoint_matches_contract() {
 #[tokio::test]
 #[serial]
 async fn matrix_session_requires_auth() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request
             .post("/api/v1/matrix/session")
             .json(&serde_json::json!({}))
@@ -163,7 +179,7 @@ async fn matrix_session_requires_auth() {
 #[tokio::test]
 #[serial]
 async fn profiles_me_requires_auth_after_phase_2() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request.get("/api/v1/profiles/me").await;
         assert_eq!(response.status_code(), 401);
 
@@ -177,7 +193,7 @@ async fn profiles_me_requires_auth_after_phase_2() {
 #[tokio::test]
 #[serial]
 async fn auth_get_session_returns_unwrapped_shape() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request.get("/api/v1/auth/get-session").await;
         assert_eq!(response.status_code(), 200);
         response.assert_json(&serde_json::json!({
@@ -191,7 +207,7 @@ async fn auth_get_session_returns_unwrapped_shape() {
 #[tokio::test]
 #[serial]
 async fn matrix_config_endpoint_available() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request.get("/api/v1/matrix/config").await;
         assert_eq!(response.status_code(), 200);
 
@@ -204,7 +220,7 @@ async fn matrix_config_endpoint_available() {
 #[tokio::test]
 #[serial]
 async fn matrix_session_is_not_cacheable() {
-    request::<App, _, _>(|request, _ctx| async move {
+    request(|request, _ctx| async move {
         let response = request
             .post("/api/v1/matrix/session")
             .json(&serde_json::json!({}))
@@ -225,7 +241,7 @@ async fn matrix_session_is_not_cacheable() {
 #[tokio::test]
 #[serial]
 async fn matrix_event_room_returns_existing_mapping_for_attendee() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use poziomki_backend::models::_entities::events;
         use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
         use uuid::Uuid;
@@ -295,7 +311,7 @@ async fn matrix_event_room_returns_existing_mapping_for_attendee() {
 #[tokio::test]
 #[serial]
 async fn matrix_dm_endpoint_returns_existing_canonical_mapping() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use poziomki_backend::models::_entities::{matrix_dm_rooms, users};
         use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 
@@ -351,7 +367,7 @@ async fn matrix_dm_endpoint_returns_existing_canonical_mapping() {
 #[tokio::test]
 #[serial]
 async fn matrix_dm_endpoint_is_symmetric_for_both_users() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use poziomki_backend::models::_entities::{matrix_dm_rooms, users};
         use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 
@@ -433,7 +449,7 @@ async fn matrix_dm_endpoint_is_symmetric_for_both_users() {
 #[tokio::test]
 #[serial]
 async fn matrix_event_room_access_tracks_attendance() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use poziomki_backend::models::_entities::events;
         use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
         use uuid::Uuid;
@@ -540,7 +556,7 @@ async fn matrix_event_room_access_tracks_attendance() {
 #[tokio::test]
 #[serial]
 async fn events_flow_matches_phase_3_contract() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let owner_token =
             sign_up_and_verify(&request, &ctx.db, "owner@example.com", "secret123", "Owner").await;
 
@@ -688,7 +704,7 @@ async fn events_flow_matches_phase_3_contract() {
 #[tokio::test]
 #[serial]
 async fn matching_and_uploads_endpoints_available() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let token_a = sign_up_and_verify(
             &request,
             &ctx.db,
@@ -744,7 +760,7 @@ async fn matching_and_uploads_endpoints_available() {
 #[tokio::test]
 #[serial]
 async fn sign_in_verifies_hashed_password() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let sign_up = request
             .post("/api/v1/auth/sign-up/email")
             .json(&sign_up_json("hash-test@example.com", "correct-password"))
@@ -792,7 +808,7 @@ async fn sign_in_verifies_hashed_password() {
 #[tokio::test]
 #[serial]
 async fn unverified_sign_in_requires_otp_and_resend_works() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let sign_up = request
             .post("/api/v1/auth/sign-up/email")
             .json(&sign_up_json("otp-flow@example.com", "correct-password"))
@@ -839,7 +855,7 @@ async fn unverified_sign_in_requires_otp_and_resend_works() {
 #[tokio::test]
 #[serial]
 async fn delete_account_verifies_hashed_password() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let token = sign_up_and_verify(
             &request,
             &ctx.db,
@@ -873,7 +889,7 @@ async fn delete_account_verifies_hashed_password() {
 #[tokio::test]
 #[serial]
 async fn uploads_auth_check_accepts_owned_variant_url() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         let (auth_key, auth_value) = create_user_with_profile(
             &request,
             &ctx.db,
@@ -909,7 +925,7 @@ async fn uploads_auth_check_accepts_owned_variant_url() {
 #[tokio::test]
 #[serial]
 async fn upload_returns_error_when_upload_row_insert_fails() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use sea_orm::ConnectionTrait;
 
         let (auth_key, auth_value) =
@@ -967,7 +983,7 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
 #[tokio::test]
 #[serial]
 async fn delete_returns_error_when_upload_row_update_fails() {
-    request::<App, _, _>(|request, ctx| async move {
+    request(|request, ctx| async move {
         use sea_orm::ConnectionTrait;
 
         let (auth_key, auth_value) =

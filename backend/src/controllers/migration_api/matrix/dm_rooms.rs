@@ -1,7 +1,10 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
-use loco_rs::{app::AppContext, prelude::*};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
+
+type Result<T> = crate::error::AppResult<T>;
 
 use super::super::{
     error_response,
@@ -10,6 +13,11 @@ use super::super::{
 };
 use super::{MatrixDmRoomRequest, MatrixRoomData};
 use crate::models::_entities::users;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 
 mod creation;
 mod pending;
@@ -57,7 +65,7 @@ pub(super) async fn resolve_dm_room(
         .filter(users::Column::Pid.eq(target_pid))
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?
+        .map_err(|e| crate::error::AppError::Any(e.into()))?
         .is_some();
     if !target_exists {
         return Ok(error_response(

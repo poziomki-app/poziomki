@@ -1,12 +1,21 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
 
 use super::super::state::{
     extract_bearer_token, resolve_session_by_token, session_model_to_view, user_model_to_view,
     SessionResponse,
 };
 use crate::models::_entities::{sessions, users};
+use sea_orm::DatabaseConnection;
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
+
+type Result<T> = crate::error::AppResult<T>;
 
 fn empty_session_response() -> Response {
     Json(SessionResponse {
@@ -19,7 +28,7 @@ fn empty_session_response() -> Response {
 async fn resolve_session_and_user(
     db: &DatabaseConnection,
     headers: &HeaderMap,
-) -> std::result::Result<Option<(sessions::Model, users::Model)>, loco_rs::Error> {
+) -> std::result::Result<Option<(sessions::Model, users::Model)>, crate::error::AppError> {
     let Some(token) = extract_bearer_token(headers) else {
         return Ok(None);
     };
@@ -34,7 +43,7 @@ async fn resolve_session_and_user(
     let user = users::Entity::find_by_id(session.user_id)
         .one(db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(user.map(|u| (session, u)))
 }

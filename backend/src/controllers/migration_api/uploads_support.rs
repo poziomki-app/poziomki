@@ -1,5 +1,5 @@
 use axum::http::{HeaderMap, StatusCode};
-use loco_rs::prelude::*;
+use axum::response::Response;
 
 use super::super::{error_response, ErrorSpec};
 use super::{

@@ -941,6 +941,13 @@ Expected scope:
 
 Objective: remove Loco utility dependencies that remain after Phase 1.
 
+Status update (partial, implemented):
+
+- password hashing moved off `loco_rs::hash` to local `backend/src/security.rs` (`argon2`, same Argon2id defaults)
+- JWT generation moved off `loco_rs::auth::jwt` to local `backend/src/security.rs` (`jsonwebtoken`, HS512 + base64 secret + `pid/exp` claim shape preserved for compatibility)
+- current auth/user callsites updated (`models/users.rs`, `auth_helpers.rs`, `auth_account.rs`)
+- Loco auth extractors / `AppContext` / `Error` aliases still remain in many modules (next steps below)
+
 Key work:
 
 - `backend/src/models/users.rs`
@@ -1080,9 +1087,24 @@ The range depends on whether you:
 
 ### Phase 1 complete (Axum shell)
 
-- `loco-rs` no longer used for app boot/routing
+- production binaries (`api`, `worker`) start through Axum-native entrypoints (no Loco CLI)
+- runtime serving uses Axum (`axum::serve`) with a plain `axum::Router` (no Loco route adapter)
 - all current HTTP routes work with same paths/status codes
 - SeaORM still passes tests
+
+### Phase 2 complete (Loco helper removal)
+
+- local `AppError` / `AppResult` introduced and used by shared modules (`search`, outbox, auth/session helpers)
+- local password hashing/JWT helpers (`security.rs`) introduced
+- backend no longer relies on Loco `Authenticable` path (local session auth remains canonical)
+- controller modules no longer import `loco_rs::prelude::*` (explicit `axum` / `sea_orm` imports used)
+- backend/test/example code no longer imports `loco_rs`
+
+### Phase 2.5 complete (Loco crate removal)
+
+- `loco-rs` removed from `backend/Cargo.toml`
+- `backend/migration` no longer depends on Loco schema helpers (first two migrations rewritten to plain `sea_orm_migration`)
+- Loco test harness replaced with local `axum_test` integration setup
 
 ### Phase 3 complete (storage)
 

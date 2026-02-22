@@ -1,4 +1,4 @@
-use loco_rs::{app::AppContext, Error, Result};
+use crate::app::AppContext;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::error::{AppError, AppResult};
+
 static OUTBOX_WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 const OUTBOX_TOPIC_OTP_EMAIL: &str = "otp_email_send";
 const OUTBOX_TOPIC_MATRIX_PROFILE_AVATAR_SYNC: &str = "matrix_profile_avatar_sync";
@@ -14,7 +16,7 @@ const OUTBOX_TOPIC_MATRIX_EVENT_MEMBERSHIP_SYNC: &str = "matrix_event_membership
 const OUTBOX_TOPIC_UPLOAD_VARIANTS_GENERATION: &str = "upload_variants_generation";
 const OUTBOX_LOCK_TIMEOUT_SECS: i64 = 300;
 const OUTBOX_DEFAULT_MAX_ATTEMPTS: i32 = 10;
-pub(crate) const OUTBOX_WORKER_HEARTBEAT_PATH: &str = "/tmp/poziomki-outbox-worker-heartbeat";
+const OUTBOX_WORKER_HEARTBEAT_PATH: &str = "/tmp/poziomki-outbox-worker-heartbeat";
 
 #[derive(Debug, Clone)]
 struct OutboxJob {
@@ -26,17 +28,17 @@ struct OutboxJob {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct OutboxStatsSnapshot {
-    pub(crate) pending_jobs: i64,
-    pub(crate) ready_jobs: i64,
-    pub(crate) retrying_jobs: i64,
-    pub(crate) inflight_jobs: i64,
-    pub(crate) failed_jobs: i64,
-    pub(crate) exhausted_jobs: i64,
-    pub(crate) processed_jobs_24h: i64,
-    pub(crate) oldest_ready_job_age_seconds: i64,
-    pub(crate) oldest_pending_job_age_seconds: i64,
-    pub(crate) last_processed_at: Option<String>,
+pub struct OutboxStatsSnapshot {
+    pub pending_jobs: i64,
+    pub ready_jobs: i64,
+    pub retrying_jobs: i64,
+    pub inflight_jobs: i64,
+    pub failed_jobs: i64,
+    pub exhausted_jobs: i64,
+    pub processed_jobs_24h: i64,
+    pub oldest_ready_job_age_seconds: i64,
+    pub oldest_pending_job_age_seconds: i64,
+    pub last_processed_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +74,7 @@ fn env_truthy(key: &str) -> bool {
     })
 }
 
-pub(crate) async fn enqueue_otp_email(db: &DatabaseConnection, to: &str, code: &str) -> Result<()> {
+pub async fn enqueue_otp_email(db: &DatabaseConnection, to: &str, code: &str) -> AppResult<()> {
     let payload = json!({
         "to": to,
         "code": code,
@@ -81,7 +83,7 @@ pub(crate) async fn enqueue_otp_email(db: &DatabaseConnection, to: &str, code: &
 
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         INSERT INTO job_outbox (
             id,
             topic,
@@ -93,7 +95,7 @@ pub(crate) async fn enqueue_otp_email(db: &DatabaseConnection, to: &str, code: &
             updated_at
         )
         VALUES ($1, $2, $3::jsonb, 0, $4, NOW(), NOW(), NOW())
-        "#,
+        ",
         vec![
             uuid::Uuid::new_v4().to_string().into(),
             OUTBOX_TOPIC_OTP_EMAIL.to_string().into(),
@@ -105,14 +107,14 @@ pub(crate) async fn enqueue_otp_email(db: &DatabaseConnection, to: &str, code: &
     db.execute(stmt)
         .await
         .map(|_| ())
-        .map_err(|e| Error::Any(e.into()))
+        .map_err(|e| AppError::Any(e.into()))
 }
 
-pub(crate) async fn enqueue_matrix_profile_avatar_sync(
+pub async fn enqueue_matrix_profile_avatar_sync(
     db: &DatabaseConnection,
     user_pid: &uuid::Uuid,
     profile_picture_filename: Option<&str>,
-) -> Result<()> {
+) -> AppResult<()> {
     let payload = json!({
         "user_pid": user_pid.to_string(),
         "profile_picture_filename": profile_picture_filename,
@@ -122,12 +124,12 @@ pub(crate) async fn enqueue_matrix_profile_avatar_sync(
     enqueue_job(db, OUTBOX_TOPIC_MATRIX_PROFILE_AVATAR_SYNC, payload).await
 }
 
-pub(crate) async fn enqueue_matrix_event_membership_sync(
+pub async fn enqueue_matrix_event_membership_sync(
     db: &DatabaseConnection,
     event_id: &uuid::Uuid,
     profile_id: &uuid::Uuid,
     leave: bool,
-) -> Result<()> {
+) -> AppResult<()> {
     let payload = json!({
         "event_id": event_id.to_string(),
         "profile_id": profile_id.to_string(),
@@ -138,10 +140,10 @@ pub(crate) async fn enqueue_matrix_event_membership_sync(
     enqueue_job(db, OUTBOX_TOPIC_MATRIX_EVENT_MEMBERSHIP_SYNC, payload).await
 }
 
-pub(crate) async fn enqueue_upload_variants_generation(
+pub async fn enqueue_upload_variants_generation(
     db: &DatabaseConnection,
     upload_id: &uuid::Uuid,
-) -> Result<()> {
+) -> AppResult<()> {
     let payload = json!({
         "upload_id": upload_id.to_string(),
     })
@@ -150,10 +152,10 @@ pub(crate) async fn enqueue_upload_variants_generation(
     enqueue_job(db, OUTBOX_TOPIC_UPLOAD_VARIANTS_GENERATION, payload).await
 }
 
-async fn enqueue_job(db: &DatabaseConnection, topic: &str, payload: String) -> Result<()> {
+async fn enqueue_job(db: &DatabaseConnection, topic: &str, payload: String) -> AppResult<()> {
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         INSERT INTO job_outbox (
             id,
             topic,
@@ -165,7 +167,7 @@ async fn enqueue_job(db: &DatabaseConnection, topic: &str, payload: String) -> R
             updated_at
         )
         VALUES ($1, $2, $3::jsonb, 0, $4, NOW(), NOW(), NOW())
-        "#,
+        ",
         vec![
             uuid::Uuid::new_v4().to_string().into(),
             topic.to_string().into(),
@@ -177,10 +179,10 @@ async fn enqueue_job(db: &DatabaseConnection, topic: &str, payload: String) -> R
     db.execute(stmt)
         .await
         .map(|_| ())
-        .map_err(|e| Error::Any(e.into()))
+        .map_err(|e| AppError::Any(e.into()))
 }
 
-pub(crate) fn maybe_start_worker(ctx: &AppContext) {
+pub fn maybe_start_worker(ctx: &AppContext) {
     if !env_truthy("OUTBOX_WORKER_ENABLED") && std::env::var("OUTBOX_WORKER_ENABLED").is_ok() {
         tracing::info!("Outbox worker disabled via OUTBOX_WORKER_ENABLED");
         return;
@@ -200,10 +202,10 @@ pub(crate) fn maybe_start_worker(ctx: &AppContext) {
     tracing::info!("Outbox worker started");
 }
 
-pub(crate) async fn outbox_stats_snapshot(db: &DatabaseConnection) -> Result<OutboxStatsSnapshot> {
+pub async fn outbox_stats_snapshot(db: &DatabaseConnection) -> AppResult<OutboxStatsSnapshot> {
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         SELECT
             COUNT(*) FILTER (
                 WHERE processed_at IS NULL AND failed_at IS NULL
@@ -258,47 +260,47 @@ pub(crate) async fn outbox_stats_snapshot(db: &DatabaseConnection) -> Result<Out
             ) AS oldest_pending_job_age_seconds,
             MAX(processed_at)::text AS last_processed_at
         FROM job_outbox
-        "#,
+        ",
         vec![OUTBOX_LOCK_TIMEOUT_SECS.into()],
     );
 
     let row = db
         .query_one(stmt)
         .await
-        .map_err(|e| Error::Any(e.into()))?
-        .ok_or_else(|| Error::Message("outbox stats query returned no rows".to_string()))?;
+        .map_err(|e| AppError::Any(e.into()))?
+        .ok_or_else(|| AppError::Message("outbox stats query returned no rows".to_string()))?;
 
     Ok(OutboxStatsSnapshot {
         pending_jobs: row
             .try_get("", "pending_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         ready_jobs: row
             .try_get("", "ready_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         retrying_jobs: row
             .try_get("", "retrying_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         inflight_jobs: row
             .try_get("", "inflight_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         failed_jobs: row
             .try_get("", "failed_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         exhausted_jobs: row
             .try_get("", "exhausted_jobs")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         processed_jobs_24h: row
             .try_get("", "processed_jobs_24h")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         oldest_ready_job_age_seconds: row
             .try_get("", "oldest_ready_job_age_seconds")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         oldest_pending_job_age_seconds: row
             .try_get("", "oldest_pending_job_age_seconds")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
         last_processed_at: row
             .try_get("", "last_processed_at")
-            .map_err(|e| Error::Any(e.into()))?,
+            .map_err(|e| AppError::Any(e.into()))?,
     })
 }
 
@@ -325,8 +327,7 @@ async fn run_worker_loop(db: DatabaseConnection) {
 fn write_worker_heartbeat() {
     let now_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string());
+        .map_or_else(|_| "0".to_string(), |d| d.as_secs().to_string());
 
     if let Err(error) = fs::write(OUTBOX_WORKER_HEARTBEAT_PATH, now_epoch) {
         tracing::warn!(%error, path = OUTBOX_WORKER_HEARTBEAT_PATH, "failed to write worker heartbeat");
@@ -356,7 +357,7 @@ async fn claim_next_job(
 ) -> std::result::Result<Option<OutboxJob>, sea_orm::DbErr> {
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         WITH picked AS (
             SELECT id
             FROM job_outbox
@@ -382,7 +383,7 @@ async fn claim_next_job(
                   j.payload::text AS payload_json,
                   j.attempts,
                   j.max_attempts
-        "#,
+        ",
         vec![OUTBOX_LOCK_TIMEOUT_SECS.into()],
     );
 
@@ -456,14 +457,14 @@ async fn mark_job_done(
 ) -> std::result::Result<(), sea_orm::DbErr> {
     let stmt = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
-        r#"
+        r"
         UPDATE job_outbox
         SET processed_at = NOW(),
             locked_at = NULL,
             last_error = NULL,
             updated_at = NOW()
         WHERE id = $1::uuid
-        "#,
+        ",
         vec![job_id.to_string().into()],
     );
     db.execute(stmt).await.map(|_| ())
@@ -479,28 +480,28 @@ async fn mark_job_failed(
     let stmt = if job.attempts >= job.max_attempts {
         Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r#"
+            r"
             UPDATE job_outbox
             SET failed_at = NOW(),
                 locked_at = NULL,
                 last_error = $2,
                 updated_at = NOW()
             WHERE id = $1::uuid
-            "#,
+            ",
             vec![job.id.clone().into(), clamped_error.into()],
         )
     } else {
         let backoff_secs = retry_backoff_secs(job.attempts);
         Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r#"
+            r"
             UPDATE job_outbox
             SET locked_at = NULL,
                 available_at = NOW() + make_interval(secs => $2),
                 last_error = $3,
                 updated_at = NOW()
             WHERE id = $1::uuid
-            "#,
+            ",
             vec![
                 job.id.clone().into(),
                 backoff_secs.into(),
@@ -520,7 +521,7 @@ async fn mark_job_failed(
     db.execute(stmt).await.map(|_| ())
 }
 
-fn retry_backoff_secs(attempts: i32) -> i64 {
+const fn retry_backoff_secs(attempts: i32) -> i64 {
     match attempts {
         0 | 1 => 5,
         2 => 15,

@@ -1,3 +1,5 @@
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
@@ -5,9 +7,15 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{ActiveValue, ColumnTrait, QueryFilter};
 use uuid::Uuid;
+
+type Result<T> = crate::error::AppResult<T>;
 
 use crate::controllers::migration_api::{
     error_response, extract_filename,
@@ -24,6 +32,7 @@ use crate::tasks::enqueue_matrix_profile_avatar_sync;
 use super::{
     full_profile_response, not_found_profile, parse_tag_uuids, sync_profile_tags, validation_error,
 };
+use sea_orm::DatabaseConnection;
 
 fn validate_profile_fields(
     headers: &HeaderMap,
@@ -90,8 +99,8 @@ async fn validate_create(
     Ok(user)
 }
 
-fn uploads_unavailable(headers: &HeaderMap) -> Box<Response> {
-    Box::new(error_response(
+fn uploads_unavailable(headers: &HeaderMap) -> Response {
+    error_response(
         axum::http::StatusCode::SERVICE_UNAVAILABLE,
         headers,
         ErrorSpec {
@@ -99,7 +108,7 @@ fn uploads_unavailable(headers: &HeaderMap) -> Box<Response> {
             code: "UPLOADS_UNAVAILABLE",
             details: None,
         },
-    ))
+    )
 }
 
 async fn validate_profile_picture_reference(
@@ -120,7 +129,7 @@ async fn validate_profile_picture_reference(
             .filter(uploads::Column::Deleted.eq(false))
             .one(db)
             .await
-            .map_err(|_| uploads_unavailable(headers))?;
+            .map_err(|_| Box::new(uploads_unavailable(headers)))?;
 
         if owned_upload.is_none() {
             return Err(Box::new(validation_error(
@@ -132,7 +141,7 @@ async fn validate_profile_picture_reference(
 
     let exists = super::super::uploads::uploads_storage::exists(&filename)
         .await
-        .map_err(|_| uploads_unavailable(headers))?;
+        .map_err(|_| Box::new(uploads_unavailable(headers)))?;
     if !exists {
         return Err(Box::new(validation_error(
             headers,
@@ -195,7 +204,7 @@ pub(in crate::controllers::migration_api) async fn profile_create(
     let inserted = model
         .insert(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids = parse_tag_uuids(payload.tags.or(payload.tag_ids));
     if !tag_ids.is_empty() {
@@ -333,7 +342,7 @@ async fn maybe_sync_tags(
     profile_id: Uuid,
     tags: Option<Vec<String>>,
     tag_ids: Option<Vec<String>>,
-) -> std::result::Result<(), loco_rs::Error> {
+) -> std::result::Result<(), crate::error::AppError> {
     if tags.is_some() || tag_ids.is_some() {
         let resolved = parse_tag_uuids(tags.or(tag_ids));
         sync_profile_tags(db, profile_id, &resolved).await?;
@@ -378,7 +387,7 @@ pub(in crate::controllers::migration_api) async fn profile_update(
     let updated = active
         .update(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     maybe_sync_tags(&ctx.db, profile_uuid, payload.tags, payload.tag_ids).await?;
 
@@ -414,7 +423,7 @@ pub(in crate::controllers::migration_api) async fn profile_delete(
     profiles::Entity::delete_by_id(profile.id)
         .exec(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     crate::search::invalidate_search_cache();
 

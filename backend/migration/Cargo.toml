@@ -9,7 +9,6 @@ name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-loco-rs = { workspace = true }
 uuid = { version = "1.6", features = ["v5"] }
 
 

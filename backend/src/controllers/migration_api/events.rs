@@ -9,6 +9,10 @@ mod events_update;
 #[path = "events_view.rs"]
 mod events_view;
 
+type Result<T> = crate::error::AppResult<T>;
+
+use crate::app::AppContext;
+use axum::response::Response;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue},
@@ -16,7 +20,11 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use loco_rs::{app::AppContext, prelude::*};
+#[allow(unused_imports)]
+use sea_orm::{
+    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
+    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
+};
 use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
 use uuid::Uuid;
 
@@ -51,7 +59,7 @@ pub(super) async fn events_list(
         .limit(limit)
         .all(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = events_view::build_event_responses(&ctx.db, &all_events, &profile.id).await?;
 
@@ -76,7 +84,7 @@ pub(super) async fn events_mine(
         .order_by_desc(events::Column::StartsAt)
         .all(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = events_view::build_event_responses(&ctx.db, &my_events, &profile.id).await?;
 
@@ -98,12 +106,12 @@ pub(super) async fn event_get(
     };
 
     let event_uuid = Uuid::parse_str(&id)
-        .map_err(|_| loco_rs::Error::Message("Invalid event ID".to_string()))?;
+        .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
     let Some(event) = events::Entity::find_by_id(event_uuid)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?
+        .map_err(|e| crate::error::AppError::Any(e.into()))?
     else {
         return Ok(not_found_event(&headers, &id));
     };
@@ -127,12 +135,12 @@ pub(super) async fn event_attendees(
     };
 
     let event_uuid = Uuid::parse_str(&id)
-        .map_err(|_| loco_rs::Error::Message("Invalid event ID".to_string()))?;
+        .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
     let exists = events::Entity::find_by_id(event_uuid)
         .one(&ctx.db)
         .await
-        .map_err(|e| loco_rs::Error::Any(e.into()))?
+        .map_err(|e| crate::error::AppError::Any(e.into()))?
         .is_some();
 
     if !exists {
