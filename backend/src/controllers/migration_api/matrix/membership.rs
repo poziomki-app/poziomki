@@ -4,57 +4,52 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 use super::{bootstrap_matrix_auth, chat_bootstrap_error, is_matrix_room_id, matrix_support};
 use crate::models::_entities::{events, profiles, users};
 
-pub(super) async fn sync_event_membership_after_attend(
+pub(super) async fn sync_event_membership_after_attend_result(
     db: &DatabaseConnection,
     headers: &HeaderMap,
     event: &events::Model,
     profile: &profiles::Model,
-) {
+) -> std::result::Result<(), String> {
     if let Some(room_id) = event
         .conversation_id
         .as_deref()
         .filter(|value| is_matrix_room_id(value))
     {
-        if let Err(error) =
-            ensure_profile_joined_room_best_effort(db, headers, event, profile, room_id).await
-        {
-            tracing::warn!(%error, event_id = %event.id, "failed to sync event-attend membership");
-        }
+        ensure_profile_joined_room_best_effort(db, headers, event, profile, room_id).await?;
     }
+    Ok(())
 }
 
-pub(super) async fn sync_event_membership_after_leave(
+pub(super) async fn sync_event_membership_after_leave_result(
     db: &DatabaseConnection,
     headers: &HeaderMap,
     event: &events::Model,
     profile: &profiles::Model,
-) {
+) -> std::result::Result<(), String> {
     let Some(room_id) = event_room_id(event) else {
-        return;
+        return Ok(());
     };
     let Some(user) = load_leave_sync_user(db, profile).await else {
-        return;
+        return Ok(());
     };
-    let Some(bootstrap) = bootstrap_leave_sync_user(headers, &user.pid).await else {
-        return;
-    };
+    let bootstrap = bootstrap_leave_sync_user(headers, &user.pid)
+        .await
+        .ok_or_else(|| "matrix bootstrap unavailable during leave sync".to_string())?;
 
-    if let Err(error) = matrix_support::leave_room(
+    matrix_support::leave_room(
         &bootstrap.http_client,
         &bootstrap.homeserver,
         &bootstrap.auth.access_token,
         room_id,
     )
     .await
-    {
-        tracing::warn!(
-            status_code = error.status_code,
-            errcode = error.errcode,
-            message = error.message,
-            room_id,
-            "failed to leave Matrix room after event leave"
-        );
-    }
+    .map_err(|error| {
+        format!(
+            "leave room failed: status={} errcode={:?} message={} room_id={room_id}",
+            error.status_code, error.errcode, error.message
+        )
+    })?;
+    Ok(())
 }
 
 fn event_room_id(event: &events::Model) -> Option<&str> {

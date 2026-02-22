@@ -1,10 +1,6 @@
 use axum::http::HeaderMap;
-use chrono::{Duration, Utc};
 use loco_rs::prelude::Response;
-use std::{
-    collections::HashMap,
-    sync::{LazyLock, Mutex},
-};
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 
 use super::{error_response, ErrorSpec};
 
@@ -42,15 +38,6 @@ impl AuthRateLimitAction {
     }
 }
 
-#[derive(Clone, Debug)]
-struct RateLimitEntry {
-    window_start: chrono::DateTime<Utc>,
-    attempts: u32,
-}
-
-static AUTH_RATE_LIMITS: LazyLock<Mutex<HashMap<String, RateLimitEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
 fn client_ip(headers: &HeaderMap) -> String {
     // Use the *last* x-forwarded-for entry — the one appended by our trusted
     // reverse proxy (Caddy).  Earlier entries are client-controlled and spoofable.
@@ -84,41 +71,60 @@ fn rate_limit_response(headers: &HeaderMap) -> Response {
     )
 }
 
-pub(super) fn enforce_rate_limit(
+async fn upsert_attempt(
+    db: &DatabaseConnection,
+    key: &str,
+    window_secs: i64,
+) -> std::result::Result<i64, sea_orm::DbErr> {
+    let stmt = Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        r#"
+        INSERT INTO auth_rate_limits (rate_key, window_start, attempts, updated_at)
+        VALUES ($1, NOW(), 1, NOW())
+        ON CONFLICT (rate_key) DO UPDATE
+        SET
+            window_start = CASE
+                WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
+                    THEN NOW()
+                ELSE auth_rate_limits.window_start
+            END,
+            attempts = CASE
+                WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
+                    THEN 1
+                ELSE auth_rate_limits.attempts + 1
+            END,
+            updated_at = NOW()
+        RETURNING attempts
+        "#,
+        vec![key.to_string().into(), window_secs.into()],
+    );
+
+    let row = db
+        .query_one(stmt)
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("auth rate limit upsert returned no row".into()))?;
+    row.try_get("", "attempts")
+}
+
+pub(super) async fn enforce_rate_limit(
+    db: &DatabaseConnection,
     headers: &HeaderMap,
     action: AuthRateLimitAction,
     subject: &str,
 ) -> std::result::Result<(), Box<Response>> {
-    let now = Utc::now();
     let ip = client_ip(headers);
     let key = format!("{}:{subject}:{ip}", action.key_prefix());
-    let mut state = AUTH_RATE_LIMITS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    // Periodic cleanup: always evict stale entries, cap at 1,000
-    if state.len() > 1_000 {
-        state.retain(|_, entry| {
-            now.signed_duration_since(entry.window_start)
-                < Duration::seconds(AUTH_RATE_LIMIT_WINDOW_SECS * 2)
-        });
-    }
+    let attempts = match upsert_attempt(db, &key, AUTH_RATE_LIMIT_WINDOW_SECS).await {
+        Ok(value) => value,
+        Err(error) => {
+            // Fail open to avoid auth outage if migration hasn't been applied yet.
+            tracing::warn!(%error, rate_key = %key, "auth rate limiter unavailable; allowing request");
+            return Ok(());
+        }
+    };
 
-    let entry = state.entry(key).or_insert(RateLimitEntry {
-        window_start: now,
-        attempts: 0,
-    });
-
-    if now.signed_duration_since(entry.window_start)
-        >= Duration::seconds(AUTH_RATE_LIMIT_WINDOW_SECS)
-    {
-        entry.window_start = now;
-        entry.attempts = 0;
-    }
-
-    entry.attempts = entry.attempts.saturating_add(1);
-    let limited = entry.attempts > action.max_attempts();
-    drop(state);
+    let limited = attempts > i64::from(action.max_attempts());
 
     if limited {
         Err(Box::new(rate_limit_response(headers)))

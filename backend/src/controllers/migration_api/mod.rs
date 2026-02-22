@@ -1,4 +1,5 @@
 use axum::{
+    extract::State,
     http::{header, HeaderMap, HeaderValue},
     response::IntoResponse,
     Json,
@@ -31,6 +32,13 @@ struct RootInfoResponse {
 #[derive(Clone, Debug, Serialize)]
 struct HealthResponse {
     status: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OutboxStatusResponse {
+    status: &'static str,
+    metrics: crate::tasks::OutboxStatsSnapshot,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -120,6 +128,39 @@ async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
 
 async fn health() -> Result<Response> {
     Ok(Json(HealthResponse { status: "ok" }).into_response())
+}
+
+fn ops_status_token() -> Option<String> {
+    env_non_empty("OPS_STATUS_TOKEN")
+}
+
+fn ops_token_matches(headers: &HeaderMap) -> bool {
+    let Some(expected) = ops_status_token() else {
+        return false;
+    };
+    headers
+        .get("x-ops-token")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|actual| actual == expected)
+}
+
+async fn outbox_status(State(ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
+    if ops_status_token().is_none() {
+        return Ok((axum::http::StatusCode::NOT_FOUND, "not found").into_response());
+    }
+
+    if !ops_token_matches(&headers) {
+        return Ok((axum::http::StatusCode::UNAUTHORIZED, "unauthorized").into_response());
+    }
+
+    let metrics = crate::tasks::outbox_stats_snapshot(&ctx.db).await?;
+    let status = if metrics.failed_jobs > 0 || metrics.oldest_ready_job_age_seconds > 60 {
+        "degraded"
+    } else {
+        "ok"
+    };
+
+    Ok(Json(OutboxStatusResponse { status, metrics }).into_response())
 }
 
 async fn root() -> Result<Response> {
@@ -219,6 +260,9 @@ fn uploads_routes() -> Routes {
     Routes::new()
         .prefix("/api/v1/uploads")
         .add("/auth-check", get(uploads::auth_check))
+        .add("/presign", post(uploads::file_upload_presign))
+        .add("/complete", post(uploads::file_upload_complete))
+        .add("/{filename}/status", get(uploads::file_status))
         .add("", post(uploads::file_upload))
         .add("/{filename}", get(uploads::file_get))
         .add("/{filename}", delete(uploads::file_delete))
@@ -266,6 +310,13 @@ fn push_gateway_routes() -> Routes {
         .add("/notify", post(push_gateway::notify))
 }
 
+fn ops_routes() -> Routes {
+    Routes::new()
+        .prefix("/api/v1/ops")
+        .add("/outbox/status", get(outbox_status))
+        .layer(cache_layer("no-store"))
+}
+
 pub fn routes() -> Vec<Routes> {
     vec![
         Routes::new()
@@ -284,5 +335,37 @@ pub fn routes() -> Vec<Routes> {
         matrix_session_routes(),
         matrix_room_routes(),
         push_gateway_routes(),
+        ops_routes(),
     ]
+}
+
+pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
+    auth::deliver_otp_email_job(to, code).await;
+}
+
+pub(crate) async fn deliver_matrix_profile_avatar_sync_job(
+    user_pid: &uuid::Uuid,
+    profile_picture_filename: Option<&str>,
+) {
+    matrix::sync_profile_avatar_best_effort(user_pid, profile_picture_filename).await;
+}
+
+pub(crate) async fn deliver_matrix_event_membership_sync_job(
+    db: &sea_orm::DatabaseConnection,
+    event_id: uuid::Uuid,
+    profile_id: uuid::Uuid,
+    leave: bool,
+) -> std::result::Result<(), String> {
+    if leave {
+        matrix::sync_event_membership_after_leave_background(db, event_id, profile_id).await
+    } else {
+        matrix::sync_event_membership_after_attend_background(db, event_id, profile_id).await
+    }
+}
+
+pub(crate) async fn deliver_upload_variants_generation_job(
+    db: &sea_orm::DatabaseConnection,
+    upload_id: uuid::Uuid,
+) -> std::result::Result<(), String> {
+    uploads::generate_upload_variants_job(db, upload_id).await
 }

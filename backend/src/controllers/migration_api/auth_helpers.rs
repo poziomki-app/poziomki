@@ -19,6 +19,7 @@ use crate::models::{
     _entities::users,
     users::{Model as UserModel, RegisterParams},
 };
+use crate::tasks::enqueue_otp_email;
 
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
 
@@ -137,12 +138,10 @@ pub(super) async fn sign_in_success_or_unauthorized(
     if user.email_verified_at.is_none() {
         // Send a fresh OTP so the user can verify
         let code = generate_otp_code();
-        let code_for_email = code.clone();
-        let email_for_send = email.to_owned();
         upsert_otp(db, email, &code).await?;
-        tokio::spawn(async move {
-            send_otp_email(&email_for_send, &code_for_email).await;
-        });
+        if let Err(error) = enqueue_otp_email(db, email, &code).await {
+            tracing::error!(%error, email = %email, "failed to enqueue OTP email for unverified sign in");
+        }
 
         return Ok(error_response(
             axum::http::StatusCode::FORBIDDEN,

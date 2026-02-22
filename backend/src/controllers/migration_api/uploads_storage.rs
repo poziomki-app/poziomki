@@ -1,39 +1,33 @@
-use opendal::{
-    services::{Fs, S3},
-    ErrorKind, Operator,
-};
-use std::{sync::OnceLock, time::Duration};
+use axum::http::{header, HeaderMap, HeaderValue};
+use s3::{creds::Credentials, error::S3Error, Bucket, Region};
+use std::sync::OnceLock;
 use url::Url;
 
-fn is_production_mode() -> bool {
-    std::env::var("NODE_ENV")
-        .map(|value| value.eq_ignore_ascii_case("production"))
-        .unwrap_or(false)
-}
-
-const DEFAULT_UPLOADS_DIR: &str = "../data/uploads";
 const DEFAULT_REGION: &str = "garage";
 const DEFAULT_PRESIGN_EXPIRY_SECS: u64 = 3600;
-
-#[derive(Clone)]
-enum StorageMode {
-    Production,
-    Development,
-}
+const MAX_PRESIGN_EXPIRY_SECS: u32 = 604_800;
 
 #[derive(Clone)]
 struct StorageConfig {
-    operator: Operator,
-    mode: StorageMode,
+    bucket: Box<Bucket>,
     public_url: Option<String>,
     presign_expiry_secs: u64,
 }
 
 static STORAGE: OnceLock<Result<StorageConfig, String>> = OnceLock::new();
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::controllers::migration_api) enum StorageErrorKind {
+    NotFound,
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::controllers::migration_api) struct StorageError {
-    pub(in crate::controllers::migration_api) kind: Option<ErrorKind>,
+    pub(in crate::controllers::migration_api) kind: Option<StorageErrorKind>,
+}
+
+fn storage_error(kind: Option<StorageErrorKind>) -> StorageError {
+    StorageError { kind }
 }
 
 fn parse_bool_env(name: &str, default: bool) -> bool {
@@ -62,69 +56,51 @@ fn parse_presign_expiry_secs() -> u64 {
         .unwrap_or(DEFAULT_PRESIGN_EXPIRY_SECS)
 }
 
-fn build_s3_operator() -> Result<StorageConfig, String> {
+fn presign_expiry_secs_u32(seconds: u64) -> u32 {
+    let bounded = seconds.min(u64::from(MAX_PRESIGN_EXPIRY_SECS));
+    u32::try_from(bounded).unwrap_or(MAX_PRESIGN_EXPIRY_SECS)
+}
+
+fn object_path(filename: &str) -> String {
+    format!("/{filename}")
+}
+
+fn build_bucket() -> Result<StorageConfig, String> {
     let endpoint = env_any(&["GARAGE_S3_ENDPOINT"])
         .ok_or_else(|| "Missing S3 endpoint. Set GARAGE_S3_ENDPOINT.".to_string())?;
-    let bucket = env_any(&["GARAGE_S3_BUCKET"])
+    let bucket_name = env_any(&["GARAGE_S3_BUCKET"])
         .ok_or_else(|| "Missing S3 bucket. Set GARAGE_S3_BUCKET.".to_string())?;
     let access_key = env_any(&["GARAGE_S3_ACCESS_KEY"])
         .ok_or_else(|| "Missing S3 access key. Set GARAGE_S3_ACCESS_KEY.".to_string())?;
     let secret_key = env_any(&["GARAGE_S3_SECRET_KEY"])
         .ok_or_else(|| "Missing S3 secret key. Set GARAGE_S3_SECRET_KEY.".to_string())?;
-    let region = env_any(&["GARAGE_S3_REGION"]).unwrap_or_else(|| DEFAULT_REGION.to_string());
+    let region_name = env_any(&["GARAGE_S3_REGION"]).unwrap_or_else(|| DEFAULT_REGION.to_string());
     let public_url = env_any(&["GARAGE_S3_PUBLIC_URL"]);
     let virtual_host = parse_bool_env("GARAGE_S3_VIRTUAL_HOST_STYLE", false);
 
-    let builder = {
-        let mut base = S3::default()
-            .root("/")
-            .bucket(&bucket)
-            .endpoint(&endpoint)
-            .region(&region)
-            .access_key_id(&access_key)
-            .secret_access_key(&secret_key)
-            .disable_config_load();
-        if virtual_host {
-            base = base.enable_virtual_host_style();
-        }
-        base
+    let region = Region::Custom {
+        region: region_name,
+        endpoint,
+    };
+    let credentials = Credentials::new(Some(&access_key), Some(&secret_key), None, None, None)
+        .map_err(|err| format!("Failed to build S3 credentials: {err}"))?;
+    let bucket = Bucket::new(&bucket_name, region, credentials)
+        .map_err(|err| format!("Failed to build S3 bucket client: {err}"))?;
+    let bucket = if virtual_host {
+        bucket
+    } else {
+        bucket.with_path_style()
     };
 
-    let operator = Operator::new(builder)
-        .map_err(|err| format!("Failed to build S3 operator: {err}"))?
-        .finish();
-
     Ok(StorageConfig {
-        operator,
-        mode: StorageMode::Production,
+        bucket,
         public_url,
         presign_expiry_secs: parse_presign_expiry_secs(),
     })
 }
 
-fn build_fs_operator() -> Result<StorageConfig, String> {
-    let root = std::env::var("UPLOADS_DIR").unwrap_or_else(|_| DEFAULT_UPLOADS_DIR.to_string());
-    std::fs::create_dir_all(&root)
-        .map_err(|err| format!("Failed to create uploads directory '{root}': {err}"))?;
-
-    let operator = Operator::new(Fs::default().root(&root))
-        .map_err(|err| format!("Failed to build filesystem operator: {err}"))?
-        .finish();
-
-    Ok(StorageConfig {
-        operator,
-        mode: StorageMode::Development,
-        public_url: None,
-        presign_expiry_secs: parse_presign_expiry_secs(),
-    })
-}
-
 fn load_storage() -> Result<StorageConfig, String> {
-    if is_production_mode() {
-        build_s3_operator()
-    } else {
-        build_fs_operator()
-    }
+    build_bucket()
 }
 
 fn storage() -> Result<&'static StorageConfig, String> {
@@ -154,81 +130,122 @@ fn rewrite_signed_url(url: &str, public_url: &str) -> String {
     })
 }
 
+fn map_s3_error(err: &S3Error) -> StorageError {
+    match err {
+        S3Error::HttpFailWithBody(404, _) => storage_error(Some(StorageErrorKind::NotFound)),
+        _ => storage_error(None),
+    }
+}
+
+fn ensure_ok_status(status_code: u16) -> Result<(), StorageError> {
+    if (200..300).contains(&status_code) {
+        Ok(())
+    } else if status_code == 404 {
+        Err(storage_error(Some(StorageErrorKind::NotFound)))
+    } else {
+        Err(storage_error(None))
+    }
+}
+
 pub(super) async fn upload(
     filename: &str,
     bytes: &[u8],
     mime_type: &str,
 ) -> Result<(), StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    config
-        .operator
-        .write_with(filename, bytes.to_vec())
-        .content_type(mime_type)
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let response = config
+        .bucket
+        .put_object_with_content_type(object_path(filename), bytes, mime_type)
         .await
-        .map(|_| ())
-        .map_err(|err| StorageError {
-            kind: Some(err.kind()),
-        })
+        .map_err(|err| map_s3_error(&err))?;
+    ensure_ok_status(response.status_code())
 }
 
 pub(in crate::controllers::migration_api) async fn read(
     filename: &str,
 ) -> Result<Vec<u8>, StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    config
-        .operator
-        .read(filename)
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let response = config
+        .bucket
+        .get_object(object_path(filename))
         .await
-        .map(|buffer| buffer.to_vec())
-        .map_err(|err| StorageError {
-            kind: Some(err.kind()),
-        })
+        .map_err(|err| map_s3_error(&err))?;
+    ensure_ok_status(response.status_code())?;
+    Ok(response.to_vec())
 }
 
 pub(in crate::controllers::migration_api) async fn exists(
     filename: &str,
 ) -> Result<bool, StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    match config.operator.stat(filename).await {
-        Ok(_) => Ok(true),
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
-        Err(err) => Err(StorageError {
-            kind: Some(err.kind()),
-        }),
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let (_head, status_code) = config
+        .bucket
+        .head_object(object_path(filename))
+        .await
+        .map_err(|err| map_s3_error(&err))?;
+    if (200..300).contains(&status_code) {
+        return Ok(true);
     }
+    if status_code == 404 {
+        return Ok(false);
+    }
+    Err(storage_error(None))
 }
 
 pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    config
-        .operator
-        .delete(filename)
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let response = config
+        .bucket
+        .delete_object(object_path(filename))
         .await
-        .map_err(|err| StorageError {
-            kind: Some(err.kind()),
-        })
+        .map_err(|err| map_s3_error(&err))?;
+    ensure_ok_status(response.status_code())
 }
 
 pub(in crate::controllers::migration_api) async fn signed_get_url(
     filename: &str,
 ) -> Result<String, StorageError> {
-    let config = storage().map_err(|_message| StorageError { kind: None })?;
-    match config.mode {
-        StorageMode::Development => Ok(format!("/api/v1/uploads/{filename}")),
-        StorageMode::Production => {
-            let signed = config
-                .operator
-                .presign_read(filename, Duration::from_secs(config.presign_expiry_secs))
-                .await
-                .map_err(|err| StorageError {
-                    kind: Some(err.kind()),
-                })?
-                .uri()
-                .to_string();
-            if let Some(public_url) = &config.public_url {
-                return Ok(rewrite_signed_url(&signed, public_url));
-            }
-            Ok(signed)
-        }
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let signed = config
+        .bucket
+        .presign_get(
+            object_path(filename),
+            presign_expiry_secs_u32(config.presign_expiry_secs),
+            None,
+        )
+        .await
+        .map_err(|err| map_s3_error(&err))?;
+    if let Some(public_url) = &config.public_url {
+        return Ok(rewrite_signed_url(&signed, public_url));
     }
+    Ok(signed)
+}
+
+pub(in crate::controllers::migration_api) async fn signed_put_url(
+    filename: &str,
+    mime_type: &str,
+) -> Result<String, StorageError> {
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let mut headers = HeaderMap::new();
+    let content_type = HeaderValue::from_str(mime_type).map_err(|_err| storage_error(None))?;
+    headers.insert(header::CONTENT_TYPE, content_type);
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, max-age=31536000"),
+    );
+
+    let signed = config
+        .bucket
+        .presign_put(
+            object_path(filename),
+            presign_expiry_secs_u32(config.presign_expiry_secs),
+            Some(headers),
+            None,
+        )
+        .await
+        .map_err(|err| map_s3_error(&err))?;
+    if let Some(public_url) = &config.public_url {
+        return Ok(rewrite_signed_url(&signed, public_url));
+    }
+    Ok(signed)
 }

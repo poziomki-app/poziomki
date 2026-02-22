@@ -421,6 +421,52 @@ pub(in crate::controllers::migration_api) struct UploadResponse {
     pub(in crate::controllers::migration_api) standard_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::controllers::migration_api) thumbhash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) processing: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::controllers::migration_api) struct UploadStatusResponse {
+    pub(in crate::controllers::migration_api) filename: String,
+    pub(in crate::controllers::migration_api) url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) thumbnail_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) standard_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::controllers::migration_api) thumbhash: Option<String>,
+    pub(in crate::controllers::migration_api) processing: bool,
+    pub(in crate::controllers::migration_api) has_variants: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::controllers::migration_api) struct DirectUploadPresignBody {
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) context: Option<String>,
+    #[serde(default)]
+    pub(in crate::controllers::migration_api) context_id: Option<String>,
+    #[serde(rename = "type")]
+    pub(in crate::controllers::migration_api) mime_type: String,
+    pub(in crate::controllers::migration_api) size: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::controllers::migration_api) struct DirectUploadCompleteBody {
+    pub(in crate::controllers::migration_api) filename: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::controllers::migration_api) struct DirectUploadPresignResponse {
+    pub(in crate::controllers::migration_api) upload_url: String,
+    pub(in crate::controllers::migration_api) method: &'static str,
+    pub(in crate::controllers::migration_api) filename: String,
+    #[serde(rename = "type")]
+    pub(in crate::controllers::migration_api) mime_type: String,
+    pub(in crate::controllers::migration_api) expires_in: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]

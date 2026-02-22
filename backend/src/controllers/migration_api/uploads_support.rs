@@ -1,9 +1,12 @@
 use axum::http::{HeaderMap, StatusCode};
 use loco_rs::prelude::*;
-use opendal::ErrorKind;
 
 use super::super::{error_response, ErrorSpec};
-use super::{uploads_multipart::HandlerResult, uploads_storage, uploads_storage::StorageError};
+use super::{
+    uploads_multipart::HandlerResult,
+    uploads_storage,
+    uploads_storage::{StorageError, StorageErrorKind},
+};
 
 fn internal_error(headers: &HeaderMap, message: &str) -> Response {
     error_response(
@@ -55,7 +58,7 @@ pub(super) fn forbidden(headers: &HeaderMap, code: &'static str, message: &str) 
 
 fn storage_error_to_response(headers: &HeaderMap, err: &StorageError) -> Response {
     match err.kind {
-        Some(ErrorKind::NotFound) => not_found(headers),
+        Some(StorageErrorKind::NotFound) => not_found(headers),
         _ => internal_error(headers, "Upload storage is unavailable"),
     }
 }
@@ -65,6 +68,16 @@ pub(super) async fn storage_signed_url(
     filename: &str,
 ) -> HandlerResult<String> {
     uploads_storage::signed_get_url(filename)
+        .await
+        .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
+}
+
+pub(super) async fn storage_signed_put_url(
+    headers: &HeaderMap,
+    filename: &str,
+    mime_type: &str,
+) -> HandlerResult<String> {
+    uploads_storage::signed_put_url(filename, mime_type)
         .await
         .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
 }

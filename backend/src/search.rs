@@ -366,7 +366,8 @@ fn cache_map() -> &'static RwLock<HashMap<String, CacheEntry>> {
 }
 
 fn search_cache_enabled() -> bool {
-    std::env::var("SEARCH_CACHE_ENABLED").map_or(true, |value| {
+    // Default off: per-process caches become inconsistent under multi-instance deployments.
+    std::env::var("SEARCH_CACHE_ENABLED").is_ok_and(|value| {
         let normalized = value.trim().to_ascii_lowercase();
         normalized == "1" || normalized == "true" || normalized == "yes"
     })

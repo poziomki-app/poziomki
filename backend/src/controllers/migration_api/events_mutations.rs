@@ -14,8 +14,8 @@ use crate::controllers::migration_api::state::{
     UpdateEventBody,
 };
 use crate::models::_entities::{event_attendees, events, profiles};
+use crate::tasks::enqueue_matrix_event_membership_sync;
 
-use super::super::matrix;
 use super::events_support::{forbidden, load_event, parse_create_dates, require_auth_profile};
 use super::events_tags::{
     maybe_sync_tags, resolve_event_tag_ids, sync_event_tags, upsert_attendee,
@@ -198,7 +198,16 @@ pub(in crate::controllers::migration_api) async fn event_attend(
     };
 
     upsert_attendee(&ctx.db, event_uuid, profile.id, status_str).await?;
-    matrix::sync_event_membership_after_attend(&ctx.db, &headers, &event, &profile).await;
+    if let Err(error) =
+        enqueue_matrix_event_membership_sync(&ctx.db, &event.id, &profile.id, false).await
+    {
+        tracing::warn!(
+            %error,
+            event_id = %event.id,
+            profile_id = %profile.id,
+            "failed to enqueue matrix membership sync after attend"
+        );
+    }
 
     let data = build_event_response(&ctx.db, &event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -236,7 +245,16 @@ pub(in crate::controllers::migration_api) async fn event_leave(
         .exec(&ctx.db)
         .await
         .map_err(|e| loco_rs::Error::Any(e.into()))?;
-    matrix::sync_event_membership_after_leave(&ctx.db, &headers, &event, &profile).await;
+    if let Err(error) =
+        enqueue_matrix_event_membership_sync(&ctx.db, &event.id, &profile.id, true).await
+    {
+        tracing::warn!(
+            %error,
+            event_id = %event.id,
+            profile_id = %profile.id,
+            "failed to enqueue matrix membership sync after leave"
+        );
+    }
 
     let data = build_event_response(&ctx.db, &event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())

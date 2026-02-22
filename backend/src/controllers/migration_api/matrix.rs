@@ -73,22 +73,44 @@ pub(super) async fn resolve_dm_room(
     dm_rooms::resolve_dm_room(state, headers, payload).await
 }
 
-pub(super) async fn sync_event_membership_after_attend(
+pub(super) async fn sync_event_membership_after_attend_background(
     db: &DatabaseConnection,
-    headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
-) {
-    membership::sync_event_membership_after_attend(db, headers, event, profile).await;
+    event_id: Uuid,
+    profile_id: Uuid,
+) -> std::result::Result<(), String> {
+    let event = events::Entity::find_by_id(event_id)
+        .one(db)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("event not found for membership sync: {event_id}"))?;
+    let profile = profiles::Entity::find_by_id(profile_id)
+        .one(db)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("profile not found for membership sync: {profile_id}"))?;
+
+    let headers = HeaderMap::new();
+    membership::sync_event_membership_after_attend_result(db, &headers, &event, &profile).await
 }
 
-pub(super) async fn sync_event_membership_after_leave(
+pub(super) async fn sync_event_membership_after_leave_background(
     db: &DatabaseConnection,
-    headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
-) {
-    membership::sync_event_membership_after_leave(db, headers, event, profile).await;
+    event_id: Uuid,
+    profile_id: Uuid,
+) -> std::result::Result<(), String> {
+    let event = events::Entity::find_by_id(event_id)
+        .one(db)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("event not found for membership leave sync: {event_id}"))?;
+    let profile = profiles::Entity::find_by_id(profile_id)
+        .one(db)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("profile not found for membership leave sync: {profile_id}"))?;
+
+    let headers = HeaderMap::new();
+    membership::sync_event_membership_after_leave_result(db, &headers, &event, &profile).await
 }
 
 pub(super) async fn sync_profile_avatar_best_effort(

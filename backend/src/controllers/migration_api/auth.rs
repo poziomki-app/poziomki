@@ -26,6 +26,7 @@ use super::{
     ErrorSpec,
 };
 use crate::models::_entities::sessions;
+use crate::tasks::enqueue_otp_email;
 
 pub(super) use auth_account::{delete_account, export_data};
 pub(super) use auth_session::get_session;
@@ -36,8 +37,13 @@ pub(super) async fn sign_up(
     Json(payload): Json<SignUpBody>,
 ) -> Result<Response> {
     let normalized_email = normalize_email(&payload.email);
-    if let Err(response) =
-        enforce_rate_limit(&headers, AuthRateLimitAction::SignUp, &normalized_email)
+    if let Err(response) = enforce_rate_limit(
+        &ctx.db,
+        &headers,
+        AuthRateLimitAction::SignUp,
+        &normalized_email,
+    )
+    .await
     {
         return Ok(*response);
     }
@@ -50,14 +56,12 @@ pub(super) async fn sign_up(
     // Generate and send OTP for email verification
     {
         let code = generate_otp_code();
-        let code_for_email = code.clone();
-        let email_for_send = normalized_email.clone();
         upsert_otp(&ctx.db, &normalized_email, &code)
             .await
             .map_err(|e| loco_rs::Error::Any(e.into()))?;
-        tokio::spawn(async move {
-            send_otp_email(&email_for_send, &code_for_email).await;
-        });
+        if let Err(error) = enqueue_otp_email(&ctx.db, &normalized_email, &code).await {
+            tracing::error!(%error, email = %normalized_email, "failed to enqueue OTP email after sign up");
+        }
     }
 
     let data = serde_json::json!({
@@ -72,7 +76,9 @@ pub(super) async fn sign_in(
     Json(payload): Json<SignInBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
-    if let Err(response) = enforce_rate_limit(&headers, AuthRateLimitAction::SignIn, &email) {
+    if let Err(response) =
+        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::SignIn, &email).await
+    {
         return Ok(*response);
     }
 
@@ -97,7 +103,9 @@ pub(super) async fn verify_otp(
     Json(payload): Json<VerifyOtpBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
-    if let Err(response) = enforce_rate_limit(&headers, AuthRateLimitAction::VerifyOtp, &email) {
+    if let Err(response) =
+        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::VerifyOtp, &email).await
+    {
         return Ok(*response);
     }
 
@@ -110,7 +118,9 @@ pub(super) async fn resend_otp(
     Json(payload): Json<ResendOtpBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
-    if let Err(response) = enforce_rate_limit(&headers, AuthRateLimitAction::ResendOtp, &email) {
+    if let Err(response) =
+        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::ResendOtp, &email).await
+    {
         return Ok(*response);
     }
 
@@ -120,18 +130,20 @@ pub(super) async fn resend_otp(
         let in_cooldown = otp_in_cooldown(&ctx.db, &email, OTP_RESEND_COOLDOWN_SECS).await;
         if !in_cooldown {
             let code = generate_otp_code();
-            let code_for_email = code.clone();
-            let email_for_send = email.clone();
             upsert_otp(&ctx.db, &email, &code)
                 .await
                 .map_err(|e| loco_rs::Error::Any(e.into()))?;
-            tokio::spawn(async move {
-                send_otp_email(&email_for_send, &code_for_email).await;
-            });
+            if let Err(error) = enqueue_otp_email(&ctx.db, &email, &code).await {
+                tracing::error!(%error, email = %email, "failed to enqueue OTP email after resend");
+            }
         }
     }
 
     Ok(Json(SuccessResponse { success: true }).into_response())
+}
+
+pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
+    send_otp_email(to, code).await;
 }
 
 pub(super) async fn sign_out(

@@ -6,7 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN cargo build --release --bin poziomki_backend-cli
+RUN cargo build --release --bin poziomki_backend-cli --bin worker
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
@@ -18,6 +18,7 @@ RUN apt-get update \
     && chown appuser:appuser /app
 
 COPY --from=builder /app/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
+COPY --from=builder /app/target/release/worker /usr/local/bin/worker
 COPY --from=builder --chown=appuser:appuser /app/config ./config
 
 USER appuser

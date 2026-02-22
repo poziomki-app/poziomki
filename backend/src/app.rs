@@ -67,6 +67,7 @@ impl Hooks for App {
         AppRoutes::empty().add_routes(controllers::migration_api::routes())
     }
     async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
+        tracing::info!("Custom background workers are run via dedicated worker binary");
         Ok(())
     }
 

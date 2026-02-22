@@ -33,28 +33,34 @@ services:
       - /tmp
       - /run
 
-  synapse:
-    image: matrixdotorg/synapse:latest
+  tuwunel:
+    image: jevolk/tuwunel:v1.5.0
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6167:8008"
+      - "127.0.0.1:6167:6167"
     environment:
-      SYNAPSE_CONFIG_DIR: /data
+      TUWUNEL_SERVER_NAME: "chat.poziomki.app"
+      TUWUNEL_PORT: "6167"
+      TUWUNEL_ADDRESS: "0.0.0.0"
+      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
+      TUWUNEL_ALLOW_REGISTRATION: "true"
+      TUWUNEL_REGISTRATION_TOKEN: "${MATRIX_REGISTRATION_TOKEN:-poziomki-prod-token}"
+      TUWUNEL_ALLOW_FEDERATION: "false"
+      TUWUNEL_ALLOW_LEGACY_MEDIA: "true"
+      TUWUNEL_REQUEST_LEGACY_MEDIA: "true"
+      TUWUNEL_CREATE_ADMIN_ROOM: "true"
+      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
+      TUWUNEL_LOG: "warn"
     volumes:
-      - synapse_data:/data
-      - ./synapse/homeserver.yaml:/data/homeserver.yaml:ro
-      - ./synapse/log.config:/data/log.config:ro
-    healthcheck:
-      test: ["CMD", "curl", "-fSs", "http://localhost:8008/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - tuwunel_data:/var/lib/tuwunel
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     deploy:
       resources:
         limits:
-          memory: 768m
+          memory: 512m
 
   api:
     build:
@@ -64,8 +70,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      synapse:
-        condition: service_healthy
+      tuwunel:
+        condition: service_started
       stalwart:
         condition: service_started
     ports:
@@ -85,7 +91,7 @@ services:
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://synapse:8008}
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
       MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
       MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
       MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
@@ -98,6 +104,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
       SMTP_TLS_NAME: ${SMTP_TLS_NAME:-}
+      OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s
@@ -115,8 +122,68 @@ services:
         limits:
           memory: 512m
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["worker"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tuwunel:
+        condition: service_started
+      stalwart:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      DATABASE_URL: postgres://${POSTGRES_USER:-loco}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-poziomki-rs}
+      JWT_SECRET: ${JWT_SECRET}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
+      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
+      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-gmail.com}
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
+      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
+      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
+      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
+      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
+      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
+      SMTP_ENABLE: ${SMTP_ENABLE:-false}
+      SMTP_HOST: ${SMTP_HOST:-stalwart}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
+      SMTP_TLS_NAME: ${SMTP_TLS_NAME:-}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /tmp/poziomki-outbox-worker-heartbeat && test $(( $(date +%s) - $(cat /tmp/poziomki-outbox-worker-heartbeat) )) -lt 30",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
   stalwart:
-    image: stalwartlabs/stalwart:latest
+    image: stalwartlabs/stalwart:v0.15.5
     restart: unless-stopped
     volumes:
       - stalwart_data:/opt/stalwart
@@ -185,5 +252,5 @@ volumes:
   postgres_data:
   garage_data:
   garage_meta:
-  synapse_data:
+  tuwunel_data:
   stalwart_data:

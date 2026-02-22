@@ -13,21 +13,25 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use base64::Engine;
 use chrono::Utc;
 use loco_rs::{app::AppContext, prelude::*};
-use sea_orm::{ActiveValue, ColumnTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use super::state::{
-    create_upload_filename, is_production_mode, require_auth_db, validate_filename, DataResponse,
-    SuccessResponse, UploadResponse, UploadUrlResponse,
+    allowed_upload_mime, create_upload_filename, is_chat_context, is_production_mode,
+    max_upload_size_bytes, parse_upload_context, require_auth_db, validate_filename, DataResponse,
+    DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
+    SuccessResponse, UploadResponse, UploadStatusResponse, UploadUrlResponse,
 };
 use super::{error_response, ErrorSpec};
 use crate::models::_entities::{profiles, uploads};
+use crate::tasks::enqueue_upload_variants_generation;
 use uploads_multipart::HandlerError;
 use uploads_support::{
-    bad_request, forbidden, not_found, storage_delete, storage_read, storage_signed_url,
-    storage_upload,
+    bad_request, forbidden, not_found, storage_delete, storage_read, storage_signed_put_url,
+    storage_signed_url, storage_upload,
 };
 
 pub(super) struct AuthCheckResponse {
@@ -79,6 +83,12 @@ async fn fallback_variant_urls(
     let fallback = public_upload_url(headers, original_filename).await;
     (Some(fallback.clone()), Some(fallback))
 }
+
+fn encode_thumbhash(raw: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(raw)
+}
+
+const DIRECT_UPLOAD_PRESIGN_EXPIRY_SECS: u64 = 3600;
 
 async fn require_auth_profile(
     db: &DatabaseConnection,
@@ -269,89 +279,42 @@ pub(super) async fn file_upload(
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
-        let thumb_name = uploads_resize::variant_filename(&filename, "thumb");
-        let std_name = uploads_resize::variant_filename(&filename, "std");
         storage_upload(&headers, &filename, &parsed.bytes, &parsed.mime_type).await?;
-
-        // Generate image variants (thumbnail + standard WebP)
-        let variants = uploads_resize::generate_variants(&parsed.bytes, &parsed.mime_type).await;
-
-        let mut thumbhash_bytes: Option<Vec<u8>> = None;
-        let mut thumbhash_b64: Option<String> = None;
-
-        let (has_variants, thumbnail_url, standard_url) = match variants {
-            Ok(v) => {
-                let (thumb_upload, std_upload) = tokio::join!(
-                    storage_upload(&headers, &thumb_name, &v.thumbnail, "image/webp"),
-                    storage_upload(&headers, &std_name, &v.standard, "image/webp")
-                );
-
-                let thumb_ok = thumb_upload.is_ok();
-                let std_ok = std_upload.is_ok();
-
-                let has_variants = thumb_ok && std_ok;
-                thumbhash_bytes = Some(v.thumbhash.clone());
-                thumbhash_b64 = Some(uploads_resize::encode_thumbhash_base64(&v.thumbhash));
-
-                if has_variants {
-                    let thumbnail_url = Some(public_upload_url(&headers, &thumb_name).await);
-                    let standard_url = Some(public_upload_url(&headers, &std_name).await);
-                    (true, thumbnail_url, standard_url)
-                } else {
-                    if thumb_ok {
-                        let _ = uploads_storage::delete(&thumb_name).await;
-                    }
-                    if std_ok {
-                        let _ = uploads_storage::delete(&std_name).await;
-                    }
-                    tracing::warn!(
-                        filename = %filename,
-                        thumb_ok,
-                        std_ok,
-                        "variant upload incomplete; cleaned partial variant files"
-                    );
-                    let (fallback_thumb, fallback_std) =
-                        fallback_variant_urls(&headers, &filename).await;
-                    (false, fallback_thumb, fallback_std)
-                }
-            }
-            Err(err) => {
-                tracing::warn!(
-                    filename = %filename,
-                    error = %err,
-                    "image variant generation failed"
-                );
-                let (fallback_thumb, fallback_std) =
-                    fallback_variant_urls(&headers, &filename).await;
-                (false, fallback_thumb, fallback_std)
-            }
-        };
+        let (thumbnail_url, standard_url) = fallback_variant_urls(&headers, &filename).await;
 
         // Store upload record in DB
         let context_str = format!("{:?}", parsed.context).to_ascii_lowercase();
         let now = Utc::now();
+        let upload_id = Uuid::new_v4();
         let upload = uploads::ActiveModel {
-            id: ActiveValue::Set(Uuid::new_v4()),
+            id: ActiveValue::Set(upload_id),
             filename: ActiveValue::Set(filename.clone()),
             owner_id: ActiveValue::Set(Some(profile.id)),
             context: ActiveValue::Set(context_str),
             context_id: ActiveValue::Set(parsed.context_id),
             mime_type: ActiveValue::Set(parsed.mime_type.clone()),
             deleted: ActiveValue::Set(false),
-            thumbhash: ActiveValue::Set(thumbhash_bytes),
-            has_variants: ActiveValue::Set(has_variants),
+            thumbhash: ActiveValue::Set(None),
+            has_variants: ActiveValue::Set(false),
             created_at: ActiveValue::Set(now.into()),
             updated_at: ActiveValue::Set(now.into()),
         };
         if let Err(error) = upload.insert(&ctx.db).await {
             tracing::warn!(filename = %filename, %error, "failed to insert upload row");
             let _ = uploads_storage::delete(&filename).await;
-            let _ = uploads_storage::delete(&thumb_name).await;
-            let _ = uploads_storage::delete(&std_name).await;
             return Err(internal_upload_error(
                 &headers,
                 "Failed to save upload metadata",
             ));
+        }
+
+        if let Err(error) = enqueue_upload_variants_generation(&ctx.db, &upload_id).await {
+            tracing::warn!(
+                %error,
+                upload_id = %upload_id,
+                filename = %filename,
+                "failed to enqueue upload variants generation"
+            );
         }
 
         let url = public_upload_url(&headers, &filename).await;
@@ -364,7 +327,8 @@ pub(super) async fn file_upload(
                 mime_type: parsed.mime_type,
                 thumbnail_url,
                 standard_url,
-                thumbhash: thumbhash_b64,
+                thumbhash: None,
+                processing: Some(true),
             },
         })
         .into_response())
@@ -372,6 +336,254 @@ pub(super) async fn file_upload(
     .await;
 
     Ok(response.unwrap_or_else(|resp| *resp))
+}
+
+pub(super) async fn file_upload_presign(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<DirectUploadPresignBody>,
+) -> Result<Response> {
+    let response: std::result::Result<Response, HandlerError> = async {
+        if !is_production_mode() {
+            return Err(Box::new(bad_request(
+                &headers,
+                "DIRECT_UPLOAD_UNAVAILABLE",
+                "Direct upload presign is available only in production/Garage mode",
+            )));
+        }
+
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let context = parse_upload_context(payload.context.as_deref()).ok_or_else(|| {
+            Box::new(bad_request(
+                &headers,
+                "VALIDATION_ERROR",
+                "Invalid upload context",
+            )) as HandlerError
+        })?;
+
+        if is_chat_context(context) && payload.context_id.as_deref().is_none_or(str::is_empty) {
+            return Err(Box::new(bad_request(
+                &headers,
+                "MISSING_CONTEXT_ID",
+                "contextId required for chat uploads",
+            )));
+        }
+        if !allowed_upload_mime(&payload.mime_type) {
+            return Err(Box::new(bad_request(
+                &headers,
+                "INVALID_FILE_TYPE",
+                "Allowed: image/jpeg, image/png, image/webp",
+            )));
+        }
+        if payload.size == 0 || payload.size > max_upload_size_bytes() {
+            return Err(Box::new(bad_request(
+                &headers,
+                "FILE_TOO_LARGE",
+                "Max: 10MB",
+            )));
+        }
+
+        let filename = create_upload_filename(&payload.mime_type);
+        let upload_url = storage_signed_put_url(&headers, &filename, &payload.mime_type).await?;
+
+        let context_str = format!("{context:?}").to_ascii_lowercase();
+        let now = Utc::now();
+        let upload = uploads::ActiveModel {
+            id: ActiveValue::Set(Uuid::new_v4()),
+            filename: ActiveValue::Set(filename.clone()),
+            owner_id: ActiveValue::Set(Some(profile.id)),
+            context: ActiveValue::Set(context_str),
+            context_id: ActiveValue::Set(payload.context_id.clone().filter(|s| !s.trim().is_empty())),
+            mime_type: ActiveValue::Set(payload.mime_type.clone()),
+            deleted: ActiveValue::Set(false),
+            thumbhash: ActiveValue::Set(None),
+            has_variants: ActiveValue::Set(false),
+            created_at: ActiveValue::Set(now.into()),
+            updated_at: ActiveValue::Set(now.into()),
+        };
+        upload.insert(&ctx.db).await.map_err(|error| {
+            tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
+            internal_upload_error(&headers, "Failed to save upload metadata")
+        })?;
+
+        Ok(Json(DataResponse {
+            data: DirectUploadPresignResponse {
+                upload_url,
+                method: "PUT",
+                filename,
+                mime_type: payload.mime_type,
+                expires_in: DIRECT_UPLOAD_PRESIGN_EXPIRY_SECS,
+            },
+        })
+        .into_response())
+    }
+    .await;
+
+    Ok(response.unwrap_or_else(|r| *r))
+}
+
+pub(super) async fn file_upload_complete(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<DirectUploadCompleteBody>,
+) -> Result<Response> {
+    let response: std::result::Result<Response, HandlerError> = async {
+        if let Err(message) = validate_filename(&payload.filename) {
+            return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
+        }
+
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let upload = load_owned_upload(&ctx.db, &headers, &payload.filename, profile.id).await?;
+
+        let exists = uploads_storage::exists(&payload.filename)
+            .await
+            .map_err(|_error| {
+                Box::new(error_response(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    &headers,
+                    ErrorSpec {
+                        error: "Upload storage is unavailable".to_string(),
+                        code: "INTERNAL_ERROR",
+                        details: None,
+                    },
+                )) as HandlerError
+            })?;
+        if !exists {
+            return Err(Box::new(not_found(&headers)));
+        }
+
+        if let Err(error) = enqueue_upload_variants_generation(&ctx.db, &upload.id).await {
+            tracing::warn!(
+                %error,
+                upload_id = %upload.id,
+                filename = %upload.filename,
+                "failed to enqueue upload variants generation after direct upload complete"
+            );
+        }
+
+        let url = public_upload_url(&headers, &upload.filename).await;
+        let (thumbnail_url, standard_url) = fallback_variant_urls(&headers, &upload.filename).await;
+
+        Ok(Json(DataResponse {
+            data: UploadResponse {
+                url,
+                filename: upload.filename,
+                size: 0,
+                mime_type: upload.mime_type,
+                thumbnail_url,
+                standard_url,
+                thumbhash: None,
+                processing: Some(true),
+            },
+        })
+        .into_response())
+    }
+    .await;
+
+    Ok(response.unwrap_or_else(|r| *r))
+}
+
+pub(super) async fn file_status(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(filename): Path<String>,
+) -> Result<Response> {
+    let response: std::result::Result<Response, HandlerError> = async {
+        if let Err(message) = validate_filename(&filename) {
+            return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
+        }
+
+        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
+
+        let url = public_upload_url(&headers, &upload.filename).await;
+        let (thumbnail_url, standard_url) = if upload.has_variants {
+            let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
+            let std_name = uploads_resize::variant_filename(&upload.filename, "std");
+            (
+                Some(public_upload_url(&headers, &thumb_name).await),
+                Some(public_upload_url(&headers, &std_name).await),
+            )
+        } else {
+            fallback_variant_urls(&headers, &upload.filename).await
+        };
+        let thumbhash = upload.thumbhash.as_deref().map(encode_thumbhash);
+
+        Ok(Json(DataResponse {
+            data: UploadStatusResponse {
+                filename: upload.filename,
+                url,
+                thumbnail_url,
+                standard_url,
+                thumbhash,
+                processing: !upload.has_variants,
+                has_variants: upload.has_variants,
+            },
+        })
+        .into_response())
+    }
+    .await;
+
+    Ok(response.unwrap_or_else(|r| *r))
+}
+
+pub(crate) async fn generate_upload_variants_job(
+    db: &DatabaseConnection,
+    upload_id: Uuid,
+) -> std::result::Result<(), String> {
+    let Some(upload) = uploads::Entity::find_by_id(upload_id)
+        .one(db)
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Ok(());
+    };
+
+    if upload.deleted || upload.has_variants {
+        return Ok(());
+    }
+
+    let original_bytes = uploads_storage::read(&upload.filename)
+        .await
+        .map_err(|error| format!("read original upload failed: {error:?}"))?;
+
+    let variants = uploads_resize::generate_variants(&original_bytes, &upload.mime_type).await?;
+    let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
+    let std_name = uploads_resize::variant_filename(&upload.filename, "std");
+
+    let (thumb_upload, std_upload) = tokio::join!(
+        uploads_storage::upload(&thumb_name, &variants.thumbnail, "image/webp"),
+        uploads_storage::upload(&std_name, &variants.standard, "image/webp")
+    );
+
+    let thumb_ok = thumb_upload.is_ok();
+    let std_ok = std_upload.is_ok();
+    if !(thumb_ok && std_ok) {
+        if thumb_ok {
+            let _ = uploads_storage::delete(&thumb_name).await;
+        }
+        if std_ok {
+            let _ = uploads_storage::delete(&std_name).await;
+        }
+
+        let thumb_err = thumb_upload.err().map(|e| format!("{e:?}"));
+        let std_err = std_upload.err().map(|e| format!("{e:?}"));
+        return Err(format!(
+            "variant upload incomplete for {}: thumb_ok={} std_ok={} thumb_err={thumb_err:?} std_err={std_err:?}",
+            upload.filename, thumb_ok, std_ok
+        ));
+    }
+
+    let mut active: uploads::ActiveModel = upload.into();
+    active.thumbhash = ActiveValue::Set(Some(variants.thumbhash));
+    active.has_variants = ActiveValue::Set(true);
+    active.updated_at = ActiveValue::Set(Utc::now().into());
+    active
+        .update(db)
+        .await
+        .map_err(|error| format!("update upload variants metadata failed: {error}"))?;
+
+    Ok(())
 }
 
 pub(super) async fn file_delete(

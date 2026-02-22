@@ -1,4 +1,3 @@
-use base64::Engine;
 use fast_image_resize::images::Image;
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 use image::{ImageFormat, ImageReader};
@@ -177,8 +176,4 @@ pub(in crate::controllers::migration_api) fn variant_filename(
         .and_then(|pos| original.get(..pos))
         .unwrap_or(original);
     format!("{stem}_{suffix}.webp")
-}
-
-pub(in crate::controllers::migration_api) fn encode_thumbhash_base64(raw: &[u8]) -> String {
-    base64::engine::general_purpose::STANDARD.encode(raw)
 }

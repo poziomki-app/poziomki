@@ -19,6 +19,7 @@ use crate::controllers::migration_api::{
     ErrorSpec,
 };
 use crate::models::_entities::{profiles, uploads};
+use crate::tasks::enqueue_matrix_profile_avatar_sync;
 
 use super::{
     full_profile_response, not_found_profile, parse_tag_uuids, sync_profile_tags, validation_error,
@@ -205,14 +206,15 @@ pub(in crate::controllers::migration_api) async fn profile_create(
 
     if should_sync_matrix_avatar {
         let user_pid = user.pid;
-        let profile_picture = inserted.profile_picture.clone();
-        tokio::spawn(async move {
-            super::super::matrix::sync_profile_avatar_best_effort(
-                &user_pid,
-                profile_picture.as_deref(),
-            )
-            .await;
-        });
+        if let Err(error) = enqueue_matrix_profile_avatar_sync(
+            &ctx.db,
+            &user_pid,
+            inserted.profile_picture.as_deref(),
+        )
+        .await
+        {
+            tracing::warn!(%error, user_pid = %user_pid, "failed to enqueue matrix avatar sync after profile create");
+        }
     }
 
     let data = full_profile_response(&ctx.db, &inserted, &user.pid).await?;
@@ -384,14 +386,15 @@ pub(in crate::controllers::migration_api) async fn profile_update(
 
     if should_sync_matrix_avatar {
         let user_pid = user.pid;
-        let profile_picture = updated.profile_picture.clone();
-        tokio::spawn(async move {
-            super::super::matrix::sync_profile_avatar_best_effort(
-                &user_pid,
-                profile_picture.as_deref(),
-            )
-            .await;
-        });
+        if let Err(error) = enqueue_matrix_profile_avatar_sync(
+            &ctx.db,
+            &user_pid,
+            updated.profile_picture.as_deref(),
+        )
+        .await
+        {
+            tracing::warn!(%error, user_pid = %user_pid, "failed to enqueue matrix avatar sync after profile update");
+        }
     }
 
     let data = full_profile_response(&ctx.db, &updated, &user.pid).await?;
