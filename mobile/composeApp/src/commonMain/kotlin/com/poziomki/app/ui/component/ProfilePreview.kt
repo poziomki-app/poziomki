@@ -56,25 +56,6 @@ import com.poziomki.app.ui.theme.White
 import com.poziomki.app.util.decodeImageBytes
 import com.poziomki.app.util.resolveImageUrl
 
-private fun parseHexColor(hex: String?): Color? {
-    if (hex.isNullOrBlank()) return null
-    val clean = hex.trimStart('#')
-    if (clean.length != 6) return null
-    return runCatching { Color(("FF$clean").toLong(16).toInt()) }.getOrNull()
-}
-
-private fun blendWithBackground(
-    color: Color,
-    amount: Float,
-): Color {
-    val bg = Background
-    return Color(
-        red = bg.red * (1f - amount) + color.red * amount,
-        green = bg.green * (1f - amount) + color.green * amount,
-        blue = bg.blue * (1f - amount) + color.blue * amount,
-        alpha = 1f,
-    )
-}
 
 sealed class ProfileImage {
     data class Bytes(

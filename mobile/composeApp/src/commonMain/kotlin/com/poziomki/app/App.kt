@@ -6,8 +6,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import coil3.PlatformContext
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.data.sync.SyncEngine
@@ -19,21 +22,39 @@ import com.poziomki.app.ui.theme.PoziomkiTheme
 import com.poziomki.app.util.MxcMediaFetcher
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
+import okio.Path.Companion.toOkioPath
 import org.koin.compose.koinInject
 
 @Composable
 fun App() {
     val engine = koinInject<HttpClientEngine>()
     val matrixClient = koinInject<MatrixClient>()
+    val imageHttpClient = remember(engine) { HttpClient(engine) }
+    val imageLoaderFactory: (PlatformContext) -> ImageLoader =
+        remember(matrixClient, imageHttpClient) {
+            { context: PlatformContext ->
+                ImageLoader
+                    .Builder(context)
+                    .memoryCache {
+                        MemoryCache
+                            .Builder()
+                            .maxSizePercent(context, 0.18)
+                            .build()
+                    }.diskCache {
+                        DiskCache
+                            .Builder()
+                            .directory(context.cacheDir.resolve("coil_images").toOkioPath())
+                            .maxSizeBytes(96L * 1024L * 1024L)
+                            .build()
+                    }
+                    .components {
+                        add(MxcMediaFetcher.Factory(matrixClient))
+                        add(KtorNetworkFetcherFactory(imageHttpClient))
+                    }.build()
+            }
+        }
 
-    setSingletonImageLoaderFactory { context ->
-        ImageLoader
-            .Builder(context)
-            .components {
-                add(MxcMediaFetcher.Factory(matrixClient))
-                add(KtorNetworkFetcherFactory(HttpClient(engine)))
-            }.build()
-    }
+    setSingletonImageLoaderFactory(imageLoaderFactory)
 
     val sessionManager = koinInject<SessionManager>()
     val syncEngine = koinInject<SyncEngine>()
@@ -58,7 +79,10 @@ fun App() {
 
     DisposableEffect(Unit) {
         syncEngine.start()
-        onDispose { syncEngine.stop() }
+        onDispose {
+            syncEngine.stop()
+            imageHttpClient.close()
+        }
     }
 
     PoziomkiTheme {

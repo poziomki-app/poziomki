@@ -3,11 +3,12 @@ package com.poziomki.app.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,124 +18,148 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.ArrowUpRight
-import com.poziomki.app.api.Tag
 import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.MontserratFamily
 import com.poziomki.app.ui.theme.NunitoFamily
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.ui.theme.TextPrimary
 import com.poziomki.app.ui.theme.TextSecondary
+import com.poziomki.app.util.resolveImageUrl
 
 @Composable
 fun ProfileCard(
     name: String,
     program: String?,
     profilePicture: String?,
-    tags: List<Tag>,
-    maxVisibleTags: Int = 2,
+    gradientStart: String? = null,
+    gradientEnd: String? = null,
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val gradientBrush =
-        Brush.linearGradient(
-            colors =
-                listOf(
-                    Color(0xFF161C26),
-                    Color(0xFF080B10),
-                ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-        )
+    val photoSize = 90.dp
+
+    val startColor = parseHexColor(gradientStart)
+    val endColor = parseHexColor(gradientEnd)
+    val hasProfileGradient = startColor != null && endColor != null
+
+    val backgroundBrush =
+        if (hasProfileGradient) {
+            val darkStart = blendWithBackground(startColor!!, 0.18f)
+            val darkEnd = blendWithBackground(endColor!!, 0.18f)
+            Brush.linearGradient(
+                colors = listOf(darkStart, darkEnd),
+                start = Offset(0f, 0f),
+                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(Color(0xFF161C26), Color(0xFF080B10)),
+                start = Offset(0f, 0f),
+                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+            )
+        }
+
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(cardShape)
                 .border(1.dp, Border, cardShape)
-                .background(gradientBrush)
+                .background(backgroundBrush)
                 .clickable(onClick = onClick),
     ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar
-                UserAvatar(
-                    picture = profilePicture,
-                    displayName = name,
-                    size = 80.dp,
-                )
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Content column
-                Column(modifier = Modifier.weight(1f)) {
-                    // Name
-                    Text(
-                        text = name,
-                        fontFamily = MontserratFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 20.sp,
-                        color = TextPrimary,
-                    )
-
-                    // Program
-                    if (program != null) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = program,
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 14.sp,
-                            color = TextSecondary,
+        Row(
+            modifier = Modifier.height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Photo — edge-to-edge left, full card height
+            if (profilePicture != null) {
+                key(profilePicture) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxHeight()
+                                .width(photoSize)
+                                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        brush =
+                                            Brush.horizontalGradient(
+                                                colorStops =
+                                                    arrayOf(
+                                                        0f to Color.Black,
+                                                        0.6f to Color.Black,
+                                                        1f to Color.Transparent,
+                                                    ),
+                                            ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                },
+                    ) {
+                        AsyncImage(
+                            model = resolveImageUrl(profilePicture),
+                            contentDescription = null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
                         )
                     }
+                }
+            } else {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    UserAvatar(
+                        picture = null,
+                        displayName = name,
+                        size = photoSize - 32.dp,
+                    )
+                }
+            }
 
-                    // Tags
-                    if (tags.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            tags.take(maxVisibleTags).forEach { tag ->
-                                Text(
-                                    text = tag.name.lowercase(),
-                                    fontFamily = NunitoFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    color = TextSecondary,
-                                    modifier =
-                                        Modifier
-                                            .border(
-                                                1.dp,
-                                                Border,
-                                                RoundedCornerShape(50),
-                                            ).padding(horizontal = 10.dp, vertical = 4.dp),
-                                )
-                            }
-                            val overflow = tags.size - maxVisibleTags
-                            if (overflow > 0) {
-                                Text(
-                                    text = "+$overflow",
-                                    fontFamily = NunitoFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    color = TextMuted,
-                                )
-                            }
-                        }
-                    }
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Content column
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(vertical = 16.dp),
+            ) {
+                Text(
+                    text = name,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp,
+                    color = TextPrimary,
+                )
+
+                if (program != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = program,
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = TextSecondary,
+                    )
                 }
             }
 
@@ -144,8 +169,9 @@ fun ProfileCard(
                 contentDescription = "View profile",
                 modifier =
                     Modifier
+                        .padding(top = 12.dp, end = 12.dp)
                         .size(20.dp)
-                        .align(Alignment.TopEnd),
+                        .align(Alignment.Top),
                 tint = TextMuted,
             )
         }

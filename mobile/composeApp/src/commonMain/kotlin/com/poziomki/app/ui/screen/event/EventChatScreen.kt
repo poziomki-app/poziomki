@@ -66,7 +66,15 @@ fun EventChatScreen(
 
             else -> {
                 val event = requireNotNull(eventState.event)
+                EventChatHeader(
+                    event = event,
+                    onBack = onBack,
+                    onNavigateToProfile = onNavigateToProfile,
+                    onJoin = eventDetailViewModel::attendEvent,
+                    onLeave = eventDetailViewModel::leaveEvent,
+                )
                 ChatContent(
+                    modifier = Modifier.weight(1f),
                     state = chatState,
                     timelineListState = timelineListState,
                     onDraftChanged = chatViewModel::onDraftChanged,
@@ -86,15 +94,6 @@ fun EventChatScreen(
                     onNavigateToProfile = onNavigateToProfile,
                     resolveDisplayNames = chatViewModel::resolveDisplayNames,
                     avatarOverrides = avatarOverrides,
-                    headerContent = {
-                        EventChatHeader(
-                            event = event,
-                            onBack = onBack,
-                            onNavigateToProfile = onNavigateToProfile,
-                            onJoin = eventDetailViewModel::attendEvent,
-                            onLeave = eventDetailViewModel::leaveEvent,
-                        )
-                    },
                 )
             }
         }

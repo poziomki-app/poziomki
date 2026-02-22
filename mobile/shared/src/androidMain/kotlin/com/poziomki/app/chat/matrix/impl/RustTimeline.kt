@@ -369,7 +369,7 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
                     MatrixReaction(
                         emoji = reaction.key,
                         count = reaction.senders.size,
-                        reactedByMe = reaction.senders.any { it.senderId == ownUserId },
+                        reactedByMe = reaction.senders.any { sender -> sender.senderId.sameMatrixUser(ownUserId) },
                         senders =
                             reaction.senders.map { sender ->
                                 MatrixReactionSender(
@@ -405,16 +405,20 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         senderId = event.sender,
         senderDisplayName = senderDisplayName,
         senderAvatarUrl = senderAvatarUrl,
-        isMine = event.isOwn,
+        // Prefer sender id matching over SDK ownership flags to avoid wrong-side bubbles
+        // when the local SDK mislabels remote events in encrypted/direct timelines.
+        isMine = event.sender.sameMatrixUser(ownUserId) || (event.sender.isBlank() && event.isOwn),
         body = messageBody,
         timestampMillis = event.timestamp.toLong(),
         inReplyTo = inReplyTo,
         reactions = reactions,
         isEditable = event.isEditable,
-        readByCount = event.readReceipts.keys.count { it != ownUserId },
+        readByCount = event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) },
         canReply = event.canBeRepliedTo,
     )
 }
+
+private fun String.sameMatrixUser(other: String): Boolean = trim().equals(other.trim(), ignoreCase = true)
 
 private fun extractReplyDetails(content: TimelineItemContent): MatrixReplyDetails? {
     val msgLike = content as? TimelineItemContent.MsgLike ?: return null

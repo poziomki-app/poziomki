@@ -32,14 +32,17 @@ import org.matrix.rustcomponents.sdk.CreateRoomParameters
 import org.matrix.rustcomponents.sdk.HttpPusherData
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.Membership
+import org.matrix.rustcomponents.sdk.MembershipState
 import org.matrix.rustcomponents.sdk.PushFormat
 import org.matrix.rustcomponents.sdk.PusherIdentifiers
 import org.matrix.rustcomponents.sdk.PusherKind
 import org.matrix.rustcomponents.sdk.Room
+import org.matrix.rustcomponents.sdk.RoomHero
 import org.matrix.rustcomponents.sdk.RoomListDynamicEntriesController
 import org.matrix.rustcomponents.sdk.RoomListEntriesListener
 import org.matrix.rustcomponents.sdk.RoomListEntriesUpdate
 import org.matrix.rustcomponents.sdk.RoomListEntriesWithDynamicAdaptersResult
+import org.matrix.rustcomponents.sdk.RoomMember
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
@@ -67,6 +70,7 @@ class RustMatrixClient(
     private var client: org.matrix.rustcomponents.sdk.Client? = null
     private var syncService: org.matrix.rustcomponents.sdk.SyncService? = null
     private var roomListSubscription: RoomListSubscription? = null
+    private var activeAppUserId: String? = null
 
     private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
     private var cachedConfig: MatrixConfigData? = null
@@ -79,8 +83,14 @@ class RustMatrixClient(
 
     override suspend fun ensureStarted(): Result<Unit> =
         startStopMutex.withLock {
-            if (client != null && state.value is MatrixClientState.Ready) {
+            val currentAppUserId = sessionManager.userId.first()
+            if (client != null && state.value is MatrixClientState.Ready && activeAppUserId == currentAppUserId) {
                 return@withLock Result.success(Unit)
+            }
+            if (client != null && activeAppUserId != currentAppUserId) {
+                cleanupInternal()
+                _rooms.value = emptyList()
+                _state.value = MatrixClientState.Idle
             }
 
             _state.value = MatrixClientState.Connecting
@@ -223,6 +233,7 @@ class RustMatrixClient(
             attemptConnect()
 
             if (_state.value is MatrixClientState.Ready) {
+                activeAppUserId = currentAppUserId
                 syncDisplayName()
                 registerPusherIfConfigured()
                 Result.success(Unit)
@@ -409,23 +420,38 @@ class RustMatrixClient(
                     runCatching {
                         val info = room.roomInfo()
                         val latest = room.latestEvent()
-                        val directHero = info.heroes.firstOrNull() ?: room.heroes().firstOrNull()
+                        val ownUserId = room.ownUserId()
+                        val directPeer =
+                            if (info.isDirect) {
+                                resolveDirectPeer(room, ownUserId)
+                            } else {
+                                null
+                            }
+                        val directHero =
+                            if (info.isDirect) {
+                                pickDirectHeroCandidate(
+                                    ownUserId = ownUserId,
+                                    heroes = info.heroes + room.heroes(),
+                                    preferredUserId = directPeer?.userId,
+                                )
+                            } else {
+                                null
+                            }
 
                         val heroUserId =
                             if (info.isDirect) {
-                                directHero?.userId
+                                directPeer?.userId ?: directHero?.userId
                             } else {
                                 null
                             }
 
                         val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
                         var resolvedAvatarUrl =
-                            info.avatarUrl
-                                ?: if (info.isDirect) {
-                                    directHero?.avatarUrl
-                                } else {
-                                    null
-                                }
+                            if (info.isDirect) {
+                                directPeer?.avatarUrl ?: directHero?.avatarUrl ?: info.avatarUrl
+                            } else {
+                                info.avatarUrl
+                            }
                                 ?: normalizedDirectUserId?.let { normalized ->
                                     synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId[normalized] }
                                 }
@@ -444,7 +470,18 @@ class RustMatrixClient(
 
                         MatrixRoomSummary(
                             roomId = info.id,
-                            displayName = info.displayName ?: directHero?.displayName ?: room.displayName() ?: info.id,
+                            displayName =
+                                if (info.isDirect) {
+                                    directPeer?.displayName
+                                        ?: directHero?.displayName
+                                        ?: info.displayName
+                                        ?: room.displayName()
+                                        ?: info.id
+                                } else {
+                                    info.displayName
+                                        ?: room.displayName()
+                                        ?: info.id
+                                },
                             avatarUrl = resolvedAvatarUrl,
                             isDirect = info.isDirect,
                             directUserId = heroUserId,
@@ -561,6 +598,7 @@ class RustMatrixClient(
 
         client?.close()
         client = null
+        activeAppUserId = null
     }
 
     private suspend fun matrixStoreNamespace(): String =
@@ -784,3 +822,64 @@ private fun TimelineItemContent.toPreviewText(): String? =
             null
         }
     }
+
+private data class DirectPeerCandidate(
+    val userId: String,
+    val displayName: String?,
+    val avatarUrl: String?,
+)
+
+private suspend fun resolveDirectPeer(
+    room: Room,
+    ownUserId: String,
+): DirectPeerCandidate? {
+    val members = runCatching { room.membersNoSync() }.getOrElse { room.members() }
+    return try {
+        val others = mutableListOf<RoomMember>()
+        while (true) {
+            val chunk = members.nextChunk(64u) ?: break
+            others +=
+                chunk.filter { member ->
+                    !member.userId.sameMatrixUser(ownUserId) &&
+                        when (member.membership) {
+                            MembershipState.Join,
+                            MembershipState.Invite,
+                            MembershipState.Knock,
+                            -> true
+
+                            else -> false
+                        }
+                }
+        }
+
+        val preferred =
+            others.firstOrNull { it.membership == MembershipState.Join }
+                ?: others.firstOrNull { it.membership == MembershipState.Invite }
+                ?: others.firstOrNull()
+                ?: return null
+
+        DirectPeerCandidate(
+            userId = preferred.userId,
+            displayName = preferred.displayName,
+            avatarUrl = preferred.avatarUrl,
+        )
+    } finally {
+        members.close()
+    }
+}
+
+private fun pickDirectHeroCandidate(
+    ownUserId: String,
+    heroes: List<RoomHero>,
+    preferredUserId: String?,
+): RoomHero? {
+    val distinctHeroes =
+        heroes
+            .distinctBy { it.userId.trim().lowercase() }
+            .filterNot { it.userId.sameMatrixUser(ownUserId) }
+    return preferredUserId?.let { preferred ->
+        distinctHeroes.firstOrNull { it.userId.sameMatrixUser(preferred) }
+    } ?: distinctHeroes.firstOrNull()
+}
+
+private fun String.sameMatrixUser(other: String): Boolean = trim().equals(other.trim(), ignoreCase = true)

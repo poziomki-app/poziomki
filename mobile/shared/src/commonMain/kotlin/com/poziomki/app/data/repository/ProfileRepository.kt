@@ -111,7 +111,8 @@ class ProfileRepository(
             }
             when (val result = api.getProfileFull(id)) {
                 is ApiResult.Success -> {
-                    upsertProfile(result.data.toProfile(), isOwn = false)
+                    val existingIsOwn = db.profileQueries.selectById(id).executeAsOneOrNull()?.is_own == 1L
+                    upsertProfile(result.data.toProfile(), isOwn = existingIsOwn)
                     upsertProfileTags(result.data.id, result.data.tags)
                     true
                 }
@@ -228,23 +229,28 @@ class ProfileRepository(
         isOwn: Boolean,
     ) {
         val now = Clock.System.now().toEpochMilliseconds()
-        db.profileQueries.upsert(
-            id = profile.id,
-            user_id = profile.userId,
-            name = profile.name,
-            bio = profile.bio,
-            age = profile.age.toLong(),
-            profile_picture = profile.profilePicture,
-            images_json = json.encodeToString(profile.images),
-            program = profile.program,
-            gradient_start = profile.gradientStart,
-            gradient_end = profile.gradientEnd,
-            is_own = if (isOwn) 1L else 0L,
-            created_at = profile.createdAt,
-            updated_at = profile.updatedAt,
-            cached_at = now,
-            is_dirty = 0L,
-        )
+        db.transaction {
+            if (isOwn) {
+                db.profileQueries.clearOwnExcept(profile.id)
+            }
+            db.profileQueries.upsert(
+                id = profile.id,
+                user_id = profile.userId,
+                name = profile.name,
+                bio = profile.bio,
+                age = profile.age.toLong(),
+                profile_picture = profile.profilePicture,
+                images_json = json.encodeToString(profile.images),
+                program = profile.program,
+                gradient_start = profile.gradientStart,
+                gradient_end = profile.gradientEnd,
+                is_own = if (isOwn) 1L else 0L,
+                created_at = profile.createdAt,
+                updated_at = profile.updatedAt,
+                cached_at = now,
+                is_dirty = 0L,
+            )
+        }
     }
 
     private fun upsertProfileTags(

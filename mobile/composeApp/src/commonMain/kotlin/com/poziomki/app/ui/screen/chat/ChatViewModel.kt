@@ -251,7 +251,7 @@ class ChatViewModel(
 
     fun markAsRead() {
         viewModelScope.launch {
-            activeTimeline?.markAsRead()
+            runCatching { activeTimeline?.markAsRead() }
         }
     }
 
@@ -425,13 +425,20 @@ class ChatViewModel(
                 room.displayName.collectLatest { name ->
                     _uiState.update { current ->
                         val summary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
+                        val resolvedName =
+                            when {
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
+                                name.isNotBlank() -> name
+                                !summary?.displayName.isNullOrBlank() -> summary?.displayName
+                                else -> current.roomDisplayName
+                            }.orEmpty()
                         current.copy(
-                            roomDisplayName = name,
+                            roomDisplayName = resolvedName,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
                                     overrides = current.avatarOverrides,
-                                    roomDisplayName = name,
+                                    roomDisplayName = resolvedName,
                                     currentAvatar = current.roomAvatarUrl,
                                 ),
                         )
@@ -446,12 +453,20 @@ class ChatViewModel(
                     val summary = summaries.firstOrNull { it.roomId == room.roomId }
                     activeDirectUserId = summary?.directUserId ?: activeDirectUserId
                     _uiState.update { current ->
+                        val resolvedName =
+                            when {
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
+                                current.roomDisplayName.isNotBlank() -> current.roomDisplayName
+                                !summary?.displayName.isNullOrBlank() -> summary?.displayName
+                                else -> current.roomDisplayName
+                            }.orEmpty()
                         current.copy(
+                            roomDisplayName = resolvedName,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
                                     overrides = current.avatarOverrides,
-                                    roomDisplayName = current.roomDisplayName,
+                                    roomDisplayName = resolvedName,
                                     currentAvatar = current.roomAvatarUrl,
                                 ),
                         )
@@ -476,7 +491,7 @@ class ChatViewModel(
             }
 
         timelineController.enterLive()
-        room.markAsRead()
+        runCatching { room.markAsRead() }
     }
 
     private fun scheduleTypingStart() {

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -64,7 +63,7 @@ fun EventChatHeader(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f),
+                .aspectRatio(16f / 10f),
     ) {
         val coverImage = event.coverImage
         if (coverImage != null) {
@@ -143,14 +142,6 @@ fun EventChatHeader(
                         )
                     }
                 }
-            }
-            if (event.isAttending) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = "Dołączono",
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp),
-                )
             }
         }
 

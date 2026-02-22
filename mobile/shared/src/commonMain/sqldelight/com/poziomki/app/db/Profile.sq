@@ -20,7 +20,11 @@ selectOwn:
 SELECT *
 FROM profile
 WHERE is_own = 1
+ORDER BY cached_at DESC
 LIMIT 1;
+
+clearOwnExcept:
+UPDATE profile SET is_own = 0 WHERE is_own = 1 AND id != ?;
 
 selectById:
 SELECT *

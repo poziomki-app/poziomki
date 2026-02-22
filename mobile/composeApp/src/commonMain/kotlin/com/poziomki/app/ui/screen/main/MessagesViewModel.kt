@@ -30,6 +30,12 @@ class MessagesViewModel(
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
 
+    private val roomSortComparator: Comparator<MatrixRoomSummary> =
+        compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
+            .thenByDescending { it.unreadCount }
+            .thenBy { stableRoomKey(it) }
+            .thenBy { it.roomId }
+
     init {
         observeClientState()
         observeRooms()
@@ -227,10 +233,4 @@ class MessagesViewModel(
 
         return candidate.roomId < current.roomId
     }
-
-    private val roomSortComparator: Comparator<MatrixRoomSummary> =
-        compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
-            .thenByDescending { it.unreadCount }
-            .thenBy { stableRoomKey(it) }
-            .thenBy { it.roomId }
 }

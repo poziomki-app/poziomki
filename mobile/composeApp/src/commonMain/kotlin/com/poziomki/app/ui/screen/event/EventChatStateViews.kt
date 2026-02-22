@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -18,7 +20,11 @@ import com.poziomki.app.ui.theme.TextSecondary
 @Composable
 fun EventChatLoadingView() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(color = Primary)
@@ -28,7 +34,11 @@ fun EventChatLoadingView() {
 @Composable
 fun EventChatNotFoundView() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         Text("Nie znaleziono wydarzenia", color = TextSecondary)
@@ -38,7 +48,11 @@ fun EventChatNotFoundView() {
 @Composable
 fun EventChatJoinRequiredView(onJoin: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

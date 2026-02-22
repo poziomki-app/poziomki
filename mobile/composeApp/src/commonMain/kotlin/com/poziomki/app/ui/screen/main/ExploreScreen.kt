@@ -140,14 +140,6 @@ fun ExploreScreen(
                                             name = profile.name,
                                             program = profile.program,
                                             profilePicture = profile.profilePicture,
-                                            tags =
-                                                profile.tags.map { tagName ->
-                                                    com.poziomki.app.api.Tag(
-                                                        id = "",
-                                                        name = tagName,
-                                                        scope = "interest",
-                                                    )
-                                                },
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
                                     }
@@ -230,7 +222,8 @@ fun ExploreScreen(
                                         name = profile.name,
                                         program = profile.program,
                                         profilePicture = profile.profilePicture,
-                                        tags = profile.tags,
+                                        gradientStart = profile.gradientStart,
+                                        gradientEnd = profile.gradientEnd,
                                         onClick = { onNavigateToProfile(profile.id) },
                                     )
                                 }

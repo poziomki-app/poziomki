@@ -3,6 +3,7 @@ package com.poziomki.app.ui.component
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,8 +21,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
-import coil3.compose.SubcomposeAsyncImageContent
+import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.User
@@ -29,12 +29,15 @@ import com.poziomki.app.ui.theme.Border
 import com.poziomki.app.ui.theme.TextMuted
 import com.poziomki.app.util.isImageUrl
 import com.poziomki.app.util.resolveImageUrl
+import kotlinx.coroutines.delay
 
 /**
  * Returns true when the string looks like an emoji (no ASCII letters or digits).
  */
 private fun isEmoji(value: String): Boolean =
     value.length <= 6 && value.none { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '.' }
+
+private const val AVATAR_NULL_FALLBACK_DELAY_MS = 250L
 
 @Composable
 fun UserAvatar(
@@ -53,7 +56,21 @@ fun UserAvatar(
         fallbackPicture
             ?.takeIf(::isImageUrl)
             ?.takeUnless { it == primaryImage }
-    var activeImage by remember(primaryImage, secondaryImage) { mutableStateOf(primaryImage ?: secondaryImage) }
+    var activeImage by remember(displayName) { mutableStateOf(primaryImage ?: secondaryImage) }
+    val preferredImage = primaryImage ?: secondaryImage
+    LaunchedEffect(preferredImage, displayName) {
+        if (preferredImage != null) {
+            activeImage = preferredImage
+        } else {
+            // Avoid photo -> placeholder -> photo flashes when refresh pipelines emit
+            // a transient null avatar before the same URL arrives again.
+            delay(AVATAR_NULL_FALLBACK_DELAY_MS)
+            if (primaryImage == null && secondaryImage == null) {
+                activeImage = null
+            }
+        }
+    }
+    val resolvedActiveImage = remember(activeImage) { activeImage?.let(::resolveImageUrl) }
 
     Surface(
         modifier = modifier.size(size),
@@ -62,8 +79,8 @@ fun UserAvatar(
     ) {
         when {
             activeImage != null -> {
-                SubcomposeAsyncImage(
-                    model = resolveImageUrl(activeImage.orEmpty()),
+                AsyncImage(
+                    model = resolvedActiveImage,
                     contentDescription = displayName,
                     modifier =
                         Modifier
@@ -75,9 +92,9 @@ fun UserAvatar(
                             activeImage = secondaryImage
                         }
                     },
-                    loading = { FallbackUserIcon(iconSize, iconTint) },
-                    error = { FallbackUserIcon(iconSize, iconTint) },
-                    success = { SubcomposeAsyncImageContent() },
+                    error = null,
+                    placeholder = null,
+                    fallback = null,
                 )
             }
 

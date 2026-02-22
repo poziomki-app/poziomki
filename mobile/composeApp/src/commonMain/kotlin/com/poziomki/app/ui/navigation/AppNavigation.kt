@@ -115,6 +115,7 @@ fun AppNavigation(
     var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
     LaunchedEffect(isLoggedIn) {
         if (wasLoggedIn && !isLoggedIn) {
+            matrixClient.stop()
             navController.navigate(Route.AuthGraph) {
                 popUpTo(0) { inclusive = true }
             }
