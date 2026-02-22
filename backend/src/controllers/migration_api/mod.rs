@@ -6,10 +6,6 @@ use axum::{
     Json, Router,
 };
 #[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
 use serde::Serialize;
 use tower_http::set_header::SetResponseHeaderLayer;
 use uuid::Uuid;

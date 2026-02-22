@@ -13,17 +13,22 @@ static POOL: OnceLock<DbPool> = OnceLock::new();
 
 /// Initialize the global Diesel connection pool.
 ///
+/// Idempotent: if the pool is already initialised, this is a no-op.
+///
 /// # Errors
-/// Returns an error string if the pool has already been initialised or if pool
-/// construction fails.
+/// Returns an error string if pool construction fails.
 pub fn init_pool(database_url: &str) -> Result<(), String> {
+    if POOL.get().is_some() {
+        return Ok(());
+    }
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
     let pool = Pool::builder(manager)
         .max_size(10)
         .build()
         .map_err(|e| format!("Diesel pool init failed: {e}"))?;
-    POOL.set(pool)
-        .map_err(|_| "Diesel pool already initialized".to_string())
+    // Another thread may have raced us — that's fine, ignore the error.
+    let _ = POOL.set(pool);
+    Ok(())
 }
 
 /// Obtain a connection from the global pool.
