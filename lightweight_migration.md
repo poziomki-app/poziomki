@@ -22,18 +22,19 @@ Constraints:
 
 This is **not** a greenfield rewrite:
 
-- Loco usage is spread across many files (`~41` files reference `loco_rs` in `backend/src`)
-- Route handlers are already mostly Axum-style handlers, but routing registration uses Loco wrappers
-- `OpenDAL` is actively used for Garage S3 + local FS fallback in uploads storage
-- Search is already SQL-heavy and Postgres-optimized (`tsvector`, `pg_trgm`, `earthdistance`)
+- Backend runtime is now **Axum + Diesel (`diesel-async`)**
+- `Loco`, `SeaORM`, `Ruma` (backend), and `OpenDAL` have been removed from backend runtime/code
+- Uploads are Garage-only (`rust-s3`) with direct upload flow + async variant generation
+- Search remains SQL-heavy and Postgres-optimized (`tsvector`, `pg_trgm`, `earthdistance`)
+- Outbox + worker split is implemented (OTP / Matrix side effects / upload variants)
 
 Key touchpoints:
 
-- Loco bootstrap/hooks: `backend/src/app.rs`, `backend/src/bin/main.rs`
-- Loco route wrapper: `backend/src/controllers/migration_api/mod.rs`
-- Loco auth/hash/jwt coupling: `backend/src/models/users.rs`
-- OpenDAL storage adapter: `backend/src/controllers/migration_api/uploads_storage.rs`
-- Upload endpoints using storage adapter: `backend/src/controllers/migration_api/uploads_support.rs`, `backend/src/controllers/migration_api/uploads.rs`
+- Axum bootstrap + worker bootstrap: `backend/src/app.rs`, `backend/src/bin/main.rs`, `backend/src/bin/worker.rs`
+- Diesel pool/schema/models: `backend/src/db/mod.rs`, `backend/src/db/schema.rs`, `backend/src/db/models/*`
+- Garage storage adapter (`rust-s3`): `backend/src/controllers/migration_api/uploads_storage.rs`
+- Upload endpoints + direct upload flow: `backend/src/controllers/migration_api/uploads_support.rs`, `backend/src/controllers/migration_api/uploads.rs`
+- Outbox worker + stats/heartbeat: `backend/src/tasks/outbox.rs`
 - Search SQL (already custom/raw): `backend/src/search.rs`
 
 ## Target Architecture (recommended)
@@ -42,7 +43,7 @@ Key touchpoints:
 - Runtime: `tokio`
 - DB runtime: `diesel` + `diesel-async` + pool (`deadpool` feature)
 - DB migrations: `diesel_migrations` via `diesel-async` `migrations` feature (or plain SQL + external runner)
-- Storage: Garage-only S3 adapter (`s3` crate preferred initial candidate)
+- Storage: Garage-only S3 adapter (`rust-s3` now; keep adapter boundary so client can change later)
 - Auth/JWT/passwords (replace Loco helpers): `jsonwebtoken`, `argon2`, `password-hash`
 - Errors: `thiserror` + app-specific `AppError`
 
@@ -82,9 +83,9 @@ These are additive and should be designed in during the rewrite:
 |---|---|---:|---:|
 | Web Framework | **Axum 0.8.8** (drop Loco) | Minimal | Thin layer on hyper |
 | ORM | **Diesel 2.3 + diesel-async 0.7** | 96 unique | 917K |
-| S3 Client | **s3 crate** (Garage-only) | Minimal | — |
+| S3 Client | **rust-s3** (keep current, Garage-only) | Minimal enough | — |
 | HTTP Client | reqwest (keep) | — | — |
-| DateTime | chrono (keep for DB) + **jiff 0.2** (business logic) | — | — |
+| DateTime | chrono (keep) | — | — |
 | Matrix | **Remove backend `ruma` completely** | — | Backend stays `reqwest + serde`; chat protocol lives in Tuwunel + Kotlin SDK |
 | Serialization | serde (keep, irreplaceable for JSON) | — | — |
 | Async Runtime | Tokio (keep, ecosystem lock-in) | — | — |
@@ -196,22 +197,18 @@ SeaORM is three abstraction layers deep: your code -> SeaORM -> SeaQuery -> SQLx
 
 ### Storage client options (Garage-only S3)
 
-Recommended initial replacement for OpenDAL:
+**Keep `rust-s3` 0.37.x** (already migrated, already working with Garage):
 
-- `s3` crate (`0.1.15`) because it supports:
-  - async client
-  - put/get/delete
-  - presigned URLs
-  - feature-gated small surface
+- 6.3M downloads, 644 GitHub stars, 95 contributors, maintained since 2016
+- Batteries-included: put/get/delete/head/presign/multipart/streaming all built-in
+- Works with Garage (AWS Signature V4, path-style URLs)
+- No reason to introduce a new storage client during the framework/ORM migration
 
-Alternative:
+Not recommended:
 
-- `rusty-s3` (`0.8.1`) if you only want presigning and are happy using `reqwest` for object ops manually
-
-Not recommended as first replacement in this rewrite:
-
-- `rust-s3` (works, but broader feature surface and maintenance profile is less ideal for a "light, focused rewrite")
-- `aws-sdk-s3` — recently broke S3-compatible services (Minio, Garage, etc.) with mandatory integrity checksums
+- `s3` crate (`0.1.x`) — **do not use.** 2 GitHub stars, 2 contributors, 20K total downloads, weeks old, uses obscure `reqx` HTTP transport. Zero battle-testing, contradicts "proven and stable" principle
+- `rusty-s3` (`0.8.1`) — good sans-IO design (`forbid(unsafe_code)`, 11 deps, 3.5K SLoC), but requires writing manual reqwest boilerplate for every S3 operation. Future lightweight option if `rust-s3` becomes problematic; not worth switching during this migration
+- `aws-sdk-s3` — recently broke S3-compatible services (MinIO, Garage, etc.) with mandatory integrity checksums
 
 ## Diesel-Specific Notes
 
@@ -390,10 +387,11 @@ OpenDAL is a multi-backend storage abstraction (S3, GCS, Azure, local FS, etc.).
 
 - `read`, `write`, `stat`, `delete`, `presign` — narrow subset
 
-### Target: `s3` crate (0.1.15)
+### Target: keep `rust-s3` first, revisit alternatives later
 
-- Async client, put/get/delete, presigned URLs, feature-gated small surface
-- Alternative: `rusty-s3` if you only need presigning (sans-IO, BYO HTTP client)
+- Current `rust-s3` 0.37.x implementation already covers put/get/delete/presign and is deployed here — keep it
+- Do NOT switch to `s3` crate (0.1.x) — too new, unproven (2 stars, 20K downloads, weeks old)
+- Future lightweight option: `rusty-s3` 0.8.x (sans-IO, 11 deps, `forbid(unsafe_code)`) if you later want to eliminate `rust-s3` and handle HTTP manually
 - Avoid `aws-sdk-s3` — recently broke S3-compatible services with mandatory integrity checksums
 
 Scalability additions for storage path:
@@ -432,7 +430,7 @@ Recommended implementation path:
 1. Garage-only config loader
    - remove local FS fallback (`Fs`) and `NODE_ENV` storage branching to force Garage parity everywhere
    - require `GARAGE_S3_*` in local dev/staging/prod
-2. `s3` crate client init
+2. `rust-s3` client hardening/cleanup (keep working implementation)
 3. `put/get/delete/head` wrappers
 4. presign GET URL generation
 5. preserve public URL rewrite logic (already in current module)
@@ -448,7 +446,7 @@ That can be a good *second* optimization if you later reduce server-side object 
 
 | Area | Current | Target | Notes |
 |---|---|---|---|
-| DateTime | chrono 0.4.43 | Keep chrono (diesel compat) + **jiff 0.2.20** for business logic | jiff: correct-by-default TZ, RFC 9557, by BurntSushi. 1.0 expected Spring/Summer 2026 |
+| DateTime | chrono 0.4.43 | Keep chrono only (for now) | Revisit Jiff after 1.0 if chrono creates real pain |
 | Image processing | `image` 0.25.9 | Keep + add **zune-image** decoders for hot paths | SIMD-optimized JPEG/PNG. Rust PNG now 1.8x faster than C libpng |
 | Binary serialization | N/A | Consider **bitcode** for internal IPC/caching | Tops every Rust serialization benchmark (Jan 2026) |
 | HTTP client | reqwest 0.16.5 | Keep | No lighter async alternative in Tokio ecosystem |
@@ -489,6 +487,22 @@ Result: **5x build speedup** on a ~500-dep codebase. Adding **sccache** reduces 
 **musl static linking** via `rust:alpine` produces a single static binary — no runtime dependencies, runs on scratch/distroless.
 
 Total final image: **under 20MB** (vs current ~80MB+ bookworm-slim).
+
+### Rust release profile (binary size/runtime tradeoff)
+
+Add an explicit release profile for the backend binary before judging image-size gains:
+
+```toml
+# backend/Cargo.toml
+[profile.release]
+lto = "fat"        # smaller/faster binary, slower compile
+codegen-units = 1  # best optimization, slower compile
+strip = true       # remove debug symbols
+panic = "abort"    # smaller binary; no unwinding
+opt-level = "s"    # size-focused; use "z" only if size matters more than throughput
+```
+
+This often matters as much as the base-image switch when shrinking deployment artifacts.
 
 ---
 
@@ -653,7 +667,7 @@ Docker image sizes (running):
 
 | Component | At 5 users (actual) | At 500-1000 concurrent (projected) | Notes |
 |---|---:|---:|---|
-| **Rust API** | 90 MB | 50-150 MB | Lightest component. Tokio task = ~64 bytes. Use mimalloc to avoid glibc fragmentation |
+| **Rust API** | 90 MB | 50-150 MB | Lightest component. Tokio task = ~64 bytes. Defer allocator tuning until production measurements show fragmentation |
 | **PostgreSQL + PgBouncer** | 44 MB | 500-700 MB | **PgBouncer is mandatory.** Maps 500 clients to 20-30 backends. Without it, 500 direct conns = ~5 GB. PgBouncer itself uses ~1 MB |
 | **Tuwunel** | 68 MB | 300-512 MB | **First to OOM** if chat is heavy. RocksDB block cache grows with room count. Non-federating helps. Plan 768MB-1GB when chat grows |
 | **Garage** | 6 MB | 150-256 MB | CDN caching absorbs reads. Only upload writes hit Garage directly |
@@ -668,7 +682,7 @@ Docker image sizes (running):
 
 1. **Add PgBouncer** — transaction pooling mode. `default_pool_size=30`, `max_client_conn=500`. Memory limit 64 MB. This is the single biggest scaling unlock. Without it, you cannot reach 500 concurrent users.
 2. **Set `GOMEMLIMIT=256MiB`** for Caddy systemd service — prevents unbounded Go GC growth under load.
-3. **Use mimalloc allocator** in Rust API — glibc can hold 3.5-4.5 GB after millions of requests due to fragmentation. mimalloc stays at 0.7-1.5 GB. Add: `mimalloc = { version = "0.1", default-features = false }` + `#[global_allocator]`.
+3. **Do not add a custom allocator by default** — ship with the default allocator and measure RSS/fragmentation first. Revisit allocator choice later (especially for glibc builds); this plan also targets musl static builds.
 4. **Lower Postgres `max_connections` to 30-50** — PgBouncer handles client connections. Saves ~5-8 MB per unused backend.
 
 ### Cheap-scale architecture patterns (recommended during redesign)
@@ -733,6 +747,18 @@ wal_buffers = 4MB
 ```
 
 Each idle Postgres connection consumes ~10MB. Dropping from default 100 to 20 saves ~800MB potential overhead. Use PgBouncer if connection counts grow.
+
+### PostgreSQL autovacuum (high-churn tables)
+
+`job_outbox` is high-churn (insert/update/retry/complete). Add a per-table autovacuum override so dead tuples and index bloat do not accumulate silently:
+
+```sql
+ALTER TABLE job_outbox SET (
+  autovacuum_vacuum_threshold = 50,
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_threshold = 50
+);
+```
 
 ## Tuwunel (Matrix Homeserver)
 
@@ -818,6 +844,12 @@ Beszel replaces node-exporter + the missing Prometheus + the missing Grafana wit
 | Nginx | C | ~2-5MB | No (certbot) | Manual TLS |
 
 Watch **Pingap** as a future migration target. Caddy is fine for now — automatic TLS is invaluable.
+
+Cache policy to document explicitly:
+
+- For immutable media/object keys, set `Cache-Control: public, max-age=31536000, immutable` on CDN-served responses.
+- The current local `backend/Caddyfile` already sets this for `/uploads/*` when proxying to Garage.
+- This helps browsers/CDNs cache aggressively; it does not by itself add a Caddy response cache layer.
 
 ## Docker Compose Alternatives
 
@@ -910,159 +942,33 @@ Quality gates to keep green throughout:
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `backend/scripts/rust-code-analysis.sh`
 
-## Phase 1: Axum bootstrap (drop Loco framework shell, keep SeaORM temporarily)
+## Backend Migration Status (brief)
 
-Objective: remove Loco runtime/boot/routing first while keeping DB access intact.
+### ✅ Completed (backend migration + stateless infra)
 
-Replace:
+- ✅ Axum runtime bootstrap for API and worker (`backend/src/app.rs`, `backend/src/bin/main.rs`, `backend/src/bin/worker.rs`)
+- ✅ Loco removed from backend runtime/tests/examples/dependencies
+- ✅ Diesel + `diesel-async` adopted across backend (schema + models + controllers + search)
+- ✅ SeaORM removed from backend runtime/deps
+- ✅ Local auth/password/JWT helpers (`argon2`, `jsonwebtoken`) replace Loco helpers
+- ✅ Local `AppError` / `AppResult` replace Loco error aliases
+- ✅ Backend `ruma` removed (Matrix backend remains thin `reqwest + serde`)
+- ✅ Garage-only uploads storage (`rust-s3`) replaced OpenDAL
+- ✅ Direct-to-Garage upload flow (`presign` + `complete`) + upload status endpoint
+- ✅ Async media variants generation via durable outbox worker
+- ✅ OTP + Matrix side effects moved to outbox worker (request path decoupled)
+- ✅ Separate `worker` process/service in prod compose
+- ✅ Outbox observability: status endpoint + heartbeat + worker healthcheck
+- ✅ Host-side outbox alert script (`ops/check_outbox_alerts.sh`)
 
-- `backend/src/bin/main.rs` (Loco CLI entrypoint)
-- `backend/src/app.rs` (Loco Hooks/app boot)
-- `backend/src/controllers/migration_api/mod.rs` (Loco Routes wrapper)
+### Remaining / next (high ROI)
 
-Add:
-
-- `AppState` (DB pool/connection, config, HTTP clients, shared services)
-- plain Axum `Router`
-- startup config loading + env validation
-- tracing setup
-- graceful shutdown
-
-Temporary compatibility tactic:
-
-- keep existing handler signatures where possible
-- replace `loco_rs::prelude::*` imports with explicit Axum/Serde/Result types gradually
-
-Expected scope:
-
-- medium rewrite, low product risk if route paths/responses are preserved
-
-## Phase 2: Replace Loco helpers (auth/hash/jwt/errors)
-
-Objective: remove Loco utility dependencies that remain after Phase 1.
-
-Status update (partial, implemented):
-
-- password hashing moved off `loco_rs::hash` to local `backend/src/security.rs` (`argon2`, same Argon2id defaults)
-- JWT generation moved off `loco_rs::auth::jwt` to local `backend/src/security.rs` (`jsonwebtoken`, HS512 + base64 secret + `pid/exp` claim shape preserved for compatibility)
-- current auth/user callsites updated (`models/users.rs`, `auth_helpers.rs`, `auth_account.rs`)
-- Loco auth extractors / `AppContext` / `Error` aliases still remain in many modules (next steps below)
-
-Key work:
-
-- `backend/src/models/users.rs`
-  - replace `loco_rs::hash::*` with `argon2` + `password-hash`
-  - replace `loco_rs::auth::jwt` with `jsonwebtoken`
-- replace `loco_rs::Error` / `Result` with local `AppError`
-- replace any Loco-specific `Response` aliases with `axum::response::Response`
-
-This phase is where "remove all Loco stuff" becomes real.
-
-Scalability tweak to include in this phase:
-
-- make auth/session writes idempotent where practical (helps retries once side effects are moved to workers/outbox)
-
-## Phase 3: Storage simplification (Garage-only first, then OpenDAL removal)
-
-Objective: simplify storage behavior before swapping client libraries.
-
-Status update (implemented in current backend):
-
-- Step A complete: `uploads_storage` is Garage-only (no local FS fallback)
-- Step B complete: `OpenDAL` replaced behind existing storage API with `rust-s3`
-- endpoint handlers kept unchanged (`uploads_support.rs` API preserved)
-
-Step A (safe):
-
-- make `uploads_storage` Garage-only
-- remove local FS fallback (`Fs`) and `NODE_ENV` branching
-- require `GARAGE_S3_*` always
-- run Garage locally in development instead of local-disk uploads (higher parity, fewer code paths)
-- keep module API unchanged:
-  - `upload`
-  - `read`
-  - `exists`
-  - `delete`
-  - `signed_get_url`
-
-Scalability tweaks for media path (add during Step A if possible):
-
-- move toward direct-to-Garage uploads (API signs, client uploads)
-- avoid proxying media bytes through API for normal flows
-- use immutable object keys/variant names for better CDN/cache behavior
-- keep originals private and serve cache-friendly variants directly
-- move resize/variant generation to worker jobs
-
-Step B (adapter swap):
-
-- replace OpenDAL implementation in `backend/src/controllers/migration_api/uploads_storage.rs`
-- keep `uploads_support.rs` and endpoint code unchanged
-- current implementation uses `rust-s3` (`put/get/head/delete/presign`) with Garage custom region + optional public URL rewrite
-
-Target client recommendation:
-
-- start with `s3` crate for `put/get/delete/presign`
-- keep a thin local adapter trait (`StorageBackend`) to avoid future lock-in
-
-## Phase 4: Diesel introduction (parallel path)
-
-Objective: add Diesel without breaking all existing endpoints at once.
-
-Start with:
-
-- `diesel` + `diesel-async` dependencies
-- `schema.rs` generation
-- one feature module migrated end-to-end (recommended: `sessions` or `otp_codes`)
-- introduce a Postgres outbox table and worker polling loop (`FOR UPDATE SKIP LOCKED`) before broad feature rewrites
-
-Keep SeaORM in parallel temporarily during transition.
-
-This avoids rewriting every endpoint and ORM layer immediately.
-
-Scalability tweak to include in Phase 4:
-
-- design DB access around low Postgres connection counts (target `PgBouncer` + small backend pools)
-
-## Phase 5: SeaORM -> Diesel module-by-module migration
-
-Suggested order (lowest risk -> highest complexity):
-
-1. `sessions`, `otp_codes`, `user_settings`
-2. `users` auth reads/writes
-3. `profiles`, `uploads`
-4. `events`, `event_attendees`, `event_tags`
-5. Matrix state tables (`matrix_dm_rooms`, room mapping logic)
-6. complex matching/catalog helpers
-
-Use Diesel for:
-
-- standard CRUD
-- transactional updates
-- simple joins
-
-Use raw SQL (via Diesel `sql_query`) for:
-
-- FTS ranking (`ts_rank_cd`, `websearch_to_tsquery`)
-- geo ranking (`earthdistance`, `cube`)
-- future vector search / hybrid ranking (`pgvector`, RRF, etc.)
-
-Scalability tweaks to include during module migration:
-
-- convert hot multi-join endpoints to read models / precomputed tables when needed
-- batch lookups and avoid N+1s explicitly (keep current `IN (...)` patterns)
-- add partial indexes for real predicates (`deleted = false`, `status = 'going'`, etc.)
-- partition append-only tables early (job attempts, notifications, audit, future embeddings)
-- prefer UUIDv7/ULID for new high-write tables for index locality
-
-## Phase 6: Remove SeaORM + Loco + migration crate coupling
-
-After all DB/runtime paths are migrated:
-
-- remove `loco-rs`
-- remove `sea-orm`
-- remove SeaORM entity generation (`backend/src/models/_entities/*`)
-- replace current migration runner with Diesel migrations (or plain SQL migration runner)
-- prune transitive bloat and remeasure build time/binary size
+- Tune Diesel pool via env (size/timeouts) and document PgBouncer settings
+- Add/restore formal migration workflow only when needed (`diesel_migrations` or external SQL runner)
+- Reduce complexity in large modules (`tasks/outbox.rs`, `profiles.rs`, Matrix modules)
+- Introduce transactions for multi-step writes (profile/tag sync, similar flows)
+- Add first read-model/precompute path for a heavy endpoint
+- Document overload/degradation switches and query budgets
 
 ## Estimated Rewrite Size (rough)
 
@@ -1083,48 +989,27 @@ The range depends on whether you:
 - refactor module layout simultaneously
 - rewrite search/matching queries early vs later
 
-## Acceptance Criteria
+## Acceptance Criteria (updated)
 
-### Phase 1 complete (Axum shell)
+### ✅ Already achieved
 
-- production binaries (`api`, `worker`) start through Axum-native entrypoints (no Loco CLI)
-- runtime serving uses Axum (`axum::serve`) with a plain `axum::Router` (no Loco route adapter)
-- all current HTTP routes work with same paths/status codes
-- SeaORM still passes tests
+- ✅ no `loco-rs` dependency
+- ✅ no `sea-orm` dependency
+- ✅ no `opendal` dependency
+- ✅ backend `ruma` removed
+- ✅ API + worker run through Axum-native entrypoints
+- ✅ uploads work via Garage-only backend + direct upload flow support
+- ✅ side effects (OTP / Matrix / media variants) decoupled from request path via outbox/worker
+- ✅ worker observability + alert script implemented
+- ✅ backend quality gates green (`fmt`, `check`, `test --no-run`, `clippy`)
 
-### Phase 2 complete (Loco helper removal)
+### Remaining for full optimization target
 
-- local `AppError` / `AppResult` introduced and used by shared modules (`search`, outbox, auth/session helpers)
-- local password hashing/JWT helpers (`security.rs`) introduced
-- backend no longer relies on Loco `Authenticable` path (local session auth remains canonical)
-- controller modules no longer import `loco_rs::prelude::*` (explicit `axum` / `sea_orm` imports used)
-- backend/test/example code no longer imports `loco_rs`
-
-### Phase 2.5 complete (Loco crate removal)
-
-- `loco-rs` removed from `backend/Cargo.toml`
-- `backend/migration` no longer depends on Loco schema helpers (first two migrations rewritten to plain `sea_orm_migration`)
-- Loco test harness replaced with local `axum_test` integration setup
-
-### Phase 3 complete (storage)
-
-- uploads work in dev/prod via Garage only
-- presigned URLs still work
-- no `opendal` dependency remains
-
-### Final complete
-
-- no `loco-rs` dependency
-- no `sea-orm` dependency
-- no `opendal` dependency
-- search (`tsvector` + geo) behavior preserved
-- quality gates green
-- Docker image under 20MB
-- Compile time measurably reduced
-- side effects (Matrix/mail/media) decoupled from request path via outbox/worker
-- media not proxied through API in normal upload/download flows
 - top hot endpoints have documented `EXPLAIN ANALYZE` plans
 - at least one overload/degradation strategy implemented (bounded candidates / deferred recomputes)
+- Docker image slimming pass (`cargo-chef` + distroless/musl evaluation)
+- measurable compile-time/binary-size before/after benchmark write-up
+- DB pool + PgBouncer tuning documented and validated under load
 
 ---
 
