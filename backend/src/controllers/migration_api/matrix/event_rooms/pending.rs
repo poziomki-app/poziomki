@@ -3,12 +3,8 @@ use std::time::Duration;
 use axum::http::HeaderMap;
 use axum::response::Response;
 use chrono::Utc;
-use sea_orm::{sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use tokio::time::sleep;
 use uuid::Uuid;
 
@@ -16,10 +12,10 @@ use super::super::{
     build_pending_token, is_matrix_room_id, EVENT_PENDING_RETRIES, PENDING_SLEEP_MS,
 };
 use super::{creation::create_event_room, EventRoomResolution};
-use crate::models::_entities::events;
+use crate::db::models::events::Event;
+use crate::db::schema::events;
 
 pub(super) async fn ensure_event_room(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     event_id: Uuid,
     event_title: &str,
@@ -29,9 +25,18 @@ pub(super) async fn ensure_event_room(
     let mut pending_retries = 0usize;
 
     loop {
-        let current_event = events::Entity::find_by_id(event_id)
-            .one(db)
+        let mut conn = crate::db::conn()
             .await
+            .map_err(|e| crate::error::AppError::Any(e.into()))
+            .map_err(|_error| {
+                super::event_room_internal_error(headers, "Failed to resolve event room")
+            })?;
+
+        let current_event = events::table
+            .find(event_id)
+            .first::<Event>(&mut conn)
+            .await
+            .optional()
             .map_err(|e| crate::error::AppError::Any(e.into()))
             .map_err(|_error| {
                 super::event_room_internal_error(headers, "Failed to resolve event room")
@@ -74,9 +79,8 @@ pub(super) async fn ensure_event_room(
 
             let takeover_pending = build_pending_token();
             let took_over =
-                claim_event_pending_token(db, event_id, Some(&existing_pending), &takeover_pending)
+                claim_event_pending_token(event_id, Some(&existing_pending), &takeover_pending)
                     .await
-                    .map_err(|e| crate::error::AppError::Any(e.into()))
                     .map_err(|_error| {
                         super::event_room_internal_error(headers, "Failed to resolve event room")
                     })?;
@@ -87,7 +91,6 @@ pub(super) async fn ensure_event_room(
             }
 
             return create_and_finalize_event_room(
-                db,
                 headers,
                 event_id,
                 event_title,
@@ -100,13 +103,11 @@ pub(super) async fn ensure_event_room(
 
         let pending_token = build_pending_token();
         let claimed = claim_event_pending_token(
-            db,
             event_id,
             current_event.conversation_id.as_deref(),
             &pending_token,
         )
         .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to resolve event room")
         })?;
@@ -118,7 +119,6 @@ pub(super) async fn ensure_event_room(
         }
 
         return create_and_finalize_event_room(
-            db,
             headers,
             event_id,
             event_title,
@@ -131,7 +131,6 @@ pub(super) async fn ensure_event_room(
 }
 
 async fn create_and_finalize_event_room(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     event_id: Uuid,
     event_title: &str,
@@ -140,7 +139,6 @@ async fn create_and_finalize_event_room(
     pending_token: &str,
 ) -> std::result::Result<EventRoomResolution, Response> {
     let room_id_result = create_event_room(
-        db,
         headers,
         event_id,
         event_title,
@@ -152,14 +150,13 @@ async fn create_and_finalize_event_room(
     let room_id = match room_id_result {
         Ok(room_id) => room_id,
         Err(response) => {
-            let _ = clear_event_pending_token(db, event_id, pending_token).await;
+            let _ = clear_event_pending_token(event_id, pending_token).await;
             return Err(response);
         }
     };
 
-    let finalized = finalize_event_pending_token(db, event_id, pending_token, &room_id)
+    let finalized = finalize_event_pending_token(event_id, pending_token, &room_id)
         .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to finalize event room mapping")
         })?;
@@ -171,9 +168,18 @@ async fn create_and_finalize_event_room(
         });
     }
 
-    let fallback_room_id = events::Entity::find_by_id(event_id)
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))
+        .map_err(|_error| {
+            super::event_room_internal_error(headers, "Failed to resolve canonical event room")
+        })?;
+
+    let fallback_room_id = events::table
+        .find(event_id)
+        .first::<Event>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))
         .map_err(|_error| {
             super::event_room_internal_error(headers, "Failed to resolve canonical event room")
@@ -189,62 +195,86 @@ async fn create_and_finalize_event_room(
 }
 
 async fn claim_event_pending_token(
-    db: &DatabaseConnection,
     event_id: Uuid,
     expected_conversation_id: Option<&str>,
     pending_token: &str,
-) -> std::result::Result<bool, sea_orm::DbErr> {
-    let mut update = events::Entity::update_many()
-        .col_expr(
-            events::Column::ConversationId,
-            Expr::value(pending_token.to_string()),
+) -> std::result::Result<bool, crate::error::AppError> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let rows_affected = if let Some(expected) = expected_conversation_id {
+        diesel::update(
+            events::table
+                .filter(events::id.eq(event_id))
+                .filter(events::conversation_id.eq(expected)),
         )
-        .col_expr(events::Column::UpdatedAt, Expr::value(Utc::now()))
-        .filter(events::Column::Id.eq(event_id));
-
-    if let Some(expected) = expected_conversation_id {
-        update = update.filter(events::Column::ConversationId.eq(expected));
+        .set((
+            events::conversation_id.eq(Some(pending_token.to_string())),
+            events::updated_at.eq(Utc::now()),
+        ))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?
     } else {
-        update = update.filter(events::Column::ConversationId.is_null());
-    }
+        diesel::update(
+            events::table
+                .filter(events::id.eq(event_id))
+                .filter(events::conversation_id.is_null()),
+        )
+        .set((
+            events::conversation_id.eq(Some(pending_token.to_string())),
+            events::updated_at.eq(Utc::now()),
+        ))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?
+    };
 
-    let result = update.exec(db).await?;
-    Ok(result.rows_affected == 1)
+    Ok(rows_affected == 1)
 }
 
 async fn finalize_event_pending_token(
-    db: &DatabaseConnection,
     event_id: Uuid,
     pending_token: &str,
     room_id: &str,
-) -> std::result::Result<bool, sea_orm::DbErr> {
-    let result = events::Entity::update_many()
-        .col_expr(
-            events::Column::ConversationId,
-            Expr::value(room_id.to_string()),
-        )
-        .col_expr(events::Column::UpdatedAt, Expr::value(Utc::now()))
-        .filter(events::Column::Id.eq(event_id))
-        .filter(events::Column::ConversationId.eq(pending_token))
-        .exec(db)
-        .await?;
-    Ok(result.rows_affected == 1)
+) -> std::result::Result<bool, crate::error::AppError> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let rows_affected = diesel::update(
+        events::table
+            .filter(events::id.eq(event_id))
+            .filter(events::conversation_id.eq(pending_token)),
+    )
+    .set((
+        events::conversation_id.eq(Some(room_id.to_string())),
+        events::updated_at.eq(Utc::now()),
+    ))
+    .execute(&mut conn)
+    .await
+    .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    Ok(rows_affected == 1)
 }
 
 async fn clear_event_pending_token(
-    db: &DatabaseConnection,
     event_id: Uuid,
     pending_token: &str,
-) -> std::result::Result<bool, sea_orm::DbErr> {
-    let result = events::Entity::update_many()
-        .col_expr(
-            events::Column::ConversationId,
-            Expr::value(Option::<String>::None),
-        )
-        .col_expr(events::Column::UpdatedAt, Expr::value(Utc::now()))
-        .filter(events::Column::Id.eq(event_id))
-        .filter(events::Column::ConversationId.eq(pending_token))
-        .exec(db)
-        .await?;
-    Ok(result.rows_affected == 1)
+) -> std::result::Result<bool, crate::error::AppError> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let rows_affected = diesel::update(
+        events::table
+            .filter(events::id.eq(event_id))
+            .filter(events::conversation_id.eq(pending_token)),
+    )
+    .set((
+        events::conversation_id.eq(None::<String>),
+        events::updated_at.eq(Utc::now()),
+    ))
+    .execute(&mut conn)
+    .await
+    .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    Ok(rows_affected == 1)
 }

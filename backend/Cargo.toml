@@ -81,6 +81,8 @@ tower-http = { version = "=0.6.8", features = ["set-header"] }
 argon2 = "=0.5.3"
 jsonwebtoken = "=9.3.1"
 dotenvy = "=0.15.7"
+diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
+diesel-async = { version = "0.5", features = ["postgres", "deadpool"] }
 
 [[bin]]
 name = "poziomki_backend-cli"

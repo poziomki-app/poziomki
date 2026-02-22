@@ -1,5 +1,6 @@
-use crate::error::{AppError, AppResult};
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
+use diesel::deserialize::QueryableByName;
+use diesel::sql_types::{Array, BigInt, Float8, Nullable, SmallInt, Text, Uuid as DieselUuid};
+use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -74,17 +75,10 @@ const DEFAULT_SEARCH_CACHE_MAX_ENTRIES: usize = 512;
 static SEARCH_CACHE: OnceLock<RwLock<HashMap<String, CacheEntry>>> = OnceLock::new();
 
 pub async fn search_all(
-    db: &DatabaseConnection,
     query: &str,
     limit: usize,
     geo: Option<&GeoSearchParams>,
-) -> AppResult<SearchResults> {
-    if db.get_database_backend() != DbBackend::Postgres {
-        return Err(AppError::Message(
-            "Search requires a PostgreSQL database".to_string(),
-        ));
-    }
-
+) -> crate::error::AppResult<SearchResults> {
     let normalized_query = query.trim().to_ascii_lowercase();
 
     if normalized_query.len() < 2 {
@@ -104,9 +98,9 @@ pub async fn search_all(
 
     let limit_i64 = i64::try_from(limit).unwrap_or(50);
 
-    let profiles_fut = search_profiles_postgres(db, &normalized_query, &pattern, limit_i64);
-    let events_fut = search_events_postgres(db, &normalized_query, &pattern, limit_i64, geo);
-    let tags_fut = search_tags_postgres(db, &pattern, limit_i64);
+    let profiles_fut = search_profiles_postgres(&normalized_query, &pattern, limit_i64);
+    let events_fut = search_events_postgres(&normalized_query, &pattern, limit_i64, geo);
+    let tags_fut = search_tags_postgres(&pattern, limit_i64);
 
     let (profiles, events, tags) = tokio::try_join!(profiles_fut, events_fut, tags_fut)?;
 
@@ -122,13 +116,15 @@ pub async fn search_all(
 }
 
 async fn search_profiles_postgres(
-    db: &DatabaseConnection,
     query: &str,
     pattern: &str,
     limit_i64: i64,
-) -> AppResult<Vec<ProfileDocument>> {
-    let profile_rows = ProfileSearchRow::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
+) -> crate::error::AppResult<Vec<ProfileDocument>> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let profile_rows = diesel::sql_query(
         r"
         SELECT
             p.id,
@@ -161,15 +157,13 @@ async fn search_profiles_postgres(
             p.updated_at DESC
         LIMIT $3
         ",
-        vec![
-            query.to_string().into(),
-            pattern.to_string().into(),
-            limit_i64.into(),
-        ],
-    ))
-    .all(db)
+    )
+    .bind::<Text, _>(query)
+    .bind::<Text, _>(pattern)
+    .bind::<BigInt, _>(limit_i64)
+    .load::<ProfileSearchRow>(&mut conn)
     .await
-    .map_err(|e| AppError::Message(format!("Profile search failed: {e}")))?;
+    .map_err(|e| crate::error::AppError::Message(format!("Profile search failed: {e}")))?;
 
     Ok(profile_rows
         .into_iter()
@@ -186,16 +180,18 @@ async fn search_profiles_postgres(
 }
 
 async fn search_events_postgres(
-    db: &DatabaseConnection,
     query: &str,
     pattern: &str,
     limit_i64: i64,
     geo: Option<&GeoSearchParams>,
-) -> AppResult<Vec<EventDocument>> {
+) -> crate::error::AppResult<Vec<EventDocument>> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
     let event_rows = match geo {
         Some(geo_query) => {
-            EventSearchRow::find_by_statement(Statement::from_sql_and_values(
-                DbBackend::Postgres,
+            diesel::sql_query(
                 r"
                 SELECT
                     e.id,
@@ -225,21 +221,18 @@ async fn search_events_postgres(
                     e.starts_at ASC
                 LIMIT $6
                 ",
-                vec![
-                    query.to_string().into(),
-                    pattern.to_string().into(),
-                    geo_query.lat.into(),
-                    geo_query.lng.into(),
-                    i64::from(geo_query.radius_m).into(),
-                    limit_i64.into(),
-                ],
-            ))
-            .all(db)
+            )
+            .bind::<Text, _>(query)
+            .bind::<Text, _>(pattern)
+            .bind::<Float8, _>(geo_query.lat)
+            .bind::<Float8, _>(geo_query.lng)
+            .bind::<BigInt, _>(i64::from(geo_query.radius_m))
+            .bind::<BigInt, _>(limit_i64)
+            .load::<EventSearchRow>(&mut conn)
             .await
         }
         None => {
-            EventSearchRow::find_by_statement(Statement::from_sql_and_values(
-                DbBackend::Postgres,
+            diesel::sql_query(
                 r"
                 SELECT
                     e.id,
@@ -262,17 +255,15 @@ async fn search_events_postgres(
                     e.starts_at ASC
                 LIMIT $3
                 ",
-                vec![
-                    query.to_string().into(),
-                    pattern.to_string().into(),
-                    limit_i64.into(),
-                ],
-            ))
-            .all(db)
+            )
+            .bind::<Text, _>(query)
+            .bind::<Text, _>(pattern)
+            .bind::<BigInt, _>(limit_i64)
+            .load::<EventSearchRow>(&mut conn)
             .await
         }
     }
-    .map_err(|e| AppError::Message(format!("Event search failed: {e}")))?;
+    .map_err(|e| crate::error::AppError::Message(format!("Event search failed: {e}")))?;
 
     Ok(event_rows
         .into_iter()
@@ -293,12 +284,14 @@ async fn search_events_postgres(
 }
 
 async fn search_tags_postgres(
-    db: &DatabaseConnection,
     pattern: &str,
     limit_i64: i64,
-) -> AppResult<Vec<TagDocument>> {
-    let rows = TagSearchRow::find_by_statement(Statement::from_sql_and_values(
-        DbBackend::Postgres,
+) -> crate::error::AppResult<Vec<TagDocument>> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let rows = diesel::sql_query(
         r"
         SELECT
             t.id,
@@ -311,11 +304,12 @@ async fn search_tags_postgres(
         ORDER BY t.name ASC
         LIMIT $2
         ",
-        vec![pattern.to_string().into(), limit_i64.into()],
-    ))
-    .all(db)
+    )
+    .bind::<Text, _>(pattern)
+    .bind::<BigInt, _>(limit_i64)
+    .load::<TagSearchRow>(&mut conn)
     .await
-    .map_err(|e| AppError::Message(format!("Tag search failed: {e}")))?;
+    .map_err(|e| crate::error::AppError::Message(format!("Tag search failed: {e}")))?;
 
     Ok(rows
         .into_iter()
@@ -329,36 +323,57 @@ async fn search_tags_postgres(
         .collect())
 }
 
-#[derive(Debug, Clone, FromQueryResult)]
+#[derive(Debug, Clone, QueryableByName)]
 struct ProfileSearchRow {
+    #[diesel(sql_type = DieselUuid)]
     id: uuid::Uuid,
+    #[diesel(sql_type = Text)]
     name: String,
+    #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
+    #[diesel(sql_type = SmallInt)]
     age: i16,
+    #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
     profile_picture: Option<String>,
+    #[diesel(sql_type = Array<Text>)]
     tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, FromQueryResult)]
+#[derive(Debug, Clone, QueryableByName)]
 struct EventSearchRow {
+    #[diesel(sql_type = DieselUuid)]
     id: uuid::Uuid,
+    #[diesel(sql_type = Text)]
     title: String,
+    #[diesel(sql_type = Nullable<Text>)]
     description: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
     location: Option<String>,
+    #[diesel(sql_type = Text)]
     starts_at: String,
+    #[diesel(sql_type = Nullable<Text>)]
     cover_image: Option<String>,
+    #[diesel(sql_type = Text)]
     creator_name: String,
+    #[diesel(sql_type = Nullable<Float8>)]
     latitude: Option<f64>,
+    #[diesel(sql_type = Nullable<Float8>)]
     longitude: Option<f64>,
 }
 
-#[derive(Debug, Clone, FromQueryResult)]
+#[derive(Debug, Clone, QueryableByName)]
 struct TagSearchRow {
+    #[diesel(sql_type = DieselUuid)]
     id: uuid::Uuid,
+    #[diesel(sql_type = Text)]
     name: String,
+    #[diesel(sql_type = Text)]
     scope: String,
+    #[diesel(sql_type = Nullable<Text>)]
     category: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
     emoji: Option<String>,
 }
 

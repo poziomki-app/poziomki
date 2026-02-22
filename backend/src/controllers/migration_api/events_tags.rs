@@ -1,42 +1,47 @@
 use chrono::Utc;
-use sea_orm::DatabaseConnection;
-use sea_orm::{ActiveValue, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::models::_entities::{event_attendees, tags};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::event_tags::EventTag;
+use crate::db::models::tags::{NewTag, Tag};
+use crate::db::schema::{event_attendees, event_tags, tags};
 
-async fn find_or_create_event_tag(db: &DatabaseConnection, name: String) -> Option<Uuid> {
-    if let Ok(Some(tag)) = tags::Entity::find()
-        .filter(tags::Column::Scope.eq("event"))
-        .filter(tags::Column::Name.eq(&name))
-        .one(db)
+async fn find_or_create_event_tag(name: String) -> Option<Uuid> {
+    let mut conn = crate::db::conn().await.ok()?;
+
+    if let Ok(Some(tag)) = tags::table
+        .filter(tags::scope.eq("event"))
+        .filter(tags::name.eq(&name))
+        .first::<Tag>(&mut conn)
         .await
+        .optional()
     {
         return Some(tag.id);
     }
 
     let new_id = Uuid::new_v4();
     let now = Utc::now();
-    let tag = tags::ActiveModel {
-        id: ActiveValue::Set(new_id),
-        name: ActiveValue::Set(name),
-        scope: ActiveValue::Set("event".to_string()),
-        category: ActiveValue::Set(None),
-        emoji: ActiveValue::Set(None),
-        onboarding_order: ActiveValue::Set(None),
-        created_at: ActiveValue::Set(now.into()),
-        updated_at: ActiveValue::Set(now.into()),
+    let new_tag = NewTag {
+        id: new_id,
+        name,
+        scope: "event".to_string(),
+        category: None,
+        emoji: None,
+        onboarding_order: None,
+        created_at: now,
+        updated_at: now,
     };
-    tag.insert(db).await.ok().map(|_| new_id)
+    diesel::insert_into(tags::table)
+        .values(&new_tag)
+        .execute(&mut conn)
+        .await
+        .ok()
+        .map(|_| new_id)
 }
 
 pub(in crate::controllers::migration_api) async fn resolve_event_tag_ids(
-    db: &DatabaseConnection,
     tag_names: Option<Vec<String>>,
     tag_ids: Option<Vec<String>>,
 ) -> Vec<Uuid> {
@@ -53,7 +58,7 @@ pub(in crate::controllers::migration_api) async fn resolve_event_tag_ids(
         if trimmed.is_empty() {
             continue;
         }
-        if let Some(id) = find_or_create_event_tag(db, trimmed).await {
+        if let Some(id) = find_or_create_event_tag(trimmed).await {
             resolved.push(id);
         }
     }
@@ -63,63 +68,77 @@ pub(in crate::controllers::migration_api) async fn resolve_event_tag_ids(
 }
 
 pub(in crate::controllers::migration_api) async fn sync_event_tags(
-    db: &DatabaseConnection,
     event_id: Uuid,
     tag_ids: &[Uuid],
 ) -> std::result::Result<(), crate::error::AppError> {
-    use crate::models::_entities::event_tags;
-    event_tags::Entity::delete_many()
-        .filter(event_tags::Column::EventId.eq(event_id))
-        .exec(db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    for tag_id in tag_ids {
-        let link = event_tags::ActiveModel {
-            event_id: ActiveValue::Set(event_id),
-            tag_id: ActiveValue::Set(*tag_id),
-        };
-        link.insert(db)
+    diesel::delete(event_tags::table.filter(event_tags::event_id.eq(event_id)))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let new_tags: Vec<EventTag> = tag_ids
+        .iter()
+        .map(|tag_id| EventTag {
+            event_id,
+            tag_id: *tag_id,
+        })
+        .collect();
+
+    if !new_tags.is_empty() {
+        diesel::insert_into(event_tags::table)
+            .values(&new_tags)
+            .execute(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?;
     }
+
     Ok(())
 }
 
 pub(in crate::controllers::migration_api) async fn maybe_sync_tags(
-    db: &DatabaseConnection,
     event_id: Uuid,
     tags: Option<Vec<String>>,
     tag_ids: Option<Vec<String>>,
 ) -> std::result::Result<(), crate::error::AppError> {
     if tags.is_some() || tag_ids.is_some() {
-        let resolved = resolve_event_tag_ids(db, tags, tag_ids).await;
-        sync_event_tags(db, event_id, &resolved).await?;
+        let resolved = resolve_event_tag_ids(tags, tag_ids).await;
+        sync_event_tags(event_id, &resolved).await?;
     }
     Ok(())
 }
 
 pub(in crate::controllers::migration_api) async fn upsert_attendee(
-    db: &DatabaseConnection,
     event_uuid: Uuid,
     profile_id: Uuid,
     status: &str,
 ) -> std::result::Result<(), crate::error::AppError> {
-    event_attendees::Entity::delete_many()
-        .filter(event_attendees::Column::EventId.eq(event_uuid))
-        .filter(event_attendees::Column::ProfileId.eq(profile_id))
-        .exec(db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    let attendee = event_attendees::ActiveModel {
-        event_id: ActiveValue::Set(event_uuid),
-        profile_id: ActiveValue::Set(profile_id),
-        status: ActiveValue::Set(status.to_string()),
+    diesel::delete(
+        event_attendees::table
+            .filter(event_attendees::event_id.eq(event_uuid))
+            .filter(event_attendees::profile_id.eq(profile_id)),
+    )
+    .execute(&mut conn)
+    .await
+    .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let attendee = EventAttendee {
+        event_id: event_uuid,
+        profile_id,
+        status: status.to_string(),
     };
-    attendee
-        .insert(db)
+    diesel::insert_into(event_attendees::table)
+        .values(&attendee)
+        .execute(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
     Ok(())
 }

@@ -89,11 +89,11 @@ fn apply_resolved_search_image_urls(
 }
 
 pub(super) async fn search(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, _user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -107,7 +107,7 @@ pub(super) async fn search(
 
     let geo = build_geo_params(&query);
 
-    let mut results = crate::search::search_all(&ctx.db, &q, limit, geo.as_ref())
+    let mut results = crate::search::search_all(&q, limit, geo.as_ref())
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");

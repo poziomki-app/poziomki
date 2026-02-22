@@ -114,6 +114,12 @@ fn load_runtime_config() -> crate::error::AppResult<RuntimeConfig> {
     })
 }
 
+fn init_diesel_pool() -> crate::error::AppResult<()> {
+    let url = std::env::var("DATABASE_URL")
+        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
+    crate::db::init_pool(&url).map_err(crate::error::AppError::Message)
+}
+
 async fn connect_db() -> crate::error::AppResult<DatabaseConnection> {
     let database_url = std::env::var("DATABASE_URL")
         .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
@@ -157,6 +163,7 @@ async fn build_app_context(auto_migrate: bool) -> crate::error::AppResult<AppCon
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?;
     }
+    init_diesel_pool()?;
     Ok(AppContext { db })
 }
 

@@ -11,12 +11,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{ActiveValue, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::{
@@ -26,8 +22,11 @@ use super::{
     },
     ErrorSpec,
 };
-use crate::models::_entities::{profile_tags, profiles, tags};
-use sea_orm::DatabaseConnection;
+use crate::db::models::profile_tags::ProfileTag;
+use crate::db::models::profiles::Profile;
+use crate::db::models::tags::Tag;
+use crate::db::models::users::User;
+use crate::db::schema::{profile_tags, profiles, tags, users};
 
 pub(super) use profiles_mutations::{profile_create, profile_delete, profile_update};
 
@@ -63,7 +62,7 @@ fn validation_error(headers: &HeaderMap, message: &str) -> Response {
     )
 }
 
-async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> ProfileResponse {
+async fn profile_to_response(profile: &Profile, user_pid: &Uuid) -> ProfileResponse {
     let profile_picture = match &profile.profile_picture {
         Some(pic) => Some(resolve_image_url(pic).await),
         None => None,
@@ -93,12 +92,15 @@ async fn profile_to_response(profile: &profiles::Model, user_pid: &Uuid) -> Prof
 }
 
 async fn load_profile_tags(
-    db: &DatabaseConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<TagResponse>, crate::error::AppError> {
-    let tag_links = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.eq(profile_id))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let tag_links = profile_tags::table
+        .filter(profile_tags::profile_id.eq(profile_id))
+        .load::<ProfileTag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -107,9 +109,9 @@ async fn load_profile_tags(
         return Ok(vec![]);
     }
 
-    let tag_models = tags::Entity::find()
-        .filter(tags::Column::Id.is_in(tag_ids))
-        .all(db)
+    let tag_models = tags::table
+        .filter(tags::id.eq_any(&tag_ids))
+        .load::<Tag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -127,11 +129,10 @@ async fn load_profile_tags(
 }
 
 async fn full_profile_response(
-    db: &DatabaseConnection,
-    profile: &profiles::Model,
+    profile: &Profile,
     user_pid: &Uuid,
 ) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
-    let profile_tags = load_profile_tags(db, profile.id).await?;
+    let profile_tags = load_profile_tags(profile.id).await?;
 
     let profile_picture = match &profile.profile_picture {
         Some(pic) => Some(resolve_image_url(pic).await),
@@ -163,22 +164,30 @@ async fn full_profile_response(
 }
 
 async fn sync_profile_tags(
-    db: &DatabaseConnection,
     profile_id: Uuid,
     tag_ids: &[Uuid],
 ) -> std::result::Result<(), crate::error::AppError> {
-    profile_tags::Entity::delete_many()
-        .filter(profile_tags::Column::ProfileId.eq(profile_id))
-        .exec(db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    for tag_id in tag_ids {
-        let link = profile_tags::ActiveModel {
-            profile_id: ActiveValue::Set(profile_id),
-            tag_id: ActiveValue::Set(*tag_id),
-        };
-        link.insert(db)
+    diesel::delete(profile_tags::table.filter(profile_tags::profile_id.eq(profile_id)))
+        .execute(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let new_tags: Vec<ProfileTag> = tag_ids
+        .iter()
+        .map(|tag_id| ProfileTag {
+            profile_id,
+            tag_id: *tag_id,
+        })
+        .collect();
+
+    if !new_tags.is_empty() {
+        diesel::insert_into(profile_tags::table)
+            .values(&new_tags)
+            .execute(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?;
     }
@@ -194,22 +203,26 @@ fn parse_tag_uuids(raw: Option<Vec<String>>) -> Vec<Uuid> {
 }
 
 pub(super) async fn profile_me(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = match profile {
-        Some(ref p) => Some(full_profile_response(&ctx.db, p, &user.pid).await?),
+        Some(ref p) => Some(full_profile_response(p, &user.pid).await?),
         None => None,
     };
 
@@ -217,11 +230,11 @@ pub(super) async fn profile_me(
 }
 
 pub(super) async fn profile_get(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, _user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -229,18 +242,25 @@ pub(super) async fn profile_get(
     let profile_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
-    let profile = profiles::Entity::find_by_id(profile_uuid)
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let profile = profiles::table
+        .find(profile_uuid)
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
     };
 
-    let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
-        .one(&ctx.db)
+    let owner = users::table
+        .find(profile.user_id)
+        .first::<User>(&mut conn)
         .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
 
@@ -249,11 +269,11 @@ pub(super) async fn profile_get(
 }
 
 pub(super) async fn profile_get_full(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, _user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -261,21 +281,28 @@ pub(super) async fn profile_get_full(
     let profile_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
-    let profile = profiles::Entity::find_by_id(profile_uuid)
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let profile = profiles::table
+        .find(profile_uuid)
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let Some(profile) = profile else {
         return Ok(not_found_profile(&headers, &id));
     };
 
-    let owner = crate::models::_entities::users::Entity::find_by_id(profile.user_id)
-        .one(&ctx.db)
+    let owner = users::table
+        .find(profile.user_id)
+        .first::<User>(&mut conn)
         .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
 
-    let data = full_profile_response(&ctx.db, &profile, &user_pid).await?;
+    let data = full_profile_response(&profile, &user_pid).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

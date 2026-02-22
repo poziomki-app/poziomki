@@ -26,21 +26,20 @@ pub(super) struct EventRoomResolution {
 }
 
 pub(super) async fn resolve_event_room(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(event_id): Path<String>,
 ) -> Result<Response> {
-    let (profile, user_pid) = match require_auth_profile_for_matrix(&ctx.db, &headers).await {
+    let (profile, user_pid) = match require_auth_profile_for_matrix(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(response),
     };
-    let (event, event_uuid) = match load_event_for_matrix(&ctx.db, &headers, &event_id).await {
+    let (event, event_uuid) = match load_event_for_matrix(&headers, &event_id).await {
         Ok(found) => found,
         Err(response) => return Ok(response),
     };
 
-    let can_access =
-        can_access_event_chat(&ctx.db, event_uuid, event.creator_id, profile.id).await?;
+    let can_access = can_access_event_chat(event_uuid, event.creator_id, profile.id).await?;
     if !can_access {
         return Ok(forbidden_response(
             &headers,
@@ -49,7 +48,6 @@ pub(super) async fn resolve_event_room(
     }
 
     let resolution = match ensure_event_room(
-        &ctx.db,
         &headers,
         event_uuid,
         &event.title,
@@ -64,7 +62,6 @@ pub(super) async fn resolve_event_room(
 
     if !resolution.from_existing_mapping {
         match super::membership::ensure_profile_joined_event_room(
-            &ctx.db,
             &headers,
             &event,
             &profile,

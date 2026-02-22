@@ -1,19 +1,16 @@
+type Result<T> = crate::error::AppResult<T>;
+
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use sea_orm::{ActiveValue, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-type Result<T> = crate::error::AppResult<T>;
-
 use super::state::{require_auth_db, DataResponse};
-use crate::models::_entities::user_settings;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::user_settings::{NewUserSetting, UserSetting, UserSettingChangeset};
+use crate::db::schema::user_settings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
@@ -47,7 +44,7 @@ pub(in crate::controllers::migration_api) struct UpdateSettingsBody {
     pub(in crate::controllers::migration_api) privacy_discoverable: Option<bool>,
 }
 
-fn model_to_response(model: &user_settings::Model) -> UserSettingsResponse {
+fn model_to_response(model: &UserSetting) -> UserSettingsResponse {
     UserSettingsResponse {
         theme: model.theme.clone(),
         language: model.language.clone(),
@@ -70,18 +67,22 @@ fn default_response() -> UserSettingsResponse {
 }
 
 pub(super) async fn settings_get(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let settings = user_settings::Entity::find()
-        .filter(user_settings::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let settings = user_settings::table
+        .filter(user_settings::user_id.eq(user.id))
+        .first::<UserSetting>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = settings
@@ -90,79 +91,61 @@ pub(super) async fn settings_get(
     Ok(Json(DataResponse { data }).into_response())
 }
 
-fn apply_settings_update(
-    existing: user_settings::Model,
-    body: &UpdateSettingsBody,
-) -> user_settings::ActiveModel {
-    let mut active: user_settings::ActiveModel = existing.into();
-    if let Some(v) = &body.theme {
-        active.theme = ActiveValue::Set(v.clone());
-    }
-    if let Some(v) = &body.language {
-        active.language = ActiveValue::Set(v.clone());
-    }
-    if let Some(v) = body.notifications_enabled {
-        active.notifications_enabled = ActiveValue::Set(v);
-    }
-    if let Some(v) = body.privacy_show_age {
-        active.privacy_show_age = ActiveValue::Set(v);
-    }
-    if let Some(v) = body.privacy_show_program {
-        active.privacy_show_program = ActiveValue::Set(v);
-    }
-    if let Some(v) = body.privacy_discoverable {
-        active.privacy_discoverable = ActiveValue::Set(v);
-    }
-    active.updated_at = ActiveValue::Set(Utc::now().into());
-    active
-}
-
-fn create_new_settings(user_id: i32, body: &UpdateSettingsBody) -> user_settings::ActiveModel {
-    let now = Utc::now();
-    user_settings::ActiveModel {
-        id: ActiveValue::Set(Uuid::new_v4()),
-        user_id: ActiveValue::Set(user_id),
-        theme: ActiveValue::Set(body.theme.clone().unwrap_or_else(|| "system".to_string())),
-        language: ActiveValue::Set(
-            body.language
-                .clone()
-                .unwrap_or_else(|| "system".to_string()),
-        ),
-        notifications_enabled: ActiveValue::Set(body.notifications_enabled.unwrap_or(true)),
-        privacy_show_age: ActiveValue::Set(body.privacy_show_age.unwrap_or(true)),
-        privacy_show_program: ActiveValue::Set(body.privacy_show_program.unwrap_or(true)),
-        privacy_discoverable: ActiveValue::Set(body.privacy_discoverable.unwrap_or(true)),
-        created_at: ActiveValue::Set(now.into()),
-        updated_at: ActiveValue::Set(now.into()),
-    }
-}
-
 pub(super) async fn settings_update(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(body): Json<UpdateSettingsBody>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let existing = user_settings::Entity::find()
-        .filter(user_settings::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let existing = user_settings::table
+        .filter(user_settings::user_id.eq(user.id))
+        .first::<UserSetting>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let updated = if let Some(record) = existing {
-        let active = apply_settings_update(record, &body);
-        active
-            .update(&ctx.db)
+        let changeset = UserSettingChangeset {
+            theme: body.theme.clone(),
+            language: body.language.clone(),
+            notifications_enabled: body.notifications_enabled,
+            privacy_show_age: body.privacy_show_age,
+            privacy_show_program: body.privacy_show_program,
+            privacy_discoverable: body.privacy_discoverable,
+            updated_at: Some(Utc::now()),
+        };
+        diesel::update(user_settings::table.find(record.id))
+            .set(&changeset)
+            .get_result::<UserSetting>(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?
     } else {
-        let new_settings = create_new_settings(user.id, &body);
-        new_settings
-            .insert(&ctx.db)
+        let now = Utc::now();
+        let new = NewUserSetting {
+            id: Uuid::new_v4(),
+            user_id: user.id,
+            theme: body.theme.clone().unwrap_or_else(|| "system".to_string()),
+            language: body
+                .language
+                .clone()
+                .unwrap_or_else(|| "system".to_string()),
+            notifications_enabled: body.notifications_enabled.unwrap_or(true),
+            privacy_show_age: body.privacy_show_age.unwrap_or(true),
+            privacy_show_program: body.privacy_show_program.unwrap_or(true),
+            privacy_discoverable: body.privacy_discoverable.unwrap_or(true),
+            created_at: now,
+            updated_at: now,
+        };
+        diesel::insert_into(user_settings::table)
+            .values(&new)
+            .get_result::<UserSetting>(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?
     };

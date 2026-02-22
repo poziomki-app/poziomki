@@ -6,18 +6,13 @@ mod state_types;
 mod state_uploads;
 
 use chrono::{Duration, Utc};
-use sea_orm::ActiveValue;
-use sea_orm::DatabaseConnection;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::ErrorSpec;
-use crate::error::AppError;
-use crate::models::_entities::otp_codes;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::otp_codes::{NewOtpCode, OtpCode};
+use crate::db::schema::otp_codes;
 pub(super) use state_auth::*;
 pub(super) use state_types::*;
 pub(super) use state_uploads::*;
@@ -29,45 +24,53 @@ pub(super) const OTP_MAX_ATTEMPTS: i16 = 5;
 
 /// Insert or replace an OTP code for the given email.
 pub(super) async fn upsert_otp(
-    db: &DatabaseConnection,
     email: &str,
     code: &str,
 ) -> std::result::Result<(), crate::error::AppError> {
     let now = Utc::now();
     let expires_at = now + Duration::seconds(OTP_TTL_SECS);
 
-    // Delete any existing OTP for this email, then insert fresh
-    otp_codes::Entity::delete_many()
-        .filter(otp_codes::Column::Email.eq(email))
-        .exec(db)
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    let model = otp_codes::ActiveModel {
-        id: ActiveValue::Set(Uuid::new_v4()),
-        email: ActiveValue::Set(email.to_owned()),
-        code: ActiveValue::Set(code.to_owned()),
-        attempts: ActiveValue::Set(0),
-        expires_at: ActiveValue::Set(expires_at.into()),
-        last_sent_at: ActiveValue::Set(now.into()),
-        created_at: ActiveValue::Set(now.into()),
-    };
-    model
-        .insert(db)
+    // Delete any existing OTP for this email, then insert fresh
+    diesel::delete(otp_codes::table.filter(otp_codes::email.eq(email)))
+        .execute(&mut conn)
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let new = NewOtpCode {
+        id: Uuid::new_v4(),
+        email: email.to_owned(),
+        code: code.to_owned(),
+        attempts: 0,
+        expires_at,
+        last_sent_at: now,
+        created_at: now,
+    };
+    diesel::insert_into(otp_codes::table)
+        .values(&new)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     Ok(())
 }
 
 /// Verify an OTP code against the database. Returns true if valid.
 /// On success, deletes the OTP row. On failure, increments attempts.
-pub(super) async fn verify_otp_db(db: &DatabaseConnection, email: &str, otp: &str) -> bool {
+pub(super) async fn verify_otp_db(email: &str, otp: &str) -> bool {
     use subtle::ConstantTimeEq;
 
-    let Ok(Some(saved)) = otp_codes::Entity::find()
-        .filter(otp_codes::Column::Email.eq(email))
-        .one(db)
+    let Ok(mut conn) = crate::db::conn().await else {
+        return false;
+    };
+
+    let Ok(Some(saved)) = otp_codes::table
+        .filter(otp_codes::email.eq(email))
+        .first::<OtpCode>(&mut conn)
         .await
+        .optional()
     else {
         return false;
     };
@@ -75,8 +78,10 @@ pub(super) async fn verify_otp_db(db: &DatabaseConnection, email: &str, otp: &st
     let now = Utc::now();
 
     // Expired or too many attempts — delete and reject
-    if saved.expires_at.with_timezone(&Utc) <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
-        let _ = otp_codes::Entity::delete_by_id(saved.id).exec(db).await;
+    if saved.expires_at <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
+        let _ = diesel::delete(otp_codes::table.find(saved.id))
+            .execute(&mut conn)
+            .await;
         return false;
     }
 
@@ -84,43 +89,43 @@ pub(super) async fn verify_otp_db(db: &DatabaseConnection, email: &str, otp: &st
     if saved.code.len() != otp.len() || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes())) {
         // Increment attempts
         let new_attempts = saved.attempts.saturating_add(1);
-        let mut active: otp_codes::ActiveModel = saved.into();
-        active.attempts = ActiveValue::Set(new_attempts);
-        let _ = active.update(db).await;
+        let _ = diesel::update(otp_codes::table.find(saved.id))
+            .set(otp_codes::attempts.eq(new_attempts))
+            .execute(&mut conn)
+            .await;
         return false;
     }
 
     // Valid — delete the OTP row
-    let _ = otp_codes::Entity::delete_by_id(saved.id).exec(db).await;
+    let _ = diesel::delete(otp_codes::table.find(saved.id))
+        .execute(&mut conn)
+        .await;
     true
 }
 
 /// Check if the OTP for this email is still within the resend cooldown.
-pub(super) async fn otp_in_cooldown(
-    db: &DatabaseConnection,
-    email: &str,
-    cooldown_secs: i64,
-) -> bool {
+pub(super) async fn otp_in_cooldown(email: &str, cooldown_secs: i64) -> bool {
     let now = Utc::now();
-    otp_codes::Entity::find()
-        .filter(otp_codes::Column::Email.eq(email))
-        .one(db)
+    let Ok(mut conn) = crate::db::conn().await else {
+        return false;
+    };
+    otp_codes::table
+        .filter(otp_codes::email.eq(email))
+        .first::<OtpCode>(&mut conn)
         .await
         .ok()
-        .flatten()
-        .is_some_and(|entry| {
-            entry.last_sent_at.with_timezone(&Utc) + Duration::seconds(cooldown_secs) > now
-        })
+        .is_some_and(|entry| entry.last_sent_at + Duration::seconds(cooldown_secs) > now)
 }
 
 /// Clean up expired OTP entries (called periodically or at boot).
 #[allow(dead_code)]
-pub(super) async fn cleanup_expired_otps(db: &DatabaseConnection) {
+pub(super) async fn cleanup_expired_otps() {
     let now = Utc::now();
-    let _ = otp_codes::Entity::delete_many()
-        .filter(otp_codes::Column::ExpiresAt.lte(now))
-        .exec(db)
-        .await;
+    if let Ok(mut conn) = crate::db::conn().await {
+        let _ = diesel::delete(otp_codes::table.filter(otp_codes::expires_at.le(now)))
+            .execute(&mut conn)
+            .await;
+    }
 }
 
 // --- Auth validation helpers ---

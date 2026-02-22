@@ -1,3 +1,5 @@
+type Result<T> = crate::error::AppResult<T>;
+
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
@@ -5,20 +7,16 @@ use axum::{
     http::HeaderMap,
     Json,
 };
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-type Result<T> = crate::error::AppResult<T>;
-
 pub(super) use super::matrix_support;
 use super::{error_response, state::require_auth_db, ErrorSpec};
-use crate::models::_entities::{events, profiles};
+use crate::db::models::events::Event;
+use crate::db::models::profiles::Profile;
+use crate::db::schema::{events, profiles};
 
 mod dm_rooms;
 mod event_rooms;
@@ -82,43 +80,53 @@ pub(super) async fn resolve_dm_room(
 }
 
 pub(super) async fn sync_event_membership_after_attend_background(
-    db: &DatabaseConnection,
     event_id: Uuid,
     profile_id: Uuid,
 ) -> std::result::Result<(), String> {
-    let event = events::Entity::find_by_id(event_id)
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|e| e.to_string())?;
+
+    let event = events::table
+        .find(event_id)
+        .first::<Event>(&mut conn)
         .await
-        .map_err(|error| error.to_string())?
+        .optional()
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("event not found for membership sync: {event_id}"))?;
-    let profile = profiles::Entity::find_by_id(profile_id)
-        .one(db)
+    let profile = profiles::table
+        .find(profile_id)
+        .first::<Profile>(&mut conn)
         .await
-        .map_err(|error| error.to_string())?
+        .optional()
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("profile not found for membership sync: {profile_id}"))?;
 
     let headers = HeaderMap::new();
-    membership::sync_event_membership_after_attend_result(db, &headers, &event, &profile).await
+    membership::sync_event_membership_after_attend_result(&headers, &event, &profile).await
 }
 
 pub(super) async fn sync_event_membership_after_leave_background(
-    db: &DatabaseConnection,
     event_id: Uuid,
     profile_id: Uuid,
 ) -> std::result::Result<(), String> {
-    let event = events::Entity::find_by_id(event_id)
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|e| e.to_string())?;
+
+    let event = events::table
+        .find(event_id)
+        .first::<Event>(&mut conn)
         .await
-        .map_err(|error| error.to_string())?
+        .optional()
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("event not found for membership leave sync: {event_id}"))?;
-    let profile = profiles::Entity::find_by_id(profile_id)
-        .one(db)
+    let profile = profiles::table
+        .find(profile_id)
+        .first::<Profile>(&mut conn)
         .await
-        .map_err(|error| error.to_string())?
+        .optional()
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("profile not found for membership leave sync: {profile_id}"))?;
 
     let headers = HeaderMap::new();
-    membership::sync_event_membership_after_leave_result(db, &headers, &event, &profile).await
+    membership::sync_event_membership_after_leave_result(&headers, &event, &profile).await
 }
 
 pub(super) async fn sync_profile_avatar_best_effort(
@@ -187,26 +195,30 @@ pub(super) fn build_pending_token() -> String {
 }
 
 pub(super) async fn require_auth_profile_for_matrix(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-) -> std::result::Result<(profiles::Model, Uuid), Response> {
-    let (_session, user) = require_auth_db(db, headers)
+) -> std::result::Result<(Profile, Uuid), Response> {
+    let (_session, user) = require_auth_db(headers)
         .await
         .map_err(|response| *response)?;
-    let profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(db)
+
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|_e| profile_not_found_response(headers))?;
+
+    let profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|_error| profile_not_found_response(headers))?
         .ok_or_else(|| profile_not_found_response(headers))?;
     Ok((profile, user.pid))
 }
 
 pub(super) async fn load_event_for_matrix(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     event_id: &str,
-) -> std::result::Result<(events::Model, Uuid), Response> {
+) -> std::result::Result<(Event, Uuid), Response> {
     let event_uuid = Uuid::parse_str(event_id).map_err(|_error| {
         error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -219,9 +231,23 @@ pub(super) async fn load_event_for_matrix(
         )
     })?;
 
-    let event = events::Entity::find_by_id(event_uuid)
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|_e| {
+        error_response(
+            axum::http::StatusCode::NOT_FOUND,
+            headers,
+            ErrorSpec {
+                error: format!("Event '{event_id}' not found"),
+                code: "NOT_FOUND",
+                details: None,
+            },
+        )
+    })?;
+
+    let event = events::table
+        .find(event_uuid)
+        .first::<Event>(&mut conn)
         .await
+        .optional()
         .map_err(|_error| {
             error_response(
                 axum::http::StatusCode::NOT_FOUND,

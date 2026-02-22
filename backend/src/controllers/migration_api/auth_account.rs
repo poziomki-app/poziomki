@@ -1,73 +1,76 @@
 #[path = "auth_export_queries.rs"]
 mod auth_export_queries;
 
-use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
 use super::super::state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse};
 use super::auth_helpers::unauthorized_error;
-use crate::models::_entities::{profiles, sessions, users};
-use crate::security;
-use sea_orm::DatabaseConnection;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-
 type Result<T> = crate::error::AppResult<T>;
 
-async fn delete_user_data(
-    db: &DatabaseConnection,
-    user_id: i32,
-) -> std::result::Result<(), crate::error::AppError> {
-    let _ = profiles::Entity::delete_many()
-        .filter(profiles::Column::UserId.eq(user_id))
-        .exec(db)
+use crate::app::AppContext;
+use crate::db::models::profiles::Profile;
+use crate::db::schema::{profiles, sessions, users};
+
+async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error::AppError> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let _ = diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
+        .execute(&mut conn)
         .await;
-    let _ = sessions::Entity::delete_many()
-        .filter(sessions::Column::UserId.eq(user_id))
-        .exec(db)
+    let _ = diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+        .execute(&mut conn)
         .await;
-    let _ = users::Entity::delete_by_id(user_id).exec(db).await;
+    let _ = diesel::delete(users::table.find(user_id))
+        .execute(&mut conn)
+        .await;
     Ok(())
 }
 
 pub(in crate::controllers::migration_api) async fn delete_account(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<DeleteAccountBody>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    if payload.password.is_empty() || !security::verify_password(&payload.password, &user.password)
+    if payload.password.is_empty()
+        || !crate::security::verify_password(&payload.password, &user.password)
     {
         return Ok(unauthorized_error(&headers, "Invalid password"));
     }
 
-    delete_user_data(&ctx.db, user.id).await?;
+    delete_user_data(user.id).await?;
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
 pub(in crate::controllers::migration_api) async fn export_data(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let profile_id = profile.as_ref().map(|p| p.id);
@@ -88,10 +91,10 @@ pub(in crate::controllers::migration_api) async fn export_data(
     });
 
     let (tags, created_events, attended_events, user_uploads) =
-        load_profile_data(&ctx.db, profile_id).await?;
+        load_profile_data(profile_id).await?;
 
-    let user_sessions = auth_export_queries::load_user_sessions(&ctx.db, user.id).await?;
-    let settings = auth_export_queries::load_user_settings(&ctx.db, user.id).await?;
+    let user_sessions = auth_export_queries::load_user_sessions(user.id).await?;
+    let settings = auth_export_queries::load_user_settings(user.id).await?;
 
     let export = serde_json::json!({
         "user": {
@@ -117,7 +120,6 @@ pub(in crate::controllers::migration_api) async fn export_data(
 }
 
 async fn load_profile_data(
-    db: &DatabaseConnection,
     profile_id: Option<uuid::Uuid>,
 ) -> std::result::Result<
     (
@@ -132,10 +134,10 @@ async fn load_profile_data(
         return Ok((vec![], vec![], vec![], vec![]));
     };
 
-    let tags = auth_export_queries::load_user_tags(db, pid).await?;
-    let created = auth_export_queries::load_created_events(db, pid).await?;
-    let attended = auth_export_queries::load_attended_events(db, pid).await?;
-    let uploads = auth_export_queries::load_user_uploads(db, pid).await?;
+    let tags = auth_export_queries::load_user_tags(pid).await?;
+    let created = auth_export_queries::load_created_events(pid).await?;
+    let attended = auth_export_queries::load_attended_events(pid).await?;
+    let uploads = auth_export_queries::load_user_uploads(pid).await?;
 
     Ok((tags, created, attended, uploads))
 }

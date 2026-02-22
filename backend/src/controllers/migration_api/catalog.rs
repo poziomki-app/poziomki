@@ -1,3 +1,5 @@
+type Result<T> = crate::error::AppResult<T>;
+
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
@@ -6,15 +8,9 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{ActiveValue, QueryFilter, QuerySelect, Select};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
-
-type Result<T> = crate::error::AppResult<T>;
 
 use super::{
     error_response,
@@ -24,8 +20,9 @@ use super::{
     },
     ErrorSpec,
 };
-use crate::models::_entities::{degrees, tags};
-use sea_orm::DatabaseConnection;
+use crate::db::models::degrees::Degree;
+use crate::db::models::tags::{NewTag, Tag};
+use crate::db::schema::{degrees, tags};
 
 const PUBLIC_CACHE_MEDIUM: HeaderValue = HeaderValue::from_static("public, max-age=1800");
 
@@ -37,8 +34,8 @@ const fn scope_to_str(scope: TagScope) -> &'static str {
     }
 }
 
-fn bounded_limit(limit: Option<u8>) -> u64 {
-    u64::from(limit.unwrap_or(20).clamp(1, 100))
+fn bounded_limit(limit: Option<u8>) -> i64 {
+    i64::from(limit.unwrap_or(20).clamp(1, 100))
 }
 
 fn str_to_scope(s: &str) -> TagScope {
@@ -49,7 +46,7 @@ fn str_to_scope(s: &str) -> TagScope {
     }
 }
 
-fn tag_model_to_response(tag: &tags::Model) -> TagResponse {
+fn tag_model_to_response(tag: &Tag) -> TagResponse {
     TagResponse {
         id: tag.id.to_string(),
         name: tag.name.clone(),
@@ -61,27 +58,32 @@ fn tag_model_to_response(tag: &tags::Model) -> TagResponse {
 }
 
 pub(super) async fn tags_search(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     Query(query): Query<TagsQuery>,
 ) -> Result<Response> {
     let search = query.search.unwrap_or_default().to_lowercase();
     let limit = bounded_limit(query.limit);
 
-    let mut query_builder: Select<tags::Entity> = tags::Entity::find();
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let mut query_builder = tags::table.into_boxed();
 
     if let Some(scope) = query.scope {
-        query_builder = query_builder.filter(tags::Column::Scope.eq(scope_to_str(scope)));
+        query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
     }
 
     if !search.is_empty() {
-        query_builder = query_builder.filter(tags::Column::Name.contains(&search));
+        let pattern = format!("%{search}%");
+        query_builder = query_builder.filter(tags::name.ilike(pattern));
     }
 
     let all_tags = query_builder
         .limit(limit)
-        .all(&ctx.db)
+        .load::<Tag>(&mut conn)
         .await
-        .map_err(|e: sea_orm::DbErr| crate::error::AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = all_tags
         .iter()
@@ -96,10 +98,9 @@ pub(super) async fn tags_search(
 }
 
 async fn validate_and_insert_tag(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     payload: CreateTagBody,
-) -> std::result::Result<tags::Model, Response> {
+) -> std::result::Result<Tag, Response> {
     let name = payload.name.trim().to_string();
 
     if name.is_empty() || name.chars().count() > 100 {
@@ -116,12 +117,26 @@ async fn validate_and_insert_tag(
 
     let scope_str = scope_to_str(payload.scope);
 
-    let existing = tags::Entity::find()
-        .filter(tags::Column::Scope.eq(scope_str))
-        .filter(tags::Column::Name.eq(&name))
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|e| {
+        tracing::error!(error = %e, "database error checking existing tag");
+        error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: "Internal server error".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        )
+    })?;
+
+    let existing = tags::table
+        .filter(tags::scope.eq(scope_str))
+        .filter(tags::name.eq(&name))
+        .first::<Tag>(&mut conn)
         .await
-        .map_err(|e: sea_orm::DbErr| {
+        .optional()
+        .map_err(|e| {
             tracing::error!(error = %e, "database error checking existing tag");
             error_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -147,42 +162,46 @@ async fn validate_and_insert_tag(
     }
 
     let now = chrono::Utc::now();
-    let tag = tags::ActiveModel {
-        id: ActiveValue::Set(Uuid::new_v4()),
-        name: ActiveValue::Set(name),
-        scope: ActiveValue::Set(scope_str.to_string()),
-        category: ActiveValue::Set(payload.category),
-        emoji: ActiveValue::Set(payload.emoji),
-        onboarding_order: ActiveValue::Set(None),
-        created_at: ActiveValue::Set(now.into()),
-        updated_at: ActiveValue::Set(now.into()),
+    let new_tag = NewTag {
+        id: Uuid::new_v4(),
+        name,
+        scope: scope_str.to_string(),
+        category: payload.category,
+        emoji: payload.emoji,
+        onboarding_order: None,
+        created_at: now,
+        updated_at: now,
     };
 
-    tag.insert(db).await.map_err(|e: sea_orm::DbErr| {
-        tracing::error!(error = %e, "database error inserting tag");
-        error_response(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            headers,
-            ErrorSpec {
-                error: "Internal server error".to_string(),
-                code: "INTERNAL_ERROR",
-                details: None,
-            },
-        )
-    })
+    diesel::insert_into(tags::table)
+        .values(&new_tag)
+        .get_result::<Tag>(&mut conn)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "database error inserting tag");
+            error_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                ErrorSpec {
+                    error: "Internal server error".to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            )
+        })
 }
 
 pub(super) async fn tags_create(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<CreateTagBody>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, _user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    match validate_and_insert_tag(&ctx.db, &headers, payload).await {
+    match validate_and_insert_tag(&headers, payload).await {
         Ok(inserted) => {
             crate::search::invalidate_search_cache();
 
@@ -194,23 +213,28 @@ pub(super) async fn tags_create(
 }
 
 pub(super) async fn degrees_search(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     Query(query): Query<DegreesQuery>,
 ) -> Result<Response> {
     let search = query.search.unwrap_or_default().to_lowercase();
     let limit = bounded_limit(query.limit);
 
-    let mut query_builder: Select<degrees::Entity> = degrees::Entity::find();
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let mut query_builder = degrees::table.into_boxed();
 
     if !search.is_empty() {
-        query_builder = query_builder.filter(degrees::Column::Name.contains(&search));
+        let pattern = format!("%{search}%");
+        query_builder = query_builder.filter(degrees::name.ilike(pattern));
     }
 
     let all_degrees = query_builder
         .limit(limit)
-        .all(&ctx.db)
+        .load::<Degree>(&mut conn)
         .await
-        .map_err(|e: sea_orm::DbErr| crate::error::AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let data = all_degrees
         .iter()

@@ -5,35 +5,36 @@ type Result<T> = crate::error::AppResult<T>;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, Json};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use uuid::Uuid;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
 use super::super::state::require_auth_db;
 use super::{chat_bootstrap_error, matrix_support, MatrixSessionRequest};
-use crate::models::_entities::profiles;
+use crate::db::models::profiles::Profile;
+use crate::db::schema::profiles;
 
 pub(super) async fn create_session(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<MatrixSessionRequest>,
 ) -> Result<Response> {
     let (user_pid, user_name, profile_picture) = {
-        let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+        let (_session, user) = match require_auth_db(&headers).await {
             Ok(auth) => auth,
             Err(response) => return Ok(*response),
         };
-        let pic = profiles::Entity::find()
-            .filter(profiles::Column::UserId.eq(user.id))
-            .one(&ctx.db)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|p| p.profile_picture);
+        let pic = {
+            let mut conn = crate::db::conn().await.ok();
+            match conn.as_mut() {
+                Some(conn) => profiles::table
+                    .filter(profiles::user_id.eq(user.id))
+                    .first::<Profile>(conn)
+                    .await
+                    .ok()
+                    .and_then(|p| p.profile_picture),
+                None => None,
+            }
+        };
         (user.pid.to_string(), user.name, pic)
     };
 
@@ -155,7 +156,7 @@ async fn sync_matrix_avatar(
 }
 
 pub(super) async fn sync_profile_avatar_best_effort(
-    user_pid: &Uuid,
+    user_pid: &uuid::Uuid,
     profile_picture_filename: Option<&str>,
 ) {
     let Some(pic_filename) = profile_picture_filename else {
@@ -193,7 +194,7 @@ fn resolve_avatar_sync_homeserver() -> Option<String> {
     matrix_support::resolve_homeserver()
 }
 
-fn build_avatar_sync_config(user_pid: &Uuid) -> Option<matrix_support::MatrixConnConfig> {
+fn build_avatar_sync_config(user_pid: &uuid::Uuid) -> Option<matrix_support::MatrixConnConfig> {
     match matrix_support::build_conn_config(&user_pid.to_string(), None, None) {
         Ok(config) => Some(config),
         Err(error) => {

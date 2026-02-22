@@ -1,13 +1,10 @@
 use axum::http::HeaderMap;
 use axum::response::Response;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
+use diesel::deserialize::QueryableByName;
+use diesel::sql_types::Integer;
+use diesel_async::RunQueryDsl;
 
 use super::{error_response, ErrorSpec};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
 
 const AUTH_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const AUTH_SIGN_UP_MAX_ATTEMPTS: u32 = 12;
@@ -76,16 +73,22 @@ fn rate_limit_response(headers: &HeaderMap) -> Response {
     )
 }
 
+#[derive(QueryableByName)]
+struct AttemptRow {
+    #[diesel(sql_type = Integer)]
+    attempts: i32,
+}
+
 async fn upsert_attempt(
-    db: &DatabaseConnection,
     key: &str,
     window_secs: i64,
-) -> std::result::Result<i64, sea_orm::DbErr> {
-    let stmt = Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
+) -> std::result::Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    let mut conn = crate::db::conn().await?;
+
+    let row = diesel::sql_query(
         r"
-        INSERT INTO auth_rate_limits (rate_key, window_start, attempts, updated_at)
-        VALUES ($1, NOW(), 1, NOW())
+        INSERT INTO auth_rate_limits (id, rate_key, window_start, attempts, updated_at)
+        VALUES (gen_random_uuid(), $1, NOW(), 1, NOW())
         ON CONFLICT (rate_key) DO UPDATE
         SET
             window_start = CASE
@@ -101,18 +104,16 @@ async fn upsert_attempt(
             updated_at = NOW()
         RETURNING attempts
         ",
-        vec![key.to_string().into(), window_secs.into()],
-    );
+    )
+    .bind::<diesel::sql_types::Text, _>(key)
+    .bind::<diesel::sql_types::BigInt, _>(window_secs)
+    .get_result::<AttemptRow>(&mut conn)
+    .await?;
 
-    let row = db
-        .query_one(stmt)
-        .await?
-        .ok_or_else(|| sea_orm::DbErr::Custom("auth rate limit upsert returned no row".into()))?;
-    row.try_get("", "attempts")
+    Ok(i64::from(row.attempts))
 }
 
 pub(super) async fn enforce_rate_limit(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     action: AuthRateLimitAction,
     subject: &str,
@@ -120,7 +121,7 @@ pub(super) async fn enforce_rate_limit(
     let ip = client_ip(headers);
     let key = format!("{}:{subject}:{ip}", action.key_prefix());
 
-    let attempts = match upsert_attempt(db, &key, AUTH_RATE_LIMIT_WINDOW_SECS).await {
+    let attempts = match upsert_attempt(&key, AUTH_RATE_LIMIT_WINDOW_SECS).await {
         Ok(value) => value,
         Err(error) => {
             // Fail open to avoid auth outage if migration hasn't been applied yet.

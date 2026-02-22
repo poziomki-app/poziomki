@@ -20,16 +20,13 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::state::{DataResponse, EventsQuery};
-use crate::models::_entities::events;
+use crate::db::models::events::Event;
+use crate::db::schema::events;
 use events_support::{not_found_event, require_auth_profile};
 use events_view::attendee_info;
 
@@ -41,27 +38,31 @@ pub(super) use events_view::{build_event_response, build_event_responses};
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
 pub(super) async fn events_list(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Query(query): Query<EventsQuery>,
 ) -> Result<Response> {
-    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+    let (profile, _user_pid) = match require_auth_profile(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let limit = u64::from(query.limit.unwrap_or(20).clamp(1, 100));
+    let limit = i64::from(query.limit.unwrap_or(20).clamp(1, 100));
     let now = Utc::now();
 
-    let all_events = events::Entity::find()
-        .filter(events::Column::StartsAt.gte(now))
-        .order_by_asc(events::Column::StartsAt)
-        .limit(limit)
-        .all(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    let data = events_view::build_event_responses(&ctx.db, &all_events, &profile.id).await?;
+    let all_events = events::table
+        .filter(events::starts_at.ge(now))
+        .order(events::starts_at.asc())
+        .limit(limit)
+        .load::<Event>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let data = events_view::build_event_responses(&all_events, &profile.id).await?;
 
     let mut response = Json(DataResponse { data }).into_response();
     response
@@ -71,22 +72,26 @@ pub(super) async fn events_list(
 }
 
 pub(super) async fn events_mine(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+    let (profile, _user_pid) = match require_auth_profile(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
-    let my_events = events::Entity::find()
-        .filter(events::Column::CreatorId.eq(profile.id))
-        .order_by_desc(events::Column::StartsAt)
-        .all(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    let data = events_view::build_event_responses(&ctx.db, &my_events, &profile.id).await?;
+    let my_events = events::table
+        .filter(events::creator_id.eq(profile.id))
+        .order(events::starts_at.desc())
+        .load::<Event>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let data = events_view::build_event_responses(&my_events, &profile.id).await?;
 
     let mut response = Json(DataResponse { data }).into_response();
     response
@@ -96,11 +101,11 @@ pub(super) async fn events_mine(
 }
 
 pub(super) async fn event_get(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+    let (profile, _user_pid) = match require_auth_profile(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -108,15 +113,21 @@ pub(super) async fn event_get(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    let Some(event) = events::Entity::find_by_id(event_uuid)
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let Some(event) = events::table
+        .find(event_uuid)
+        .first::<Event>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?
     else {
         return Ok(not_found_event(&headers, &id));
     };
 
-    let data = build_event_response(&ctx.db, &event, &profile.id).await?;
+    let data = build_event_response(&event, &profile.id).await?;
     let mut response = Json(DataResponse { data }).into_response();
     response
         .headers_mut()
@@ -125,11 +136,11 @@ pub(super) async fn event_get(
 }
 
 pub(super) async fn event_attendees(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (_profile, _user_pid) = match require_auth_profile(&ctx.db, &headers).await {
+    let (_profile, _user_pid) = match require_auth_profile(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -137,9 +148,15 @@ pub(super) async fn event_attendees(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    let exists = events::Entity::find_by_id(event_uuid)
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let exists = events::table
+        .find(event_uuid)
+        .first::<Event>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?
         .is_some();
 
@@ -147,6 +164,6 @@ pub(super) async fn event_attendees(
         return Ok(not_found_event(&headers, &id));
     }
 
-    let data = attendee_info(&ctx.db, event_uuid).await?;
+    let data = attendee_info(event_uuid).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

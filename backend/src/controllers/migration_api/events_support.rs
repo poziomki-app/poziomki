@@ -1,26 +1,22 @@
 use axum::http::HeaderMap;
-use axum::response::Response;
 use chrono::{DateTime, Utc};
-use sea_orm::QueryFilter;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::controllers::migration_api::{error_response, state::CreateEventBody, ErrorSpec};
-use crate::models::_entities::{events, profiles};
-use sea_orm::DatabaseConnection;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::events::Event;
+use crate::db::models::profiles::Profile;
+use crate::db::schema::{events, profiles};
 
 pub(in crate::controllers::migration_api) type EventDates =
     (String, DateTime<Utc>, Option<DateTime<Utc>>);
-pub(in crate::controllers::migration_api) type HandlerError = Box<Response>;
+pub(in crate::controllers::migration_api) type HandlerError = Box<axum::response::Response>;
 
 pub(in crate::controllers::migration_api) fn validation_error(
     headers: &HeaderMap,
     message: &str,
-) -> Response {
+) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::BAD_REQUEST,
         headers,
@@ -35,7 +31,7 @@ pub(in crate::controllers::migration_api) fn validation_error(
 pub(in crate::controllers::migration_api) fn not_found_event(
     headers: &HeaderMap,
     event_id: &str,
-) -> Response {
+) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::NOT_FOUND,
         headers,
@@ -50,7 +46,7 @@ pub(in crate::controllers::migration_api) fn not_found_event(
 pub(in crate::controllers::migration_api) fn forbidden(
     headers: &HeaderMap,
     message: &str,
-) -> Response {
+) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::FORBIDDEN,
         headers,
@@ -63,15 +59,28 @@ pub(in crate::controllers::migration_api) fn forbidden(
 }
 
 pub(in crate::controllers::migration_api) async fn require_auth_profile(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-) -> std::result::Result<(profiles::Model, Uuid), HandlerError> {
+) -> std::result::Result<(Profile, Uuid), HandlerError> {
     let (_session, user) =
-        crate::controllers::migration_api::state::require_auth_db(db, headers).await?;
-    let profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(db)
+        crate::controllers::migration_api::state::require_auth_db(headers).await?;
+
+    let mut conn = crate::db::conn().await.map_err(|_| {
+        Box::new(error_response(
+            axum::http::StatusCode::NOT_FOUND,
+            headers,
+            ErrorSpec {
+                error: "Profile not found. Create a profile first.".to_string(),
+                code: "NOT_FOUND",
+                details: None,
+            },
+        ))
+    })?;
+
+    let profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
         .await
+        .optional()
         .map_err(|_| {
             Box::new(error_response(
                 axum::http::StatusCode::NOT_FOUND,
@@ -98,10 +107,9 @@ pub(in crate::controllers::migration_api) async fn require_auth_profile(
 }
 
 pub(in crate::controllers::migration_api) async fn load_event(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     id: &str,
-) -> std::result::Result<(events::Model, Uuid), HandlerError> {
+) -> std::result::Result<(Event, Uuid), HandlerError> {
     let event_uuid = Uuid::parse_str(id).map_err(|_| {
         Box::new(error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -114,9 +122,15 @@ pub(in crate::controllers::migration_api) async fn load_event(
         ))
     })?;
 
-    let event = events::Entity::find_by_id(event_uuid)
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|_| Box::new(not_found_event(headers, id)))?;
+
+    let event = events::table
+        .find(event_uuid)
+        .first::<Event>(&mut conn)
+        .await
+        .optional()
         .map_err(|_| Box::new(not_found_event(headers, id)))?
         .ok_or_else(|| Box::new(not_found_event(headers, id)))?;
 

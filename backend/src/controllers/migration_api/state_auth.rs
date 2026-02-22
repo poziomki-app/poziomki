@@ -1,21 +1,16 @@
 use axum::http::HeaderMap;
-use axum::response::Response;
 use chrono::{Duration, Utc};
-use sea_orm::ActiveValue;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use uuid::Uuid;
 
 use super::super::{error_response, ErrorSpec};
 use super::{SessionView, UserView};
-use crate::error::AppError;
-use crate::models::_entities::{sessions, users};
-use sea_orm::DatabaseConnection;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::sessions::{NewSession, Session, SessionUpdate};
+use crate::db::models::users::User;
+use crate::db::schema::{sessions, users};
 
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
@@ -31,7 +26,7 @@ pub(in crate::controllers::migration_api) fn extract_bearer_token(
 
 #[derive(Clone, Debug)]
 pub(in crate::controllers::migration_api) struct CreatedSession {
-    pub(in crate::controllers::migration_api) model: sessions::Model,
+    pub(in crate::controllers::migration_api) model: Session,
     pub(in crate::controllers::migration_api) token: String,
 }
 
@@ -51,47 +46,64 @@ pub(in crate::controllers::migration_api) fn hash_session_token(token: &str) -> 
 }
 
 pub(in crate::controllers::migration_api) async fn resolve_session_by_token(
-    db: &DatabaseConnection,
     token: &str,
-) -> std::result::Result<Option<sessions::Model>, AppError> {
+) -> std::result::Result<Option<Session>, crate::error::AppError> {
     let hashed = session_token_hash(token);
-    sessions::Entity::find()
-        .filter(sessions::Column::Token.eq(&hashed))
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    sessions::table
+        .filter(sessions::token.eq(&hashed))
+        .first::<Session>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| crate::error::AppError::Any(e.into()))
 }
 
 pub(in crate::controllers::migration_api) async fn require_auth_db(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-) -> std::result::Result<(sessions::Model, users::Model), Box<Response>> {
+) -> std::result::Result<(Session, User), Box<axum::response::Response>> {
     let token =
         extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
 
-    let session = resolve_session_by_token(db, &token)
+    let session = resolve_session_by_token(&token)
         .await
         .map_err(|_| Box::new(unauthorized_response(headers)))?
         .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
 
     let now = Utc::now();
-    if session.expires_at.with_timezone(&Utc) <= now {
-        let _ = sessions::Entity::delete_by_id(session.id).exec(db).await;
+    if session.expires_at <= now {
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|_| Box::new(unauthorized_response(headers)))?;
+        let _ = diesel::delete(sessions::table.find(session.id))
+            .execute(&mut conn)
+            .await;
         return Err(Box::new(unauthorized_response(headers)));
     }
 
-    let elapsed = now - session.updated_at.with_timezone(&Utc);
+    let elapsed = now - session.updated_at;
     if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
         let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
-        let mut active: sessions::ActiveModel = session.clone().into();
-        active.updated_at = ActiveValue::Set(now.into());
-        active.expires_at = ActiveValue::Set(new_expires.into());
-        let _ = active.update(db).await;
+        if let Ok(mut conn) = crate::db::conn().await {
+            let _ = diesel::update(sessions::table.find(session.id))
+                .set(&SessionUpdate {
+                    updated_at: Some(now),
+                    expires_at: Some(new_expires),
+                })
+                .execute(&mut conn)
+                .await;
+        }
     }
 
-    let user = users::Entity::find_by_id(session.user_id)
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|_| Box::new(unauthorized_response(headers)))?;
+    let user = users::table
+        .find(session.user_id)
+        .first::<User>(&mut conn)
+        .await
+        .optional()
         .map_err(|_| Box::new(unauthorized_response(headers)))?
         .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
 
@@ -99,43 +111,42 @@ pub(in crate::controllers::migration_api) async fn require_auth_db(
 }
 
 pub(in crate::controllers::migration_api) async fn create_session_db(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     user_id: i32,
-) -> std::result::Result<CreatedSession, AppError> {
+) -> std::result::Result<CreatedSession, crate::error::AppError> {
     let now = Utc::now();
     let session_id = Uuid::new_v4();
     let secret = Uuid::new_v4().simple().to_string();
     let token = format!("{session_id}.{secret}");
-    let session = sessions::ActiveModel {
-        id: ActiveValue::Set(session_id),
-        user_id: ActiveValue::Set(user_id),
-        token: ActiveValue::Set(session_token_hash(&token)),
-        ip_address: ActiveValue::Set(
-            headers
-                .get("x-forwarded-for")
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned),
-        ),
-        user_agent: ActiveValue::Set(
-            headers
-                .get("user-agent")
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned),
-        ),
-        expires_at: ActiveValue::Set((now + Duration::seconds(SESSION_DURATION_SECS)).into()),
-        created_at: ActiveValue::Set(now.into()),
-        updated_at: ActiveValue::Set(now.into()),
+    let new = NewSession {
+        id: session_id,
+        user_id,
+        token: session_token_hash(&token),
+        ip_address: headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .map(ToOwned::to_owned),
+        user_agent: headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .map(ToOwned::to_owned),
+        expires_at: now + Duration::seconds(SESSION_DURATION_SECS),
+        created_at: now,
+        updated_at: now,
     };
-    let model = session
-        .insert(db)
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let model = diesel::insert_into(sessions::table)
+        .values(&new)
+        .get_result::<Session>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
     Ok(CreatedSession { model, token })
 }
 
 pub(in crate::controllers::migration_api) fn session_model_to_view(
-    session: &sessions::Model,
+    session: &Session,
 ) -> SessionView {
     SessionView {
         id: session.id.to_string(),
@@ -148,7 +159,7 @@ pub(in crate::controllers::migration_api) fn session_model_to_view(
     }
 }
 
-pub(in crate::controllers::migration_api) fn user_model_to_view(user: &users::Model) -> UserView {
+pub(in crate::controllers::migration_api) fn user_model_to_view(user: &User) -> UserView {
     UserView {
         id: user.pid.to_string(),
         email: user.email.clone(),
@@ -157,7 +168,7 @@ pub(in crate::controllers::migration_api) fn user_model_to_view(user: &users::Mo
     }
 }
 
-fn unauthorized_response(headers: &HeaderMap) -> Response {
+fn unauthorized_response(headers: &HeaderMap) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::UNAUTHORIZED,
         headers,

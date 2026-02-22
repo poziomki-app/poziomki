@@ -12,12 +12,14 @@ use self::auth_helpers::{
     sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS,
 };
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
+type Result<T> = crate::error::AppResult<T>;
+
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-#[allow(unused_imports)]
-use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
 use super::{
     error_response,
@@ -28,32 +30,26 @@ use super::{
     },
     ErrorSpec,
 };
-use crate::models::_entities::sessions;
+use crate::db::models::sessions::Session;
+use crate::db::schema::sessions;
 use crate::tasks::enqueue_otp_email;
-
-type Result<T> = crate::error::AppResult<T>;
 
 pub(super) use auth_account::{delete_account, export_data};
 pub(super) use auth_session::get_session;
 
 pub(super) async fn sign_up(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<SignUpBody>,
 ) -> Result<Response> {
     let normalized_email = normalize_email(&payload.email);
-    if let Err(response) = enforce_rate_limit(
-        &ctx.db,
-        &headers,
-        AuthRateLimitAction::SignUp,
-        &normalized_email,
-    )
-    .await
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::SignUp, &normalized_email).await
     {
         return Ok(*response);
     }
 
-    let user = match create_user_or_error(&ctx.db, &headers, &payload).await {
+    let user = match create_user_or_error(&headers, &payload).await {
         Ok(user) => user,
         Err(response) => return Ok(response),
     };
@@ -61,10 +57,10 @@ pub(super) async fn sign_up(
     // Generate and send OTP for email verification
     {
         let code = generate_otp_code();
-        upsert_otp(&ctx.db, &normalized_email, &code)
+        upsert_otp(&normalized_email, &code)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?;
-        if let Err(error) = enqueue_otp_email(&ctx.db, &normalized_email, &code).await {
+        if let Err(error) = enqueue_otp_email(&normalized_email, &code).await {
             tracing::error!(%error, email = %normalized_email, "failed to enqueue OTP email after sign up");
         }
     }
@@ -76,14 +72,12 @@ pub(super) async fn sign_up(
 }
 
 pub(super) async fn sign_in(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<SignInBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
-    if let Err(response) =
-        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::SignIn, &email).await
-    {
+    if let Err(response) = enforce_rate_limit(&headers, AuthRateLimitAction::SignIn, &email).await {
         return Ok(*response);
     }
 
@@ -99,46 +93,46 @@ pub(super) async fn sign_in(
         ));
     }
 
-    sign_in_success_or_unauthorized(&ctx.db, &headers, &email, &payload.password).await
+    sign_in_success_or_unauthorized(&headers, &email, &payload.password).await
 }
 
 pub(super) async fn verify_otp(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<VerifyOtpBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
     if let Err(response) =
-        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::VerifyOtp, &email).await
+        enforce_rate_limit(&headers, AuthRateLimitAction::VerifyOtp, &email).await
     {
         return Ok(*response);
     }
 
-    verify_otp_inner(&ctx.db, &headers, &email, &payload.otp).await
+    verify_otp_inner(&headers, &email, &payload.otp).await
 }
 
 pub(super) async fn resend_otp(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<ResendOtpBody>,
 ) -> Result<Response> {
     let email = normalize_email(&payload.email);
     if let Err(response) =
-        enforce_rate_limit(&ctx.db, &headers, AuthRateLimitAction::ResendOtp, &email).await
+        enforce_rate_limit(&headers, AuthRateLimitAction::ResendOtp, &email).await
     {
         return Ok(*response);
     }
 
-    let exists = find_user_by_email(&ctx.db, &email).await?.is_some();
+    let exists = find_user_by_email(&email).await?.is_some();
 
     if exists {
-        let in_cooldown = otp_in_cooldown(&ctx.db, &email, OTP_RESEND_COOLDOWN_SECS).await;
+        let in_cooldown = otp_in_cooldown(&email, OTP_RESEND_COOLDOWN_SECS).await;
         if !in_cooldown {
             let code = generate_otp_code();
-            upsert_otp(&ctx.db, &email, &code)
+            upsert_otp(&email, &code)
                 .await
                 .map_err(|e| crate::error::AppError::Any(e.into()))?;
-            if let Err(error) = enqueue_otp_email(&ctx.db, &email, &code).await {
+            if let Err(error) = enqueue_otp_email(&email, &code).await {
                 tracing::error!(%error, email = %email, "failed to enqueue OTP email after resend");
             }
         }
@@ -152,33 +146,37 @@ pub(super) async fn deliver_otp_email_job(to: &str, code: &str) {
 }
 
 pub(super) async fn sign_out(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
     if let Some(token) = extract_bearer_token(&headers) {
         let hashed = hash_session_token(&token);
-        let _ = sessions::Entity::delete_many()
-            .filter(sessions::Column::Token.eq(&hashed))
-            .exec(&ctx.db)
-            .await;
+        if let Ok(mut conn) = crate::db::conn().await {
+            let _ = diesel::delete(sessions::table.filter(sessions::token.eq(&hashed)))
+                .execute(&mut conn)
+                .await;
+        }
     }
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
 pub(super) async fn sessions(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
     let now = Utc::now();
-    let user_sessions = sessions::Entity::find()
-        .filter(sessions::Column::UserId.eq(user.id))
-        .filter(sessions::Column::ExpiresAt.gt(now))
-        .all(&ctx.db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let user_sessions = sessions::table
+        .filter(sessions::user_id.eq(user.id))
+        .filter(sessions::expires_at.gt(now))
+        .load::<Session>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 

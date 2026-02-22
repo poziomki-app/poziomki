@@ -1,40 +1,37 @@
 use axum::http::HeaderMap;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
 use super::{bootstrap_matrix_auth, chat_bootstrap_error, is_matrix_room_id, matrix_support};
-use crate::models::_entities::{events, profiles, users};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::events::Event;
+use crate::db::models::profiles::Profile;
+use crate::db::models::users::User;
+use crate::db::schema::{profiles, users};
 
 pub(super) async fn sync_event_membership_after_attend_result(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
+    event: &Event,
+    profile: &Profile,
 ) -> std::result::Result<(), String> {
     if let Some(room_id) = event
         .conversation_id
         .as_deref()
         .filter(|value| is_matrix_room_id(value))
     {
-        ensure_profile_joined_room_best_effort(db, headers, event, profile, room_id).await?;
+        ensure_profile_joined_room_best_effort(headers, event, profile, room_id).await?;
     }
     Ok(())
 }
 
 pub(super) async fn sync_event_membership_after_leave_result(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
+    event: &Event,
+    profile: &Profile,
 ) -> std::result::Result<(), String> {
     let Some(room_id) = event_room_id(event) else {
         return Ok(());
     };
-    let Some(user) = load_leave_sync_user(db, profile).await else {
+    let Some(user) = load_leave_sync_user(profile).await else {
         return Ok(());
     };
     let bootstrap = bootstrap_leave_sync_user(headers, &user.pid)
@@ -57,20 +54,28 @@ pub(super) async fn sync_event_membership_after_leave_result(
     Ok(())
 }
 
-fn event_room_id(event: &events::Model) -> Option<&str> {
+fn event_room_id(event: &Event) -> Option<&str> {
     event
         .conversation_id
         .as_deref()
         .filter(|value| is_matrix_room_id(value))
 }
 
-async fn load_leave_sync_user(
-    db: &DatabaseConnection,
-    profile: &profiles::Model,
-) -> Option<users::Model> {
-    match users::Entity::find_by_id(profile.user_id).one(db).await {
-        Ok(Some(user)) => Some(user),
-        Ok(None) => None,
+async fn load_leave_sync_user(profile: &Profile) -> Option<User> {
+    let mut conn = match crate::db::conn().await {
+        Ok(conn) => conn,
+        Err(error) => {
+            tracing::warn!(%error, "failed to get db connection for event leave sync");
+            return None;
+        }
+    };
+    match users::table
+        .find(profile.user_id)
+        .first::<User>(&mut conn)
+        .await
+        .optional()
+    {
+        Ok(user) => user,
         Err(error) => {
             tracing::warn!(%error, "failed to load user for event leave sync");
             None
@@ -95,13 +100,12 @@ async fn bootstrap_leave_sync_user(
 }
 
 pub(super) async fn ensure_profile_joined_event_room(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
+    event: &Event,
+    profile: &Profile,
     room_id: &str,
 ) -> std::result::Result<(), axum::response::Response> {
-    ensure_profile_joined_room_best_effort(db, headers, event, profile, room_id)
+    ensure_profile_joined_room_best_effort(headers, event, profile, room_id)
         .await
         .map_err(|error| {
             tracing::warn!(%error, event_id = %event.id, "event room join failed");
@@ -115,16 +119,19 @@ pub(super) async fn ensure_profile_joined_event_room(
 }
 
 async fn ensure_profile_joined_room_best_effort(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
-    event: &events::Model,
-    profile: &profiles::Model,
+    event: &Event,
+    profile: &Profile,
     room_id: &str,
 ) -> std::result::Result<(), String> {
-    let attendee_user = users::Entity::find_by_id(profile.user_id)
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|e| e.to_string())?;
+
+    let attendee_user = users::table
+        .find(profile.user_id)
+        .first::<User>(&mut conn)
         .await
-        .map_err(|error| error.to_string())?
+        .optional()
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| "User not found for attendee profile".to_string())?;
 
     let attendee_bootstrap =
@@ -150,16 +157,20 @@ async fn ensure_profile_joined_room_best_effort(
             ));
         }
 
-        let creator_profile = profiles::Entity::find_by_id(event.creator_id)
-            .one(db)
+        let creator_profile = profiles::table
+            .find(event.creator_id)
+            .first::<Profile>(&mut conn)
             .await
-            .map_err(|db_error| db_error.to_string())?
+            .optional()
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| "Event creator profile not found".to_string())?;
 
-        let creator_user = users::Entity::find_by_id(creator_profile.user_id)
-            .one(db)
+        let creator_user = users::table
+            .find(creator_profile.user_id)
+            .first::<User>(&mut conn)
             .await
-            .map_err(|db_error| db_error.to_string())?
+            .optional()
+            .map_err(|e| e.to_string())?
             .ok_or_else(|| "Event creator user not found".to_string())?;
 
         let creator_bootstrap =

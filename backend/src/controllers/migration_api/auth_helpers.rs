@@ -1,15 +1,12 @@
 use axum::response::Response;
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use lettre::{
     message::{header, Mailbox, MultiPart},
     transport::smtp::{authentication::Credentials, client::TlsParameters},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
-};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
 };
 
 use super::super::{
@@ -20,13 +17,9 @@ use super::super::{
     },
     ErrorSpec,
 };
-use crate::models::{
-    _entities::users,
-    users::{Model as UserModel, ModelError, RegisterParams},
-};
-use crate::security;
+use crate::db::models::users::{NewUser, User, UserChangeset};
+use crate::db::schema::users;
 use crate::tasks::enqueue_otp_email;
-use sea_orm::DatabaseConnection;
 
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
 
@@ -69,10 +62,9 @@ pub(super) fn invalid_otp_response(headers: &HeaderMap) -> Response {
 }
 
 pub(super) async fn create_user_or_error(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     payload: &SignUpBody,
-) -> std::result::Result<users::Model, Response> {
+) -> std::result::Result<User, Response> {
     if let Err(spec) = validate_signup_payload(payload) {
         return Err(error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -84,27 +76,27 @@ pub(super) async fn create_user_or_error(
     let email = normalize_email(&payload.email);
     let name = payload.name.trim().to_string();
 
-    UserModel::create_with_password(
-        db,
-        &RegisterParams {
-            email,
-            password: payload.password.clone(),
-            name,
-        },
-    )
-    .await
-    .map_err(|err| match err {
-        ModelError::EntityAlreadyExists => error_response(
-            axum::http::StatusCode::CONFLICT,
+    // Check if user already exists
+    let mut conn = crate::db::conn().await.map_err(|e| {
+        tracing::error!("Pool error: {e}");
+        error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             headers,
             ErrorSpec {
-                error: "User already exists".to_string(),
-                code: "CONFLICT",
+                error: "Registration failed".to_string(),
+                code: "INTERNAL_ERROR",
                 details: None,
             },
-        ),
-        other => {
-            tracing::error!("User creation failed: {other}");
+        )
+    })?;
+
+    let existing = users::table
+        .filter(users::email.eq(&email))
+        .first::<User>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| {
+            tracing::error!("User lookup failed: {e}");
             error_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 headers,
@@ -114,39 +106,90 @@ pub(super) async fn create_user_or_error(
                     details: None,
                 },
             )
-        }
-    })
+        })?;
+
+    if existing.is_some() {
+        return Err(error_response(
+            axum::http::StatusCode::CONFLICT,
+            headers,
+            ErrorSpec {
+                error: "User already exists".to_string(),
+                code: "CONFLICT",
+                details: None,
+            },
+        ));
+    }
+
+    let password_hash = crate::security::hash_password(&payload.password).map_err(|e| {
+        tracing::error!("Password hashing failed: {e}");
+        error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: "Registration failed".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        )
+    })?;
+
+    let new_user = NewUser {
+        pid: uuid::Uuid::new_v4(),
+        email,
+        password: password_hash,
+        api_key: format!("lo-{}", uuid::Uuid::new_v4()),
+        name,
+    };
+
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .get_result::<User>(&mut conn)
+        .await
+        .map_err(|e| {
+            tracing::error!("User creation failed: {e}");
+            error_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                ErrorSpec {
+                    error: "Registration failed".to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            )
+        })
 }
 
 async fn find_authenticated_user(
-    db: &DatabaseConnection,
     email: &str,
     password: &str,
-) -> std::result::Result<Option<users::Model>, crate::error::AppError> {
-    let user = users::Entity::find()
-        .filter(users::Column::Email.eq(email))
-        .one(db)
+) -> std::result::Result<Option<User>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let user = users::table
+        .filter(users::email.eq(email))
+        .first::<User>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
-    Ok(user.filter(|u| security::verify_password(password, &u.password)))
+    Ok(user.filter(|u| crate::security::verify_password(password, &u.password)))
 }
 
 pub(super) async fn sign_in_success_or_unauthorized(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     email: &str,
     password: &str,
 ) -> std::result::Result<Response, crate::error::AppError> {
-    let Some(user) = find_authenticated_user(db, email, password).await? else {
+    let Some(user) = find_authenticated_user(email, password).await? else {
         return Ok(unauthorized_error(headers, "Authentication failed"));
     };
 
     if user.email_verified_at.is_none() {
         // Send a fresh OTP so the user can verify
         let code = generate_otp_code();
-        upsert_otp(db, email, &code).await?;
-        if let Err(error) = enqueue_otp_email(db, email, &code).await {
+        upsert_otp(email, &code).await?;
+        if let Err(error) = enqueue_otp_email(email, &code).await {
             tracing::error!(%error, email = %email, "failed to enqueue OTP email for unverified sign in");
         }
 
@@ -161,7 +204,7 @@ pub(super) async fn sign_in_success_or_unauthorized(
         ));
     }
 
-    let session = create_session_db(db, headers, user.id).await?;
+    let session = create_session_db(headers, user.id).await?;
     let data = serde_json::json!({
         "user": user_model_to_view(&user),
         "token": session.token,
@@ -171,13 +214,16 @@ pub(super) async fn sign_in_success_or_unauthorized(
 }
 
 pub(super) async fn find_user_by_email(
-    db: &DatabaseConnection,
     email: &str,
-) -> std::result::Result<Option<users::Model>, crate::error::AppError> {
-    users::Entity::find()
-        .filter(users::Column::Email.eq(email))
-        .one(db)
+) -> std::result::Result<Option<User>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    users::table
+        .filter(users::email.eq(email))
+        .first::<User>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))
 }
 
@@ -336,30 +382,36 @@ pub(super) async fn send_otp_email(to: &str, code: &str) {
 }
 
 pub(super) async fn verify_otp_inner(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     email: &str,
     otp: &str,
 ) -> std::result::Result<Response, crate::error::AppError> {
-    let Some(user) = find_user_by_email(db, email).await? else {
+    let Some(user) = find_user_by_email(email).await? else {
         return Ok(invalid_otp_response(headers));
     };
 
-    let otp_ok = verify_otp_db(db, email, otp).await;
+    let otp_ok = verify_otp_db(email, otp).await;
     if !otp_ok {
         return Ok(invalid_otp_response(headers));
     }
 
     let mut verified_user = user.clone();
     if verified_user.email_verified_at.is_none() {
-        let mut active: users::ActiveModel = user.clone().into();
         let now = Utc::now();
-        active.email_verified_at = sea_orm::ActiveValue::Set(Some(now.into()));
-        let _ = active.update(db).await;
-        verified_user.email_verified_at = Some(now.into());
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|e| crate::error::AppError::Any(e.into()))?;
+        let _ = diesel::update(users::table.find(user.id))
+            .set(&UserChangeset {
+                email_verified_at: Some(Some(now)),
+                updated_at: Some(now),
+            })
+            .execute(&mut conn)
+            .await;
+        verified_user.email_verified_at = Some(now);
     }
 
-    let session = create_session_db(db, headers, verified_user.id).await?;
+    let session = create_session_db(headers, verified_user.id).await?;
     Ok(Json(DataResponse {
         data: serde_json::json!({
             "user": user_model_to_view(&verified_user),

@@ -1,10 +1,11 @@
+type Result<T> = crate::error::AppResult<T>;
+
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
-
-type Result<T> = crate::error::AppResult<T>;
 
 use super::super::{
     error_response,
@@ -12,12 +13,8 @@ use super::super::{
     ErrorSpec,
 };
 use super::{MatrixDmRoomRequest, MatrixRoomData};
-use crate::models::_entities::users;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use crate::db::models::users::User;
+use crate::db::schema::users;
 
 mod creation;
 mod pending;
@@ -25,11 +22,11 @@ mod pending;
 use pending::ensure_dm_room;
 
 pub(super) async fn resolve_dm_room(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<MatrixDmRoomRequest>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
@@ -61,10 +58,15 @@ pub(super) async fn resolve_dm_room(
         ));
     }
 
-    let target_exists = users::Entity::find()
-        .filter(users::Column::Pid.eq(target_pid))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let target_exists = users::table
+        .filter(users::pid.eq(target_pid))
+        .first::<User>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?
         .is_some();
     if !target_exists {
@@ -79,7 +81,7 @@ pub(super) async fn resolve_dm_room(
         ));
     }
 
-    let room_id = match ensure_dm_room(&ctx.db, &headers, user.pid, target_pid).await {
+    let room_id = match ensure_dm_room(&headers, user.pid, target_pid).await {
         Ok(room_id) => room_id,
         Err(response) => return Ok(response),
     };

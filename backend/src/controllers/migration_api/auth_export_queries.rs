@@ -1,37 +1,42 @@
-use sea_orm::DatabaseConnection;
-use sea_orm::QueryFilter;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::error::AppError;
-use crate::models::_entities::{
+use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::event_tags::EventTag;
+use crate::db::models::events::Event;
+use crate::db::models::profile_tags::ProfileTag;
+use crate::db::models::sessions::Session;
+use crate::db::models::tags::Tag;
+use crate::db::models::uploads::Upload;
+use crate::db::models::user_settings::UserSetting;
+use crate::db::schema::{
     event_attendees, event_tags, events, profile_tags, sessions, tags, uploads, user_settings,
-};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
 };
 
 pub(super) async fn load_user_tags(
-    db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let pt_rows = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.eq(profile_id))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let pt_rows = profile_tags::table
+        .filter(profile_tags::profile_id.eq(profile_id))
+        .load::<ProfileTag>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids: Vec<Uuid> = pt_rows.iter().map(|pt| pt.tag_id).collect();
     if tag_ids.is_empty() {
         return Ok(vec![]);
     }
 
-    let tag_rows = tags::Entity::find()
-        .filter(tags::Column::Id.is_in(tag_ids))
-        .all(db)
+    let tag_rows = tags::table
+        .filter(tags::id.eq_any(&tag_ids))
+        .load::<Tag>(&mut conn)
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(tag_rows
         .iter()
@@ -48,18 +53,21 @@ pub(super) async fn load_user_tags(
 }
 
 pub(super) async fn load_created_events(
-    db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let event_rows = events::Entity::find()
-        .filter(events::Column::CreatorId.eq(profile_id))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let event_rows = events::table
+        .filter(events::creator_id.eq(profile_id))
+        .load::<Event>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let mut result = Vec::with_capacity(event_rows.len());
     for event in &event_rows {
-        let event_tag_rows = load_tags_for_event(db, event.id).await?;
+        let event_tag_rows = load_tags_for_event(&mut conn, event.id).await?;
         result.push(serde_json::json!({
             "id": event.id.to_string(),
             "title": event.title,
@@ -76,25 +84,25 @@ pub(super) async fn load_created_events(
 }
 
 async fn load_tags_for_event(
-    db: &DatabaseConnection,
+    conn: &mut diesel_async::AsyncPgConnection,
     event_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let et_rows = event_tags::Entity::find()
-        .filter(event_tags::Column::EventId.eq(event_id))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let et_rows = event_tags::table
+        .filter(event_tags::event_id.eq(event_id))
+        .load::<EventTag>(conn)
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids: Vec<Uuid> = et_rows.iter().map(|et| et.tag_id).collect();
     if tag_ids.is_empty() {
         return Ok(vec![]);
     }
 
-    let tag_rows = tags::Entity::find()
-        .filter(tags::Column::Id.is_in(tag_ids))
-        .all(db)
+    let tag_rows = tags::table
+        .filter(tags::id.eq_any(&tag_ids))
+        .load::<Tag>(conn)
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(tag_rows
         .iter()
@@ -108,25 +116,28 @@ async fn load_tags_for_event(
 }
 
 pub(super) async fn load_attended_events(
-    db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let att_rows = event_attendees::Entity::find()
-        .filter(event_attendees::Column::ProfileId.eq(profile_id))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let att_rows = event_attendees::table
+        .filter(event_attendees::profile_id.eq(profile_id))
+        .load::<EventAttendee>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let event_ids: Vec<Uuid> = att_rows.iter().map(|a| a.event_id).collect();
     if event_ids.is_empty() {
         return Ok(vec![]);
     }
 
-    let event_rows = events::Entity::find()
-        .filter(events::Column::Id.is_in(event_ids.clone()))
-        .all(db)
+    let event_rows = events::table
+        .filter(events::id.eq_any(&event_ids))
+        .load::<Event>(&mut conn)
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(att_rows
         .iter()
@@ -143,14 +154,17 @@ pub(super) async fn load_attended_events(
 }
 
 pub(super) async fn load_user_sessions(
-    db: &DatabaseConnection,
     user_id: i32,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let session_rows = sessions::Entity::find()
-        .filter(sessions::Column::UserId.eq(user_id))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let session_rows = sessions::table
+        .filter(sessions::user_id.eq(user_id))
+        .load::<Session>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(session_rows
         .iter()
@@ -167,15 +181,18 @@ pub(super) async fn load_user_sessions(
 }
 
 pub(super) async fn load_user_uploads(
-    db: &DatabaseConnection,
     profile_id: Uuid,
-) -> std::result::Result<Vec<serde_json::Value>, AppError> {
-    let upload_rows = uploads::Entity::find()
-        .filter(uploads::Column::OwnerId.eq(profile_id))
-        .filter(uploads::Column::Deleted.eq(false))
-        .all(db)
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let upload_rows = uploads::table
+        .filter(uploads::owner_id.eq(profile_id))
+        .filter(uploads::deleted.eq(false))
+        .load::<Upload>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(upload_rows
         .iter()
@@ -192,14 +209,18 @@ pub(super) async fn load_user_uploads(
 }
 
 pub(super) async fn load_user_settings(
-    db: &DatabaseConnection,
     user_id: i32,
-) -> std::result::Result<Option<serde_json::Value>, AppError> {
-    let settings = user_settings::Entity::find()
-        .filter(user_settings::Column::UserId.eq(user_id))
-        .one(db)
+) -> std::result::Result<Option<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn()
         .await
-        .map_err(|e| AppError::Any(e.into()))?;
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let settings = user_settings::table
+        .filter(user_settings::user_id.eq(user_id))
+        .first::<UserSetting>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(settings.map(|s| {
         serde_json::json!({

@@ -19,12 +19,8 @@ use axum::{
 };
 use base64::Engine;
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::state::{
@@ -34,9 +30,10 @@ use super::state::{
     SuccessResponse, UploadResponse, UploadStatusResponse, UploadUrlResponse,
 };
 use super::{error_response, ErrorSpec};
-use crate::models::_entities::{profiles, uploads};
+use crate::db::models::profiles::Profile;
+use crate::db::models::uploads::{NewUpload, Upload, UploadChangeset};
+use crate::db::schema::{profiles, uploads};
 use crate::tasks::enqueue_upload_variants_generation;
-use sea_orm::DatabaseConnection;
 use uploads_multipart::HandlerError;
 use uploads_support::{
     bad_request, forbidden, not_found, storage_delete, storage_read, storage_signed_put_url,
@@ -59,8 +56,9 @@ impl serde::Serialize for AuthCheckResponse {
     }
 }
 
-fn internal_upload_error(headers: &HeaderMap, message: &str) -> Response {
-    error_response(
+#[allow(clippy::unnecessary_box_returns)]
+fn internal_upload_error(headers: &HeaderMap, message: &str) -> HandlerError {
+    Box::new(error_response(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         headers,
         ErrorSpec {
@@ -68,7 +66,7 @@ fn internal_upload_error(headers: &HeaderMap, message: &str) -> Response {
             code: "INTERNAL_ERROR",
             details: None,
         },
-    )
+    ))
 }
 
 fn dev_upload_url(filename: &str) -> String {
@@ -99,17 +97,20 @@ fn encode_thumbhash(raw: &[u8]) -> String {
 
 const DIRECT_UPLOAD_PRESIGN_EXPIRY_SECS: u64 = 3600;
 
-async fn require_auth_profile(
-    db: &DatabaseConnection,
-    headers: &HeaderMap,
-) -> std::result::Result<profiles::Model, HandlerError> {
-    let (_session, user) = require_auth_db(db, headers)
+async fn require_auth_profile(headers: &HeaderMap) -> std::result::Result<Profile, HandlerError> {
+    let (_session, user) = require_auth_db(headers)
         .await
         .map_err(|e| e as HandlerError)?;
-    profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(db)
+
+    let mut conn = crate::db::conn().await.map_err(|_| {
+        Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")) as HandlerError
+    })?;
+
+    profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
         .await
+        .optional()
         .map_err(|_| {
             Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")) as HandlerError
         })?
@@ -117,16 +118,20 @@ async fn require_auth_profile(
 }
 
 async fn load_owned_upload(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     filename: &str,
     owner_profile_id: uuid::Uuid,
-) -> std::result::Result<uploads::Model, HandlerError> {
-    let upload = uploads::Entity::find()
-        .filter(uploads::Column::Filename.eq(filename))
-        .filter(uploads::Column::Deleted.eq(false))
-        .one(db)
+) -> std::result::Result<Upload, HandlerError> {
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|_| Box::new(not_found(headers)) as HandlerError)?;
+
+    let upload = uploads::table
+        .filter(uploads::filename.eq(filename))
+        .filter(uploads::deleted.eq(false))
+        .first::<Upload>(&mut conn)
+        .await
+        .optional()
         .map_err(|_| Box::new(not_found(headers)) as HandlerError)?
         .ok_or_else(|| Box::new(not_found(headers)) as HandlerError)?;
 
@@ -148,16 +153,15 @@ fn variant_stem(filename: &str) -> Option<&str> {
 }
 
 async fn load_owned_original_for_variant(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     filename: &str,
     owner_profile_id: uuid::Uuid,
-) -> std::result::Result<Option<uploads::Model>, HandlerError> {
+) -> std::result::Result<Option<Upload>, HandlerError> {
     let Some(stem) = variant_stem(filename) else {
         return Ok(None);
     };
 
-    let candidates = [
+    let candidates = vec![
         format!("{stem}.jpg"),
         format!("{stem}.jpeg"),
         format!("{stem}.png"),
@@ -165,12 +169,17 @@ async fn load_owned_original_for_variant(
         format!("{stem}.avif"),
     ];
 
-    uploads::Entity::find()
-        .filter(uploads::Column::OwnerId.eq(Some(owner_profile_id)))
-        .filter(uploads::Column::Deleted.eq(false))
-        .filter(uploads::Column::Filename.is_in(candidates))
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|_| Box::new(not_found(headers)) as HandlerError)?;
+
+    uploads::table
+        .filter(uploads::owner_id.eq(Some(owner_profile_id)))
+        .filter(uploads::deleted.eq(false))
+        .filter(uploads::filename.eq_any(candidates))
+        .first::<Upload>(&mut conn)
+        .await
+        .optional()
         .map_err(|_| Box::new(not_found(headers)) as HandlerError)
 }
 
@@ -204,17 +213,17 @@ fn extract_filename_from_original_uri(
 }
 
 pub(super) async fn auth_check(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let profile = require_auth_profile(&headers).await?;
         let filename = extract_filename_from_original_uri(&headers)?;
-        match load_owned_upload(&ctx.db, &headers, &filename, profile.id).await {
+        match load_owned_upload(&headers, &filename, profile.id).await {
             Ok(_upload) => {}
             Err(owned_err) => {
                 let has_owned_original =
-                    load_owned_original_for_variant(&ctx.db, &headers, &filename, profile.id)
+                    load_owned_original_for_variant(&headers, &filename, profile.id)
                         .await?
                         .is_some();
                 if !has_owned_original {
@@ -231,7 +240,7 @@ pub(super) async fn auth_check(
 }
 
 pub(super) async fn file_get(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(filename): Path<String>,
 ) -> Result<Response> {
@@ -240,20 +249,20 @@ pub(super) async fn file_get(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
-        let mime_type =
-            if let Ok(upload) = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await {
-                upload.mime_type
-            } else {
-                let has_owned_original =
-                    load_owned_original_for_variant(&ctx.db, &headers, &filename, profile.id)
-                        .await?
-                        .is_some();
-                if !has_owned_original {
-                    return Err(Box::new(not_found(&headers)));
-                }
-                "image/webp".to_string()
-            };
+        let profile = require_auth_profile(&headers).await?;
+        let mime_type = if let Ok(upload) = load_owned_upload(&headers, &filename, profile.id).await
+        {
+            upload.mime_type
+        } else {
+            let has_owned_original =
+                load_owned_original_for_variant(&headers, &filename, profile.id)
+                    .await?
+                    .is_some();
+            if !has_owned_original {
+                return Err(Box::new(not_found(&headers)));
+            }
+            "image/webp".to_string()
+        };
 
         if is_production_mode() {
             let url = storage_signed_url(&headers, &filename).await?;
@@ -279,45 +288,53 @@ pub(super) async fn file_get(
 }
 
 pub(super) async fn file_upload(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     multipart: Multipart,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let profile = require_auth_profile(&headers).await?;
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
         storage_upload(&headers, &filename, &parsed.bytes, &parsed.mime_type).await?;
         let (thumbnail_url, standard_url) = fallback_variant_urls(&headers, &filename).await;
 
-        // Store upload record in DB
         let context_str = format!("{:?}", parsed.context).to_ascii_lowercase();
         let now = Utc::now();
         let upload_id = Uuid::new_v4();
-        let upload = uploads::ActiveModel {
-            id: ActiveValue::Set(upload_id),
-            filename: ActiveValue::Set(filename.clone()),
-            owner_id: ActiveValue::Set(Some(profile.id)),
-            context: ActiveValue::Set(context_str),
-            context_id: ActiveValue::Set(parsed.context_id),
-            mime_type: ActiveValue::Set(parsed.mime_type.clone()),
-            deleted: ActiveValue::Set(false),
-            thumbhash: ActiveValue::Set(None),
-            has_variants: ActiveValue::Set(false),
-            created_at: ActiveValue::Set(now.into()),
-            updated_at: ActiveValue::Set(now.into()),
+        let new_upload = NewUpload {
+            id: upload_id,
+            filename: filename.clone(),
+            owner_id: Some(profile.id),
+            context: context_str,
+            context_id: parsed.context_id,
+            mime_type: parsed.mime_type.clone(),
+            deleted: false,
+            thumbhash: None,
+            has_variants: false,
+            created_at: now,
+            updated_at: now,
         };
-        if let Err(error) = upload.insert(&ctx.db).await {
+
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|_| internal_upload_error(&headers, "Failed to save upload metadata"))?;
+
+        if let Err(error) = diesel::insert_into(uploads::table)
+            .values(&new_upload)
+            .execute(&mut conn)
+            .await
+        {
             tracing::warn!(filename = %filename, %error, "failed to insert upload row");
             let _ = uploads_storage::delete(&filename).await;
-            return Err(Box::new(internal_upload_error(
+            return Err(internal_upload_error(
                 &headers,
                 "Failed to save upload metadata",
-            )));
+            ));
         }
 
-        if let Err(error) = enqueue_upload_variants_generation(&ctx.db, &upload_id).await {
+        if let Err(error) = enqueue_upload_variants_generation(&upload_id).await {
             tracing::warn!(
                 %error,
                 upload_id = %upload_id,
@@ -348,7 +365,7 @@ pub(super) async fn file_upload(
 }
 
 pub(super) async fn file_upload_presign(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<DirectUploadPresignBody>,
 ) -> Result<Response> {
@@ -361,7 +378,7 @@ pub(super) async fn file_upload_presign(
             )));
         }
 
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
+        let profile = require_auth_profile(&headers).await?;
         let context = parse_upload_context(payload.context.as_deref()).ok_or_else(|| {
             Box::new(bad_request(
                 &headers,
@@ -397,23 +414,32 @@ pub(super) async fn file_upload_presign(
 
         let context_str = format!("{context:?}").to_ascii_lowercase();
         let now = Utc::now();
-        let upload = uploads::ActiveModel {
-            id: ActiveValue::Set(Uuid::new_v4()),
-            filename: ActiveValue::Set(filename.clone()),
-            owner_id: ActiveValue::Set(Some(profile.id)),
-            context: ActiveValue::Set(context_str),
-            context_id: ActiveValue::Set(payload.context_id.clone().filter(|s| !s.trim().is_empty())),
-            mime_type: ActiveValue::Set(payload.mime_type.clone()),
-            deleted: ActiveValue::Set(false),
-            thumbhash: ActiveValue::Set(None),
-            has_variants: ActiveValue::Set(false),
-            created_at: ActiveValue::Set(now.into()),
-            updated_at: ActiveValue::Set(now.into()),
+        let new_upload = NewUpload {
+            id: Uuid::new_v4(),
+            filename: filename.clone(),
+            owner_id: Some(profile.id),
+            context: context_str,
+            context_id: payload.context_id.clone().filter(|s| !s.trim().is_empty()),
+            mime_type: payload.mime_type.clone(),
+            deleted: false,
+            thumbhash: None,
+            has_variants: false,
+            created_at: now,
+            updated_at: now,
         };
-        upload.insert(&ctx.db).await.map_err(|error| {
-            tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
-            Box::new(internal_upload_error(&headers, "Failed to save upload metadata"))
-        })?;
+
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|_| internal_upload_error(&headers, "Failed to save upload metadata"))?;
+
+        diesel::insert_into(uploads::table)
+            .values(&new_upload)
+            .execute(&mut conn)
+            .await
+            .map_err(|error| {
+                tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
+                internal_upload_error(&headers, "Failed to save upload metadata")
+            })?;
 
         Ok(Json(DataResponse {
             data: DirectUploadPresignResponse {
@@ -432,7 +458,7 @@ pub(super) async fn file_upload_presign(
 }
 
 pub(super) async fn file_upload_complete(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<DirectUploadCompleteBody>,
 ) -> Result<Response> {
@@ -441,8 +467,8 @@ pub(super) async fn file_upload_complete(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
-        let upload = load_owned_upload(&ctx.db, &headers, &payload.filename, profile.id).await?;
+        let profile = require_auth_profile(&headers).await?;
+        let upload = load_owned_upload(&headers, &payload.filename, profile.id).await?;
 
         let exists = uploads_storage::exists(&payload.filename)
             .await
@@ -461,7 +487,7 @@ pub(super) async fn file_upload_complete(
             return Err(Box::new(not_found(&headers)));
         }
 
-        if let Err(error) = enqueue_upload_variants_generation(&ctx.db, &upload.id).await {
+        if let Err(error) = enqueue_upload_variants_generation(&upload.id).await {
             tracing::warn!(
                 %error,
                 upload_id = %upload.id,
@@ -493,7 +519,7 @@ pub(super) async fn file_upload_complete(
 }
 
 pub(super) async fn file_status(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(filename): Path<String>,
 ) -> Result<Response> {
@@ -502,8 +528,8 @@ pub(super) async fn file_status(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
-        let upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
+        let profile = require_auth_profile(&headers).await?;
+        let upload = load_owned_upload(&headers, &filename, profile.id).await?;
 
         let url = public_upload_url(&headers, &upload.filename).await;
         let (thumbnail_url, standard_url) = if upload.has_variants {
@@ -537,12 +563,15 @@ pub(super) async fn file_status(
 }
 
 pub(super) async fn generate_upload_variants_job(
-    db: &DatabaseConnection,
     upload_id: Uuid,
 ) -> std::result::Result<(), String> {
-    let Some(upload) = uploads::Entity::find_by_id(upload_id)
-        .one(db)
+    let mut conn = crate::db::conn().await.map_err(|error| error.to_string())?;
+
+    let Some(upload) = uploads::table
+        .find(upload_id)
+        .first::<Upload>(&mut conn)
         .await
+        .optional()
         .map_err(|error| error.to_string())?
     else {
         return Ok(());
@@ -583,12 +612,16 @@ pub(super) async fn generate_upload_variants_job(
         ));
     }
 
-    let mut active: uploads::ActiveModel = upload.into();
-    active.thumbhash = ActiveValue::Set(Some(variants.thumbhash));
-    active.has_variants = ActiveValue::Set(true);
-    active.updated_at = ActiveValue::Set(Utc::now().into());
-    active
-        .update(db)
+    let changeset = UploadChangeset {
+        thumbhash: Some(Some(variants.thumbhash)),
+        has_variants: Some(true),
+        updated_at: Some(Utc::now()),
+        ..Default::default()
+    };
+
+    diesel::update(uploads::table.find(upload.id))
+        .set(&changeset)
+        .execute(&mut conn)
         .await
         .map_err(|error| format!("update upload variants metadata failed: {error}"))?;
 
@@ -596,7 +629,7 @@ pub(super) async fn generate_upload_variants_job(
 }
 
 pub(super) async fn file_delete(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Path(filename): Path<String>,
 ) -> Result<Response> {
@@ -605,8 +638,8 @@ pub(super) async fn file_delete(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&ctx.db, &headers).await?;
-        let upload = load_owned_upload(&ctx.db, &headers, &filename, profile.id).await?;
+        let profile = require_auth_profile(&headers).await?;
+        let upload = load_owned_upload(&headers, &filename, profile.id).await?;
 
         storage_delete(&headers, &filename).await?;
 
@@ -617,15 +650,26 @@ pub(super) async fn file_delete(
         let _ = uploads_storage::delete(&std_name).await;
 
         // Mark as deleted
-        let mut active: uploads::ActiveModel = upload.into();
-        active.deleted = ActiveValue::Set(true);
-        active.updated_at = ActiveValue::Set(Utc::now().into());
-        if let Err(error) = active.update(&ctx.db).await {
+        let changeset = UploadChangeset {
+            deleted: Some(true),
+            updated_at: Some(Utc::now()),
+            ..Default::default()
+        };
+
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|_| internal_upload_error(&headers, "Failed to update upload metadata"))?;
+
+        if let Err(error) = diesel::update(uploads::table.find(upload.id))
+            .set(&changeset)
+            .execute(&mut conn)
+            .await
+        {
             tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
-            return Err(Box::new(internal_upload_error(
+            return Err(internal_upload_error(
                 &headers,
                 "Failed to update upload metadata",
-            )));
+            ));
         }
 
         Ok(Json(SuccessResponse { success: true }).into_response())

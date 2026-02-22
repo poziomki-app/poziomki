@@ -11,20 +11,21 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{QueryFilter, QueryOrder, QuerySelect};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::state::{
     require_auth_db, DataResponse, MatchingQuery, MatchingTagResponse, ProfileRecommendation,
     TagScope,
 };
-use crate::models::_entities::{event_tags, events, profile_tags, profiles, tags, users};
-use sea_orm::DatabaseConnection;
+use crate::db::models::event_tags::EventTag;
+use crate::db::models::events::Event;
+use crate::db::models::profile_tags::ProfileTag;
+use crate::db::models::profiles::Profile;
+use crate::db::models::tags::Tag;
+use crate::db::models::users::User;
+use crate::db::schema::{event_tags, events, profile_tags, profiles, tags, users};
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
@@ -37,30 +38,35 @@ fn scope_from_str(s: &str) -> TagScope {
 }
 
 async fn load_profile_tag_ids(
-    db: &DatabaseConnection,
     profile_id: Uuid,
 ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
-    let tag_links = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.eq(profile_id))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let tag_links = profile_tags::table
+        .filter(profile_tags::profile_id.eq(profile_id))
+        .load::<ProfileTag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
     Ok(tag_links.iter().map(|l| l.tag_id).collect())
 }
 
 /// Batch-load all tag links and tag models for a set of profile IDs in 2 queries.
-/// Returns a map from `profile_id` → `Vec<MatchingTagResponse>`.
+/// Returns a map from `profile_id` -> `Vec<MatchingTagResponse>`.
 async fn batch_load_profile_tags(
-    db: &DatabaseConnection,
     profile_ids: &[Uuid],
 ) -> std::result::Result<HashMap<Uuid, Vec<MatchingTagResponse>>, crate::error::AppError> {
     if profile_ids.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let all_links = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.is_in(profile_ids.to_vec()))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let all_links = profile_tags::table
+        .filter(profile_tags::profile_id.eq_any(profile_ids))
+        .load::<ProfileTag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -68,14 +74,14 @@ async fn batch_load_profile_tags(
     let tag_models = if all_tag_ids.is_empty() {
         vec![]
     } else {
-        tags::Entity::find()
-            .filter(tags::Column::Id.is_in(all_tag_ids))
-            .all(db)
+        tags::table
+            .filter(tags::id.eq_any(&all_tag_ids.into_iter().collect::<Vec<_>>()))
+            .load::<Tag>(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?
     };
 
-    let tag_by_id: HashMap<Uuid, &tags::Model> = tag_models.iter().map(|t| (t.id, t)).collect();
+    let tag_by_id: HashMap<Uuid, &Tag> = tag_models.iter().map(|t| (t.id, t)).collect();
 
     let mut result: HashMap<Uuid, Vec<MatchingTagResponse>> = HashMap::new();
     for link in &all_links {
@@ -95,16 +101,19 @@ async fn batch_load_profile_tags(
 
 /// Batch-load tag ID sets for a set of profile IDs in 1 query.
 async fn batch_load_profile_tag_ids(
-    db: &DatabaseConnection,
     profile_ids: &[Uuid],
 ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
     if profile_ids.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let all_links = profile_tags::Entity::find()
-        .filter(profile_tags::Column::ProfileId.is_in(profile_ids.to_vec()))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let all_links = profile_tags::table
+        .filter(profile_tags::profile_id.eq_any(profile_ids))
+        .load::<ProfileTag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -119,15 +128,17 @@ async fn batch_load_profile_tag_ids(
 }
 
 async fn load_users_by_ids(
-    db: &DatabaseConnection,
     user_ids: &[i32],
-) -> std::result::Result<Vec<users::Model>, crate::error::AppError> {
+) -> std::result::Result<Vec<User>, crate::error::AppError> {
     if user_ids.is_empty() {
         return Ok(vec![]);
     }
-    users::Entity::find()
-        .filter(users::Column::Id.is_in(user_ids.to_vec()))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    users::table
+        .filter(users::id.eq_any(user_ids))
+        .load::<User>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))
 }
@@ -143,7 +154,7 @@ fn haversine_km(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     2.0 * R * a.sqrt().asin()
 }
 
-/// Returns a 0.0–1.0 score: 1.0 when distance is 0, 0.0 at or beyond `max_km`.
+/// Returns a 0.0-1.0 score: 1.0 when distance is 0, 0.0 at or beyond `max_km`.
 fn proximity_score(distance_km: f64, max_km: f64) -> f64 {
     if max_km <= 0.0 {
         return 0.0;
@@ -162,44 +173,49 @@ fn jaccard(a: &HashSet<Uuid>, b: &HashSet<Uuid>) -> f64 {
 }
 
 pub(super) async fn profiles_recommendations(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Query(query): Query<MatchingQuery>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
     let limit = query.limit.unwrap_or(10).clamp(1, 50) as usize;
 
-    // Load current user's profile and tags
-    let my_profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
+    // Load current user's profile and tags
+    let my_profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
     let my_tag_ids = match &my_profile {
-        Some(p) => load_profile_tag_ids(&ctx.db, p.id).await?,
+        Some(p) => load_profile_tag_ids(p.id).await?,
         None => HashSet::new(),
     };
 
     // Fetch candidate profiles (more than limit so we can score and rank)
-    let candidates = profiles::Entity::find()
-        .filter(profiles::Column::UserId.ne(user.id))
-        .order_by_desc(profiles::Column::CreatedAt)
+    let candidates = profiles::table
+        .filter(profiles::user_id.ne(user.id))
+        .order(profiles::created_at.desc())
         .limit(200)
-        .all(&ctx.db)
+        .load::<Profile>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     // Batch-load all candidate tag IDs in one query
     let candidate_ids: Vec<Uuid> = candidates.iter().map(|c| c.id).collect();
-    let all_candidate_tags = batch_load_profile_tag_ids(&ctx.db, &candidate_ids).await?;
+    let all_candidate_tags = batch_load_profile_tag_ids(&candidate_ids).await?;
 
     // Score each candidate
-    let mut scored: Vec<(f64, &profiles::Model)> = Vec::with_capacity(candidates.len());
+    let mut scored: Vec<(f64, &Profile)> = Vec::with_capacity(candidates.len());
     for candidate in &candidates {
         let candidate_tags = all_candidate_tags
             .get(&candidate.id)
@@ -228,11 +244,11 @@ pub(super) async fn profiles_recommendations(
     let top = scored.into_iter().take(limit).collect::<Vec<_>>();
 
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
-    let user_models = load_users_by_ids(&ctx.db, &user_ids).await?;
+    let user_models = load_users_by_ids(&user_ids).await?;
 
     // Batch-load tags and resolve images for the top profiles
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
-    let top_tags = batch_load_profile_tags(&ctx.db, &top_ids).await?;
+    let top_tags = batch_load_profile_tags(&top_ids).await?;
 
     let pic_urls: Vec<String> = top
         .iter()
@@ -281,17 +297,22 @@ pub(super) async fn profiles_recommendations(
 
 /// Batch-load tag ID sets for a set of event IDs in 1 query.
 async fn batch_load_event_tag_ids(
-    db: &DatabaseConnection,
     event_ids: &[Uuid],
 ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
     if event_ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let all_links = event_tags::Entity::find()
-        .filter(event_tags::Column::EventId.is_in(event_ids.to_vec()))
-        .all(db)
+
+    let mut conn = crate::db::conn()
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let all_links = event_tags::table
+        .filter(event_tags::event_id.eq_any(event_ids))
+        .load::<EventTag>(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
     let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
     for link in &all_links {
         result.entry(link.event_id).or_default().insert(link.tag_id);
@@ -300,45 +321,50 @@ async fn batch_load_event_tag_ids(
 }
 
 pub(super) async fn events_recommendations(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Query(query): Query<MatchingQuery>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&ctx.db, &headers).await {
+    let (_session, user) = match require_auth_db(&headers).await {
         Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
 
     let limit = query.limit.unwrap_or(20).clamp(1, 100) as usize;
 
-    // Load current user's profile and tags
-    let my_profile = profiles::Entity::find()
-        .filter(profiles::Column::UserId.eq(user.id))
-        .one(&ctx.db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    // Load current user's profile and tags
+    let my_profile = profiles::table
+        .filter(profiles::user_id.eq(user.id))
+        .first::<Profile>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let my_profile_id = my_profile.as_ref().map_or(Uuid::nil(), |p| p.id);
 
     let my_tag_ids = match &my_profile {
-        Some(p) => load_profile_tag_ids(&ctx.db, p.id).await?,
+        Some(p) => load_profile_tag_ids(p.id).await?,
         None => HashSet::new(),
     };
 
     let now = Utc::now();
 
     // Fetch future events
-    let future_events = events::Entity::find()
-        .filter(events::Column::StartsAt.gte(now))
-        .order_by_asc(events::Column::StartsAt)
+    let future_events = events::table
+        .filter(events::starts_at.ge(now))
+        .order(events::starts_at.asc())
         .limit(100)
-        .all(&ctx.db)
+        .load::<Event>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     // Batch-load all event tag IDs in one query
     let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();
-    let all_event_tags = batch_load_event_tag_ids(&ctx.db, &event_ids).await?;
+    let all_event_tags = batch_load_event_tag_ids(&event_ids).await?;
 
     // Resolve user geo query: lat, lng, max radius in km (default 20 km)
     let user_geo = query.lat.zip(query.lng).map(|(lat, lng)| {
@@ -350,9 +376,9 @@ pub(super) async fn events_recommendations(
     });
 
     // Score each event by user tag overlap + optional proximity.
-    // Without geo: pure tag relevance (0–100).
+    // Without geo: pure tag relevance (0-100).
     // With geo: tags still dominate (85 %) with proximity as mild tiebreaker (15 %).
-    let mut scored: Vec<(f64, &events::Model)> = Vec::with_capacity(future_events.len());
+    let mut scored: Vec<(f64, &Event)> = Vec::with_capacity(future_events.len());
     for event in &future_events {
         let event_tag_ids = all_event_tags.get(&event.id).cloned().unwrap_or_default();
         #[allow(clippy::cast_precision_loss)]
@@ -372,7 +398,7 @@ pub(super) async fn events_recommendations(
             };
             tag_score * 0.85 + geo_bonus
         } else {
-            // No location provided — pure tag relevance, no penalty
+            // No location provided - pure tag relevance, no penalty
             tag_score
         };
 
@@ -388,8 +414,8 @@ pub(super) async fn events_recommendations(
 
     let top = scored.into_iter().take(limit).collect::<Vec<_>>();
 
-    let top_models: Vec<events::Model> = top.iter().map(|(_, event)| (*event).clone()).collect();
-    let base = super::events::build_event_responses(&ctx.db, &top_models, &my_profile_id).await?;
+    let top_models: Vec<Event> = top.iter().map(|(_, event)| (*event).clone()).collect();
+    let base = super::events::build_event_responses(&top_models, &my_profile_id).await?;
     let score_by_event: HashMap<String, f64> = top
         .iter()
         .map(|(score, event)| (event.id.to_string(), *score))
@@ -420,7 +446,7 @@ mod tests {
 
     #[test]
     fn jaccard_partial_overlap() {
-        // {1,2,3} ∩ {2,3,4} = {2,3}  →  2/4 = 0.5
+        // {1,2,3} intersect {2,3,4} = {2,3}  ->  2/4 = 0.5
         let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
         let b: HashSet<Uuid> = [id(2), id(3), id(4)].into();
         assert!((jaccard(&a, &b) - 0.5).abs() < f64::EPSILON);
@@ -449,7 +475,7 @@ mod tests {
 
     #[test]
     fn event_combined_score_with_geo_max() {
-        // Perfect tags + perfect proximity → 85 + 15 = 100
+        // Perfect tags + perfect proximity -> 85 + 15 = 100
         let tag_score: f64 = 100.0;
         let geo_bonus = proximity_score(0.0, 20.0) * 15.0;
         let combined = tag_score * 0.85 + geo_bonus;
@@ -458,7 +484,7 @@ mod tests {
 
     #[test]
     fn event_score_is_asymmetric() {
-        // User has 2 tags, event has 10 tags, 2 overlap → 100%
+        // User has 2 tags, event has 10 tags, 2 overlap -> 100%
         let user_tags: HashSet<Uuid> = [id(1), id(2)].into();
         let event_tags: HashSet<Uuid> = (1..=10).map(id).collect();
         let shared = user_tags.intersection(&event_tags).count();
@@ -466,7 +492,7 @@ mod tests {
         let score = (shared as f64 / user_tags.len() as f64) * 100.0;
         assert!((score - 100.0).abs() < f64::EPSILON);
 
-        // Flip: user has 10 tags, event has 2 tags, 2 overlap → 20%
+        // Flip: user has 10 tags, event has 2 tags, 2 overlap -> 20%
         let user_tags2: HashSet<Uuid> = (1..=10).map(id).collect();
         let event_tags2: HashSet<Uuid> = [id(1), id(2)].into();
         let shared2 = user_tags2.intersection(&event_tags2).count();

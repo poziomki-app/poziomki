@@ -2,19 +2,17 @@ use std::collections::HashSet;
 
 use axum::http::HeaderMap;
 use axum::response::Response;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::super::{bootstrap_matrix_auth, matrix_support};
-use crate::models::_entities::{event_attendees, profiles, users};
+use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::profiles::Profile;
+use crate::db::models::users::User;
+use crate::db::schema::{event_attendees, profiles, users};
 
 pub(super) async fn create_event_room(
-    db: &DatabaseConnection,
     headers: &HeaderMap,
     event_id: Uuid,
     event_title: &str,
@@ -34,7 +32,7 @@ pub(super) async fn create_event_room(
             )
         })?;
 
-    let attendee_user_pids = load_event_attendee_user_pids(db, event_id, creator_profile_id)
+    let attendee_user_pids = load_event_attendee_user_pids(event_id, creator_profile_id)
         .await
         .map_err(|e| {
             tracing::warn!(%e, "failed to load event attendees for room creation");
@@ -79,7 +77,6 @@ pub(super) async fn create_event_room(
 }
 
 pub(super) async fn can_access_event_chat(
-    db: &DatabaseConnection,
     event_id: Uuid,
     creator_profile_id: Uuid,
     requester_profile_id: Uuid,
@@ -88,26 +85,34 @@ pub(super) async fn can_access_event_chat(
         return Ok(true);
     }
 
-    let attendee = event_attendees::Entity::find()
-        .filter(event_attendees::Column::EventId.eq(event_id))
-        .filter(event_attendees::Column::ProfileId.eq(requester_profile_id))
-        .filter(event_attendees::Column::Status.eq("going"))
-        .one(db)
+    let mut conn = crate::db::conn()
         .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let attendee = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::profile_id.eq(requester_profile_id))
+        .filter(event_attendees::status.eq("going"))
+        .first::<EventAttendee>(&mut conn)
+        .await
+        .optional()
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     Ok(attendee.is_some())
 }
 
 async fn load_event_attendee_user_pids(
-    db: &DatabaseConnection,
     event_id: Uuid,
     creator_profile_id: Uuid,
 ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
-    let attendee_rows = event_attendees::Entity::find()
-        .filter(event_attendees::Column::EventId.eq(event_id))
-        .filter(event_attendees::Column::Status.eq("going"))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let attendee_rows = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::status.eq("going"))
+        .load::<EventAttendee>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -117,9 +122,9 @@ async fn load_event_attendee_user_pids(
         .collect();
     profile_ids.insert(creator_profile_id);
 
-    let profile_models = profiles::Entity::find()
-        .filter(profiles::Column::Id.is_in(profile_ids))
-        .all(db)
+    let profile_models = profiles::table
+        .filter(profiles::id.eq_any(&profile_ids.into_iter().collect::<Vec<_>>()))
+        .load::<Profile>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
     let user_ids: Vec<i32> = profile_models
@@ -130,9 +135,9 @@ async fn load_event_attendee_user_pids(
         return Ok(HashSet::new());
     }
 
-    let user_models = users::Entity::find()
-        .filter(users::Column::Id.is_in(user_ids))
-        .all(db)
+    let user_models = users::table
+        .filter(users::id.eq_any(&user_ids))
+        .load::<User>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 

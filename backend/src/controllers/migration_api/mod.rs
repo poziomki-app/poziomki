@@ -153,7 +153,7 @@ fn ops_token_matches(headers: &HeaderMap) -> bool {
         .is_some_and(|actual| actual == expected)
 }
 
-async fn outbox_status(State(ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
+async fn outbox_status(State(_ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
     if ops_status_token().is_none() {
         return Ok((axum::http::StatusCode::NOT_FOUND, "not found").into_response());
     }
@@ -162,7 +162,7 @@ async fn outbox_status(State(ctx): State<AppContext>, headers: HeaderMap) -> Res
         return Ok((axum::http::StatusCode::UNAUTHORIZED, "unauthorized").into_response());
     }
 
-    let metrics = crate::tasks::outbox_stats_snapshot(&ctx.db).await?;
+    let metrics = crate::tasks::outbox_stats_snapshot().await?;
     let status = if metrics.failed_jobs > 0 || metrics.oldest_ready_job_age_seconds > 60 {
         "degraded"
     } else {
@@ -342,21 +342,19 @@ pub(crate) async fn deliver_matrix_profile_avatar_sync_job(
 }
 
 pub(crate) async fn deliver_matrix_event_membership_sync_job(
-    db: &sea_orm::DatabaseConnection,
     event_id: uuid::Uuid,
     profile_id: uuid::Uuid,
     leave: bool,
 ) -> std::result::Result<(), String> {
     if leave {
-        matrix::sync_event_membership_after_leave_background(db, event_id, profile_id).await
+        matrix::sync_event_membership_after_leave_background(event_id, profile_id).await
     } else {
-        matrix::sync_event_membership_after_attend_background(db, event_id, profile_id).await
+        matrix::sync_event_membership_after_attend_background(event_id, profile_id).await
     }
 }
 
 pub(crate) async fn deliver_upload_variants_generation_job(
-    db: &sea_orm::DatabaseConnection,
     upload_id: uuid::Uuid,
 ) -> std::result::Result<(), String> {
-    uploads::generate_upload_variants_job(db, upload_id).await
+    uploads::generate_upload_variants_job(upload_id).await
 }

@@ -49,15 +49,9 @@ impl From<&str> for AppError {
     }
 }
 
-impl From<sea_orm::DbErr> for AppError {
-    fn from(value: sea_orm::DbErr) -> Self {
+impl From<diesel::result::Error> for AppError {
+    fn from(value: diesel::result::Error) -> Self {
         Self::Any(value.into())
-    }
-}
-
-impl From<sea_orm::TryGetError> for AppError {
-    fn from(value: sea_orm::TryGetError) -> Self {
-        Self::Message(format!("{value:?}"))
     }
 }
 

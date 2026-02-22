@@ -1,21 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
 use axum::response::IntoResponse;
-use axum::response::Response;
-use sea_orm::QueryFilter;
-#[allow(unused_imports)]
-use sea_orm::{
-    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, IntoActiveModel as _,
-    PaginatorTrait as _, QueryFilter as _, QueryOrder as _, TransactionTrait as _,
-};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::controllers::migration_api::state::{
     AttendeeFullInfo, AttendeeStatus, DataResponse, EventResponse, EventTagResponse,
     ProfilePreview, TagScope,
 };
-use crate::models::_entities::{event_attendees, event_tags, events, profiles, tags};
-use sea_orm::DatabaseConnection;
+use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::event_tags::EventTag;
+use crate::db::models::events::Event;
+use crate::db::models::profiles::Profile;
+use crate::db::models::tags::Tag;
+use crate::db::models::users::User;
+use crate::db::schema::{event_attendees, event_tags, profiles, tags, users};
 
 const PREVIEW_LIMIT: usize = 5;
 
@@ -45,7 +45,7 @@ fn unknown_preview(id: Uuid) -> ProfilePreview {
 
 #[derive(Clone)]
 struct AttendeeRow {
-    profile: profiles::Model,
+    profile: Profile,
     status: AttendeeStatus,
 }
 
@@ -56,16 +56,19 @@ struct EventBatchContext {
 }
 
 async fn load_profiles_by_ids(
-    db: &DatabaseConnection,
     ids: &[Uuid],
-) -> std::result::Result<HashMap<Uuid, profiles::Model>, crate::error::AppError> {
+) -> std::result::Result<HashMap<Uuid, Profile>, crate::error::AppError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let models = profiles::Entity::find()
-        .filter(profiles::Column::Id.is_in(ids.to_vec()))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let models = profiles::table
+        .filter(profiles::id.eq_any(ids))
+        .load::<Profile>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -73,12 +76,15 @@ async fn load_profiles_by_ids(
 }
 
 async fn load_attendee_rows(
-    db: &DatabaseConnection,
     event_id: Uuid,
 ) -> std::result::Result<Vec<AttendeeRow>, crate::error::AppError> {
-    let links = event_attendees::Entity::find()
-        .filter(event_attendees::Column::EventId.eq(event_id))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let links = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .load::<EventAttendee>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
@@ -87,8 +93,7 @@ async fn load_attendee_rows(
         return Ok(vec![]);
     }
 
-    let profiles_map =
-        load_profiles_by_ids(db, &profile_ids.into_iter().collect::<Vec<_>>()).await?;
+    let profiles_map = load_profiles_by_ids(&profile_ids.into_iter().collect::<Vec<_>>()).await?;
 
     let mut rows: Vec<AttendeeRow> = links
         .iter()
@@ -108,8 +113,7 @@ async fn load_attendee_rows(
 }
 
 async fn load_event_batch_context(
-    db: &DatabaseConnection,
-    event_models: &[events::Model],
+    event_models: &[Event],
 ) -> std::result::Result<EventBatchContext, crate::error::AppError> {
     if event_models.is_empty() {
         return Ok(EventBatchContext {
@@ -122,8 +126,7 @@ async fn load_event_batch_context(
     let event_ids: Vec<Uuid> = event_models.iter().map(|e| e.id).collect();
 
     let creator_ids: HashSet<Uuid> = event_models.iter().map(|e| e.creator_id).collect();
-    let creator_models =
-        load_profiles_by_ids(db, &creator_ids.into_iter().collect::<Vec<_>>()).await?;
+    let creator_models = load_profiles_by_ids(&creator_ids.into_iter().collect::<Vec<_>>()).await?;
     let creators: HashMap<Uuid, ProfilePreview> = creator_models
         .into_values()
         .map(|profile| {
@@ -138,15 +141,19 @@ async fn load_event_batch_context(
         })
         .collect();
 
-    let attendee_links = event_attendees::Entity::find()
-        .filter(event_attendees::Column::EventId.is_in(event_ids.clone()))
-        .all(db)
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+
+    let attendee_links = event_attendees::table
+        .filter(event_attendees::event_id.eq_any(&event_ids))
+        .load::<EventAttendee>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let attendee_profile_ids: HashSet<Uuid> = attendee_links.iter().map(|a| a.profile_id).collect();
     let attendee_profiles =
-        load_profiles_by_ids(db, &attendee_profile_ids.into_iter().collect::<Vec<_>>()).await?;
+        load_profiles_by_ids(&attendee_profile_ids.into_iter().collect::<Vec<_>>()).await?;
 
     let mut attendees: HashMap<Uuid, Vec<AttendeeRow>> = HashMap::new();
     for link in &attendee_links {
@@ -164,19 +171,19 @@ async fn load_event_batch_context(
         rows.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
     }
 
-    let tag_links = event_tags::Entity::find()
-        .filter(event_tags::Column::EventId.is_in(event_ids))
-        .all(db)
+    let tag_links = event_tags::table
+        .filter(event_tags::event_id.eq_any(&event_ids))
+        .load::<EventTag>(&mut conn)
         .await
         .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
     let tag_ids: HashSet<Uuid> = tag_links.iter().map(|l| l.tag_id).collect();
-    let tag_models = if tag_ids.is_empty() {
+    let tag_models: HashMap<Uuid, Tag> = if tag_ids.is_empty() {
         HashMap::new()
     } else {
-        tags::Entity::find()
-            .filter(tags::Column::Id.is_in(tag_ids))
-            .all(db)
+        tags::table
+            .filter(tags::id.eq_any(&tag_ids.into_iter().collect::<Vec<_>>()))
+            .load::<Tag>(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?
             .into_iter()
@@ -205,11 +212,7 @@ async fn load_event_batch_context(
     })
 }
 
-fn build_from_context(
-    event: &events::Model,
-    profile_id: &Uuid,
-    ctx: &EventBatchContext,
-) -> EventResponse {
+fn build_from_context(event: &Event, profile_id: &Uuid, ctx: &EventBatchContext) -> EventResponse {
     let attendee_rows = ctx.attendees.get(&event.id).cloned().unwrap_or_default();
 
     let attendees_count = attendee_rows
@@ -321,11 +324,10 @@ async fn resolve_event_images(responses: &mut [EventResponse]) {
 }
 
 pub(in crate::controllers::migration_api) async fn build_event_responses(
-    db: &DatabaseConnection,
-    event_models: &[events::Model],
+    event_models: &[Event],
     profile_id: &Uuid,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
-    let batch_ctx = load_event_batch_context(db, event_models).await?;
+    let batch_ctx = load_event_batch_context(event_models).await?;
     let mut responses: Vec<EventResponse> = event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))
@@ -335,29 +337,30 @@ pub(in crate::controllers::migration_api) async fn build_event_responses(
 }
 
 pub(in crate::controllers::migration_api) async fn build_event_response(
-    db: &DatabaseConnection,
-    event: &events::Model,
+    event: &Event,
     profile_id: &Uuid,
 ) -> std::result::Result<EventResponse, crate::error::AppError> {
-    let responses = build_event_responses(db, std::slice::from_ref(event), profile_id).await?;
+    let responses = build_event_responses(std::slice::from_ref(event), profile_id).await?;
     responses.into_iter().next().ok_or_else(|| {
         crate::error::AppError::Message("Failed to build event response".to_string())
     })
 }
 
 pub(in crate::controllers::migration_api) async fn attendee_info(
-    db: &DatabaseConnection,
     event_id: Uuid,
 ) -> std::result::Result<Vec<AttendeeFullInfo>, crate::error::AppError> {
-    let rows = load_attendee_rows(db, event_id).await?;
+    let rows = load_attendee_rows(event_id).await?;
 
     let user_ids: Vec<i32> = rows.iter().map(|r| r.profile.user_id).collect();
-    let users = if user_ids.is_empty() {
+    let user_models = if user_ids.is_empty() {
         vec![]
     } else {
-        crate::models::_entities::users::Entity::find()
-            .filter(crate::models::_entities::users::Column::Id.is_in(user_ids))
-            .all(db)
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|e| crate::error::AppError::Any(e.into()))?;
+        users::table
+            .filter(users::id.eq_any(&user_ids))
+            .load::<User>(&mut conn)
             .await
             .map_err(|e| crate::error::AppError::Any(e.into()))?
     };
@@ -371,7 +374,7 @@ pub(in crate::controllers::migration_api) async fn attendee_info(
     Ok(rows
         .into_iter()
         .map(|row| {
-            let user_pid = users
+            let user_pid = user_models
                 .iter()
                 .find(|u| u.id == row.profile.user_id)
                 .map_or(uuid::Uuid::nil(), |u| u.pid);
@@ -394,7 +397,7 @@ pub(in crate::controllers::migration_api) async fn attendee_info(
 
 pub(in crate::controllers::migration_api) fn created_event_response(
     data: EventResponse,
-) -> Response {
+) -> axum::response::Response {
     (
         axum::http::StatusCode::CREATED,
         axum::Json(DataResponse { data }),
