@@ -45,21 +45,9 @@ tokio = { version = "=1.49.0", default-features = false, features = [
   "signal",
   "time",
 ] }
-async-trait = { version = "0.1" }
 axum = { version = "=0.8.8", features = ["multipart"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-migration = { path = "migration" }
-sea-orm-migration = { version = "=1.1.19", default-features = false, features = ["sqlx-postgres", "runtime-tokio-rustls"] }
-sea-orm = { version = "=1.1.19", default-features = false, features = [
-  "sqlx-sqlite",
-  "sqlx-postgres",
-  "runtime-tokio-rustls",
-  "macros",
-  "with-chrono",
-  "with-json",
-  "with-uuid",
-] }
 chrono = { version = "=0.4.43" }
 validator = { version = "=0.20.0", features = ["derive"] }
 uuid = { version = "=1.20.0", features = ["v4"] }
@@ -78,7 +66,8 @@ webp = "=0.3.1"
 thumbhash = "=0.1.0"
 base64 = "=0.22.1"
 tower-http = { version = "=0.6.8", features = ["set-header"] }
-argon2 = "=0.5.3"
+argon2 = { version = "=0.5.3", features = ["rand"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
 jsonwebtoken = "=9.3.1"
 dotenvy = "=0.15.7"
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }

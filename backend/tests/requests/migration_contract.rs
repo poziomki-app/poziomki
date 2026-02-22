@@ -31,10 +31,8 @@ where
     Fut: Future<Output = ()>,
 {
     let _ = dotenvy::dotenv();
-    let ctx = poziomki_backend::app::build_test_app_context()
-        .await
-        .expect("build test app context");
-    poziomki_backend::app::reset_test_database(&ctx)
+    let ctx = poziomki_backend::app::build_test_app_context().expect("build test app context");
+    poziomki_backend::app::reset_test_database()
         .await
         .expect("truncate test tables");
     let server = TestServer::new(poziomki_backend::app::build_router_with_state(ctx.clone()))

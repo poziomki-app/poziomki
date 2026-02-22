@@ -1,27 +1,10 @@
-use migration::Migrator;
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use sea_orm_migration::MigratorTrait;
-use std::time::Duration;
-
 #[derive(Clone, Debug)]
-pub struct AppContext {
-    pub db: DatabaseConnection,
-}
+pub struct AppContext {}
 
 #[derive(Clone, Debug)]
 struct RuntimeConfig {
     binding: String,
     port: u16,
-    auto_migrate: bool,
-}
-
-fn env_truthy(key: &str, default: bool) -> bool {
-    std::env::var(key).ok().map_or(default, |value| {
-        matches!(
-            value.to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        )
-    })
 }
 
 fn resolve_binding() -> String {
@@ -97,7 +80,6 @@ async fn shutdown_signal() {
 fn load_runtime_config() -> crate::error::AppResult<RuntimeConfig> {
     let binding = resolve_binding();
     let port = resolve_port()?;
-    let auto_migrate = env_truthy("AUTO_MIGRATE", true);
 
     if std::env::var("DATABASE_URL").unwrap_or_default().is_empty() {
         return Err(crate::error::AppError::message("DATABASE_URL must be set"));
@@ -107,11 +89,7 @@ fn load_runtime_config() -> crate::error::AppResult<RuntimeConfig> {
         return Err(crate::error::AppError::message("JWT_SECRET must be set"));
     }
 
-    Ok(RuntimeConfig {
-        binding,
-        port,
-        auto_migrate,
-    })
+    Ok(RuntimeConfig { binding, port })
 }
 
 fn init_diesel_pool() -> crate::error::AppResult<()> {
@@ -120,59 +98,17 @@ fn init_diesel_pool() -> crate::error::AppResult<()> {
     crate::db::init_pool(&url).map_err(crate::error::AppError::Message)
 }
 
-async fn connect_db() -> crate::error::AppResult<DatabaseConnection> {
-    let database_url = std::env::var("DATABASE_URL")
-        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
-
-    let mut opts = ConnectOptions::new(database_url);
-    opts.max_connections(
-        std::env::var("DB_MAX_CONNECTIONS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(20),
-    );
-    opts.min_connections(
-        std::env::var("DB_MIN_CONNECTIONS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1),
-    );
-    opts.connect_timeout(Duration::from_millis(
-        std::env::var("DB_CONNECT_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(5_000),
-    ));
-    opts.idle_timeout(Duration::from_millis(
-        std::env::var("DB_IDLE_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(10_000),
-    ));
-    opts.sqlx_logging(env_truthy("DB_ENABLE_LOGGING", false));
-
-    Database::connect(opts)
-        .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))
-}
-
-async fn build_app_context(auto_migrate: bool) -> crate::error::AppResult<AppContext> {
-    let db = connect_db().await?;
-    if auto_migrate {
-        Migrator::up(&db, None)
-            .await
-            .map_err(|e| crate::error::AppError::Any(e.into()))?;
-    }
+fn build_app_context() -> crate::error::AppResult<AppContext> {
     init_diesel_pool()?;
-    Ok(AppContext { db })
+    Ok(AppContext {})
 }
 
-pub async fn build_test_app_context() -> crate::error::AppResult<AppContext> {
-    build_app_context(true).await
+pub fn build_test_app_context() -> crate::error::AppResult<AppContext> {
+    build_app_context()
 }
 
-pub async fn reset_test_database(ctx: &AppContext) -> crate::error::AppResult<()> {
-    crate::app_support::truncate_all_tables(&ctx.db).await
+pub async fn reset_test_database() -> crate::error::AppResult<()> {
+    crate::app_support::truncate_all_tables().await
 }
 
 pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
@@ -183,7 +119,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
     init_tracing_once()?;
     let cfg = load_runtime_config()?;
-    let ctx = build_app_context(cfg.auto_migrate).await?;
+    let ctx = build_app_context()?;
     let router = build_router_with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
@@ -194,7 +130,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
         |a| a.to_string(),
     );
 
-    tracing::info!(addr = %addr, "Poziomki API server started (Axum)");
+    tracing::info!(addr = %addr, "Poziomki API server started");
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())
         .await
@@ -206,8 +142,8 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
 pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
     init_tracing_once()?;
-    let cfg = load_runtime_config()?;
-    let ctx = build_app_context(cfg.auto_migrate).await?;
+    let _cfg = load_runtime_config()?;
+    let ctx = build_app_context()?;
 
     crate::tasks::start_background_workers(&ctx)?;
     tracing::info!("Poziomki outbox worker process started");
