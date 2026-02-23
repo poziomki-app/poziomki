@@ -81,12 +81,9 @@ if (
 }
 
 dependencies {
-    implementation(projects.composeApp)
-    implementation(projects.shared)
+    implementation(projects.appUi)
+    implementation(projects.core)
     implementation(libs.androidx.activity.compose)
     implementation(libs.koin.android)
-    implementation(platform("androidx.compose:compose-bom:2025.06.00"))
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.runtime:runtime")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

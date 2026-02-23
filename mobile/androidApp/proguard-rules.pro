@@ -66,7 +66,7 @@
 -keep class androidx.datastore.** { *; }
 
 # Keep all app data/API/mapper classes (repositories, models, mappers)
--keep class com.poziomki.app.api.** { *; }
+-keep class com.poziomki.app.network.** { *; }
 -keep class com.poziomki.app.data.** { *; }
 -keep class com.poziomki.app.session.** { *; }
 -keep class com.poziomki.app.di.** { *; }

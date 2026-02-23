@@ -2,10 +2,12 @@ use axum::response::{IntoResponse, Response};
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    #[error("{0}")]
     Message(String),
-    Any(Box<dyn std::error::Error + Send + Sync>),
+    #[error("{0}")]
+    Any(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl AppError {
@@ -14,17 +16,6 @@ impl AppError {
         Self::Message(message.into())
     }
 }
-
-impl std::fmt::Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Message(message) => f.write_str(message),
-            Self::Any(error) => write!(f, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for AppError {}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
@@ -51,6 +42,12 @@ impl From<&str> for AppError {
 
 impl From<diesel::result::Error> for AppError {
     fn from(value: diesel::result::Error) -> Self {
+        Self::Any(value.into())
+    }
+}
+
+impl From<diesel_async::pooled_connection::deadpool::PoolError> for AppError {
+    fn from(value: diesel_async::pooled_connection::deadpool::PoolError) -> Self {
         Self::Any(value.into())
     }
 }

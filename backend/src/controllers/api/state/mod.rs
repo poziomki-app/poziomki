@@ -1,0 +1,206 @@
+#[path = "auth.rs"]
+mod auth;
+#[path = "types.rs"]
+mod types;
+#[path = "uploads.rs"]
+mod uploads;
+
+use chrono::{Duration, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use uuid::Uuid;
+
+use super::ErrorSpec;
+use crate::db::models::otp_codes::{NewOtpCode, OtpCode};
+use crate::db::schema::otp_codes;
+pub(super) use auth::*;
+pub(super) use types::*;
+pub(super) use uploads::*;
+
+pub(super) const OTP_TTL_SECS: i64 = 60 * 10;
+pub(super) const OTP_MAX_ATTEMPTS: i16 = 5;
+
+// --- OTP database operations ---
+
+/// Insert or replace an OTP code for the given email.
+pub(super) async fn upsert_otp(
+    email: &str,
+    code: &str,
+) -> std::result::Result<(), crate::error::AppError> {
+    let now = Utc::now();
+    let expires_at = now + Duration::seconds(OTP_TTL_SECS);
+
+    let mut conn = crate::db::conn().await?;
+
+    // Delete any existing OTP for this email, then insert fresh
+    diesel::delete(otp_codes::table.filter(otp_codes::email.eq(email)))
+        .execute(&mut conn)
+        .await?;
+
+    let new = NewOtpCode {
+        id: Uuid::new_v4(),
+        email: email.to_owned(),
+        code: code.to_owned(),
+        attempts: 0,
+        expires_at,
+        last_sent_at: now,
+        created_at: now,
+    };
+    diesel::insert_into(otp_codes::table)
+        .values(&new)
+        .execute(&mut conn)
+        .await?;
+    Ok(())
+}
+
+/// Load and validate an OTP entry: returns `None` if not found, expired, or max attempts exceeded.
+async fn load_valid_otp(email: &str) -> Option<(OtpCode, crate::db::DbConn)> {
+    let mut conn = crate::db::conn().await.ok()?;
+    let saved = otp_codes::table
+        .filter(otp_codes::email.eq(email))
+        .first::<OtpCode>(&mut conn)
+        .await
+        .optional()
+        .ok()
+        .flatten()?;
+    let now = Utc::now();
+    if saved.expires_at <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
+        let _ = diesel::delete(otp_codes::table.find(saved.id))
+            .execute(&mut conn)
+            .await;
+        return None;
+    }
+    Some((saved, conn))
+}
+
+/// Verify an OTP code against the database. Returns true if valid.
+/// On success, deletes the OTP row. On failure, increments attempts.
+pub(super) async fn verify_otp_db(email: &str, otp: &str) -> bool {
+    use subtle::ConstantTimeEq;
+
+    let Some((saved, mut conn)) = load_valid_otp(email).await else {
+        return false;
+    };
+
+    // Constant-time comparison
+    if saved.code.len() != otp.len() || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes())) {
+        // Increment attempts
+        let new_attempts = saved.attempts.saturating_add(1);
+        let _ = diesel::update(otp_codes::table.find(saved.id))
+            .set(otp_codes::attempts.eq(new_attempts))
+            .execute(&mut conn)
+            .await;
+        return false;
+    }
+
+    // Valid — delete the OTP row
+    let _ = diesel::delete(otp_codes::table.find(saved.id))
+        .execute(&mut conn)
+        .await;
+    true
+}
+
+/// Check if the OTP for this email is still within the resend cooldown.
+pub(super) async fn otp_in_cooldown(email: &str, cooldown_secs: i64) -> bool {
+    let now = Utc::now();
+    let Ok(mut conn) = crate::db::conn().await else {
+        return false;
+    };
+    otp_codes::table
+        .filter(otp_codes::email.eq(email))
+        .first::<OtpCode>(&mut conn)
+        .await
+        .ok()
+        .is_some_and(|entry| entry.last_sent_at + Duration::seconds(cooldown_secs) > now)
+}
+
+// --- Auth validation helpers ---
+
+pub(super) fn normalize_email(email: &str) -> String {
+    email.trim().to_lowercase()
+}
+
+pub(super) fn is_valid_email(email: &str) -> bool {
+    let mut split = email.split('@');
+    let local = split.next();
+    let domain = split.next();
+    local.is_some_and(|part| !part.is_empty())
+        && domain.is_some_and(|part| part.contains('.'))
+        && split.next().is_none()
+}
+
+pub(super) fn allowed_email_domain() -> String {
+    std::env::var("ALLOWED_EMAIL_DOMAIN").unwrap_or_else(|_| "example.com".to_string())
+}
+
+pub(super) fn validate_signup_payload(payload: &SignUpBody) -> std::result::Result<(), ErrorSpec> {
+    let email = normalize_email(&payload.email);
+    let mut error: Option<ErrorSpec> = None;
+    if email.is_empty() {
+        error = Some(validation_error_spec("Email is required"));
+    } else if !is_valid_email(&email) {
+        error = Some(validation_error_spec("Invalid email address"));
+    } else if !(1..=100).contains(&payload.name.trim().chars().count()) {
+        error = Some(validation_error_spec(
+            "Name must be between 1 and 100 characters",
+        ));
+    } else if !(8..=128).contains(&payload.password.len()) {
+        error = Some(validation_error_spec(
+            "Password must be between 8 and 128 characters",
+        ));
+    }
+    let domain = allowed_email_domain();
+    if error.is_none() && domain != "*" && !email.ends_with(&format!("@{domain}")) {
+        error = Some(validation_error_spec(&format!(
+            "Only @{domain} emails are allowed"
+        )));
+    }
+    error.map_or(Ok(()), Err)
+}
+
+fn validation_error_spec(message: &str) -> ErrorSpec {
+    ErrorSpec {
+        error: message.to_string(),
+        code: "VALIDATION_ERROR",
+        details: None,
+    }
+}
+
+pub(super) fn validate_profile_name(name: &str) -> std::result::Result<(), &'static str> {
+    if name.trim().is_empty() {
+        Err("Name is required")
+    } else if name.chars().count() > 100 {
+        Err("Name must be at most 100 characters")
+    } else if name.contains("http://") || name.contains("https://") || name.contains("www.") {
+        Err("Imie nie moze zawierac linkow ani adresow email")
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn validate_profile_age(age: u8) -> std::result::Result<(), &'static str> {
+    if !(15..=67).contains(&age) {
+        return Err("Age must be between 15 and 67");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_profile_bio(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 5_000) {
+        Err("Bio must be at most 5000 characters")
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn validate_profile_program(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 200) {
+        Err("Program must be at most 200 characters")
+    } else {
+        Ok(())
+    }
+}

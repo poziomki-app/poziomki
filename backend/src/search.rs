@@ -2,11 +2,6 @@ use diesel::deserialize::QueryableByName;
 use diesel::sql_types::{Array, BigInt, Float8, Nullable, SmallInt, Text, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{OnceLock, RwLock},
-    time::{Duration, Instant},
-};
 
 // --- Geo types ---
 
@@ -64,16 +59,6 @@ pub struct GeoSearchParams {
     pub radius_m: u32,
 }
 
-#[derive(Clone)]
-struct CacheEntry {
-    stored_at: Instant,
-    results: SearchResults,
-}
-
-const DEFAULT_SEARCH_CACHE_TTL_MS: u64 = 15_000;
-const DEFAULT_SEARCH_CACHE_MAX_ENTRIES: usize = 512;
-static SEARCH_CACHE: OnceLock<RwLock<HashMap<String, CacheEntry>>> = OnceLock::new();
-
 pub async fn search_all(
     query: &str,
     limit: usize,
@@ -90,12 +75,6 @@ pub async fn search_all(
     }
 
     let pattern = format!("%{normalized_query}%");
-    let cache_key = build_cache_key(&normalized_query, limit, geo);
-
-    if let Some(cached) = read_cached_results(&cache_key) {
-        return Ok(cached);
-    }
-
     let limit_i64 = i64::try_from(limit).unwrap_or(50);
 
     let profiles_fut = search_profiles_postgres(&normalized_query, &pattern, limit_i64);
@@ -104,15 +83,11 @@ pub async fn search_all(
 
     let (profiles, events, tags) = tokio::try_join!(profiles_fut, events_fut, tags_fut)?;
 
-    let results = SearchResults {
+    Ok(SearchResults {
         profiles,
         events,
         tags,
-    };
-
-    write_cached_results(cache_key, &results);
-
-    Ok(results)
+    })
 }
 
 async fn search_profiles_postgres(
@@ -120,9 +95,7 @@ async fn search_profiles_postgres(
     pattern: &str,
     limit_i64: i64,
 ) -> crate::error::AppResult<Vec<ProfileDocument>> {
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let mut conn = crate::db::conn().await?;
 
     let profile_rows = diesel::sql_query(
         r"
@@ -162,8 +135,7 @@ async fn search_profiles_postgres(
     .bind::<Text, _>(pattern)
     .bind::<BigInt, _>(limit_i64)
     .load::<ProfileSearchRow>(&mut conn)
-    .await
-    .map_err(|e| crate::error::AppError::Message(format!("Profile search failed: {e}")))?;
+    .await?;
 
     Ok(profile_rows
         .into_iter()
@@ -185,111 +157,86 @@ async fn search_events_postgres(
     limit_i64: i64,
     geo: Option<&GeoSearchParams>,
 ) -> crate::error::AppResult<Vec<EventDocument>> {
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let mut conn = crate::db::conn().await?;
 
-    let event_rows = match geo {
-        Some(geo_query) => {
-            diesel::sql_query(
-                r"
-                SELECT
-                    e.id,
-                    e.title,
-                    e.description,
-                    e.location,
-                    e.starts_at::text AS starts_at,
-                    e.cover_image,
-                    COALESCE(p.name, 'Unknown') AS creator_name,
-                    e.latitude,
-                    e.longitude
-                FROM events e
-                LEFT JOIN profiles p ON p.id = e.creator_id
-                WHERE
-                    (
-                        e.search_vector @@ websearch_to_tsquery('simple', $1)
-                        OR LOWER(e.title) LIKE $2
-                        OR LOWER(COALESCE(p.name, '')) LIKE $2
-                    )
-                    AND e.latitude IS NOT NULL
-                    AND e.longitude IS NOT NULL
-                    AND earth_box(ll_to_earth($3, $4), $5) @> ll_to_earth(e.latitude, e.longitude)
-                    AND earth_distance(ll_to_earth($3, $4), ll_to_earth(e.latitude, e.longitude)) <= $5
-                ORDER BY
-                    earth_distance(ll_to_earth($3, $4), ll_to_earth(e.latitude, e.longitude)) ASC,
-                    ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC,
-                    e.starts_at ASC
-                LIMIT $6
-                ",
-            )
+    let (geo_filter, order_by, has_geo) = match geo {
+        Some(_) => (
+            "AND e.latitude IS NOT NULL AND e.longitude IS NOT NULL \
+             AND earth_box(ll_to_earth($3, $4), $5) @> ll_to_earth(e.latitude, e.longitude) \
+             AND earth_distance(ll_to_earth($3, $4), ll_to_earth(e.latitude, e.longitude)) <= $5",
+            "earth_distance(ll_to_earth($3, $4), ll_to_earth(e.latitude, e.longitude)) ASC, \
+             ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC, \
+             e.starts_at ASC",
+            true,
+        ),
+        None => (
+            "",
+            "ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC, \
+             e.starts_at ASC",
+            false,
+        ),
+    };
+
+    let limit_param = if has_geo { "$6" } else { "$3" };
+
+    let sql = format!(
+        "SELECT e.id, e.title, e.description, e.location, \
+                e.starts_at::text AS starts_at, e.cover_image, \
+                COALESCE(p.name, 'Unknown') AS creator_name, \
+                e.latitude, e.longitude \
+         FROM events e \
+         LEFT JOIN profiles p ON p.id = e.creator_id \
+         WHERE (e.search_vector @@ websearch_to_tsquery('simple', $1) \
+                OR LOWER(e.title) LIKE $2 \
+                OR LOWER(COALESCE(p.name, '')) LIKE $2) \
+         {geo_filter} \
+         ORDER BY {order_by} \
+         LIMIT {limit_param}"
+    );
+
+    let event_rows = if let Some(g) = geo {
+        diesel::sql_query(&sql)
             .bind::<Text, _>(query)
             .bind::<Text, _>(pattern)
-            .bind::<Float8, _>(geo_query.lat)
-            .bind::<Float8, _>(geo_query.lng)
-            .bind::<BigInt, _>(i64::from(geo_query.radius_m))
+            .bind::<Float8, _>(g.lat)
+            .bind::<Float8, _>(g.lng)
+            .bind::<BigInt, _>(i64::from(g.radius_m))
             .bind::<BigInt, _>(limit_i64)
             .load::<EventSearchRow>(&mut conn)
-            .await
-        }
-        None => {
-            diesel::sql_query(
-                r"
-                SELECT
-                    e.id,
-                    e.title,
-                    e.description,
-                    e.location,
-                    e.starts_at::text AS starts_at,
-                    e.cover_image,
-                    COALESCE(p.name, 'Unknown') AS creator_name,
-                    e.latitude,
-                    e.longitude
-                FROM events e
-                LEFT JOIN profiles p ON p.id = e.creator_id
-                WHERE
-                    e.search_vector @@ websearch_to_tsquery('simple', $1)
-                    OR LOWER(e.title) LIKE $2
-                    OR LOWER(COALESCE(p.name, '')) LIKE $2
-                ORDER BY
-                    ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC,
-                    e.starts_at ASC
-                LIMIT $3
-                ",
-            )
+            .await?
+    } else {
+        diesel::sql_query(&sql)
             .bind::<Text, _>(query)
             .bind::<Text, _>(pattern)
             .bind::<BigInt, _>(limit_i64)
             .load::<EventSearchRow>(&mut conn)
-            .await
-        }
+            .await?
+    };
+
+    Ok(event_rows.into_iter().map(event_row_to_doc).collect())
+}
+
+fn event_row_to_doc(row: EventSearchRow) -> EventDocument {
+    EventDocument {
+        id: row.id.to_string(),
+        title: row.title,
+        description: row.description,
+        location: row.location,
+        starts_at: row.starts_at,
+        cover_image: row.cover_image,
+        creator_name: row.creator_name,
+        geo: row
+            .latitude
+            .zip(row.longitude)
+            .map(|(lat, lng)| GeoPoint { lat, lng }),
     }
-    .map_err(|e| crate::error::AppError::Message(format!("Event search failed: {e}")))?;
-
-    Ok(event_rows
-        .into_iter()
-        .map(|row| EventDocument {
-            id: row.id.to_string(),
-            title: row.title,
-            description: row.description,
-            location: row.location,
-            starts_at: row.starts_at,
-            cover_image: row.cover_image,
-            creator_name: row.creator_name,
-            geo: row
-                .latitude
-                .zip(row.longitude)
-                .map(|(lat, lng)| GeoPoint { lat, lng }),
-        })
-        .collect())
 }
 
 async fn search_tags_postgres(
     pattern: &str,
     limit_i64: i64,
 ) -> crate::error::AppResult<Vec<TagDocument>> {
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let mut conn = crate::db::conn().await?;
 
     let rows = diesel::sql_query(
         r"
@@ -308,8 +255,7 @@ async fn search_tags_postgres(
     .bind::<Text, _>(pattern)
     .bind::<BigInt, _>(limit_i64)
     .load::<TagSearchRow>(&mut conn)
-    .await
-    .map_err(|e| crate::error::AppError::Message(format!("Tag search failed: {e}")))?;
+    .await?;
 
     Ok(rows
         .into_iter()
@@ -375,95 +321,4 @@ struct TagSearchRow {
     category: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     emoji: Option<String>,
-}
-
-fn cache_map() -> &'static RwLock<HashMap<String, CacheEntry>> {
-    SEARCH_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-fn search_cache_enabled() -> bool {
-    // Default off: per-process caches become inconsistent under multi-instance deployments.
-    std::env::var("SEARCH_CACHE_ENABLED").is_ok_and(|value| {
-        let normalized = value.trim().to_ascii_lowercase();
-        normalized == "1" || normalized == "true" || normalized == "yes"
-    })
-}
-
-fn search_cache_ttl() -> Duration {
-    let ttl_ms = std::env::var("SEARCH_CACHE_TTL_MS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_SEARCH_CACHE_TTL_MS);
-    Duration::from_millis(ttl_ms)
-}
-
-fn search_cache_max_entries() -> usize {
-    std::env::var("SEARCH_CACHE_MAX_ENTRIES")
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_SEARCH_CACHE_MAX_ENTRIES)
-}
-
-fn build_cache_key(query: &str, limit: usize, geo: Option<&GeoSearchParams>) -> String {
-    let geo_part = geo.map_or_else(
-        || "none".to_string(),
-        |g| format!("{:.4}:{:.4}:{}", g.lat, g.lng, g.radius_m),
-    );
-    format!("{query}|{limit}|{geo_part}")
-}
-
-fn read_cached_results(key: &str) -> Option<SearchResults> {
-    if !search_cache_enabled() {
-        return None;
-    }
-
-    let ttl = search_cache_ttl();
-    let entry = cache_map().read().ok()?.get(key)?.clone();
-    if entry.stored_at.elapsed() > ttl {
-        return None;
-    }
-    Some(entry.results)
-}
-
-fn write_cached_results(key: String, results: &SearchResults) {
-    if !search_cache_enabled() {
-        return;
-    }
-
-    let ttl = search_cache_ttl();
-    let max_entries = search_cache_max_entries();
-    let now = Instant::now();
-    let Ok(mut map) = cache_map().write() else {
-        return;
-    };
-
-    map.retain(|_, entry| now.duration_since(entry.stored_at) <= ttl);
-    map.insert(
-        key,
-        CacheEntry {
-            stored_at: now,
-            results: results.clone(),
-        },
-    );
-
-    if map.len() > max_entries {
-        let mut oldest_key: Option<String> = None;
-        let mut oldest_instant = now;
-        for (candidate_key, entry) in map.iter() {
-            if entry.stored_at <= oldest_instant {
-                oldest_instant = entry.stored_at;
-                oldest_key = Some(candidate_key.clone());
-            }
-        }
-        if let Some(k) = oldest_key {
-            map.remove(&k);
-        }
-    }
-}
-
-pub fn invalidate_search_cache() {
-    if let Ok(mut map) = cache_map().write() {
-        map.clear();
-    }
 }

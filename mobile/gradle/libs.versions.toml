@@ -14,7 +14,6 @@ maplibre-compose = "0.12.1"
 ktor = "3.4.0"
 materialIconsCore = "1.7.3"
 navigationCompose = "2.9.2"
-phosphor-icons = "1.0.0"
 lifecycleCompose = "2.9.1"
 matrixSdk = "26.2.6"
 securityCrypto = "1.1.0"
@@ -44,7 +43,6 @@ lifecycle-viewmodel-compose = { group = "org.jetbrains.androidx.lifecycle", name
 material-icons-core = { module = "org.jetbrains.compose.material:material-icons-core", version.ref = "materialIconsCore" }
 material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsCore" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
-phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphor-icons" }
 matrix-sdk = { module = "org.matrix.rustcomponents:sdk-android", version.ref = "matrixSdk" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version = "1.9.0" }

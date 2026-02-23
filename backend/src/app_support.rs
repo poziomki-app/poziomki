@@ -20,15 +20,12 @@ const TRUNCATE_ORDER: &[&str] = &[
 ];
 
 pub async fn truncate_all_tables() -> AppResult<()> {
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let mut conn = crate::db::conn().await?;
 
     for table in TRUNCATE_ORDER {
         diesel::sql_query(format!("DELETE FROM \"{table}\""))
             .execute(&mut conn)
-            .await
-            .map_err(|e| crate::error::AppError::Any(e.into()))?;
+            .await?;
     }
     Ok(())
 }

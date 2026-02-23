@@ -99,6 +99,9 @@ fn init_diesel_pool() -> crate::error::AppResult<()> {
 }
 
 fn build_app_context() -> crate::error::AppResult<AppContext> {
+    let url = std::env::var("DATABASE_URL")
+        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
+    crate::db::run_migrations(&url).map_err(crate::error::AppError::Message)?;
     init_diesel_pool()?;
     Ok(AppContext {})
 }
@@ -112,7 +115,7 @@ pub async fn reset_test_database() -> crate::error::AppResult<()> {
 }
 
 pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
-    crate::controllers::migration_api::router().with_state(ctx)
+    crate::controllers::api::router().with_state(ctx)
 }
 
 pub async fn run_api_server() -> crate::error::AppResult<()> {

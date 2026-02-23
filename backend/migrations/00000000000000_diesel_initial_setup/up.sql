@@ -1,0 +1,1 @@
+-- Diesel initial setup (required by diesel_migrations)

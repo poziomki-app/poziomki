@@ -1,6 +1,7 @@
 # Rust
 /target/
 backend/target/
+imgproxy/target/
 **/*.rs.bk
 Cargo.lock
 
@@ -8,6 +9,7 @@ Cargo.lock
 mobile/build/
 mobile/**/build/
 mobile/.gradle/
+mobile/.kotlin/
 mobile/local.properties
 *.apk
 *.aab

@@ -28,8 +28,6 @@ RUN apt-get update \
 
 COPY --from=builder /app/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
 COPY --from=builder /app/target/release/worker /usr/local/bin/worker
-COPY --from=builder --chown=appuser:appuser /app/config ./config
-
 USER appuser
 EXPOSE 5150
 CMD ["poziomki_backend-cli"]
