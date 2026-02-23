@@ -7,12 +7,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.resources.Font
-import poziomki_mobile.composeapp.generated.resources.Res
-import poziomki_mobile.composeapp.generated.resources.montserrat_extrabold
-import poziomki_mobile.composeapp.generated.resources.nunito_bold
-import poziomki_mobile.composeapp.generated.resources.nunito_medium
-import poziomki_mobile.composeapp.generated.resources.nunito_regular
-import poziomki_mobile.composeapp.generated.resources.nunito_semibold
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.montserrat_extrabold
+import poziomki_mobile.app_ui.generated.resources.nunito_bold
+import poziomki_mobile.app_ui.generated.resources.nunito_medium
+import poziomki_mobile.app_ui.generated.resources.nunito_regular
+import poziomki_mobile.app_ui.generated.resources.nunito_semibold
 
 val MontserratFamily: FontFamily
     @Composable get() =

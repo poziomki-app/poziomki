@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 
@@ -30,7 +29,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             // Remove when https://issuetracker.google.com/issues/364713509 is fixed
-            LaunchedEffect(isSystemInDarkTheme()) {
+            LaunchedEffect(Unit) {
                 enableEdgeToEdge()
             }
             App()

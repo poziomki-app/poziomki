@@ -21,12 +21,12 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
@@ -95,7 +95,12 @@ val bottomNavItems =
     listOf(
         BottomNavItem("Explore", Icons.Outlined.Groups, Icons.Filled.Groups, Route.Explore),
         BottomNavItem("Events", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, Route.Events),
-        BottomNavItem("Messages", Icons.Outlined.Chat, Icons.Filled.Chat, Route.Messages),
+        BottomNavItem(
+            "Messages",
+            Icons.AutoMirrored.Outlined.Chat,
+            Icons.AutoMirrored.Filled.Chat,
+            Route.Messages,
+        ),
         BottomNavItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Route.ProfileTab),
     )
 

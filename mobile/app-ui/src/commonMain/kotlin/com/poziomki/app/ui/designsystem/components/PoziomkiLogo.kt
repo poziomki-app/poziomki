@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import org.jetbrains.compose.resources.painterResource
-import poziomki_mobile.composeapp.generated.resources.Res
-import poziomki_mobile.composeapp.generated.resources.strawberry_logo
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.strawberry_logo
 
 @Composable
 fun PoziomkiLogo(
