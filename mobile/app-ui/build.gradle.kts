@@ -15,6 +15,7 @@ kotlin {
         namespace = "com.poziomki.app.ui"
         compileSdk = 35
         minSdk = 24
+        androidResources.enable = true
     }
 
     listOf(

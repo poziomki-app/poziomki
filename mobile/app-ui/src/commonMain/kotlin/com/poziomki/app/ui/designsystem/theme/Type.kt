@@ -6,12 +6,28 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.resources.Font
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.montserrat_extrabold
+import poziomki_mobile.app_ui.generated.resources.nunito_bold
+import poziomki_mobile.app_ui.generated.resources.nunito_medium
+import poziomki_mobile.app_ui.generated.resources.nunito_regular
+import poziomki_mobile.app_ui.generated.resources.nunito_semibold
 
 val MontserratFamily: FontFamily
-    @Composable get() = FontFamily.SansSerif
+    @Composable get() =
+        FontFamily(
+            Font(Res.font.montserrat_extrabold, FontWeight.ExtraBold),
+        )
 
 val NunitoFamily: FontFamily
-    @Composable get() = FontFamily.SansSerif
+    @Composable get() =
+        FontFamily(
+            Font(Res.font.nunito_regular, FontWeight.Normal),
+            Font(Res.font.nunito_medium, FontWeight.Medium),
+            Font(Res.font.nunito_semibold, FontWeight.SemiBold),
+            Font(Res.font.nunito_bold, FontWeight.Bold),
+        )
 
 @Composable
 fun poziomkiTypography(): Typography {

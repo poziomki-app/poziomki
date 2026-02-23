@@ -1,7 +1,9 @@
 package com.poziomki.app.ui.designsystem.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -11,6 +13,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import org.jetbrains.compose.resources.painterResource
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.strawberry_logo
 
 @Composable
 fun PoziomkiLogo(
@@ -18,6 +23,7 @@ fun PoziomkiLogo(
     modifier: Modifier = Modifier,
 ) {
     val fontSize = size.value.sp
+    val imageSize = size * 0.88f
     val montserrat = MontserratFamily
 
     Row(
@@ -30,10 +36,13 @@ fun PoziomkiLogo(
             fontSize = fontSize,
             color = TextPrimary,
         )
-        Text(
-            text = "🍓",
-            fontSize = (size.value * 0.7f).sp,
-            modifier = Modifier.offset(x = (-2).dp, y = (size.value * 0.1f).dp),
+        Image(
+            painter = painterResource(Res.drawable.strawberry_logo),
+            contentDescription = null,
+            modifier =
+                Modifier
+                    .size(imageSize)
+                    .offset(x = (-2).dp, y = (size.value * 0.1f).dp),
         )
         Text(
             text = "ziomki",
