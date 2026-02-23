@@ -17,12 +17,12 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-internal class EventMutationManager(
+internal class EventMutationRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
     private val connectivityMonitor: ConnectivityMonitor,
     private val pendingOps: PendingOperationsManager,
-    private val eventRoomManager: EventRoomManager,
+    private val eventRoomManager: EventRoomRepository,
 ) {
     companion object {
         private const val CREATE_EVENT_ONLINE_TIMEOUT_MS = 1500L

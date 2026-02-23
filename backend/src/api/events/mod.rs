@@ -1,15 +1,19 @@
-#[path = "mutations.rs"]
-mod events_mutations;
 #[path = "repo.rs"]
 mod events_repo;
 #[path = "service.rs"]
 mod events_service;
-#[path = "tags.rs"]
-mod events_tags;
-#[path = "update.rs"]
-mod events_update;
+#[path = "tags_repo.rs"]
+mod events_tags_repo;
+#[path = "tags_service.rs"]
+mod events_tags_service;
 #[path = "view.rs"]
 mod events_view;
+#[path = "write_handler.rs"]
+mod events_write_handler;
+#[path = "write_repo.rs"]
+mod events_write_repo;
+#[path = "write_service.rs"]
+mod events_write_service;
 
 type Result<T> = crate::error::AppResult<T>;
 
@@ -28,10 +32,10 @@ use super::state::{DataResponse, EventsQuery};
 use events_service::{not_found_event, require_auth_profile};
 use events_view::attendee_info;
 
-pub(super) use events_mutations::{
+pub(super) use events_view::{build_event_response, build_event_responses};
+pub(super) use events_write_handler::{
     event_attend, event_create, event_delete, event_leave, event_update,
 };
-pub(super) use events_view::{build_event_response, build_event_responses};
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 

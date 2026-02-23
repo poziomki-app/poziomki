@@ -6,7 +6,7 @@ use crate::api::{
 };
 use crate::db::models::profiles::Profile;
 
-use super::profiles_tags::load_profile_tags;
+use super::profiles_tags_repo::load_profile_tags;
 
 fn decode_profile_images(profile: &Profile) -> Vec<String> {
     profile

@@ -9,8 +9,6 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::api::state::{
@@ -19,15 +17,14 @@ use crate::api::state::{
 };
 use crate::db::models::events::{Event, NewEvent};
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{event_attendees, events};
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
 use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
-use super::events_tags::{
-    maybe_sync_tags, resolve_event_tag_ids, sync_event_tags, upsert_attendee,
-};
-use super::events_update::event_update_inner;
+use super::events_tags_repo::{sync_event_tags, upsert_attendee};
+use super::events_tags_service::{maybe_sync_tags, resolve_event_tag_ids};
 use super::events_view::{build_event_response, created_event_response};
+use super::events_write_repo;
+use super::events_write_service::event_update_inner;
 
 struct ValidatedCreate {
     profile: Profile,
@@ -97,11 +94,7 @@ pub(in crate::api) async fn event_create(
 
     let (new_event, event_id) = build_create_event(&validated, &payload);
 
-    let mut conn = crate::db::conn().await?;
-    let inserted = diesel::insert_into(events::table)
-        .values(&new_event)
-        .get_result::<Event>(&mut conn)
-        .await?;
+    let inserted = events_write_repo::insert_event(&new_event).await?;
 
     let tag_ids = resolve_event_tag_ids(payload.tags, payload.tag_ids).await;
     finalize_event_create(event_id, &inserted, validated.profile.id, tag_ids).await
@@ -118,11 +111,7 @@ pub(in crate::api) async fn event_update(
         Err(response) => return Ok(*response),
     };
 
-    let mut conn = crate::db::conn().await?;
-    let updated = diesel::update(events::table.find(event_uuid))
-        .set(&changeset)
-        .get_result::<Event>(&mut conn)
-        .await?;
+    let updated = events_write_repo::update_event(event_uuid, &changeset).await?;
 
     maybe_sync_tags(event_uuid, payload.tags, payload.tag_ids).await?;
 
@@ -154,10 +143,7 @@ pub(in crate::api) async fn event_delete(
             Err(response) => return Ok(*response),
         };
 
-    let mut conn = crate::db::conn().await?;
-    diesel::delete(events::table.find(event_uuid))
-        .execute(&mut conn)
-        .await?;
+    events_write_repo::delete_event(event_uuid).await?;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
@@ -237,14 +223,7 @@ pub(in crate::api) async fn event_leave(
         Err(response) => return Ok(*response),
     };
 
-    let mut conn = crate::db::conn().await?;
-    diesel::delete(
-        event_attendees::table
-            .filter(event_attendees::event_id.eq(event_uuid))
-            .filter(event_attendees::profile_id.eq(profile.id)),
-    )
-    .execute(&mut conn)
-    .await?;
+    events_write_repo::delete_event_attendee(event_uuid, profile.id).await?;
 
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, true).await {
         tracing::warn!(

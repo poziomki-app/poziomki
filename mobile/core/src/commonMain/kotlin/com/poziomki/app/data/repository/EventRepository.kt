@@ -28,9 +28,9 @@ class EventRepository(
     private val pendingOps: PendingOperationsManager,
     private val matrixClient: MatrixClient,
 ) {
-    private val eventRoomManager = EventRoomManager(db = db, api = api, matrixClient = matrixClient)
+    private val eventRoomManager = EventRoomRepository(db = db, api = api, matrixClient = matrixClient)
     private val eventMutationManager =
-        EventMutationManager(
+        EventMutationRepository(
             db = db,
             api = api,
             connectivityMonitor = connectivityMonitor,

@@ -1,14 +1,16 @@
 use super::{
     bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
     fallback_variant_urls, internal_upload_error, load_owned_upload, not_found, public_upload_url,
-    require_auth_profile, storage_delete, storage_signed_put_url, storage_upload, uploads,
+    require_auth_profile, storage_delete, storage_signed_put_url, storage_upload,
     uploads_multipart, uploads_resize, uploads_storage, validate_filename,
     validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
     DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
-    Multipart, NewUpload, Path, QueryDsl, Response, Result, RunQueryDsl, State, SuccessResponse,
-    UploadChangeset, UploadResponse, Utc, Uuid,
+    Multipart, NewUpload, Path, Response, Result, State, SuccessResponse, UploadChangeset,
+    UploadResponse, Utc, Uuid,
 };
 use axum::response::IntoResponse;
+
+use super::uploads_write_repo::{insert_upload_metadata, mark_upload_deleted};
 
 const DIRECT_UPLOAD_PRESIGN_EXPIRY_SECS: u64 = 3600;
 
@@ -42,15 +44,7 @@ pub(in crate::api) async fn file_upload(
             updated_at: now,
         };
 
-        let mut conn = crate::db::conn()
-            .await
-            .map_err(|_| internal_upload_error(&headers, "Failed to save upload metadata"))?;
-
-        if let Err(error) = diesel::insert_into(uploads::table)
-            .values(&new_upload)
-            .execute(&mut conn)
-            .await
-        {
+        if let Err(error) = insert_upload_metadata(&new_upload).await {
             tracing::warn!(filename = %filename, %error, "failed to insert upload row");
             let _ = uploads_storage::delete(&filename).await;
             return Err(internal_upload_error(
@@ -117,13 +111,7 @@ pub(in crate::api) async fn file_upload_presign(
             updated_at: now,
         };
 
-        let mut conn = crate::db::conn()
-            .await
-            .map_err(|_| internal_upload_error(&headers, "Failed to save upload metadata"))?;
-
-        diesel::insert_into(uploads::table)
-            .values(&new_upload)
-            .execute(&mut conn)
+        insert_upload_metadata(&new_upload)
             .await
             .map_err(|error| {
                 tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
@@ -234,15 +222,7 @@ pub(in crate::api) async fn file_delete(
             ..Default::default()
         };
 
-        let mut conn = crate::db::conn()
-            .await
-            .map_err(|_| internal_upload_error(&headers, "Failed to update upload metadata"))?;
-
-        if let Err(error) = diesel::update(uploads::table.find(upload.id))
-            .set(&changeset)
-            .execute(&mut conn)
-            .await
-        {
+        if let Err(error) = mark_upload_deleted(upload.id, &changeset).await {
             tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
             return Err(internal_upload_error(
                 &headers,

@@ -8,7 +8,7 @@ import com.poziomki.app.network.resolveRoomId
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-internal class EventRoomManager(
+internal class EventRoomRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
     private val matrixClient: MatrixClient,

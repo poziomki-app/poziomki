@@ -1,17 +1,11 @@
 use axum::{
-    extract::State,
-    http::{header, HeaderMap, HeaderValue},
-    response::{IntoResponse, Response},
+    http::{header, HeaderValue},
     routing::{delete, get, patch, post},
-    Json, Router,
+    Router,
 };
-#[allow(unused_imports)]
-use serde::Serialize;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::app::AppContext;
-
-type Result<T> = crate::error::AppResult<T>;
 
 mod auth;
 mod catalog;
@@ -22,6 +16,7 @@ mod matching;
 mod matrix;
 mod profiles;
 mod push_gateway;
+mod root;
 mod search;
 mod settings;
 mod state;
@@ -31,100 +26,6 @@ pub(crate) use common::{
     env_non_empty, error_response, extract_filename, resolve_image_url, resolve_image_urls,
     ErrorSpec,
 };
-
-#[derive(Clone, Debug, Serialize)]
-struct RootInfoResponse {
-    docs: &'static str,
-    message: &'static str,
-    version: &'static str,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct HealthResponse {
-    status: &'static str,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OutboxStatusResponse {
-    status: &'static str,
-    metrics: crate::jobs::OutboxStatsSnapshot,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct MatrixConfigResponse {
-    data: MatrixConfigData,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct MatrixConfigData {
-    homeserver: Option<String>,
-    chat_mode: &'static str,
-    push_gateway_url: Option<String>,
-    ntfy_server: Option<String>,
-}
-
-async fn health() -> Result<Response> {
-    Ok(Json(HealthResponse { status: "ok" }).into_response())
-}
-
-fn ops_status_token() -> Option<String> {
-    env_non_empty("OPS_STATUS_TOKEN")
-}
-
-fn ops_token_matches(headers: &HeaderMap) -> bool {
-    let Some(expected) = ops_status_token() else {
-        return false;
-    };
-    headers
-        .get("x-ops-token")
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|actual| actual == expected)
-}
-
-async fn outbox_status(State(_ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
-    if ops_status_token().is_none() {
-        return Ok((axum::http::StatusCode::NOT_FOUND, "not found").into_response());
-    }
-
-    if !ops_token_matches(&headers) {
-        return Ok((axum::http::StatusCode::UNAUTHORIZED, "unauthorized").into_response());
-    }
-
-    let metrics = crate::jobs::outbox_stats_snapshot().await?;
-    let status = if metrics.failed_jobs > 0 || metrics.oldest_ready_job_age_seconds > 60 {
-        "degraded"
-    } else {
-        "ok"
-    };
-
-    Ok(Json(OutboxStatusResponse { status, metrics }).into_response())
-}
-
-async fn root() -> Result<Response> {
-    Ok(Json(RootInfoResponse {
-        docs: "/api/docs",
-        message: "poziomki API v1",
-        version: "1.0.0",
-    })
-    .into_response())
-}
-
-async fn matrix_config() -> Result<Response> {
-    let homeserver = env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
-        .or_else(|| env_non_empty("MATRIX_HOMESERVER_URL"));
-    let push_gateway_url = env_non_empty("PUSH_GATEWAY_URL");
-    let ntfy_server = env_non_empty("NTFY_SERVER_URL");
-    Ok(Json(MatrixConfigResponse {
-        data: MatrixConfigData {
-            homeserver,
-            chat_mode: "matrix-native",
-            push_gateway_url,
-            ntfy_server,
-        },
-    })
-    .into_response())
-}
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
@@ -212,7 +113,7 @@ fn search_routes() -> Router<AppContext> {
 
 fn matrix_config_routes() -> Router<AppContext> {
     Router::new()
-        .route("/config", get(matrix_config))
+        .route("/config", get(root::matrix_config))
         .layer(cache_layer("public, max-age=3600"))
 }
 
@@ -235,14 +136,14 @@ fn push_gateway_routes() -> Router<AppContext> {
 
 fn ops_routes() -> Router<AppContext> {
     Router::new()
-        .route("/outbox/status", get(outbox_status))
+        .route("/outbox/status", get(root::outbox_status))
         .layer(cache_layer("no-store"))
 }
 
 pub fn router() -> Router<AppContext> {
     Router::new()
-        .route("/health", get(health))
-        .route("/", get(root))
+        .route("/health", get(root::health))
+        .route("/", get(root::root))
         .nest("/api/v1/auth", auth_routes())
         .nest("/api/v1/profiles", profiles_routes())
         .nest("/api/v1/degrees", degrees_routes())

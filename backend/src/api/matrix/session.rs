@@ -9,7 +9,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use super::super::state::require_auth_db;
-use super::{chat_bootstrap_error, matrix_support, MatrixSessionRequest};
+use super::{chat_bootstrap_error, matrix_service, MatrixSessionRequest};
 use crate::db::models::profiles::Profile;
 use crate::db::schema::profiles;
 
@@ -62,7 +62,7 @@ async fn do_create_session(
     req: &SessionRequest<'_>,
     headers: &HeaderMap,
 ) -> std::result::Result<Response, Response> {
-    let internal_homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
+    let internal_homeserver = matrix_service::resolve_homeserver().ok_or_else(|| {
         chat_bootstrap_error(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             headers,
@@ -72,9 +72,9 @@ async fn do_create_session(
     })?;
 
     let public_homeserver =
-        matrix_support::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
+        matrix_service::resolve_public_homeserver().unwrap_or_else(|| internal_homeserver.clone());
 
-    let config = matrix_support::build_conn_config(req.user_pid, req.device_name, req.device_id)
+    let config = matrix_service::build_conn_config(req.user_pid, req.device_name, req.device_id)
         .map_err(|error| {
             tracing::warn!(%error, "matrix session bootstrap is not configured");
             chat_bootstrap_error(
@@ -84,9 +84,9 @@ async fn do_create_session(
                 "CHAT_NOT_CONFIGURED",
             )
         })?;
-    let http_client = matrix_support::init_http_client(headers)?;
+    let http_client = matrix_service::init_http_client(headers)?;
 
-    let matrix_auth = matrix_support::try_matrix_auth(&http_client, &internal_homeserver, &config)
+    let matrix_auth = matrix_service::try_matrix_auth(&http_client, &internal_homeserver, &config)
         .await
         .map_err(|error| {
             tracing::warn!(
@@ -103,7 +103,7 @@ async fn do_create_session(
             )
         })?;
 
-    let client = matrix_support::MatrixClient::new(
+    let client = matrix_service::MatrixClient::new(
         &http_client,
         &internal_homeserver,
         &matrix_auth.access_token,
@@ -122,16 +122,16 @@ async fn do_create_session(
         }
     }
 
-    matrix_support::build_session_response(public_homeserver, matrix_auth, headers)
+    matrix_service::build_session_response(public_homeserver, matrix_auth, headers)
 }
 
 async fn sync_matrix_avatar(
-    client: &matrix_support::MatrixClient<'_>,
+    client: &matrix_service::MatrixClient<'_>,
     user_id: &str,
     pic_filename: &str,
 ) -> std::result::Result<(), String> {
     let filename = super::super::extract_filename(pic_filename);
-    let content_type = matrix_support::content_type_from_filename(&filename)
+    let content_type = matrix_service::content_type_from_filename(&filename)
         .ok_or_else(|| format!("unsupported image type: {filename}"))?;
     let bytes = super::super::uploads::uploads_storage::read(&filename)
         .await
@@ -163,7 +163,7 @@ async fn try_sync_profile_avatar(
         .await
         .ok_or("failed to authenticate for avatar sync")?;
 
-    let client = matrix_support::MatrixClient::new(
+    let client = matrix_service::MatrixClient::new(
         &http_client,
         &internal_homeserver,
         &matrix_auth.access_token,
@@ -172,11 +172,11 @@ async fn try_sync_profile_avatar(
 }
 
 fn resolve_avatar_sync_homeserver() -> Option<String> {
-    matrix_support::resolve_homeserver()
+    matrix_service::resolve_homeserver()
 }
 
-fn build_avatar_sync_config(user_pid: &uuid::Uuid) -> Option<matrix_support::MatrixConnConfig> {
-    match matrix_support::build_conn_config(&user_pid.to_string(), None, None) {
+fn build_avatar_sync_config(user_pid: &uuid::Uuid) -> Option<matrix_service::MatrixConnConfig> {
+    match matrix_service::build_conn_config(&user_pid.to_string(), None, None) {
         Ok(config) => Some(config),
         Err(error) => {
             tracing::warn!(%error, "matrix avatar sync skipped: matrix bootstrap is not configured");
@@ -201,9 +201,9 @@ fn build_avatar_sync_http_client() -> Option<reqwest::Client> {
 async fn authenticate_avatar_sync(
     http_client: &reqwest::Client,
     homeserver: &str,
-    config: &matrix_support::MatrixConnConfig,
-) -> Option<matrix_support::MatrixAuthResponse> {
-    match matrix_support::try_matrix_auth(http_client, homeserver, config).await {
+    config: &matrix_service::MatrixConnConfig,
+) -> Option<matrix_service::MatrixAuthResponse> {
+    match matrix_service::try_matrix_auth(http_client, homeserver, config).await {
         Ok(auth) => Some(auth),
         Err(error) => {
             tracing::warn!(

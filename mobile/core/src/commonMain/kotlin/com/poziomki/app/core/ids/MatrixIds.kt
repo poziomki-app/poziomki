@@ -2,7 +2,7 @@ package com.poziomki.app.core.ids
 
 /**
  * Derives a Matrix localpart from a Poziomki user ID (UUID).
- * Mirrors backend `matrix_localpart_from_user_id` in `matrix_support.rs`.
+ * Mirrors backend `matrix_localpart_from_user_id` in `backend/src/api/matrix/service.rs`.
  */
 fun matrixLocalpartFromUserId(userId: String): String {
     if (userId.startsWith("@")) return userId // already a Matrix ID

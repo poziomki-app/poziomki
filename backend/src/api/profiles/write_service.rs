@@ -16,7 +16,7 @@ use crate::db::models::profiles::{Profile, ProfileChangeset};
 use crate::db::models::uploads::Upload;
 use crate::db::schema::{profiles, uploads};
 
-// super = profiles_mutations, super::super = profiles
+// super = profiles_write_handler, super::super = profiles
 use super::super::{not_found_profile, validation_error};
 
 fn check_validation(

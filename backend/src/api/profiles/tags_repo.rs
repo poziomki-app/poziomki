@@ -77,10 +77,3 @@ pub(in crate::api) async fn sync_profile_tags(
 
     Ok(())
 }
-
-pub(in crate::api) fn parse_tag_uuids(raw: Option<Vec<String>>) -> Vec<Uuid> {
-    raw.unwrap_or_default()
-        .into_iter()
-        .filter_map(|s| Uuid::parse_str(&s).ok())
-        .collect()
-}

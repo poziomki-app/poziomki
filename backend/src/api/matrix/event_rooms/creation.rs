@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use super::super::{bootstrap_matrix_auth, matrix_support};
+use super::super::{bootstrap_matrix_auth, matrix_service};
 use crate::db::models::event_attendees::EventAttendee;
 use crate::db::models::profiles::Profile;
 use crate::db::models::users::User;
@@ -25,7 +25,7 @@ pub(super) async fn create_event_room(
 ) -> std::result::Result<String, Response> {
     let bootstrap =
         bootstrap_matrix_auth(&req.requesting_user_pid.to_string(), headers, None, None).await?;
-    let server_name = matrix_support::matrix_server_name_from_user_id(&bootstrap.auth.user_id)
+    let server_name = matrix_service::matrix_server_name_from_user_id(&bootstrap.auth.user_id)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {
             super::super::chat_bootstrap_error(
@@ -45,7 +45,7 @@ pub(super) async fn create_event_room(
 
     let invites: Vec<String> = attendee_user_pids
         .iter()
-        .map(|pid| matrix_support::matrix_user_id_from_pid(pid, &server_name))
+        .map(|pid| matrix_service::matrix_user_id_from_pid(pid, &server_name))
         .filter(|user_id| user_id != &bootstrap.auth.user_id)
         .collect();
 

@@ -1,19 +1,27 @@
-#[path = "http_read.rs"]
-mod uploads_http_read;
-#[path = "http_support.rs"]
-mod uploads_http_support;
-#[path = "http_write.rs"]
-mod uploads_http_write;
+#[path = "auth_service.rs"]
+mod uploads_auth_service;
+#[path = "http.rs"]
+mod uploads_http;
 #[path = "multipart.rs"]
 mod uploads_multipart;
+#[path = "read_handler.rs"]
+mod uploads_read_handler;
+#[path = "read_repo.rs"]
+mod uploads_read_repo;
 #[path = "resize.rs"]
 mod uploads_resize;
-#[path = "service.rs"]
-mod uploads_service;
 #[path = "storage.rs"]
 pub(super) mod uploads_storage;
+#[path = "url_service.rs"]
+mod uploads_url_service;
+#[path = "validation_service.rs"]
+mod uploads_validation_service;
 #[path = "variant_jobs.rs"]
 mod uploads_variant_jobs;
+#[path = "write_handler.rs"]
+mod uploads_write_handler;
+#[path = "write_repo.rs"]
+mod uploads_write_repo;
 
 type Result<T> = crate::error::AppResult<T>;
 
@@ -25,8 +33,6 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::state::{
@@ -36,21 +42,22 @@ use super::state::{
 };
 use super::{error_response, ErrorSpec};
 use crate::db::models::uploads::{NewUpload, UploadChangeset};
-use crate::db::schema::uploads;
 use crate::jobs::enqueue_upload_variants_generation;
-pub(super) use uploads_http_read::{auth_check, file_get, file_status};
-use uploads_http_support::{
+use uploads_auth_service::{
+    internal_upload_error, load_owned_original_for_variant, load_owned_upload,
+    require_auth_profile, resolve_upload_mime_type,
+};
+use uploads_http::{
     bad_request, not_found, storage_delete, storage_read, storage_signed_put_url, storage_upload,
 };
-pub(super) use uploads_http_write::{
-    file_delete, file_upload, file_upload_complete, file_upload_presign,
-};
 use uploads_multipart::HandlerError;
-use uploads_service::{
-    build_signed_upload_redirect, encode_thumbhash, extract_filename_from_original_uri,
-    fallback_variant_urls, internal_upload_error, load_owned_original_for_variant,
-    load_owned_upload, public_upload_url, require_auth_profile, resolve_upload_mime_type,
-    validate_presign_payload,
+pub(super) use uploads_read_handler::{auth_check, file_get, file_status};
+use uploads_url_service::{
+    build_signed_upload_redirect, encode_thumbhash, fallback_variant_urls, public_upload_url,
+};
+use uploads_validation_service::{extract_filename_from_original_uri, validate_presign_payload};
+pub(super) use uploads_write_handler::{
+    file_delete, file_upload, file_upload_complete, file_upload_presign,
 };
 
 pub(super) async fn generate_upload_variants_job(

@@ -2,7 +2,7 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use uuid::Uuid;
 
-use super::super::{bootstrap_matrix_auth, matrix_support};
+use super::super::{bootstrap_matrix_auth, matrix_service};
 
 pub(super) async fn create_dm_room(
     headers: &HeaderMap,
@@ -10,7 +10,7 @@ pub(super) async fn create_dm_room(
     other_user_pid: Uuid,
 ) -> std::result::Result<String, Response> {
     let bootstrap = bootstrap_matrix_auth(&own_user_pid.to_string(), headers, None, None).await?;
-    let server_name = matrix_support::matrix_server_name_from_user_id(&bootstrap.auth.user_id)
+    let server_name = matrix_service::matrix_server_name_from_user_id(&bootstrap.auth.user_id)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {
             super::super::chat_bootstrap_error(
@@ -21,7 +21,7 @@ pub(super) async fn create_dm_room(
             )
         })?;
     let target_matrix_user_id =
-        matrix_support::matrix_user_id_from_pid(&other_user_pid, &server_name);
+        matrix_service::matrix_user_id_from_pid(&other_user_pid, &server_name);
     let invites = vec![target_matrix_user_id];
 
     bootstrap

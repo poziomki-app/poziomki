@@ -3,7 +3,9 @@ use axum::response::Response;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
 
+#[path = "bootstrap.rs"]
 mod bootstrap;
+#[path = "operations.rs"]
 mod operations;
 
 const DEFAULT_DEVICE_NAME: &str = "Poziomki Mobile";

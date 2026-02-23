@@ -20,10 +20,10 @@ use crate::db::schema::{events, profiles};
 mod dm_rooms;
 mod event_rooms;
 mod membership;
+pub(super) mod service;
 mod session;
-pub(super) mod support;
 
-pub(super) use self::support as matrix_support;
+pub(super) use self::service as matrix_service;
 
 pub(super) const PENDING_PREFIX: &str = "pending:";
 pub(super) const EVENT_PENDING_RETRIES: usize = 20;
@@ -54,12 +54,12 @@ pub(super) struct MatrixRoomData {
 pub(super) struct MatrixBootstrap {
     pub(super) http_client: reqwest::Client,
     pub(super) homeserver: String,
-    pub(super) auth: matrix_support::MatrixAuthResponse,
+    pub(super) auth: matrix_service::MatrixAuthResponse,
 }
 
 impl MatrixBootstrap {
-    pub(super) fn client(&self) -> matrix_support::MatrixClient<'_> {
-        matrix_support::MatrixClient::new(
+    pub(super) fn client(&self) -> matrix_service::MatrixClient<'_> {
+        matrix_service::MatrixClient::new(
             &self.http_client,
             &self.homeserver,
             &self.auth.access_token,
@@ -154,7 +154,7 @@ pub(super) async fn bootstrap_matrix_auth(
     device_name: Option<&str>,
     device_id: Option<&str>,
 ) -> std::result::Result<MatrixBootstrap, Response> {
-    let homeserver = matrix_support::resolve_homeserver().ok_or_else(|| {
+    let homeserver = matrix_service::resolve_homeserver().ok_or_else(|| {
         chat_bootstrap_error(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             headers,
@@ -164,7 +164,7 @@ pub(super) async fn bootstrap_matrix_auth(
     })?;
 
     let config =
-        matrix_support::build_conn_config(user_pid, device_name, device_id).map_err(|error| {
+        matrix_service::build_conn_config(user_pid, device_name, device_id).map_err(|error| {
             tracing::warn!(%error, "matrix bootstrap is not configured");
             chat_bootstrap_error(
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
@@ -173,8 +173,8 @@ pub(super) async fn bootstrap_matrix_auth(
                 "CHAT_NOT_CONFIGURED",
             )
         })?;
-    let http_client = matrix_support::init_http_client(headers)?;
-    let auth = matrix_support::try_matrix_auth(&http_client, &homeserver, &config)
+    let http_client = matrix_service::init_http_client(headers)?;
+    let auth = matrix_service::try_matrix_auth(&http_client, &homeserver, &config)
         .await
         .map_err(|error| {
             tracing::warn!(
