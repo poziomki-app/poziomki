@@ -26,8 +26,8 @@ mod response_common;
 mod shared;
 #[path = "uploads.rs"]
 mod uploads;
-#[path = "uploads_dto.rs"]
-mod uploads_dto;
+#[path = "uploads_payloads.rs"]
+mod uploads_payloads;
 
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
@@ -51,7 +51,7 @@ pub(super) use profile_responses::*;
 pub(super) use response_common::*;
 pub(super) use shared::*;
 pub(super) use uploads::*;
-pub(super) use uploads_dto::*;
+pub(super) use uploads_payloads::*;
 
 pub(super) const OTP_TTL_SECS: i64 = 60 * 10;
 pub(super) const OTP_MAX_ATTEMPTS: i16 = 5;
