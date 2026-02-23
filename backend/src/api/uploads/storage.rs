@@ -198,9 +198,7 @@ pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
     ensure_ok_status(response.status_code())
 }
 
-pub(in crate::api) async fn signed_get_url(
-    filename: &str,
-) -> Result<String, StorageError> {
+pub(in crate::api) async fn signed_get_url(filename: &str) -> Result<String, StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
     let signed = config
         .bucket

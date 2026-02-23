@@ -6,7 +6,7 @@ use crate::api::state::UpdateEventBody;
 use crate::db::models::events::{Event, EventChangeset};
 use crate::db::models::profiles::Profile;
 
-use super::events_support::{
+use super::events_service::{
     self, forbidden, load_event, require_auth_profile, validate_event_description,
     validate_event_location,
 };
@@ -26,7 +26,7 @@ fn validate_event_basic_fields(
     headers: &HeaderMap,
     payload: &UpdateEventBody,
 ) -> std::result::Result<(), Box<axum::response::Response>> {
-    let val_err = |msg| Box::new(events_support::validation_error(headers, msg));
+    let val_err = |msg| Box::new(events_service::validation_error(headers, msg));
 
     payload
         .title
@@ -45,8 +45,8 @@ fn parse_optional_ts(
     headers: &HeaderMap,
     raw: &str,
 ) -> std::result::Result<chrono::DateTime<Utc>, Box<axum::response::Response>> {
-    events_support::parse_timestamp(raw)
-        .map_err(|msg| Box::new(events_support::validation_error(headers, msg)))
+    events_service::parse_timestamp(raw)
+        .map_err(|msg| Box::new(events_service::validation_error(headers, msg)))
 }
 
 fn parse_event_dates(
@@ -69,7 +69,7 @@ fn parse_event_dates(
     };
 
     if ends.is_some_and(|end| end <= starts) {
-        return Err(Box::new(events_support::validation_error(
+        return Err(Box::new(events_service::validation_error(
             headers,
             "Event end time must be after start time",
         )));

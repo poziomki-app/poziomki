@@ -34,8 +34,8 @@ pub(super) fn resolve_homeserver() -> Option<String> {
 /// Public-facing homeserver URL for client session responses.
 /// Falls back to internal URL if public URL is not set.
 pub(super) fn resolve_public_homeserver() -> Option<String> {
-    super::super::env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
-        .or_else(|| super::super::env_non_empty("MATRIX_HOMESERVER_URL"))
+    crate::api::env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
+        .or_else(|| crate::api::env_non_empty("MATRIX_HOMESERVER_URL"))
         .map(|v| v.trim().trim_end_matches('/').to_string())
 }
 
@@ -44,9 +44,9 @@ pub(super) fn build_conn_config(
     device_name: Option<&str>,
     device_id: Option<&str>,
 ) -> std::result::Result<MatrixConnConfig, MatrixConfigError> {
-    let password_pepper = super::super::env_non_empty("MATRIX_PASSWORD_PEPPER")
+    let password_pepper = crate::api::env_non_empty("MATRIX_PASSWORD_PEPPER")
         .ok_or(MatrixConfigError::MissingPasswordPepper)?;
-    let registration_token = super::super::env_non_empty("MATRIX_REGISTRATION_TOKEN")
+    let registration_token = crate::api::env_non_empty("MATRIX_REGISTRATION_TOKEN")
         .ok_or(MatrixConfigError::MissingRegistrationToken)?;
 
     Ok(MatrixConnConfig {
@@ -66,7 +66,7 @@ pub(super) fn init_http_client(
         .timeout(Duration::from_secs(10))
         .build()
         .map_err(|_error| {
-            super::super::matrix::chat_bootstrap_error(
+            super::super::chat_bootstrap_error(
                 axum::http::StatusCode::BAD_GATEWAY,
                 headers,
                 "Messaging service is temporarily unavailable",
@@ -110,7 +110,7 @@ pub(super) fn build_session_response(
     headers: &HeaderMap,
 ) -> std::result::Result<Response, Response> {
     let Some(refresh_token) = auth.refresh_token.clone() else {
-        return Err(super::super::matrix::chat_bootstrap_error(
+        return Err(super::super::chat_bootstrap_error(
             axum::http::StatusCode::BAD_GATEWAY,
             headers,
             "Messaging service is temporarily unavailable",

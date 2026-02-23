@@ -42,10 +42,7 @@ pub(in crate::api) fn not_found_event(
     )
 }
 
-pub(in crate::api) fn forbidden(
-    headers: &HeaderMap,
-    message: &str,
-) -> axum::response::Response {
+pub(in crate::api) fn forbidden(headers: &HeaderMap, message: &str) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::FORBIDDEN,
         headers,

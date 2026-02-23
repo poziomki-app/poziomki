@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use super::types::UploadContext;
+use super::shared::UploadContext;
 
 const MAX_UPLOAD_SIZE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION: u32 = 8192;
@@ -151,9 +151,7 @@ pub(in crate::api) fn create_upload_filename(mime_type: &str) -> String {
     format!("{random}.{ext}")
 }
 
-pub(in crate::api) fn validate_filename(
-    filename: &str,
-) -> std::result::Result<(), &'static str> {
+pub(in crate::api) fn validate_filename(filename: &str) -> std::result::Result<(), &'static str> {
     if filename.is_empty()
         || filename.contains("..")
         || filename.contains('/')
@@ -167,9 +165,7 @@ pub(in crate::api) fn validate_filename(
     }
 }
 
-pub(in crate::api) fn parse_upload_context(
-    value: Option<&str>,
-) -> Option<UploadContext> {
+pub(in crate::api) fn parse_upload_context(value: Option<&str>) -> Option<UploadContext> {
     let raw = value.unwrap_or("profile_gallery");
     match raw {
         "profile_picture" => Some(UploadContext::ProfilePicture),

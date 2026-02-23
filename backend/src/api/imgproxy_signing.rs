@@ -1,0 +1,65 @@
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use base64::Engine;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use std::sync::OnceLock;
+
+type HmacSha256 = Hmac<Sha256>;
+const SIG_BYTES: usize = 16;
+
+struct ImgproxyConfig {
+    hmac_key: Vec<u8>,
+    base_url: String,
+    expiry_secs: u64,
+}
+
+static CONFIG: OnceLock<Option<ImgproxyConfig>> = OnceLock::new();
+
+fn config() -> Option<&'static ImgproxyConfig> {
+    CONFIG
+        .get_or_init(|| {
+            let key_b64 = std::env::var("IMGPROXY_HMAC_KEY")
+                .ok()
+                .filter(|v| !v.trim().is_empty())?;
+            let hmac_key = STANDARD.decode(&key_b64).ok()?;
+            let base_url = std::env::var("IMGPROXY_BASE_URL")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_default();
+            let expiry_secs = std::env::var("IMGPROXY_URL_EXPIRY_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(120);
+            Some(ImgproxyConfig {
+                hmac_key,
+                base_url,
+                expiry_secs,
+            })
+        })
+        .as_ref()
+}
+
+pub fn is_configured() -> bool {
+    config().is_some()
+}
+
+/// Generate a signed imgproxy URL: `{base}/img/{sig}/{expiry}/{variant}.{fmt}/{filename}`
+pub fn signed_url(filename: &str, variant: &str, format: &str) -> Option<String> {
+    let cfg = config()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let expiry = now + cfg.expiry_secs;
+    let path = format!("{expiry}/{variant}.{format}/{filename}");
+    let sig = sign(&cfg.hmac_key, &path).ok()?;
+    Some(format!("{}/img/{sig}/{path}", cfg.base_url))
+}
+
+fn sign(key: &[u8], path: &str) -> Result<String, String> {
+    let mut mac = HmacSha256::new_from_slice(key).map_err(|e| format!("HMAC key error: {e}"))?;
+    mac.update(path.as_bytes());
+    let tag = mac.finalize().into_bytes();
+    let bytes = tag.get(..SIG_BYTES).ok_or("HMAC tag too short")?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}

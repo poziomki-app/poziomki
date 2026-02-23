@@ -52,7 +52,7 @@ pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), Str
 async fn dispatch_otp_email(payload_json: &str) -> std::result::Result<(), String> {
     let payload: OtpEmailJobPayload =
         serde_json::from_str(payload_json).map_err(|e| format!("invalid otp payload: {e}"))?;
-    crate::controllers::api::deliver_otp_email_job(&payload.to, &payload.code).await;
+    crate::api::deliver_otp_email_job(&payload.to, &payload.code).await;
     Ok(())
 }
 
@@ -61,7 +61,7 @@ async fn dispatch_matrix_avatar_sync(payload_json: &str) -> std::result::Result<
         .map_err(|e| format!("invalid matrix avatar sync payload: {e}"))?;
     let user_pid = uuid::Uuid::parse_str(&payload.user_pid)
         .map_err(|e| format!("invalid matrix avatar sync user_pid: {e}"))?;
-    crate::controllers::api::deliver_matrix_profile_avatar_sync_job(
+    crate::api::deliver_matrix_profile_avatar_sync_job(
         &user_pid,
         payload.profile_picture_filename.as_deref(),
     )
@@ -76,12 +76,7 @@ async fn dispatch_matrix_membership_sync(payload_json: &str) -> std::result::Res
         .map_err(|e| format!("invalid matrix membership sync event_id: {e}"))?;
     let profile_id = uuid::Uuid::parse_str(&payload.profile_id)
         .map_err(|e| format!("invalid matrix membership sync profile_id: {e}"))?;
-    crate::controllers::api::deliver_matrix_event_membership_sync_job(
-        event_id,
-        profile_id,
-        payload.leave,
-    )
-    .await
+    crate::api::deliver_matrix_event_membership_sync_job(event_id, profile_id, payload.leave).await
 }
 
 async fn dispatch_upload_variants(payload_json: &str) -> std::result::Result<(), String> {
@@ -89,7 +84,7 @@ async fn dispatch_upload_variants(payload_json: &str) -> std::result::Result<(),
         .map_err(|e| format!("invalid upload variants job payload: {e}"))?;
     let upload_id = uuid::Uuid::parse_str(&payload.upload_id)
         .map_err(|e| format!("invalid upload variants upload_id: {e}"))?;
-    crate::controllers::api::deliver_upload_variants_generation_job(upload_id).await
+    crate::api::deliver_upload_variants_generation_job(upload_id).await
 }
 
 pub(super) async fn mark_job_done(job_id: &str) -> std::result::Result<(), crate::error::AppError> {

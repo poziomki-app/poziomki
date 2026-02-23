@@ -78,6 +78,9 @@ pub(in crate::api) async fn file_get(
         let profile = require_auth_profile(&headers).await?;
         let mime_type = resolve_upload_mime_type(&headers, &filename, profile.id).await?;
 
+        if let Some(url) = crate::api::imgproxy_signing::signed_url(&filename, "full", "webp") {
+            return Ok(Json(super::super::state::UploadUrlResponse { url }).into_response());
+        }
         if is_s3_storage_configured() {
             build_signed_upload_redirect(&headers, &filename).await
         } else {
@@ -103,8 +106,14 @@ pub(in crate::api) async fn file_status(
         let profile = require_auth_profile(&headers).await?;
         let upload = load_owned_upload(&headers, &filename, profile.id).await?;
 
+        let imgproxy = crate::api::imgproxy_signing::is_configured();
         let url = public_upload_url(&headers, &upload.filename).await;
-        let (thumbnail_url, standard_url) = if upload.has_variants {
+        let (thumbnail_url, standard_url) = if imgproxy {
+            (
+                crate::api::imgproxy_signing::signed_url(&upload.filename, "thumb", "webp"),
+                crate::api::imgproxy_signing::signed_url(&upload.filename, "feed", "webp"),
+            )
+        } else if upload.has_variants {
             let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
             let std_name = uploads_resize::variant_filename(&upload.filename, "std");
             (

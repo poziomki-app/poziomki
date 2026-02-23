@@ -1,17 +1,17 @@
 #[path = "account.rs"]
 mod auth_account;
-#[path = "helpers.rs"]
-mod auth_helpers;
 #[path = "rate_limit.rs"]
 mod auth_rate_limit;
+#[path = "service.rs"]
+mod auth_service;
 #[path = "session.rs"]
 mod auth_session;
 
-use self::auth_helpers::{
+use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
+use self::auth_service::{
     create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
     sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS,
 };
-use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;

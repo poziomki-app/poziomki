@@ -23,9 +23,9 @@ use crate::jobs::enqueue_matrix_profile_avatar_sync;
 
 use super::{full_profile_response, parse_tag_uuids, sync_profile_tags};
 
-#[path = "mutations_support.rs"]
-mod support;
-use support::{
+#[path = "mutation_service.rs"]
+mod mutation_service;
+use mutation_service::{
     build_update_changeset, load_and_verify_profile, resolve_picture_filename,
     validate_and_prepare_update, validate_create,
 };

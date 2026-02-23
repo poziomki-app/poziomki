@@ -1,9 +1,9 @@
+#[path = "assembler.rs"]
+mod matching_assembler;
 #[path = "repo.rs"]
 mod matching_repo;
 #[path = "scoring.rs"]
 mod matching_scoring;
-#[path = "support.rs"]
-mod matching_support;
 
 use std::collections::HashMap;
 
@@ -23,9 +23,9 @@ use uuid::Uuid;
 use super::state::{require_auth_db, DataResponse, MatchingQuery};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
+use matching_assembler::build_recommendations_response;
 use matching_repo::MatchingRepository;
 use matching_scoring::{rank_and_take, rank_events_and_take, score_event, score_profile};
-use matching_support::build_recommendations_response;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 

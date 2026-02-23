@@ -113,9 +113,7 @@ pub(in crate::api) async fn build_event_response(
     })
 }
 
-pub(in crate::api) fn created_event_response(
-    data: EventResponse,
-) -> axum::response::Response {
+pub(in crate::api) fn created_event_response(data: EventResponse) -> axum::response::Response {
     (
         axum::http::StatusCode::CREATED,
         axum::Json(DataResponse { data }),

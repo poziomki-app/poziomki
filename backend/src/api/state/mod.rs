@@ -1,9 +1,33 @@
 #[path = "auth.rs"]
 mod auth;
-#[path = "types.rs"]
-mod types;
+#[path = "auth_requests.rs"]
+mod auth_requests;
+#[path = "auth_responses.rs"]
+mod auth_responses;
+#[path = "catalog_requests.rs"]
+mod catalog_requests;
+#[path = "catalog_responses.rs"]
+mod catalog_responses;
+#[path = "event_requests.rs"]
+mod event_requests;
+#[path = "event_responses.rs"]
+mod event_responses;
+#[path = "matching_requests.rs"]
+mod matching_requests;
+#[path = "matching_responses.rs"]
+mod matching_responses;
+#[path = "profile_requests.rs"]
+mod profile_requests;
+#[path = "profile_responses.rs"]
+mod profile_responses;
+#[path = "response_common.rs"]
+mod response_common;
+#[path = "shared.rs"]
+mod shared;
 #[path = "uploads.rs"]
 mod uploads;
+#[path = "uploads_dto.rs"]
+mod uploads_dto;
 
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
@@ -14,8 +38,20 @@ use super::ErrorSpec;
 use crate::db::models::otp_codes::{NewOtpCode, OtpCode};
 use crate::db::schema::otp_codes;
 pub(super) use auth::*;
-pub(super) use types::*;
+pub(super) use auth_requests::*;
+pub(super) use auth_responses::*;
+pub(super) use catalog_requests::*;
+pub(super) use catalog_responses::*;
+pub(super) use event_requests::*;
+pub(super) use event_responses::*;
+pub(super) use matching_requests::*;
+pub(super) use matching_responses::*;
+pub(super) use profile_requests::*;
+pub(super) use profile_responses::*;
+pub(super) use response_common::*;
+pub(super) use shared::*;
 pub(super) use uploads::*;
+pub(super) use uploads_dto::*;
 
 pub(super) const OTP_TTL_SECS: i64 = 60 * 10;
 pub(super) const OTP_MAX_ATTEMPTS: i16 = 5;

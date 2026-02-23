@@ -25,7 +25,7 @@ struct MatrixSessionData {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub(super) struct MatrixAuthResponse {
+pub(in crate::api) struct MatrixAuthResponse {
     pub(super) access_token: String,
     pub(super) user_id: String,
     pub(super) device_id: String,
@@ -44,7 +44,7 @@ struct MatrixErrorBody {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct MatrixRequestError {
+pub(in crate::api) struct MatrixRequestError {
     pub(super) status_code: u16,
     pub(super) errcode: Option<String>,
     pub(super) message: String,
@@ -60,7 +60,7 @@ impl MatrixRequestError {
     }
 }
 
-pub(super) struct MatrixConnConfig {
+pub(in crate::api) struct MatrixConnConfig {
     pub(super) localpart: String,
     pub(super) password: String,
     pub(super) device_name: String,
@@ -69,7 +69,7 @@ pub(super) struct MatrixConnConfig {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum MatrixConfigError {
+pub(in crate::api) enum MatrixConfigError {
     MissingPasswordPepper,
     MissingRegistrationToken,
 }

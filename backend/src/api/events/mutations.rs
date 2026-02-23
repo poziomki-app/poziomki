@@ -22,7 +22,7 @@ use crate::db::models::profiles::Profile;
 use crate::db::schema::{event_attendees, events};
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
-use super::events_support::{forbidden, load_event, parse_create_dates, require_auth_profile};
+use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
 use super::events_tags::{
     maybe_sync_tags, resolve_event_tag_ids, sync_event_tags, upsert_attendee,
 };

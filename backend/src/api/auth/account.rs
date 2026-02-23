@@ -8,7 +8,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use super::super::state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse};
-use super::auth_helpers::unauthorized_error;
+use super::auth_service::unauthorized_error;
 type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;

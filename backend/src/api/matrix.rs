@@ -12,7 +12,6 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub(super) use super::matrix_support;
 use super::{error_response, state::require_auth_db, ErrorSpec};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
@@ -22,6 +21,9 @@ mod dm_rooms;
 mod event_rooms;
 mod membership;
 mod session;
+pub(super) mod support;
+
+pub(super) use self::support as matrix_support;
 
 pub(super) const PENDING_PREFIX: &str = "pending:";
 pub(super) const EVENT_PENDING_RETRIES: usize = 20;

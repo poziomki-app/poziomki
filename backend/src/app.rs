@@ -115,7 +115,7 @@ pub async fn reset_test_database() -> crate::error::AppResult<()> {
 }
 
 pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
-    crate::controllers::api::router().with_state(ctx)
+    crate::api::router().with_state(ctx)
 }
 
 pub async fn run_api_server() -> crate::error::AppResult<()> {
@@ -148,7 +148,7 @@ pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     let _cfg = load_runtime_config()?;
     let ctx = build_app_context()?;
 
-    crate::tasks::start_background_workers(&ctx)?;
+    crate::jobs::start_background_workers(&ctx)?;
     tracing::info!("Poziomki outbox worker process started");
     shutdown_signal().await;
     tracing::info!("Poziomki outbox worker process stopping");

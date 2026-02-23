@@ -7,8 +7,8 @@ use base64::Engine;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+use super::uploads_http_support::{bad_request, forbidden, not_found, storage_signed_url};
 use super::uploads_multipart::HandlerError;
-use super::uploads_support::{bad_request, forbidden, not_found, storage_signed_url};
 use crate::api::state::{
     allowed_upload_mime, is_chat_context, is_s3_storage_configured, max_upload_size_bytes,
     parse_upload_context, require_auth_db, validate_filename, DirectUploadPresignBody,
@@ -37,6 +37,9 @@ fn dev_upload_url(filename: &str) -> String {
 }
 
 pub(super) async fn public_upload_url(headers: &HeaderMap, filename: &str) -> String {
+    if let Some(url) = crate::api::imgproxy_signing::signed_url(filename, "feed", "webp") {
+        return url;
+    }
     if is_s3_storage_configured() {
         storage_signed_url(headers, filename)
             .await
@@ -50,6 +53,11 @@ pub(super) async fn fallback_variant_urls(
     headers: &HeaderMap,
     original_filename: &str,
 ) -> (Option<String>, Option<String>) {
+    if crate::api::imgproxy_signing::is_configured() {
+        let thumb = crate::api::imgproxy_signing::signed_url(original_filename, "thumb", "webp");
+        let feed = crate::api::imgproxy_signing::signed_url(original_filename, "feed", "webp");
+        return (thumb, feed);
+    }
     let fallback = public_upload_url(headers, original_filename).await;
     (Some(fallback.clone()), Some(fallback))
 }

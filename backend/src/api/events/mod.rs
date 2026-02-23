@@ -1,7 +1,9 @@
 #[path = "mutations.rs"]
 mod events_mutations;
-#[path = "support.rs"]
-mod events_support;
+#[path = "repo.rs"]
+mod events_repo;
+#[path = "service.rs"]
+mod events_service;
 #[path = "tags.rs"]
 mod events_tags;
 #[path = "update.rs"]
@@ -20,14 +22,10 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::state::{DataResponse, EventsQuery};
-use crate::db::models::events::Event;
-use crate::db::schema::events;
-use events_support::{not_found_event, require_auth_profile};
+use events_service::{not_found_event, require_auth_profile};
 use events_view::attendee_info;
 
 pub(super) use events_mutations::{
@@ -36,6 +34,13 @@ pub(super) use events_mutations::{
 pub(super) use events_view::{build_event_response, build_event_responses};
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
+
+fn with_private_short_cache(mut response: Response) -> Response {
+    response
+        .headers_mut()
+        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
+    response
+}
 
 pub(super) async fn events_list(
     State(_ctx): State<AppContext>,
@@ -50,22 +55,12 @@ pub(super) async fn events_list(
     let limit = i64::from(query.limit.unwrap_or(20).clamp(1, 100));
     let now = Utc::now();
 
-    let mut conn = crate::db::conn().await?;
-
-    let all_events = events::table
-        .filter(events::starts_at.ge(now))
-        .order(events::starts_at.asc())
-        .limit(limit)
-        .load::<Event>(&mut conn)
-        .await?;
+    let all_events = events_repo::list_upcoming_events(now, limit).await?;
 
     let data = events_view::build_event_responses(&all_events, &profile.id).await?;
-
-    let mut response = Json(DataResponse { data }).into_response();
-    response
-        .headers_mut()
-        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
-    Ok(response)
+    Ok(with_private_short_cache(
+        Json(DataResponse { data }).into_response(),
+    ))
 }
 
 pub(super) async fn events_mine(
@@ -77,21 +72,12 @@ pub(super) async fn events_mine(
         Err(response) => return Ok(*response),
     };
 
-    let mut conn = crate::db::conn().await?;
-
-    let my_events = events::table
-        .filter(events::creator_id.eq(profile.id))
-        .order(events::starts_at.desc())
-        .load::<Event>(&mut conn)
-        .await?;
+    let my_events = events_repo::list_events_by_creator(profile.id).await?;
 
     let data = events_view::build_event_responses(&my_events, &profile.id).await?;
-
-    let mut response = Json(DataResponse { data }).into_response();
-    response
-        .headers_mut()
-        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
-    Ok(response)
+    Ok(with_private_short_cache(
+        Json(DataResponse { data }).into_response(),
+    ))
 }
 
 pub(super) async fn event_get(
@@ -107,23 +93,14 @@ pub(super) async fn event_get(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    let mut conn = crate::db::conn().await?;
-
-    let Some(event) = events::table
-        .find(event_uuid)
-        .first::<Event>(&mut conn)
-        .await
-        .optional()?
-    else {
+    let Some(event) = events_repo::find_event(event_uuid).await? else {
         return Ok(not_found_event(&headers, &id));
     };
 
     let data = build_event_response(&event, &profile.id).await?;
-    let mut response = Json(DataResponse { data }).into_response();
-    response
-        .headers_mut()
-        .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
-    Ok(response)
+    Ok(with_private_short_cache(
+        Json(DataResponse { data }).into_response(),
+    ))
 }
 
 pub(super) async fn event_attendees(
@@ -139,16 +116,7 @@ pub(super) async fn event_attendees(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    let mut conn = crate::db::conn().await?;
-
-    let exists = events::table
-        .find(event_uuid)
-        .first::<Event>(&mut conn)
-        .await
-        .optional()?
-        .is_some();
-
-    if !exists {
+    if !events_repo::event_exists(event_uuid).await? {
         return Ok(not_found_event(&headers, &id));
     }
 
