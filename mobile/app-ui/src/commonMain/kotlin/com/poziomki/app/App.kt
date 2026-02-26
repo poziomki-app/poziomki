@@ -2,6 +2,7 @@ package com.poziomki.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -19,6 +20,7 @@ import com.poziomki.app.session.SessionManager
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
+import com.poziomki.app.ui.shared.ImgproxyKeyer
 import com.poziomki.app.ui.shared.MxcMediaFetcher
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -26,7 +28,7 @@ import okio.Path.Companion.toOkioPath
 import org.koin.compose.koinInject
 
 private const val COIL_MEMORY_CACHE_MAX_SIZE_PERCENT = 0.18
-private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 96L * 1024L * 1024L
+private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
 
 @Composable
 fun App() {
@@ -67,6 +69,13 @@ fun App() {
         }
     }
 
+    // Warm up Matrix client (E2EE init) in background so first chat open is fast.
+    LaunchedEffect(startDestination) {
+        if (startDestination == Route.MainGraph) {
+            matrixClient.ensureStarted()
+        }
+    }
+
     PoziomkiTheme {
         if (startDestination != null) {
             AppNavigation(startDestination = startDestination, isLoggedIn = isLoggedIn)
@@ -93,6 +102,7 @@ private fun buildImageLoaderFactory(
                     .maxSizeBytes(COIL_DISK_CACHE_MAX_SIZE_BYTES)
                     .build()
             }.components {
+                add(ImgproxyKeyer())
                 add(MxcMediaFetcher.Factory(matrixClient))
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()

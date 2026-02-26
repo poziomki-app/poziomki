@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::matching_repo::MatchingRepository;
-use crate::api::resolve_thumbhashes;
+use crate::api::{resolve_image_urls, resolve_thumbhashes};
 use crate::api::state::{MatchingTagResponse, ProfileRecommendation};
 use crate::db::models::profiles::Profile;
 use crate::db::models::users::User;
 
 struct RecommendationContext<'a> {
     user_models: &'a [User],
+    pic_map: &'a HashMap<String, String>,
     thumbhash_map: &'a HashMap<String, String>,
 }
 
@@ -24,7 +25,11 @@ fn build_profile_recommendation(
         .iter()
         .find(|u| u.id == profile.user_id)
         .map_or(Uuid::nil(), |u| u.pid);
-    let profile_picture = profile.profile_picture.clone();
+    let profile_picture = profile
+        .profile_picture
+        .as_ref()
+        .and_then(|pic| ctx.pic_map.get(pic))
+        .cloned();
     let thumbhash = profile
         .profile_picture
         .as_ref()
@@ -63,10 +68,16 @@ pub(super) async fn build_recommendations_response(
         .filter_map(|(_, p)| p.profile_picture.clone())
         .collect();
 
-    let thumbhash_map = resolve_thumbhashes(&pic_filenames).await;
+    let (resolved_pics, thumbhash_map) = tokio::join!(
+        resolve_image_urls(&pic_filenames),
+        resolve_thumbhashes(&pic_filenames),
+    );
+    let pic_map: HashMap<String, String> =
+        pic_filenames.into_iter().zip(resolved_pics).collect();
 
     let ctx = RecommendationContext {
         user_models: &user_models,
+        pic_map: &pic_map,
         thumbhash_map: &thumbhash_map,
     };
     Ok(top

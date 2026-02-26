@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::api::{
-    resolve_image_urls, resolve_thumbhashes,
+    resolve_image_url, resolve_image_urls, resolve_thumbhashes,
     state::{FullProfileResponse, ProfileResponse},
 };
 use crate::db::models::profiles::Profile;
@@ -26,6 +26,11 @@ pub(in crate::api) async fn profile_to_response(
     profile: &Profile,
     user_pid: &Uuid,
 ) -> ProfileResponse {
+    let profile_picture = match &profile.profile_picture {
+        Some(pic) => Some(resolve_image_url(pic).await),
+        None => None,
+    };
+
     let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
@@ -37,7 +42,7 @@ pub(in crate::api) async fn profile_to_response(
         name: profile.name.clone(),
         bio: profile.bio.clone(),
         age: profile.age.and_then(|a| u8::try_from(a).ok()),
-        profile_picture: profile.profile_picture.clone(),
+        profile_picture,
         thumbhash,
         images,
         program: profile.program.clone(),
@@ -54,6 +59,11 @@ pub(in crate::api) async fn full_profile_response(
 ) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
     let profile_tags = load_profile_tags(profile.id).await?;
 
+    let profile_picture = match &profile.profile_picture {
+        Some(pic) => Some(resolve_image_url(pic).await),
+        None => None,
+    };
+
     let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
@@ -65,7 +75,7 @@ pub(in crate::api) async fn full_profile_response(
         name: profile.name.clone(),
         bio: profile.bio.clone(),
         age: profile.age.and_then(|a| u8::try_from(a).ok()),
-        profile_picture: profile.profile_picture.clone(),
+        profile_picture,
         thumbhash,
         images,
         program: profile.program.clone(),
