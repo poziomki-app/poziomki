@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::api::{
-    resolve_image_url, resolve_image_urls,
+    resolve_image_urls, resolve_thumbhashes,
     state::{FullProfileResponse, ProfileResponse},
 };
 use crate::db::models::profiles::Profile;
@@ -16,14 +16,17 @@ fn decode_profile_images(profile: &Profile) -> Vec<String> {
         .unwrap_or_default()
 }
 
+async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
+    let pic = profile_picture?;
+    let map = resolve_thumbhashes(&[pic.clone()]).await;
+    map.into_values().next()
+}
+
 pub(in crate::api) async fn profile_to_response(
     profile: &Profile,
     user_pid: &Uuid,
 ) -> ProfileResponse {
-    let profile_picture = match &profile.profile_picture {
-        Some(pic) => Some(resolve_image_url(pic).await),
-        None => None,
-    };
+    let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
@@ -33,8 +36,9 @@ pub(in crate::api) async fn profile_to_response(
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
-        age: u8::try_from(profile.age).unwrap_or(0),
-        profile_picture,
+        age: profile.age.and_then(|a| u8::try_from(a).ok()),
+        profile_picture: profile.profile_picture.clone(),
+        thumbhash,
         images,
         program: profile.program.clone(),
         gradient_start: profile.gradient_start.clone(),
@@ -50,10 +54,7 @@ pub(in crate::api) async fn full_profile_response(
 ) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
     let profile_tags = load_profile_tags(profile.id).await?;
 
-    let profile_picture = match &profile.profile_picture {
-        Some(pic) => Some(resolve_image_url(pic).await),
-        None => None,
-    };
+    let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
@@ -63,8 +64,9 @@ pub(in crate::api) async fn full_profile_response(
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
-        age: u8::try_from(profile.age).unwrap_or(0),
-        profile_picture,
+        age: profile.age.and_then(|a| u8::try_from(a).ok()),
+        profile_picture: profile.profile_picture.clone(),
+        thumbhash,
         images,
         program: profile.program.clone(),
         gradient_start: profile.gradient_start.clone(),

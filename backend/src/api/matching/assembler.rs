@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::matching_repo::MatchingRepository;
-use crate::api::resolve_image_urls;
+use crate::api::resolve_thumbhashes;
 use crate::api::state::{MatchingTagResponse, ProfileRecommendation};
 use crate::db::models::profiles::Profile;
 use crate::db::models::users::User;
 
 struct RecommendationContext<'a> {
     user_models: &'a [User],
-    pic_map: &'a HashMap<String, String>,
+    thumbhash_map: &'a HashMap<String, String>,
 }
 
 fn build_profile_recommendation(
@@ -24,18 +24,20 @@ fn build_profile_recommendation(
         .iter()
         .find(|u| u.id == profile.user_id)
         .map_or(Uuid::nil(), |u| u.pid);
-    let profile_picture = profile
+    let profile_picture = profile.profile_picture.clone();
+    let thumbhash = profile
         .profile_picture
         .as_ref()
-        .and_then(|pic| ctx.pic_map.get(pic))
+        .and_then(|pic| ctx.thumbhash_map.get(pic))
         .cloned();
     ProfileRecommendation {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
-        age: u8::try_from(profile.age).unwrap_or(0),
+        age: profile.age.and_then(|a| u8::try_from(a).ok()),
         profile_picture,
+        thumbhash,
         program: profile.program.clone(),
         gradient_start: profile.gradient_start.clone(),
         gradient_end: profile.gradient_end.clone(),
@@ -56,16 +58,16 @@ pub(super) async fn build_recommendations_response(
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
     let top_tags = repo.batch_load_profile_tags(&top_ids).await?;
 
-    let pic_urls: Vec<String> = top
+    let pic_filenames: Vec<String> = top
         .iter()
         .filter_map(|(_, p)| p.profile_picture.clone())
         .collect();
-    let resolved_pics = resolve_image_urls(&pic_urls).await;
-    let pic_map: HashMap<String, String> = pic_urls.into_iter().zip(resolved_pics).collect();
+
+    let thumbhash_map = resolve_thumbhashes(&pic_filenames).await;
 
     let ctx = RecommendationContext {
         user_models: &user_models,
-        pic_map: &pic_map,
+        thumbhash_map: &thumbhash_map,
     };
     Ok(top
         .iter()
