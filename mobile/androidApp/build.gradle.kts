@@ -16,8 +16,8 @@ android {
         applicationId = "com.poziomki.rs.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.4.1"
+        versionCode = 17
+        versionName = "0.1.4.7"
 
         val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
@@ -84,6 +84,7 @@ dependencies {
     implementation(projects.appUi)
     implementation(projects.core)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.coil)
     implementation(libs.koin.android)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

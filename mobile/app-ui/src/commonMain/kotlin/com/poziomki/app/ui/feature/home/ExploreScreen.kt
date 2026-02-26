@@ -211,13 +211,16 @@ fun ExploreScreen(
                             onRefresh = { viewModel.pullToRefresh() },
                         ) {
                             LazyColumn(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = PoziomkiTheme.spacing.md),
+                                modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                             ) {
-                                items(state.profiles, key = { it.id }) { profile ->
+                                item(key = "recommended-row") {
+                                    RecommendedPeopleRow(
+                                        profiles = state.recommendedProfiles,
+                                        onProfileClick = onNavigateToProfile,
+                                    )
+                                }
+                                items(state.remainingProfiles, key = { it.id }) { profile ->
                                     ProfileCard(
                                         name = profile.name,
                                         program = profile.program,
@@ -225,6 +228,7 @@ fun ExploreScreen(
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,
                                         onClick = { onNavigateToProfile(profile.id) },
+                                        modifier = Modifier.padding(horizontal = PoziomkiTheme.spacing.md),
                                     )
                                 }
                             }

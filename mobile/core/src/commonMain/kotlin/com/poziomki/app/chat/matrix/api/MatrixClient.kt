@@ -33,6 +33,9 @@ data class MatrixRoomSummary(
     val unreadCount: Int,
     val latestMessage: String?,
     val latestTimestampMillis: Long?,
+    val latestMessageIsMine: Boolean = false,
+    val latestMessageSendStatus: MatrixEventSendStatus? = null,
+    val latestMessageReadByCount: Int = 0,
 )
 
 interface MatrixClient {

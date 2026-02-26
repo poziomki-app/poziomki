@@ -83,6 +83,24 @@ fun pluralizePolish(
     }
 }
 
+fun eventDateKey(startsAt: String): Int {
+    val tz = TimeZone.currentSystemDefault()
+    val eventDate = Instant.parse(startsAt).toLocalDateTime(tz).date
+    return eventDate.toEpochDays()
+}
+
+fun dayLabel(startsAt: String): String {
+    val tz = TimeZone.currentSystemDefault()
+    val eventDate = Instant.parse(startsAt).toLocalDateTime(tz).date
+    val today = Clock.System.now().toLocalDateTime(tz).date
+    val daysDiff = eventDate.toEpochDays() - today.toEpochDays()
+    return when (daysDiff) {
+        0 -> "dzisiaj"
+        1 -> "jutro"
+        else -> POLISH_WEEKDAYS_FULL[eventDate.dayOfWeek.ordinal]
+    }
+}
+
 fun matchesTimeFilter(
     startsAt: String,
     filter: TimeFilter,

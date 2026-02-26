@@ -46,16 +46,30 @@ fun buildProfilePicturesByUserId(userIdToPic: Map<String, String>): Map<String, 
     return pictureMap
 }
 
+fun buildDisplayNameOverrides(profiles: List<MatchProfile>): Map<String, String> {
+    val nameMap = mutableMapOf<String, String>()
+    profiles.forEach { profile ->
+        val name = profile.name.trim()
+        if (name.isBlank()) return@forEach
+        val userId = profile.userId
+        val localpart = matrixLocalpartFromUserId(userId)
+        nameMap[userId] = name
+        nameMap[userId.lowercase()] = name
+        nameMap[localpart] = name
+        nameMap["@$localpart"] = name
+    }
+    return nameMap
+}
+
 fun buildProfilePicturesByName(profiles: List<MatchProfile>): Map<String, String> =
     profiles
         .asSequence()
-        .filter { !it.name.isBlank() && !it.profilePicture.isNullOrBlank() }
+        .filter { !it.name.isBlank() }
         .groupBy { it.name.trim().lowercase() }
         .mapNotNull { (name, sameNameProfiles) ->
-            val uniquePictures =
-                sameNameProfiles
-                    .mapNotNull { it.profilePicture?.takeIf { picture -> picture.isNotBlank() } }
-                    .distinct()
+            val allPictures = sameNameProfiles.map { it.profilePicture?.takeIf { p -> p.isNotBlank() } }
+            if (allPictures.any { it == null }) return@mapNotNull null
+            val uniquePictures = allPictures.filterNotNull().distinct()
             if (uniquePictures.size == 1) {
                 name to uniquePictures.first()
             } else {

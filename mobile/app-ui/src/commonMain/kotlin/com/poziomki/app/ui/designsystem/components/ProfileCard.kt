@@ -5,10 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,13 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,7 +35,6 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
-import com.poziomki.app.ui.shared.rememberThumbhashPainter
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @Composable
@@ -51,8 +44,8 @@ fun ProfileCard(
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
-    thumbhash: String? = null,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
     val photoSize = 90.dp
@@ -80,7 +73,7 @@ fun ProfileCard(
 
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(cardShape)
                 .border(1.dp, Border, cardShape)
@@ -88,43 +81,16 @@ fun ProfileCard(
                 .clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Photo — edge-to-edge left, full card height
+            // Photo — fixed square, ContentScale.Crop fills it
             if (profilePicture != null) {
-                val thumbhashPainter = rememberThumbhashPainter(thumbhash)
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxHeight()
-                            .width(photoSize)
-                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush =
-                                        Brush.horizontalGradient(
-                                            colorStops =
-                                                arrayOf(
-                                                    0f to Color.Black,
-                                                    0.6f to Color.Black,
-                                                    1f to Color.Transparent,
-                                                ),
-                                        ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                ) {
-                    Box(modifier = Modifier.matchParentSize().background(Color(0xFF111418)))
-                    AsyncImage(
-                        model = resolveImageUrl(profilePicture),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Crop,
-                        placeholder = thumbhashPainter,
-                    )
-                }
+                AsyncImage(
+                    model = resolveImageUrl(profilePicture),
+                    contentDescription = null,
+                    modifier = Modifier.size(photoSize),
+                    contentScale = ContentScale.Crop,
+                )
             } else {
                 Box(modifier = Modifier.padding(16.dp)) {
                     UserAvatar(

@@ -184,7 +184,7 @@ class ApiClient(
                         response.body<ApiErrorResponse>()
                     } catch (_: Exception) {
                         ApiErrorResponse(
-                            error = "Unknown error",
+                            error = "Co\u015b posz\u0142o nie tak. Spr\u00f3buj ponownie.",
                             code = response.status.value.toString(),
                             requestId = null,
                         )
@@ -192,6 +192,6 @@ class ApiClient(
                 ApiResult.Error(error.error, error.code, response.status.value)
             }
         } catch (e: Exception) {
-            ApiResult.Error(e.message ?: "Network error", "NETWORK_ERROR", 0)
+            ApiResult.Error("Brak po\u0142\u0105czenia z internetem", "NETWORK_ERROR", 0)
         }
 }

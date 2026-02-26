@@ -132,18 +132,40 @@ fun AppNavigation(
             val roomId =
                 when {
                     chatTargetId.startsWith("!") -> chatTargetId
-                    else -> matrixClient.createDM(chatTargetId).getOrNull()
-                } ?: return@launch
+                    else ->
+                        matrixClient.createDM(chatTargetId).getOrElse { error ->
+                            println("Failed to create DM with $chatTargetId: ${error.message}")
+                            return@launch
+                        }
+                }
 
             navController.navigate(Route.Chat(roomId))
         }
     }
 
-    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, _ ->
+    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
         if (userId.isBlank()) return@navigateToDm
         navigationScope.launch {
-            val roomId = chatRoomRepository.resolveDirectRoom(userId).getOrNull() ?: return@launch
-            navController.navigate(Route.Chat(roomId))
+            val roomId =
+                chatRoomRepository.resolveDirectRoom(userId).getOrElse { error ->
+                    println("Failed to resolve DM room for $userId: ${error.message}")
+                    return@launch
+                }
+            runCatching { matrixClient.refreshRooms() }
+            // Pre-hydrate the room locally before opening ChatScreen.
+            // Fresh backend-created DMs can exist server-side for a moment before the local SDK
+            // has a joined room + timeline, which otherwise leaves the composer in "connecting".
+            val hydratedRoom = runCatching { matrixClient.getJoinedRoom(roomId) }.getOrNull()
+            if (hydratedRoom == null) {
+                println("DM room $roomId is not hydrated locally yet; opening chat with retry path")
+            }
+            navController.navigate(
+                Route.Chat(
+                    id = roomId,
+                    title = displayName.trim().ifBlank { null },
+                    directUserId = userId,
+                ),
+            )
         }
     }
 
@@ -157,8 +179,9 @@ fun AppNavigation(
         popExitTransition = { ExitTransition.None },
     ) {
         // Auth graph
-        navigation<Route.AuthGraph>(startDestination = Route.Login) {
-            composable<Route.Login> {
+        navigation<Route.AuthGraph>(startDestination = Route.Login()) {
+            composable<Route.Login> { backStackEntry ->
+                val login = backStackEntry.toRoute<Route.Login>()
                 LoginScreen(
                     onNavigateToRegister = { navController.navigate(Route.Register) },
                     onLoginSuccess = {
@@ -174,6 +197,7 @@ fun AppNavigation(
                             popUpTo(Route.AuthGraph) { inclusive = true }
                         }
                     },
+                    prefillEmail = login.prefillEmail,
                 )
             }
             composable<Route.Register> {
@@ -181,6 +205,11 @@ fun AppNavigation(
                     onNavigateToLogin = { navController.popBackStack() },
                     onRegisterSuccess = { email ->
                         navController.navigate(Route.Verify(email))
+                    },
+                    onUserExists = { email ->
+                        navController.navigate(Route.Login(prefillEmail = email)) {
+                            popUpTo(Route.Login()) { inclusive = true }
+                        }
                     },
                 )
             }
@@ -210,6 +239,11 @@ fun AppNavigation(
                     }
                 BasicInfoScreen(
                     onNext = { navController.navigate(Route.Interests) },
+                    onBack = {
+                        navController.navigate(Route.AuthGraph) {
+                            popUpTo(Route.OnboardingGraph) { inclusive = true }
+                        }
+                    },
                     viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
                 )
             }
@@ -305,6 +339,8 @@ fun AppNavigation(
             val chat = backStackEntry.toRoute<Route.Chat>()
             ChatScreen(
                 chatId = chat.id,
+                initialTitle = chat.title,
+                initialDirectUserId = chat.directUserId,
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )

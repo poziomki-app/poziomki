@@ -10,7 +10,9 @@ import android.content.Context
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
+import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
@@ -18,14 +20,17 @@ import com.poziomki.app.network.MatrixConfigData
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
@@ -48,6 +53,7 @@ import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk.BackupDownloadStrategy
+import uniffi.matrix_sdk_ui.LatestEventValueLocalState
 import java.io.File
 import java.util.UUID
 
@@ -75,7 +81,10 @@ class RustMatrixClient(
     private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
     private var cachedConfig: MatrixConfigData? = null
     private val dmRoomIdsByUserId = mutableMapOf<String, String>()
+    private val dmUserIdsByRoomId = mutableMapOf<String, String>()
     private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
+    private val openedRoomSummaryJobs = mutableMapOf<String, Job>()
+    private val timelinePreviewByRoomId = mutableMapOf<String, TimelinePreview>()
     private val roomSummaryComparator: Comparator<MatrixRoomSummary> =
         compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
             .thenByDescending { it.unreadCount }
@@ -255,23 +264,176 @@ class RustMatrixClient(
         openedRooms[roomId]?.let { return it }
 
         val innerClient = client ?: return null
-        val room = innerClient.getRoom(roomId) ?: return null
+        repeat(24) { attempt ->
+            openedRooms[roomId]?.let { return it }
 
-        // Auto-join if we've been invited
-        if (room.membership() == Membership.INVITED) {
-            runCatching { room.join() }.getOrElse { return null }
+            val room =
+                runCatching { innerClient.getRoom(roomId) }.getOrNull()
+                    ?: runCatching {
+                        // Backend may create a DM room before this device has seen it in sliding sync.
+                        // Ask the SDK to hydrate/fetch the room by id as a fallback.
+                        innerClient.joinRoomById(roomId)
+                    }.getOrNull()
+
+            if (room != null) {
+                if (room.membership() == Membership.INVITED) {
+                    runCatching { room.join() }
+                        .onFailure { throwable ->
+                            println("Matrix getJoinedRoom($roomId): join invite failed: ${throwable.message}")
+                        }
+                }
+
+                if (room.membership() == Membership.JOINED) {
+                    val ownUserId = runCatching { room.ownUserId() }.getOrNull()
+                    if (!ownUserId.isNullOrBlank()) {
+                        val directPeer =
+                            runCatching { resolveDirectPeer(room, ownUserId) }
+                                .getOrNull()
+                        val directPeerUserId = directPeer?.userId?.takeIf { it.isNotBlank() }
+                        if (!directPeerUserId.isNullOrBlank()) {
+                            val normalizedDirectUserId = normalizeUserId(directPeerUserId)
+                            synchronized(dmRoomIdsByUserId) {
+                                dmRoomIdsByUserId[normalizedDirectUserId] = roomId
+                            }
+                            synchronized(dmUserIdsByRoomId) {
+                                dmUserIdsByRoomId[roomId] = directPeerUserId
+                            }
+                            directPeer.avatarUrl
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { avatarUrl ->
+                                    synchronized(dmAvatarUrlsByUserId) {
+                                        dmAvatarUrlsByUserId[normalizedDirectUserId] = avatarUrl
+                                    }
+                                }
+                        }
+                    }
+
+                    val liveTimeline =
+                        runCatching { room.timeline() }
+                            .onFailure { throwable ->
+                                println("Matrix getJoinedRoom($roomId): timeline creation failed: ${throwable.message}")
+                            }.getOrNull()
+                    if (liveTimeline != null) {
+                        val wrappedRoom =
+                            JoinedRustRoom(
+                                innerRoom = room,
+                                liveTimeline = RustTimeline(liveTimeline, MatrixTimelineMode.Live, room.ownUserId(), scope),
+                                coroutineScope = scope,
+                            )
+                        openedRooms[roomId] = wrappedRoom
+                        observeOpenedRoomTimelineSummary(room, wrappedRoom)
+                        scope.launch(Dispatchers.Default) {
+                            publishOpenedRoomSummary(room)
+                        }
+                        return wrappedRoom
+                    }
+                }
+            }
+
+            if (attempt == 0 || attempt % 3 == 2) {
+                runCatching { refreshRooms() }
+            }
+            if (attempt < 23) {
+                delay(500L)
+            }
         }
-        if (room.membership() != Membership.JOINED) return null
+        return null
+    }
 
-        val liveTimeline = runCatching { room.timeline() }.getOrElse { return null }
-        val wrappedRoom =
-            JoinedRustRoom(
-                innerRoom = room,
-                liveTimeline = RustTimeline(liveTimeline, MatrixTimelineMode.Live, room.ownUserId(), scope),
-                coroutineScope = scope,
-            )
-        openedRooms[roomId] = wrappedRoom
-        return wrappedRoom
+    private suspend fun publishOpenedRoomSummary(room: Room) {
+        val mappedRoom =
+            runCatching {
+                val info = room.roomInfo()
+                val latest = runCatching { room.latestEvent() }.getOrNull()
+                val ownUserId = room.ownUserId()
+                val cachedDirectUserId =
+                    synchronized(dmUserIdsByRoomId) { dmUserIdsByRoomId[info.id] }
+                val directPeer = runCatching { resolveDirectPeer(room, ownUserId) }.getOrNull()
+                val directHero =
+                    runCatching {
+                        pickDirectHeroCandidate(
+                            ownUserId = ownUserId,
+                            heroes = info.heroes + room.heroes(),
+                            preferredUserId = directPeer?.userId ?: cachedDirectUserId,
+                        )
+                    }.getOrNull()
+                val heroUserId = directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
+                val effectiveIsDirect = info.isDirect || !heroUserId.isNullOrBlank()
+                val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
+
+                var resolvedAvatarUrl =
+                    if (effectiveIsDirect) {
+                        directPeer?.avatarUrl ?: directHero?.avatarUrl ?: info.avatarUrl
+                    } else {
+                        info.avatarUrl
+                    }
+                        ?: normalizedDirectUserId?.let { normalized ->
+                            synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId[normalized] }
+                        }
+
+                if (resolvedAvatarUrl.isNullOrBlank() && effectiveIsDirect && !heroUserId.isNullOrBlank()) {
+                    resolvedAvatarUrl =
+                        runCatching { room.memberAvatarUrl(heroUserId) }
+                            .getOrNull()
+                            ?.takeIf { it.isNotBlank() }
+                }
+
+                if (!heroUserId.isNullOrBlank()) {
+                    val normalized = normalizeUserId(heroUserId)
+                    synchronized(dmRoomIdsByUserId) {
+                        dmRoomIdsByUserId[normalized] = info.id
+                    }
+                    synchronized(dmUserIdsByRoomId) {
+                        dmUserIdsByRoomId[info.id] = heroUserId
+                    }
+                    resolvedAvatarUrl?.takeIf { it.isNotBlank() }?.let { avatarUrl ->
+                        synchronized(dmAvatarUrlsByUserId) {
+                            dmAvatarUrlsByUserId[normalized] = avatarUrl
+                        }
+                    }
+                }
+
+                var mapped =
+                    MatrixRoomSummary(
+                    roomId = info.id,
+                    displayName =
+                        if (effectiveIsDirect) {
+                            directPeer?.displayName
+                                ?: directHero?.displayName
+                                ?: info.displayName
+                                ?: room.displayName()
+                                ?: info.id
+                        } else {
+                            info.displayName
+                                ?: room.displayName()
+                                ?: info.id
+                        },
+                    avatarUrl = resolvedAvatarUrl,
+                    isDirect = effectiveIsDirect,
+                    directUserId = heroUserId,
+                    unreadCount =
+                        info.numUnreadNotifications
+                            .toLong()
+                            .coerceAtMost(Int.MAX_VALUE.toLong())
+                            .toInt(),
+                    latestMessage = latest?.previewText(),
+                    latestTimestampMillis = latest?.timestampMillis(),
+                    latestMessageIsMine = latest?.isMine(ownUserId) == true,
+                    latestMessageSendStatus = latest?.toRoomSendStatus(ownUserId),
+                )
+                mapped = applyTimelinePreviewOverride(mapped)
+                mapped
+            }.getOrNull() ?: return
+
+        val updated =
+            (_rooms.value + mappedRoom)
+                .groupBy { it.roomId }
+                .map { (_, candidates) ->
+                    candidates.maxWithOrNull(roomSummaryComparator) ?: candidates.first()
+                }.sortedWith(roomSummaryComparator)
+        if (_rooms.value != updated) {
+            _rooms.value = updated
+        }
     }
 
     override suspend fun createDM(
@@ -425,33 +587,37 @@ class RustMatrixClient(
                         val info = room.roomInfo()
                         val latest = room.latestEvent()
                         val ownUserId = room.ownUserId()
+                        val cachedDirectUserId =
+                            synchronized(dmUserIdsByRoomId) { dmUserIdsByRoomId[info.id] }
+                        val shouldResolveDirectPeer = info.isDirect || !cachedDirectUserId.isNullOrBlank()
                         val directPeer =
-                            if (info.isDirect) {
+                            if (shouldResolveDirectPeer) {
                                 resolveDirectPeer(room, ownUserId)
                             } else {
                                 null
                             }
                         val directHero =
-                            if (info.isDirect) {
+                            if (shouldResolveDirectPeer) {
                                 pickDirectHeroCandidate(
                                     ownUserId = ownUserId,
                                     heroes = info.heroes + room.heroes(),
-                                    preferredUserId = directPeer?.userId,
+                                    preferredUserId = directPeer?.userId ?: cachedDirectUserId,
                                 )
                             } else {
                                 null
                             }
 
                         val heroUserId =
-                            if (info.isDirect) {
-                                directPeer?.userId ?: directHero?.userId
+                            if (shouldResolveDirectPeer) {
+                                directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
                             } else {
                                 null
                             }
+                        val effectiveIsDirect = info.isDirect || !heroUserId.isNullOrBlank()
 
                         val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
                         var resolvedAvatarUrl =
-                            if (info.isDirect) {
+                            if (effectiveIsDirect) {
                                 directPeer?.avatarUrl ?: directHero?.avatarUrl ?: info.avatarUrl
                             } else {
                                 info.avatarUrl
@@ -460,7 +626,7 @@ class RustMatrixClient(
                                     synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId[normalized] }
                                 }
 
-                        if (resolvedAvatarUrl.isNullOrBlank() && info.isDirect && !heroUserId.isNullOrBlank()) {
+                        if (resolvedAvatarUrl.isNullOrBlank() && effectiveIsDirect && !heroUserId.isNullOrBlank()) {
                             resolvedAvatarUrl =
                                 runCatching { room.memberAvatarUrl(heroUserId) }
                                     .getOrNull()
@@ -472,10 +638,11 @@ class RustMatrixClient(
                             }
                         }
 
-                        MatrixRoomSummary(
+                        var mapped =
+                            MatrixRoomSummary(
                             roomId = info.id,
                             displayName =
-                                if (info.isDirect) {
+                                if (effectiveIsDirect) {
                                     directPeer?.displayName
                                         ?: directHero?.displayName
                                         ?: info.displayName
@@ -487,7 +654,7 @@ class RustMatrixClient(
                                         ?: info.id
                                 },
                             avatarUrl = resolvedAvatarUrl,
-                            isDirect = info.isDirect,
+                            isDirect = effectiveIsDirect,
                             directUserId = heroUserId,
                             unreadCount =
                                 info.numUnreadNotifications
@@ -496,7 +663,11 @@ class RustMatrixClient(
                                     .toInt(),
                             latestMessage = latest.previewText(),
                             latestTimestampMillis = latest.timestampMillis(),
+                            latestMessageIsMine = latest.isMine(ownUserId) == true,
+                            latestMessageSendStatus = latest.toRoomSendStatus(ownUserId),
                         )
+                        mapped = applyTimelinePreviewOverride(mapped)
+                        mapped
                     }.getOrNull()
 
                 if (mappedRoom != null) {
@@ -511,6 +682,7 @@ class RustMatrixClient(
                     .forEach { room ->
                         val directUserId = room.directUserId ?: return@forEach
                         dmRoomIdsByUserId[normalizeUserId(directUserId)] = room.roomId
+                        dmUserIdsByRoomId[room.roomId] = directUserId
                     }
             }
 
@@ -587,8 +759,11 @@ class RustMatrixClient(
     private fun cleanupInternal() {
         openedRooms.values.forEach { room -> room.close() }
         openedRooms.clear()
+        openedRoomSummaryJobs.values.forEach { it.cancel() }
+        openedRoomSummaryJobs.clear()
         synchronized(dmRoomIdsByUserId) { dmRoomIdsByUserId.clear() }
         synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId.clear() }
+        synchronized(timelinePreviewByRoomId) { timelinePreviewByRoomId.clear() }
 
         roomListSubscription?.streamHandle?.cancel()
         roomListSubscription?.roomListResult?.close()
@@ -604,6 +779,94 @@ class RustMatrixClient(
         client = null
         activeAppUserId = null
     }
+
+    private fun observeOpenedRoomTimelineSummary(
+        room: Room,
+        wrappedRoom: JoinedRustRoom,
+    ) {
+        val roomId = room.id()
+        if (openedRoomSummaryJobs[roomId]?.isActive == true) return
+        openedRoomSummaryJobs[roomId] =
+            scope.launch(Dispatchers.Default) {
+                wrappedRoom.liveTimeline.items.collectLatest { items ->
+                    val latestMessageEvent =
+                        items
+                            .asReversed()
+                            .firstNotNullOfOrNull { item ->
+                                (item as? MatrixTimelineItem.Event)
+                                    ?.takeIf { it.body.isNotBlank() }
+                            } ?: return@collectLatest
+
+                    synchronized(timelinePreviewByRoomId) {
+                        timelinePreviewByRoomId[roomId] =
+                            TimelinePreview(
+                                message = latestMessageEvent.body,
+                                timestampMillis = latestMessageEvent.timestampMillis,
+                                isMine = latestMessageEvent.isMine,
+                                sendStatus = latestMessageEvent.sendStatus,
+                                readByCount = latestMessageEvent.readByCount,
+                            )
+                    }
+
+                    publishTimelinePreview(roomId, latestMessageEvent)
+                }
+            }
+    }
+
+    private fun publishTimelinePreview(
+        roomId: String,
+        event: MatrixTimelineItem.Event,
+    ) {
+        val currentRooms = _rooms.value
+        val current = currentRooms.firstOrNull { it.roomId == roomId } ?: return
+        val updatedSummary =
+            current.copy(
+                latestMessage = event.body,
+                latestTimestampMillis = event.timestampMillis,
+                latestMessageIsMine = event.isMine,
+                latestMessageSendStatus = event.sendStatus,
+                latestMessageReadByCount = event.readByCount,
+            )
+        if (updatedSummary == current) return
+
+        val updated =
+            currentRooms
+                .map { summary -> if (summary.roomId == roomId) updatedSummary else summary }
+                .sortedWith(roomSummaryComparator)
+        if (_rooms.value != updated) {
+            _rooms.value = updated
+        }
+    }
+
+    private fun applyTimelinePreviewOverride(summary: MatrixRoomSummary): MatrixRoomSummary {
+        val timelinePreview =
+            synchronized(timelinePreviewByRoomId) { timelinePreviewByRoomId[summary.roomId] }
+                ?: return summary
+
+        val shouldOverride =
+            summary.latestMessage.isNullOrBlank() ||
+                isStatusPreview(summary.latestMessage) ||
+                (summary.latestTimestampMillis ?: Long.MIN_VALUE) <= timelinePreview.timestampMillis
+        if (!shouldOverride) return summary
+
+        return summary.copy(
+            latestMessage = timelinePreview.message,
+            latestTimestampMillis = timelinePreview.timestampMillis,
+            latestMessageIsMine = timelinePreview.isMine,
+            latestMessageSendStatus = timelinePreview.sendStatus,
+            latestMessageReadByCount = timelinePreview.readByCount,
+        )
+    }
+
+    private fun isStatusPreview(message: String?): Boolean =
+        when (message?.trim()) {
+            null, "" -> true
+            "Rozpoczęto rozmowę",
+            "Zaproszenie",
+            "Zaproszenie wysłane",
+            -> true
+            else -> false
+        }
 
     private suspend fun matrixStoreNamespace(): String =
         sessionManager
@@ -801,6 +1064,35 @@ private fun LatestEventValue.timestampMillis(): Long? =
         is LatestEventValue.RemoteInvite -> this.timestamp.toLong()
     }
 
+private fun LatestEventValue.isMine(ownUserId: String): Boolean? =
+    when (this) {
+        LatestEventValue.None,
+        is LatestEventValue.RemoteInvite,
+        -> null
+
+        is LatestEventValue.Remote -> this.isOwn || this.sender.sameMatrixUser(ownUserId)
+        is LatestEventValue.Local -> this.sender.sameMatrixUser(ownUserId)
+    }
+
+private fun LatestEventValue.toRoomSendStatus(ownUserId: String): MatrixEventSendStatus? =
+    when (this) {
+        LatestEventValue.None,
+        is LatestEventValue.RemoteInvite,
+        -> null
+
+        is LatestEventValue.Remote -> {
+            if (this.isOwn || this.sender.sameMatrixUser(ownUserId)) MatrixEventSendStatus.Sent else null
+        }
+
+        is LatestEventValue.Local -> {
+            when (this.state) {
+                LatestEventValueLocalState.IS_SENDING -> MatrixEventSendStatus.Sending
+                LatestEventValueLocalState.HAS_BEEN_SENT -> MatrixEventSendStatus.Sent
+                LatestEventValueLocalState.CANNOT_BE_SENT -> MatrixEventSendStatus.Failed
+            }
+        }
+    }
+
 @Suppress("CyclomaticComplexMethod")
 private fun TimelineItemContent.toPreviewText(): String? =
     when (this) {
@@ -855,6 +1147,14 @@ private data class DirectPeerCandidate(
     val userId: String,
     val displayName: String?,
     val avatarUrl: String?,
+)
+
+private data class TimelinePreview(
+    val message: String,
+    val timestampMillis: Long,
+    val isMine: Boolean,
+    val sendStatus: MatrixEventSendStatus?,
+    val readByCount: Int,
 )
 
 private suspend fun resolveDirectPeer(

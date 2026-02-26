@@ -19,3 +19,18 @@ fun resolveRoomProfilePicture(
                 appUserId?.let { profilePictures[it] },
             ).firstOrNull()
         } ?: profilePicturesByName[room.displayName.trim().lowercase()]
+
+fun resolveRoomDisplayName(
+    room: MatrixRoomSummary,
+    displayNameOverrides: Map<String, String>,
+): String? {
+    val directUserId = room.directUserId ?: return null
+    val localpart = directUserId.substringAfter("@").substringBefore(":")
+    val appUserId = appUserIdFromMatrixUserId(directUserId)
+    return listOfNotNull(
+        displayNameOverrides[directUserId],
+        displayNameOverrides[directUserId.substringBefore(":")],
+        displayNameOverrides[localpart],
+        appUserId?.let { displayNameOverrides[it] },
+    ).firstOrNull()
+}

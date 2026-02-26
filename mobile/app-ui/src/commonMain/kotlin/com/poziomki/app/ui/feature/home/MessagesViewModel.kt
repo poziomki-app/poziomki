@@ -8,8 +8,10 @@ import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.feature.home.messages.MessagesUiState
+import com.poziomki.app.ui.feature.home.messages.buildDisplayNameOverrides
 import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByName
 import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByUserId
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,10 @@ class MessagesViewModel(
 ) : ViewModel() {
     private companion object {
         const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
+        const val EMPTY_ROOMS_FALLBACK_MS = 15_000L
     }
+
+    private var emptyRoomsFallbackJob: Job? = null
 
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
@@ -42,6 +47,7 @@ class MessagesViewModel(
         observeEventRooms()
         observeProfilePictures()
         observeProfilePicturesByName()
+        observeDisplayNameOverrides()
         refresh()
         refreshProfilePictures()
         refreshProfilePicturesPeriodically()
@@ -73,7 +79,28 @@ class MessagesViewModel(
                 return@launch
             }
 
-            _state.update { it.copy(isLoading = false) }
+            _state.update { current ->
+                if (current.rooms.isNotEmpty()) {
+                    current.copy(isLoading = false)
+                } else {
+                    current // keep isLoading = true, let observeRooms() handle it
+                }
+            }
+            scheduleEmptyRoomsFallback()
+        }
+    }
+
+    private fun scheduleEmptyRoomsFallback() {
+        emptyRoomsFallbackJob?.cancel()
+        emptyRoomsFallbackJob = viewModelScope.launch {
+            delay(EMPTY_ROOMS_FALLBACK_MS)
+            _state.update { current ->
+                if (current.isLoading && current.rooms.isEmpty()) {
+                    current.copy(isLoading = false)
+                } else {
+                    current
+                }
+            }
         }
     }
 
@@ -160,6 +187,14 @@ class MessagesViewModel(
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
                 _state.update { it.copy(profilePicturesByName = buildProfilePicturesByName(profiles)) }
+            }
+        }
+    }
+
+    private fun observeDisplayNameOverrides() {
+        viewModelScope.launch {
+            matchProfileRepository.observeProfiles().collect { profiles ->
+                _state.update { it.copy(displayNameOverrides = buildDisplayNameOverrides(profiles)) }
             }
         }
     }

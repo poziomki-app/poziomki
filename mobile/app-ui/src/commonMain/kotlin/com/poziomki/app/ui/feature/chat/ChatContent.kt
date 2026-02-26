@@ -154,14 +154,7 @@ fun ChatContent(
             )
         }
 
-        if (state.isLoading && state.timelineItems.isEmpty()) {
-            Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(color = Primary)
-            }
-        } else {
+        run {
             Box(
                 modifier =
                     Modifier

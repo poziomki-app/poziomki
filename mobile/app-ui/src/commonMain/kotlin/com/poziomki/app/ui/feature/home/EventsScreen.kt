@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,9 +21,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +60,7 @@ import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -63,8 +69,11 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.TimeFilter
+import com.poziomki.app.ui.shared.dayLabel
+import com.poziomki.app.ui.shared.eventDateKey
 import com.poziomki.app.ui.shared.formatEventDate
 import com.poziomki.app.ui.shared.pluralizePolish
+import com.poziomki.app.ui.shared.rememberLocationPermissionLauncher
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
@@ -78,13 +87,15 @@ fun EventsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    val requestLocationPermission = rememberLocationPermissionLauncher { granted ->
+        if (granted) viewModel.retryNearby()
+    }
 
     val timeFilterTabs =
         listOf(
             TimeFilter.ALL to "polecane",
             TimeFilter.NEARBY to "w pobliżu",
-            TimeFilter.TODAY to "dzisiaj",
-            TimeFilter.TOMORROW to "jutro",
+            TimeFilter.WEEK to "ten tydzień",
         )
 
     Column(
@@ -119,6 +130,30 @@ fun EventsScreen(
         // Content
         Box(modifier = Modifier.fillMaxSize()) {
             when {
+                state.activeFilter == TimeFilter.NEARBY -> {
+                    val nearbyDisplayEvents = remember(state.nearbyEvents, state.allEvents) {
+                        val nearbyGeo = state.nearbyEvents.filter { it.latitude != null && it.longitude != null }
+                        if (nearbyGeo.isNotEmpty()) state.nearbyEvents
+                        else state.allEvents.filter { it.latitude != null && it.longitude != null }
+                    }
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { viewModel.pullToRefresh() },
+                    ) {
+                        NearbyEventsContent(
+                            events = nearbyDisplayEvents,
+                            selectedEventId = state.selectedNearbyEventId,
+                            userLat = state.userLat,
+                            userLng = state.userLng,
+                            isPermissionDenied = state.isLocationPermissionDenied,
+                            isLocationUnavailable = state.isLocationUnavailable,
+                            onEventSelected = { viewModel.selectNearbyEvent(it) },
+                            onEventClick = onNavigateToEventDetail,
+                            onRequestPermission = requestLocationPermission,
+                        )
+                    }
+                }
+
                 state.isLoading && state.allEvents.isEmpty() -> {
                     LoadingView()
                 }
@@ -132,26 +167,33 @@ fun EventsScreen(
                         isRefreshing = state.isRefreshing,
                         onRefresh = { viewModel.pullToRefresh() },
                     ) {
-                        LazyColumn(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = PoziomkiTheme.spacing.md),
-                            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
-                        ) {
-                            if (state.events.isEmpty()) {
-                                item {
-                                    EmptyView("brak wydarzeń")
+                        if (state.activeFilter == TimeFilter.WEEK) {
+                            WeekEventsContent(
+                                events = state.events,
+                                onEventClick = onNavigateToEventDetail,
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = PoziomkiTheme.spacing.md),
+                                verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
+                            ) {
+                                if (state.events.isEmpty()) {
+                                    item {
+                                        EmptyView("brak wydarzeń")
+                                    }
+                                } else {
+                                    items(state.events, key = { it.id }) { event ->
+                                        EventCard(
+                                            event = event,
+                                            onClick = { onNavigateToEventDetail(event.id) },
+                                        )
+                                    }
                                 }
-                            } else {
-                                items(state.events, key = { it.id }) { event ->
-                                    EventCard(
-                                        event = event,
-                                        onClick = { onNavigateToEventDetail(event.id) },
-                                    )
-                                }
+                                item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
                             }
-                            item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
                         }
                     }
                 }
@@ -314,6 +356,169 @@ private fun EventCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WeekEventsContent(
+    events: List<Event>,
+    onEventClick: (String) -> Unit,
+) {
+    if (events.isEmpty()) {
+        EmptyView("brak wydarzeń w tym tygodniu")
+        return
+    }
+
+    val grouped = remember(events) {
+        events
+            .groupBy { eventDateKey(it.startsAt) }
+            .toSortedMap()
+    }
+    val collapsedDays = remember { mutableStateMapOf<Int, Boolean>() }
+
+    LazyColumn(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = PoziomkiTheme.spacing.md),
+        verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+    ) {
+        grouped.forEach { (dateKey, dayEvents) ->
+            val label = dayLabel(dayEvents.first().startsAt)
+            val isCollapsed = collapsedDays[dateKey] == true
+
+            item(key = "header_$dateKey") {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { collapsedDays[dateKey] = !isCollapsed }
+                            .padding(
+                                start = PoziomkiTheme.spacing.sm,
+                                top = PoziomkiTheme.spacing.sm,
+                                bottom = PoziomkiTheme.spacing.sm,
+                            ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        if (isCollapsed) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess,
+                        contentDescription = if (isCollapsed) "Rozwiń" else "Zwiń",
+                        modifier = Modifier.size(24.dp),
+                        tint = TextMuted,
+                    )
+                }
+            }
+
+            if (!isCollapsed) {
+                items(dayEvents, key = { it.id }) { event ->
+                    EventRow(
+                        event = event,
+                        onClick = { onEventClick(event.id) },
+                    )
+                }
+            }
+        }
+        item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
+    }
+}
+
+@Composable
+private fun EventRow(
+    event: Event,
+    onClick: () -> Unit,
+) {
+    val cardShape = RoundedCornerShape(20.dp)
+    val photoSize = 90.dp
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .border(1.dp, Border, cardShape)
+                .background(SurfaceElevated)
+                .clickable(onClick = onClick),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val coverImage = event.coverImage
+            if (coverImage != null) {
+                AsyncImage(
+                    model = resolveImageUrl(coverImage),
+                    contentDescription = event.title,
+                    modifier = Modifier.size(photoSize),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(photoSize)
+                            .background(Background),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = TextMuted,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(vertical = 12.dp),
+            ) {
+                Text(
+                    text = event.title,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp,
+                    color = TextPrimary,
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = formatEventDate(event.startsAt),
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                event.creator?.let { creator ->
+                    Text(
+                        text = "od ${creator.name}",
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                    )
+                }
+            }
+
+            Icon(
+                Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = "Otwórz",
+                modifier =
+                    Modifier
+                        .padding(top = 12.dp, end = 12.dp)
+                        .size(20.dp)
+                        .align(Alignment.Top),
+                tint = TextMuted,
+            )
         }
     }
 }

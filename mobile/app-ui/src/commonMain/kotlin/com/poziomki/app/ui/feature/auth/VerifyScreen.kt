@@ -42,6 +42,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.Surface
+import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
@@ -139,13 +140,32 @@ fun VerifyScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
-        TextButton(onClick = { viewModel.resendOtp(email) }) {
+        if (uiState.otpResent) {
             Text(
-                text = "wy\u015blij ponownie",
+                text = "kod wys\u0142any ponownie",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                color = Primary,
+                modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.sm),
+            )
+        }
+
+        TextButton(
+            onClick = { viewModel.resendOtp(email) },
+            enabled = uiState.resendCooldownSeconds == 0,
+        ) {
+            Text(
+                text =
+                    if (uiState.resendCooldownSeconds > 0) {
+                        "wy\u015blij ponownie (${uiState.resendCooldownSeconds}s)"
+                    } else {
+                        "wy\u015blij ponownie"
+                    },
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
-                color = Primary,
+                color = if (uiState.resendCooldownSeconds > 0) TextMuted else Primary,
             )
         }
     }

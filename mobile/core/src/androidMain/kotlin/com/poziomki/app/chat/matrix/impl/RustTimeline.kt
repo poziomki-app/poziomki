@@ -9,17 +9,20 @@ package com.poziomki.app.chat.matrix.impl
 import com.poziomki.app.chat.matrix.api.MatrixReaction
 import com.poziomki.app.chat.matrix.api.MatrixReactionSender
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
+import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.chat.matrix.api.Timeline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EmbeddedEventDetails
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
+import org.matrix.rustcomponents.sdk.EventSendState
 import org.matrix.rustcomponents.sdk.FileInfo
 import org.matrix.rustcomponents.sdk.ImageInfo
 import org.matrix.rustcomponents.sdk.MessageType
@@ -56,6 +59,7 @@ class RustTimeline(
 
     private var listenerHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
     private var paginationStatusHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
+    private val inFlightTextSendHandles = mutableSetOf<org.matrix.rustcomponents.sdk.SendHandle>()
 
     init {
         coroutineScope.launch(Dispatchers.Default) {
@@ -185,7 +189,19 @@ class RustTimeline(
 
     override suspend fun sendMessage(body: String): Result<Unit> =
         runCatching {
-            inner.send(messageEventContentFromMarkdown(body))
+            val sendHandle = inner.send(messageEventContentFromMarkdown(body))
+            synchronized(inFlightTextSendHandles) {
+                inFlightTextSendHandles += sendHandle
+            }
+            // Keep the native send handle alive briefly so the queued send is not
+            // cleaned up before the SDK has a chance to process it.
+            coroutineScope.launch {
+                delay(15_000)
+                runCatching { sendHandle.close() }
+                synchronized(inFlightTextSendHandles) {
+                    inFlightTextSendHandles.remove(sendHandle)
+                }
+            }
             Unit
         }
 
@@ -313,6 +329,10 @@ class RustTimeline(
     override fun close() {
         paginationStatusHandle?.cancel()
         listenerHandle?.cancel()
+        synchronized(inFlightTextSendHandles) {
+            inFlightTextSendHandles.forEach { handle -> runCatching { handle.close() } }
+            inFlightTextSendHandles.clear()
+        }
         inner.close()
     }
 }
@@ -414,10 +434,19 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         inReplyTo = inReplyTo,
         reactions = reactions,
         isEditable = event.isEditable,
+        sendStatus = event.localSendState.toUiSendStatus(eventId != null),
         readByCount = event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) },
         canReply = event.canBeRepliedTo,
     )
 }
+
+private fun EventSendState?.toUiSendStatus(hasRemoteEventId: Boolean): MatrixEventSendStatus? =
+    when (this) {
+        is EventSendState.NotSentYet -> MatrixEventSendStatus.Sending
+        is EventSendState.SendingFailed -> MatrixEventSendStatus.Failed
+        is EventSendState.Sent -> MatrixEventSendStatus.Sent
+        null -> if (hasRemoteEventId) MatrixEventSendStatus.Sent else null
+    }
 
 private fun String.sameMatrixUser(other: String): Boolean = trim().equals(other.trim(), ignoreCase = true)
 

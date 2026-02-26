@@ -38,6 +38,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ChatScreen(
     chatId: String,
+    initialTitle: String? = null,
+    initialDirectUserId: String? = null,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
@@ -45,15 +47,22 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     val timelineListState = rememberLazyListState()
 
-    LaunchedEffect(chatId) {
-        viewModel.loadRoom(chatId)
+    LaunchedEffect(chatId, initialTitle, initialDirectUserId) {
+        viewModel.loadRoom(
+            roomId = chatId,
+            fallbackDisplayName = initialTitle,
+            fallbackDirectUserId = initialDirectUserId,
+        )
     }
 
     Scaffold(
         containerColor = Background,
         topBar = {
             ChatTopBar(
-                title = state.roomDisplayName.ifBlank { "Chat" },
+                title =
+                    state.roomDisplayName.ifBlank {
+                        initialTitle?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    },
                 avatarUrl = state.roomAvatarUrl,
                 onBack = onBack,
             )

@@ -47,6 +47,9 @@ DerivedData/
 # Environment
 .env
 
+# Stalwart DKIM private key
+deploy/ops/stalwart/dkim-rsa.key
+
 # OS
 .DS_Store
 Thumbs.db

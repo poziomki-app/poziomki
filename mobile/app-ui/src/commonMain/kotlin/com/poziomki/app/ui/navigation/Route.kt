@@ -6,7 +6,9 @@ sealed interface Route {
     // Auth
     @Serializable data object AuthGraph : Route
 
-    @Serializable data object Login : Route
+    @Serializable data class Login(
+        val prefillEmail: String? = null,
+    ) : Route
 
     @Serializable data object Register : Route
 
@@ -51,6 +53,8 @@ sealed interface Route {
 
     @Serializable data class Chat(
         val id: String,
+        val title: String? = null,
+        val directUserId: String? = null,
     ) : Route
 
     @Serializable data object NewChat : Route

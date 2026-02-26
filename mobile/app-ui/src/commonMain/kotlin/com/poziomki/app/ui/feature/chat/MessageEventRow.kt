@@ -22,8 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
+import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -318,20 +321,32 @@ private fun BubbleContent(
             )
             if (event.isMine) {
                 Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector =
-                        if (event.readByCount > 0) {
-                            Icons.Filled.CheckCircle
-                        } else {
-                            Icons.Filled.Check
-                        },
-                    contentDescription = null,
-                    tint = if (event.readByCount > 0) Primary else TextSecondary,
-                    modifier = Modifier.size(14.dp),
-                )
+                OutgoingMessageStatusIcon(event = event)
             }
         }
     }
+}
+
+@Composable
+private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
+    val (icon, tint) =
+        when {
+            event.sendStatus == MatrixEventSendStatus.Failed ->
+                Icons.Filled.ErrorOutline to MaterialTheme.colorScheme.error
+            event.sendStatus == MatrixEventSendStatus.Sending ->
+                Icons.Filled.Schedule to TextSecondary
+            event.readByCount > 0 ->
+                Icons.Filled.DoneAll to Primary
+            else ->
+                Icons.Filled.Check to TextSecondary
+        }
+
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(14.dp),
+    )
 }
 
 @Composable

@@ -38,17 +38,12 @@ internal class EventRoomRepository(
     suspend fun reconcileMembershipAfterAttend(conversationId: String?) {
         val roomId = conversationId?.takeIf { it.startsWith("!") } ?: return
 
-        val canRefreshRooms =
-            matrixClient.ensureStarted().isSuccess &&
-                matrixClient.refreshRooms().isSuccess
-        if (!canRefreshRooms) {
-            return
-        }
+        matrixClient.ensureStarted().getOrElse { return }
+        matrixClient.refreshRooms()
 
         // getJoinedRoom auto-joins invited rooms in RustMatrixClient; this keeps attendee
         // state and room membership aligned without additional UI steps.
         matrixClient.getJoinedRoom(roomId)
-        matrixClient.refreshRooms()
     }
 
     suspend fun reconcileMembershipAfterLeave() {

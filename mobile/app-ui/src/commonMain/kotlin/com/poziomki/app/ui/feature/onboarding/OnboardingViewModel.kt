@@ -21,7 +21,6 @@ import kotlinx.serialization.json.Json
 
 data class OnboardingState(
     val name: String = "",
-    val age: String = "",
     val program: String = "",
     val bio: String = "",
     val selectedTagIds: Set<String> = emptySet(),
@@ -43,7 +42,7 @@ class OnboardingViewModel(
     @Serializable
     private data class OnboardingDraft(
         val name: String,
-        val age: String,
+        val age: String? = null,
         val program: String,
         val bio: String,
         val selectedTagIds: Set<String>,
@@ -80,7 +79,6 @@ class OnboardingViewModel(
             _state.value =
                 _state.value.copy(
                     name = draft.name,
-                    age = draft.age,
                     program = draft.program,
                     bio = draft.bio,
                     selectedTagIds = draft.selectedTagIds,
@@ -94,7 +92,6 @@ class OnboardingViewModel(
         val draft =
             OnboardingDraft(
                 name = state.name,
-                age = state.age,
                 program = state.program,
                 bio = state.bio,
                 selectedTagIds = state.selectedTagIds,
@@ -156,10 +153,6 @@ class OnboardingViewModel(
 
     fun updateName(name: String) {
         updateState { it.copy(name = name, error = null) }
-    }
-
-    fun updateAge(age: String) {
-        updateState { it.copy(age = age, error = null) }
     }
 
     fun updateProgram(program: String) {
@@ -228,11 +221,10 @@ class OnboardingViewModel(
 
     fun createProfile(onComplete: () -> Unit) {
         val s = _state.value
-        val ageInt = s.age.toIntOrNull() ?: 20
 
         viewModelScope.launch {
             updateState(persist = false) { it.copy(isLoading = true, error = null) }
-            val profileId = ensureProfileExists(s, ageInt) ?: return@launch
+            val profileId = ensureProfileExists(s) ?: return@launch
             val mediaResult = uploadMedia(s)
             val mediaUpdated = updateProfileMedia(profileId, mediaResult.avatarUrl, mediaResult.imageUrls)
             if (!mediaUpdated) return@launch
@@ -255,10 +247,7 @@ class OnboardingViewModel(
         }
     }
 
-    private suspend fun ensureProfileExists(
-        state: OnboardingState,
-        age: Int,
-    ): String? {
+    private suspend fun ensureProfileExists(state: OnboardingState): String? {
         val existing = createdProfileId
         if (existing != null) return existing
 
@@ -267,7 +256,6 @@ class OnboardingViewModel(
                 apiService.createProfile(
                     CreateProfileRequest(
                         name = state.name,
-                        age = age,
                         bio = state.bio.ifBlank { null },
                         program = state.program.ifBlank { null },
                         tagIds = state.selectedTagIds.toList(),

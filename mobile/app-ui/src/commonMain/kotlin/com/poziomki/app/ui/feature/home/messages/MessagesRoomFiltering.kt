@@ -13,7 +13,6 @@ fun List<MatrixRoomSummary>.filterMessagesRooms(
         .filter { room ->
             when (selectedFilter) {
                 MessagesRoomFilter.Direct -> room.isDirect
-                MessagesRoomFilter.Groups -> !room.isDirect && room.roomId !in eventRoomIds
                 MessagesRoomFilter.Events -> !room.isDirect && room.roomId in eventRoomIds
             }
         }.filter { room ->

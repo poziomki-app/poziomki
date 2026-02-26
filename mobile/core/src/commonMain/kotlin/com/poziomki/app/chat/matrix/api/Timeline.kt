@@ -34,6 +34,12 @@ data class MatrixReplyDetails(
     val body: String?,
 )
 
+enum class MatrixEventSendStatus {
+    Sending,
+    Sent,
+    Failed,
+}
+
 sealed interface MatrixTimelineItem {
     data class Event(
         val eventOrTransactionId: String,
@@ -47,6 +53,7 @@ sealed interface MatrixTimelineItem {
         val inReplyTo: MatrixReplyDetails?,
         val reactions: List<MatrixReaction>,
         val isEditable: Boolean,
+        val sendStatus: MatrixEventSendStatus?,
         val readByCount: Int,
         val canReply: Boolean,
     ) : MatrixTimelineItem

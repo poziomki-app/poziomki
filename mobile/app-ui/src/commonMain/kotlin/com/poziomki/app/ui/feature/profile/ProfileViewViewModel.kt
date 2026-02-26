@@ -59,7 +59,6 @@ class ProfileViewViewModel(
 
     private fun refreshProfile() {
         viewModelScope.launch {
-            _state.value = ProfileViewState(isLoading = true)
             profileRepository.refreshProfile(profileId)
         }
     }

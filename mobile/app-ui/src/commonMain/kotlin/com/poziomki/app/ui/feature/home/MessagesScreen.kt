@@ -44,6 +44,7 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.home.messages.MessagesRoomFilter
 import com.poziomki.app.ui.feature.home.messages.RoomRow
 import com.poziomki.app.ui.feature.home.messages.filterMessagesRooms
+import com.poziomki.app.ui.feature.home.messages.resolveRoomDisplayName
 import com.poziomki.app.ui.feature.home.messages.resolveRoomProfilePicture
 import com.poziomki.app.ui.feature.home.messages.roomFilterTabs
 import org.koin.compose.viewmodel.koinViewModel
@@ -141,9 +142,15 @@ fun MessagesScreen(
                                             profilePictures = state.profilePictures,
                                             profilePicturesByName = state.profilePicturesByName,
                                         )
+                                    val displayNameOverride =
+                                        resolveRoomDisplayName(
+                                            room = room,
+                                            displayNameOverrides = state.displayNameOverrides,
+                                        )
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,
+                                        displayNameOverride = displayNameOverride,
                                         onClick = { onNavigateToChat(room.roomId) },
                                         onAvatarClick =
                                             room.directUserId?.let { userId ->

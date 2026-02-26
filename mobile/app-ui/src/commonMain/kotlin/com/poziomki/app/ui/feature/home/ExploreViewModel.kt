@@ -23,7 +23,14 @@ data class ExploreState(
     val query: String = "",
     val searchResults: SearchResults? = null,
     val isSearching: Boolean = false,
-)
+) {
+    companion object {
+        const val RECOMMENDED_COUNT = 5
+    }
+
+    val recommendedProfiles get() = profiles.take(RECOMMENDED_COUNT)
+    val remainingProfiles get() = profiles.drop(RECOMMENDED_COUNT)
+}
 
 class ExploreViewModel(
     private val matchProfileRepository: MatchProfileRepository,
@@ -41,12 +48,24 @@ class ExploreViewModel(
     private fun observeProfiles() {
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
-                _state.value =
-                    _state.value.copy(
-                        profiles = profiles,
-                        isLoading = if (profiles.isNotEmpty()) false else _state.value.isLoading,
-                    )
+                val current = _state.value.profiles
+                _state.value = _state.value.copy(
+                    profiles = if (profilesVisuallyEqual(current, profiles)) current else profiles,
+                    isLoading = if (profiles.isNotEmpty()) false else _state.value.isLoading,
+                )
             }
+        }
+    }
+
+    private fun profilesVisuallyEqual(a: List<MatchProfile>, b: List<MatchProfile>): Boolean {
+        if (a.size != b.size) return false
+        return a.indices.all { i ->
+            val x = a[i]; val y = b[i]
+            x.id == y.id && x.name == y.name &&
+                x.profilePicture == y.profilePicture &&
+                x.program == y.program &&
+                x.gradientStart == y.gradientStart &&
+                x.gradientEnd == y.gradientEnd
         }
     }
 

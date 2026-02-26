@@ -40,6 +40,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
     onRegisterSuccess: (String) -> Unit,
+    onUserExists: (String) -> Unit = {},
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -127,7 +128,7 @@ fun RegisterScreen(
             text = "zarejestruj si\u0119",
             onClick = {
                 val placeholderName = email.substringBefore("@").ifBlank { "User" }
-                viewModel.signUp(email, password, placeholderName, onRegisterSuccess)
+                viewModel.signUp(email, password, placeholderName, onRegisterSuccess, onUserExists)
             },
             enabled =
                 email.isNotBlank() &&

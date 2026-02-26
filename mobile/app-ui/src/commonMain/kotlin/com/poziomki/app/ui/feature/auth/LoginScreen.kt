@@ -43,10 +43,11 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNeedsVerification: (String) -> Unit,
     onNeedsOnboarding: () -> Unit,
+    prefillEmail: String? = null,
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(prefillEmail.orEmpty()) }
     var password by remember { mutableStateOf("") }
 
     Column(

@@ -195,7 +195,7 @@ fun EventDetailScreen(
                                     LazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                                     ) {
-                                        items(state.attendees) { attendee ->
+                                        items(state.attendees, key = { it.profileId }) { attendee ->
                                             Column(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier =

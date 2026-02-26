@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.network.MatchProfile
+import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -132,19 +133,13 @@ private fun ProfileRow(
                     .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                color = SurfaceElevated,
-                shape = CircleShape,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = profile.name.firstOrNull()?.uppercase() ?: "?",
-                        color = TextPrimary,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
-            }
+            UserAvatar(
+                picture = profile.profilePicture,
+                displayName = profile.name,
+                size = 40.dp,
+                backgroundColor = SurfaceElevated,
+                iconTint = TextPrimary,
+            )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

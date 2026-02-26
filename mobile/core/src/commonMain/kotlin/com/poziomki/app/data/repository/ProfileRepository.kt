@@ -135,6 +135,7 @@ class ProfileRepository(
             bio = bio,
             age = age,
             profilePicture = profilePicture,
+            thumbhash = thumbhash,
             images = images,
             program = program,
             gradientStart = gradientStart,
@@ -156,6 +157,7 @@ class ProfileRepository(
                     bio = request.bio ?: current.bio,
                     age = request.age?.toLong() ?: current.age,
                     profile_picture = request.profilePicture ?: current.profile_picture,
+                    thumbhash = current.thumbhash,
                     images_json =
                         request.images?.let { json.encodeToString(it) }
                             ?: current.images_json,
@@ -242,8 +244,9 @@ class ProfileRepository(
                 user_id = profile.userId,
                 name = profile.name,
                 bio = profile.bio,
-                age = profile.age.toLong(),
+                age = profile.age?.toLong(),
                 profile_picture = profile.profilePicture,
+                thumbhash = profile.thumbhash,
                 images_json = json.encodeToString(profile.images),
                 program = profile.program,
                 gradient_start = profile.gradientStart,

@@ -48,6 +48,7 @@ class ChatViewModel(
     private var focusedTimeline: Timeline? = null
     private val bindMutex = Mutex()
     private var bindJob: Job? = null
+    private var pendingRoomRetryJob: Job? = null
     private var bindingRoomId: String? = null
     private val roomJobs = mutableListOf<Job>()
     private val timelineJobs = mutableListOf<Job>()
@@ -64,13 +65,20 @@ class ChatViewModel(
         observeAvatarOverrides()
     }
 
-    fun loadRoom(roomId: String) {
+    fun loadRoom(
+        roomId: String,
+        fallbackDisplayName: String? = null,
+        fallbackDirectUserId: String? = null,
+    ) {
         if (roomId.isBlank()) return
         if (!roomId.startsWith("!")) {
             val avatarOverrides = _uiState.value.avatarOverrides
             _uiState.value =
                 ChatUiState(
                     roomId = roomId,
+                    roomDisplayName = fallbackDisplayName.orEmpty(),
+                    roomAvatarUrl =
+                        fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
                     avatarOverrides = avatarOverrides,
                     error = "Invalid chat route id. Expected Matrix room id (!...)",
                 )
@@ -83,13 +91,18 @@ class ChatViewModel(
 
         boundRoomId = roomId
         bindJob?.cancel()
+        pendingRoomRetryJob?.cancel()
         bindJob =
             viewModelScope.launch {
                 bindMutex.withLock {
                     if (boundRoomId != roomId) return@withLock
                     bindingRoomId = roomId
                     try {
-                        bindRoom(roomId)
+                        bindRoom(
+                            roomId = roomId,
+                            fallbackDisplayName = fallbackDisplayName,
+                            fallbackDirectUserId = fallbackDirectUserId,
+                        )
                     } finally {
                         if (bindingRoomId == roomId) {
                             bindingRoomId = null
@@ -101,13 +114,18 @@ class ChatViewModel(
 
     private suspend fun awaitJoinedRoom(
         roomId: String,
-        attempts: Int = 12,
-        retryDelayMs: Long = 250L,
+        attempts: Int = 20,
+        initialDelayMs: Long = 250L,
     ): JoinedRoom? {
+        var currentDelay = initialDelayMs
         repeat(attempts) { attempt ->
             matrixClient.getJoinedRoom(roomId)?.let { return it }
+            if (attempt == 0 || attempt % 3 == 2) {
+                runCatching { matrixClient.refreshRooms() }
+            }
             if (attempt < attempts - 1) {
-                delay(retryDelayMs)
+                delay(currentDelay)
+                currentDelay = (currentDelay * 3 / 2).coerceAtMost(2_000L)
             }
         }
         return null
@@ -145,19 +163,24 @@ class ChatViewModel(
         if (body.isEmpty()) return
         val composerMode = _uiState.value.composerMode
         val roomId = currentDraftRoomId()
-
-        _uiState.update {
-            it.copy(
-                messageDraft = "",
-                composerMode = ComposerMode.NewMessage,
-                error = null,
-            )
-        }
-
-        roomId?.let(roomComposerDraftStore::clearDraft)
-        stopTyping(notifyRoom = true)
         viewModelScope.launch {
-            val timeline = activeTimeline ?: return@launch
+            val timeline = awaitTimelineForSend()
+            if (timeline == null) {
+                _uiState.update {
+                    it.copy(error = "Conversation is still connecting. Please wait a few seconds.")
+                }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    messageDraft = "",
+                    composerMode = ComposerMode.NewMessage,
+                    error = null,
+                )
+            }
+
+            roomId?.let(roomComposerDraftStore::clearDraft)
+            stopTyping(notifyRoom = true)
             val result =
                 when (composerMode) {
                     ComposerMode.NewMessage -> timeline.sendMessage(body)
@@ -334,6 +357,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         bindJob?.cancel()
+        pendingRoomRetryJob?.cancel()
         clearTypingTimers()
         focusedTimeline?.close()
         focusedTimeline = null
@@ -344,10 +368,16 @@ class ChatViewModel(
         super.onCleared()
     }
 
-    private suspend fun bindRoom(roomId: String) {
+    private suspend fun bindRoom(
+        roomId: String,
+        fallbackDisplayName: String?,
+        fallbackDirectUserId: String?,
+    ) {
         focusedTimeline?.close()
         focusedTimeline = null
         activeTimeline = null
+        pendingRoomRetryJob?.cancel()
+        pendingRoomRetryJob = null
         timelineJobs.forEach { it.cancel() }
         timelineJobs.clear()
         roomJobs.forEach { it.cancel() }
@@ -355,12 +385,16 @@ class ChatViewModel(
         activeRoom = null
         clearTypingTimers()
         typingState = false
-        activeDirectUserId = null
+        activeDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() }
 
         val avatarOverrides = _uiState.value.avatarOverrides
+        val seededDisplayName = fallbackDisplayName?.trim().orEmpty()
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
+                roomDisplayName = seededDisplayName,
+                roomAvatarUrl =
+                    fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
                 avatarOverrides = avatarOverrides,
                 isLoading = true,
             )
@@ -378,30 +412,57 @@ class ChatViewModel(
                 )
             return
         }
+        runCatching { matrixClient.refreshRooms() }
 
         val room =
             awaitJoinedRoom(roomId) ?: run {
                 val currentOverrides = _uiState.value.avatarOverrides
-                _uiState.value =
-                    ChatUiState(
+                if (!fallbackDirectUserId.isNullOrBlank() || seededDisplayName.isNotBlank()) {
+                    _uiState.value =
+                        ChatUiState(
+                            roomId = roomId,
+                            roomDisplayName = seededDisplayName,
+                            roomAvatarUrl =
+                                fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) },
+                            avatarOverrides = currentOverrides,
+                            isLoading = false,
+                            error = null,
+                        )
+                    schedulePendingRoomRetry(
                         roomId = roomId,
-                        avatarOverrides = currentOverrides,
-                        isLoading = false,
-                        error = "Room not found or user is not joined",
+                        fallbackDisplayName = fallbackDisplayName,
+                        fallbackDirectUserId = fallbackDirectUserId,
                     )
+                } else {
+                    _uiState.value =
+                        ChatUiState(
+                            roomId = roomId,
+                            avatarOverrides = currentOverrides,
+                            isLoading = false,
+                            error = "Cannot open this conversation yet",
+                        )
+                }
                 return
             }
 
         activeRoom = room
         val restoredDraft = roomComposerDraftStore.getDraft(room.roomId)
         val initialSummary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
-        val initialDisplayName = initialSummary?.displayName?.takeIf { it.isNotBlank() }.orEmpty()
+        val initialDisplayName =
+            resolvePreferredRoomDisplayName(
+                roomId = room.roomId,
+                summary = initialSummary,
+                liveName = null,
+                currentName = seededDisplayName,
+                fallbackDisplayName = fallbackDisplayName,
+            )
         val initialAvatar =
             resolveRoomAvatar(
                 summary = initialSummary,
                 overrides = _uiState.value.avatarOverrides,
                 roomDisplayName = initialDisplayName,
                 currentAvatar = null,
+                directUserIdFallback = activeDirectUserId,
             )
         _uiState.update {
             it.copy(
@@ -428,10 +489,15 @@ class ChatViewModel(
                         val resolvedName =
                             when {
                                 summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                name.isNotBlank() -> name
-                                !summary?.displayName.isNullOrBlank() -> summary.displayName
-                                else -> current.roomDisplayName
-                            }.orEmpty()
+                                else ->
+                                    resolvePreferredRoomDisplayName(
+                                        roomId = room.roomId,
+                                        summary = summary,
+                                        liveName = name,
+                                        currentName = current.roomDisplayName,
+                                        fallbackDisplayName = fallbackDisplayName,
+                                    )
+                            }
                         current.copy(
                             roomDisplayName = resolvedName,
                             roomAvatarUrl =
@@ -456,10 +522,15 @@ class ChatViewModel(
                         val resolvedName =
                             when {
                                 summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                current.roomDisplayName.isNotBlank() -> current.roomDisplayName
-                                !summary?.displayName.isNullOrBlank() -> summary.displayName
-                                else -> current.roomDisplayName
-                            }.orEmpty()
+                                else ->
+                                    resolvePreferredRoomDisplayName(
+                                        roomId = room.roomId,
+                                        summary = summary,
+                                        liveName = null,
+                                        currentName = current.roomDisplayName,
+                                        fallbackDisplayName = fallbackDisplayName,
+                                    )
+                            }
                         current.copy(
                             roomDisplayName = resolvedName,
                             roomAvatarUrl =
@@ -578,7 +649,20 @@ class ChatViewModel(
         stopTyping(notifyRoom = true)
 
         viewModelScope.launch {
-            val timeline = activeTimeline ?: return@launch
+            val timeline = awaitTimelineForSend()
+            if (timeline == null) {
+                _uiState.update { current ->
+                    current.copy(
+                        messageDraft = caption.orEmpty(),
+                        composerMode = composerMode,
+                        error = "Conversation is still connecting. Please wait a few seconds.",
+                    )
+                }
+                roomId?.let { failedRoomId ->
+                    roomComposerDraftStore.saveDraft(roomId = failedRoomId, draft = caption.orEmpty())
+                }
+                return@launch
+            }
             sendOperation(timeline, caption, inReplyToEventId).onFailure { throwable ->
                 _uiState.update { current ->
                     current.copy(
@@ -592,6 +676,44 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun awaitTimelineForSend(
+        attempts: Int = 120,
+        delayMs: Long = 500L,
+    ): Timeline? {
+        repeat(attempts) { attempt ->
+            activeTimeline?.let { return it }
+
+            val roomId = boundRoomId
+            if (!roomId.isNullOrBlank()) {
+                if (attempt == 0 || attempt % 3 == 2) {
+                    runCatching { matrixClient.refreshRooms() }
+                }
+                val shouldKickRebind =
+                    activeRoom == null &&
+                        bindingRoomId != roomId &&
+                        (bindJob?.isActive != true)
+                if (shouldKickRebind) {
+                    val current = _uiState.value
+                    loadRoom(
+                        roomId = roomId,
+                        fallbackDisplayName = current.roomDisplayName.takeIf { it.isNotBlank() },
+                        fallbackDirectUserId = activeDirectUserId,
+                    )
+                }
+                if (bindJob?.isActive == true) {
+                    // Let the in-flight bind finish an iteration before we retry.
+                    bindJob?.join()
+                    activeTimeline?.let { return it }
+                }
+            }
+
+            if (attempt < attempts - 1) {
+                delay(delayMs)
+            }
+        }
+        return activeTimeline
     }
 
     private suspend fun activateTimeline(
@@ -714,13 +836,12 @@ class ChatViewModel(
                 val byName =
                     profiles
                         .asSequence()
-                        .filter { !it.name.isBlank() && !it.profilePicture.isNullOrBlank() }
+                        .filter { !it.name.isBlank() }
                         .groupBy { it.name.trim().lowercase() }
                         .mapNotNull { (name, sameNameProfiles) ->
-                            val uniquePictures =
-                                sameNameProfiles
-                                    .mapNotNull { it.profilePicture?.takeIf { picture -> picture.isNotBlank() } }
-                                    .distinct()
+                            val allPictures = sameNameProfiles.map { it.profilePicture?.takeIf { p -> p.isNotBlank() } }
+                            if (allPictures.any { it == null }) return@mapNotNull null
+                            val uniquePictures = allPictures.filterNotNull().distinct()
                             if (uniquePictures.size == 1) {
                                 name to uniquePictures.first()
                             } else {
@@ -760,6 +881,72 @@ class ChatViewModel(
                 ?: directUserId?.let { resolveAvatarOverride(it, overrides) }
         val byNameAvatar = latestAvatarByName[roomDisplayName.trim().lowercase()]
         return summaryAvatar ?: currentAvatar ?: timelineAvatar ?: byNameAvatar
+    }
+
+    private fun schedulePendingRoomRetry(
+        roomId: String,
+        fallbackDisplayName: String?,
+        fallbackDirectUserId: String?,
+    ) {
+        pendingRoomRetryJob?.cancel()
+        pendingRoomRetryJob =
+            viewModelScope.launch {
+                repeat(12) { attempt ->
+                    delay((1_000L + attempt * 500L).coerceAtMost(5_000L))
+                    if (boundRoomId != roomId || activeRoom != null) return@launch
+                    runCatching { matrixClient.refreshRooms() }
+                    if (matrixClient.getJoinedRoom(roomId) != null) {
+                        loadRoom(
+                            roomId = roomId,
+                            fallbackDisplayName = fallbackDisplayName,
+                            fallbackDirectUserId = fallbackDirectUserId,
+                        )
+                        return@launch
+                    }
+                }
+            }
+    }
+
+    private fun resolvePreferredRoomDisplayName(
+        roomId: String,
+        summary: MatrixRoomSummary?,
+        liveName: String?,
+        currentName: String,
+        fallbackDisplayName: String?,
+    ): String {
+        val summaryName = summary?.displayName?.trim().orEmpty()
+        val sdkName = liveName?.trim().orEmpty()
+        val fallback = fallbackDisplayName?.trim().orEmpty()
+
+        if (summary?.isDirect == true && summaryName.isNotBlank() && !isGenericDmTitle(summaryName, roomId)) {
+            return summaryName
+        }
+        if (fallback.isNotBlank() && (sdkName.isBlank() || isGenericDmTitle(sdkName, roomId))) {
+            return fallback
+        }
+        if (sdkName.isNotBlank() && !isGenericDmTitle(sdkName, roomId)) {
+            return sdkName
+        }
+        if (summaryName.isNotBlank()) {
+            return summaryName
+        }
+        if (currentName.isNotBlank()) {
+            return currentName
+        }
+        return fallback
+    }
+
+    private fun isGenericDmTitle(
+        value: String,
+        roomId: String,
+    ): Boolean {
+        val trimmed = value.trim()
+        if (trimmed.isBlank()) return true
+        if (trimmed == roomId) return true
+        return when (trimmed.lowercase()) {
+            "chat", "dm", "direct message", "wiadomość", "wiadomosc" -> true
+            else -> false
+        }
     }
 
     private fun computeUnreadBelowCount(items: List<com.poziomki.app.chat.matrix.api.MatrixTimelineItem>): Int {

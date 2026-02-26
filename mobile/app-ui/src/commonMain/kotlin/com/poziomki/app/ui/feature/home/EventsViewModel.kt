@@ -24,6 +24,11 @@ data class EventsState(
     val refreshError: String? = null,
     val searchQuery: String = "",
     val activeFilter: TimeFilter = TimeFilter.ALL,
+    val userLat: Double? = null,
+    val userLng: Double? = null,
+    val selectedNearbyEventId: String? = null,
+    val isLocationPermissionDenied: Boolean = false,
+    val isLocationUnavailable: Boolean = false,
 )
 
 class EventsViewModel(
@@ -43,13 +48,32 @@ class EventsViewModel(
     private fun observeEvents() {
         viewModelScope.launch {
             eventRepository.observeEvents().collect { events ->
-                _state.value =
-                    _state.value.copy(
+                val current = _state.value.allEvents
+                if (eventsVisuallyEqual(current, events)) {
+                    if (_state.value.isLoading) {
+                        _state.value = _state.value.copy(isLoading = false)
+                    }
+                } else {
+                    _state.value = _state.value.copy(
                         allEvents = events,
                         isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
                     )
-                filterEvents()
+                    filterEvents()
+                }
             }
+        }
+    }
+
+    private fun eventsVisuallyEqual(a: List<Event>, b: List<Event>): Boolean {
+        if (a.size != b.size) return false
+        return a.indices.all { i ->
+            val x = a[i]; val y = b[i]
+            x.id == y.id && x.title == y.title &&
+                x.coverImage == y.coverImage &&
+                x.startsAt == y.startsAt &&
+                x.location == y.location &&
+                x.attendeesCount == y.attendeesCount &&
+                x.isAttending == y.isAttending
         }
     }
 
@@ -82,8 +106,20 @@ class EventsViewModel(
                 _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć wydarzeń")
             }
             loadRecommendedEvents()
+            if (_state.value.activeFilter == TimeFilter.NEARBY) {
+                fetchNearbyIfPermitted()
+            }
             _state.value = _state.value.copy(isRefreshing = false)
         }
+    }
+
+    fun retryNearby() {
+        _state.value = _state.value.copy(isLocationPermissionDenied = false)
+        fetchNearbyIfPermitted()
+    }
+
+    fun selectNearbyEvent(id: String) {
+        _state.value = _state.value.copy(selectedNearbyEventId = id)
     }
 
     fun clearRefreshError() {
@@ -97,16 +133,35 @@ class EventsViewModel(
 
     fun setTimeFilter(filter: TimeFilter) {
         _state.value = _state.value.copy(activeFilter = filter)
-        if (filter == TimeFilter.NEARBY && _state.value.nearbyEvents.isEmpty()) {
-            fetchNearbyIfPermitted()
+        if (filter == TimeFilter.NEARBY) {
+            // Seed nearbyEvents from allEvents so the map shows dots while API loads
+            if (_state.value.nearbyEvents.isEmpty() && _state.value.allEvents.isNotEmpty()) {
+                _state.value = _state.value.copy(
+                    nearbyEvents = _state.value.allEvents.filter {
+                        it.latitude != null && it.longitude != null
+                    },
+                )
+            }
+            if (_state.value.userLat == null) {
+                fetchNearbyIfPermitted()
+            }
         }
         filterEvents()
     }
 
     private fun fetchNearbyIfPermitted() {
-        if (!locationProvider.isPermissionGranted()) return
+        if (!locationProvider.isPermissionGranted()) {
+            _state.value = _state.value.copy(isLocationPermissionDenied = true)
+            return
+        }
+        _state.value = _state.value.copy(isLocationPermissionDenied = false, isLocationUnavailable = false)
         viewModelScope.launch {
-            val loc = locationProvider.getCurrentLocation() ?: return@launch
+            val loc = locationProvider.getCurrentLocation()
+            if (loc == null) {
+                _state.value = _state.value.copy(isLocationUnavailable = true)
+                return@launch
+            }
+            _state.value = _state.value.copy(userLat = loc.latitude, userLng = loc.longitude)
             loadNearbyEvents(loc.latitude, loc.longitude)
         }
     }
@@ -119,13 +174,26 @@ class EventsViewModel(
         viewModelScope.launch {
             when (val result = apiService.getMatchingEvents(lat = lat, lng = lng, radiusM = radiusM)) {
                 is ApiResult.Success -> {
-                    _state.value = _state.value.copy(nearbyEvents = result.data)
+                    val nearby = result.data
+                    val closest = nearby
+                        .filter { it.latitude != null && it.longitude != null }
+                        .minByOrNull { distanceDeg(lat, lng, it.latitude!!, it.longitude!!) }
+                    _state.value = _state.value.copy(
+                        nearbyEvents = nearby,
+                        selectedNearbyEventId = closest?.id ?: _state.value.selectedNearbyEventId,
+                    )
                     filterEvents()
                 }
 
                 is ApiResult.Error -> {}
             }
         }
+    }
+
+    private fun distanceDeg(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val dLat = lat1 - lat2
+        val dLng = lng1 - lng2
+        return dLat * dLat + dLng * dLng
     }
 
     private fun filterEvents() {

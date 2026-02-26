@@ -1,6 +1,8 @@
 package com.poziomki.app
 
 import android.app.Application
+import android.content.ComponentCallbacks2
+import coil3.imageLoader
 import com.poziomki.app.chat.push.NotificationHelper
 import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.di.appModule
@@ -26,5 +28,13 @@ class PoziomkiApp : Application() {
 
         getKoin().get<NotificationHelper>().createChannels()
         getKoin().get<PushManager>().startObserving()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            imageLoader.memoryCache?.clear()
+        }
     }
 }

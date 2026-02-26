@@ -34,6 +34,8 @@ internal data class PhotonProperties(
     val name: String? = null,
     val street: String? = null,
     val housenumber: String? = null,
+    val locality: String? = null,
+    val district: String? = null,
     val city: String? = null,
     val state: String? = null,
     val country: String? = null,
@@ -65,7 +67,7 @@ class GeocodingService(
                     .get("api") {
                         parameter("q", query)
                         parameter("limit", "5")
-                        parameter("lang", "pl")
+                        parameter("lang", "default")
                         parameter("lat", "52.2297")
                         parameter("lon", "21.0122")
                         parameter("location_bias_scale", "0.5")
@@ -86,7 +88,7 @@ class GeocodingService(
                     .get("reverse") {
                         parameter("lat", lat)
                         parameter("lon", lng)
-                        parameter("lang", "pl")
+                        parameter("lang", "default")
                     }.body()
             response.features
                 .firstOrNull()
@@ -108,6 +110,9 @@ private fun PhotonFeature.toResult(): GeocodingResult? {
             if (p.street != null) {
                 val street = if (p.housenumber != null) "${p.street} ${p.housenumber}" else p.street
                 if (street != p.name) add(street)
+            }
+            (p.district ?: p.locality)?.let { area ->
+                if (area != p.name && area != p.city) add(area)
             }
             p.city?.let { if (it != p.name) add(it) }
         }.joinToString(", ").ifBlank { p.country ?: return null }
