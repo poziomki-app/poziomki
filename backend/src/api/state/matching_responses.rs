@@ -9,9 +9,11 @@ pub(in crate::api) struct ProfileRecommendation {
     pub(in crate::api) user_id: String,
     pub(in crate::api) name: String,
     pub(in crate::api) bio: Option<String>,
-    pub(in crate::api) age: u8,
+    pub(in crate::api) age: Option<u8>,
     #[serde(rename = "profilePicture")]
     pub(in crate::api) profile_picture: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::api) thumbhash: Option<String>,
     pub(in crate::api) program: Option<String>,
     #[serde(rename = "gradientStart")]
     pub(in crate::api) gradient_start: Option<String>,

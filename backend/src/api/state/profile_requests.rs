@@ -4,7 +4,8 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub(in crate::api) struct CreateProfileBody {
     pub(in crate::api) name: String,
-    pub(in crate::api) age: u8,
+    #[serde(default)]
+    pub(in crate::api) age: Option<u8>,
     #[serde(default)]
     pub(in crate::api) bio: Option<String>,
     #[serde(default)]

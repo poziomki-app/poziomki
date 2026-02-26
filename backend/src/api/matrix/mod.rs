@@ -42,6 +42,7 @@ pub(super) struct MatrixSessionRequest {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct MatrixDmRoomRequest {
+    #[serde(alias = "targetUserId")]
     user_id: String,
 }
 

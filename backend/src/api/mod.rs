@@ -24,7 +24,7 @@ mod uploads;
 
 pub(crate) use common::{
     env_non_empty, error_response, extract_filename, resolve_image_url, resolve_image_urls,
-    ErrorSpec,
+    resolve_thumbhashes, ErrorSpec,
 };
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {

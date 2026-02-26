@@ -18,7 +18,7 @@ pub struct ProfileDocument {
     pub id: String,
     pub name: String,
     pub bio: Option<String>,
-    pub age: i16,
+    pub age: Option<i16>,
     pub program: Option<String>,
     pub profile_picture: Option<String>,
     pub tags: Vec<String>,
@@ -277,8 +277,8 @@ struct ProfileSearchRow {
     name: String,
     #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
-    #[diesel(sql_type = SmallInt)]
-    age: i16,
+    #[diesel(sql_type = Nullable<SmallInt>)]
+    age: Option<i16>,
     #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]

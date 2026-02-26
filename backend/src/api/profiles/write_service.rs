@@ -202,8 +202,8 @@ fn validate_update_payload(
     if let Some(name) = &payload.name {
         check_validation(headers, validate_profile_name(name))?;
     }
-    if let Some(age) = payload.age {
-        check_validation(headers, validate_profile_age(age))?;
+    if payload.age.is_some() {
+        check_validation(headers, validate_profile_age(payload.age))?;
     }
     check_validation(headers, validate_profile_bio(payload.bio.as_ref()))?;
     check_validation(headers, validate_profile_program(payload.program.as_ref()))
@@ -228,7 +228,7 @@ pub(super) fn build_update_changeset(
 ) -> ProfileChangeset {
     ProfileChangeset {
         name: payload.name.as_ref().map(|n| n.trim().to_string()),
-        age: payload.age.map(i16::from),
+        age: payload.age.map(|a| Some(i16::from(a))),
         bio: payload.bio.as_ref().map(|b| Some(b.clone())),
         program: payload.program.as_ref().map(|p| Some(p.clone())),
         profile_picture: profile_picture.map(Some),

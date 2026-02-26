@@ -46,7 +46,7 @@ fn build_create_model(
         user_id: user.id,
         name: payload.name.trim().to_string(),
         bio: payload.bio.clone(),
-        age: i16::from(payload.age),
+        age: payload.age.map(i16::from),
         profile_picture,
         images: images_json,
         program: payload.program.clone(),

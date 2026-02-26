@@ -81,3 +81,38 @@ pub async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
     let futs: Vec<_> = stored.iter().map(|s| resolve_image_url(s)).collect();
     futures_util::future::join_all(futs).await
 }
+
+/// Look up thumbhashes for a batch of filenames.
+/// Returns a map from filename → base64-encoded thumbhash.
+pub async fn resolve_thumbhashes(
+    filenames: &[String],
+) -> std::collections::HashMap<String, String> {
+    use base64::Engine;
+    use crate::db::schema::uploads;
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+
+    if filenames.is_empty() {
+        return std::collections::HashMap::new();
+    }
+
+    let rows: Vec<(String, Vec<u8>)> = match crate::db::conn().await {
+        Ok(mut conn) => uploads::table
+            .filter(uploads::filename.eq_any(filenames))
+            .filter(uploads::thumbhash.is_not_null())
+            .select((uploads::filename, uploads::thumbhash.assume_not_null()))
+            .load::<(String, Vec<u8>)>(&mut conn)
+            .await
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+
+    rows.into_iter()
+        .map(|(name, raw)| {
+            (
+                name,
+                base64::engine::general_purpose::STANDARD.encode(&raw),
+            )
+        })
+        .collect()
+}
