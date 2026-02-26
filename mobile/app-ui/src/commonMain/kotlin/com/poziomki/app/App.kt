@@ -20,7 +20,7 @@ import com.poziomki.app.session.SessionManager
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
-import com.poziomki.app.ui.shared.ImgproxyKeyer
+import com.poziomki.app.ui.shared.ImgproxyCacheInterceptor
 import com.poziomki.app.ui.shared.MxcMediaFetcher
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -102,7 +102,7 @@ private fun buildImageLoaderFactory(
                     .maxSizeBytes(COIL_DISK_CACHE_MAX_SIZE_BYTES)
                     .build()
             }.components {
-                add(ImgproxyKeyer())
+                add(ImgproxyCacheInterceptor())
                 add(MxcMediaFetcher.Factory(matrixClient))
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()
