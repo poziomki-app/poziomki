@@ -20,7 +20,6 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +41,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.shared.rememberThumbhashPainter
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @Composable
@@ -51,6 +51,7 @@ fun ProfileCard(
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
+    thumbhash: String? = null,
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
@@ -92,36 +93,37 @@ fun ProfileCard(
         ) {
             // Photo — edge-to-edge left, full card height
             if (profilePicture != null) {
-                key(profilePicture) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxHeight()
-                                .width(photoSize)
-                                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                                .drawWithContent {
-                                    drawContent()
-                                    drawRect(
-                                        brush =
-                                            Brush.horizontalGradient(
-                                                colorStops =
-                                                    arrayOf(
-                                                        0f to Color.Black,
-                                                        0.6f to Color.Black,
-                                                        1f to Color.Transparent,
-                                                    ),
-                                            ),
-                                        blendMode = BlendMode.DstIn,
-                                    )
-                                },
-                    ) {
-                        AsyncImage(
-                            model = resolveImageUrl(profilePicture),
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                    }
+                val thumbhashPainter = rememberThumbhashPainter(thumbhash)
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .width(photoSize)
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush =
+                                        Brush.horizontalGradient(
+                                            colorStops =
+                                                arrayOf(
+                                                    0f to Color.Black,
+                                                    0.6f to Color.Black,
+                                                    1f to Color.Transparent,
+                                                ),
+                                        ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                ) {
+                    Box(modifier = Modifier.matchParentSize().background(Color(0xFF111418)))
+                    AsyncImage(
+                        model = resolveImageUrl(profilePicture),
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        placeholder = thumbhashPainter,
+                    )
                 }
             } else {
                 Box(modifier = Modifier.padding(16.dp)) {
