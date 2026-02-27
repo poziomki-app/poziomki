@@ -26,7 +26,7 @@ pub(super) async fn create_dm_room(
 
     bootstrap
         .client()
-        .create_private_room("Wiadomość", &invites, true)
+        .create_private_room(None, &invites, true)
         .await
         .map_err(|error| {
             tracing::warn!(

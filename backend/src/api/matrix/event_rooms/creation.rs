@@ -57,7 +57,7 @@ pub(super) async fn create_event_room(
 
     bootstrap
         .client()
-        .create_private_room(&room_name, &invites, false)
+        .create_private_room(Some(&room_name), &invites, false)
         .await
         .map_err(|error| {
             tracing::warn!(

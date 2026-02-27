@@ -120,7 +120,7 @@ impl<'a> MatrixClient<'a> {
 
     pub(in crate::api) async fn create_private_room(
         &self,
-        room_name: &str,
+        room_name: Option<&str>,
         invited_user_ids: &[String],
         is_direct: bool,
     ) -> std::result::Result<String, MatrixRequestError> {
@@ -130,12 +130,14 @@ impl<'a> MatrixClient<'a> {
         } else {
             "private_chat"
         };
-        let payload = json!({
-            "name": room_name,
+        let mut payload = json!({
             "preset": preset,
             "is_direct": is_direct,
             "invite": invited_user_ids,
         });
+        if let Some(name) = room_name {
+            payload["name"] = json!(name);
+        }
         let body: MatrixCreateRoomResponse = execute_matrix_json_request(
             self.http_client
                 .post(&url)
