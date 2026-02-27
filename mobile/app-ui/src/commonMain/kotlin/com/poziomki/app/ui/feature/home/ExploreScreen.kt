@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +41,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -92,6 +94,7 @@ fun ExploreScreen(
                                     Modifier
                                         .fillMaxSize()
                                         .padding(horizontal = PoziomkiTheme.spacing.md),
+                                contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                             ) {
                                 // Tags section
@@ -212,6 +215,7 @@ fun ExploreScreen(
                         ) {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                             ) {
                                 item(key = "recommended-row") {

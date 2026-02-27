@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -68,6 +69,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.dayLabel
 import com.poziomki.app.ui.shared.eventDateKey
@@ -178,6 +180,7 @@ fun EventsScreen(
                                     Modifier
                                         .fillMaxSize()
                                         .padding(horizontal = PoziomkiTheme.spacing.md),
+                                contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
                             ) {
                                 if (state.events.isEmpty()) {
@@ -192,7 +195,6 @@ fun EventsScreen(
                                         )
                                     }
                                 }
-                                item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
                             }
                         }
                     }
@@ -382,6 +384,7 @@ private fun WeekEventsContent(
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = PoziomkiTheme.spacing.md),
+        contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
     ) {
         grouped.forEach { (dateKey, dayEvents) ->
@@ -427,7 +430,6 @@ private fun WeekEventsContent(
                 }
             }
         }
-        item { Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md)) }
     }
 }
 

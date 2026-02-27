@@ -55,6 +55,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -168,7 +169,7 @@ fun ProfileScreen(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+                                Spacer(modifier = Modifier.height(LocalNavBarPadding.current))
                             }
                         }
                     }

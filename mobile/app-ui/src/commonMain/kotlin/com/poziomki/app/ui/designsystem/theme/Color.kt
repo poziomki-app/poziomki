@@ -19,15 +19,15 @@ val Accent = Secondary
 val AccentDark = SecondaryDark
 val AccentLight = SecondaryLight
 
-// Neutrals - dark grays with subtle blue tint
-val Background = Color(0xFF0D1117)
-val Surface = Color(0xFF161B22)
-val SurfaceElevated = Color(0xFF21262D)
+// Neutrals - AMOLED true black
+val Background = Color(0xFF000000)
+val Surface = Color(0xFF0A0A0A)
+val SurfaceElevated = Color(0xFF141414)
 val TextPrimary = Color(0xFFF0F6FC)
 val TextSecondary = Color(0xFFA8B3C4)
 val TextMuted = Color(0xFF6E7A8A)
-val Border = Color(0xFF30363D)
-val BorderLight = Color(0xFF21262D)
+val Border = Color(0xFF1A1A1A)
+val BorderLight = Color(0xFF111111)
 
 // Semantic
 val Error = Color(0xFFF85149)
@@ -39,5 +39,5 @@ val Warning = Color(0xFFE65100)
 
 // Base
 val White = Color(0xFFF0F6FC)
-val Black = Color(0xFF010409)
+val Black = Color(0xFF000000)
 val Overlay = Color(0x99000000)

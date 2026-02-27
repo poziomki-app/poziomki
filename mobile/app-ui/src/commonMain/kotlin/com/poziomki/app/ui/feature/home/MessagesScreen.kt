@@ -3,6 +3,7 @@ package com.poziomki.app.ui.feature.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -37,6 +38,7 @@ import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -134,6 +136,7 @@ fun MessagesScreen(
                                     Modifier
                                         .fillMaxSize()
                                         .padding(horizontal = PoziomkiTheme.spacing.lg),
+                                contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                             ) {
                                 items(filteredRooms, key = { it.roomId }) { room ->
                                     val profilePicture =
@@ -158,7 +161,6 @@ fun MessagesScreen(
                                             },
                                     )
                                 }
-                                item { Spacer(modifier = Modifier.height(84.dp)) }
                             }
                         }
                     }

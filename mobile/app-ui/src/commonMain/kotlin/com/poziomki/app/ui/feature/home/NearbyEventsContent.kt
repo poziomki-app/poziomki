@@ -49,6 +49,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.formatEventDate
 import com.poziomki.app.ui.shared.pluralizePolish
 import com.poziomki.app.ui.shared.resolveImageUrl
@@ -268,7 +269,8 @@ internal fun NearbyEventsContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(bottom = LocalNavBarPadding.current),
                 ) {
                     Text(
                         text = selectedEvent.title,
