@@ -35,27 +35,26 @@ fn scope_from_str(s: &str) -> TagScope {
 
 async fn load_profiles_by_ids(
     ids: &[Uuid],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Profile>, crate::error::AppError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let mut conn = crate::db::conn().await?;
     let models = profiles::table
         .filter(profiles::id.eq_any(ids))
-        .load::<Profile>(&mut conn)
+        .load::<Profile>(conn)
         .await?;
     Ok(models.into_iter().map(|model| (model.id, model)).collect())
 }
 
 pub(super) async fn load_attendee_rows(
     event_id: Uuid,
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<Vec<AttendeeRow>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let links = event_attendees::table
         .filter(event_attendees::event_id.eq(event_id))
-        .load::<EventAttendee>(&mut conn)
+        .load::<EventAttendee>(conn)
         .await?;
 
     let profile_ids: HashSet<Uuid> = links.iter().map(|attendee| attendee.profile_id).collect();
@@ -63,7 +62,8 @@ pub(super) async fn load_attendee_rows(
         return Ok(vec![]);
     }
 
-    let profiles_map = load_profiles_by_ids(&profile_ids.into_iter().collect::<Vec<_>>()).await?;
+    let profiles_map =
+        load_profiles_by_ids(&profile_ids.into_iter().collect::<Vec<_>>(), conn).await?;
 
     let mut rows: Vec<AttendeeRow> = links
         .iter()
@@ -84,9 +84,11 @@ pub(super) async fn load_attendee_rows(
 
 async fn load_creator_previews(
     events_list: &[Event],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, ProfilePreview>, crate::error::AppError> {
     let creator_ids: HashSet<Uuid> = events_list.iter().map(|event| event.creator_id).collect();
-    let creator_models = load_profiles_by_ids(&creator_ids.into_iter().collect::<Vec<_>>()).await?;
+    let creator_models =
+        load_profiles_by_ids(&creator_ids.into_iter().collect::<Vec<_>>(), conn).await?;
 
     Ok(creator_models
         .into_values()
@@ -105,12 +107,11 @@ async fn load_creator_previews(
 
 async fn load_event_attendee_map(
     event_ids: &[Uuid],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Vec<AttendeeRow>>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let attendee_links = event_attendees::table
         .filter(event_attendees::event_id.eq_any(event_ids))
-        .load::<EventAttendee>(&mut conn)
+        .load::<EventAttendee>(conn)
         .await?;
 
     let attendee_profile_ids: HashSet<Uuid> = attendee_links
@@ -118,7 +119,7 @@ async fn load_event_attendee_map(
         .map(|attendee| attendee.profile_id)
         .collect();
     let attendee_profiles =
-        load_profiles_by_ids(&attendee_profile_ids.into_iter().collect::<Vec<_>>()).await?;
+        load_profiles_by_ids(&attendee_profile_ids.into_iter().collect::<Vec<_>>(), conn).await?;
 
     let mut attendees: HashMap<Uuid, Vec<AttendeeRow>> = HashMap::new();
     for link in &attendee_links {
@@ -142,12 +143,11 @@ async fn load_event_attendee_map(
 
 async fn load_event_tag_map(
     event_ids: &[Uuid],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Vec<EventTagResponse>>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let tag_links = event_tags::table
         .filter(event_tags::event_id.eq_any(event_ids))
-        .load::<EventTag>(&mut conn)
+        .load::<EventTag>(conn)
         .await?;
 
     let tag_ids: HashSet<Uuid> = tag_links.iter().map(|link| link.tag_id).collect();
@@ -156,7 +156,7 @@ async fn load_event_tag_map(
     } else {
         tags::table
             .filter(tags::id.eq_any(&tag_ids.into_iter().collect::<Vec<_>>()))
-            .load::<Tag>(&mut conn)
+            .load::<Tag>(conn)
             .await?
             .into_iter()
             .map(|tag| (tag.id, tag))
@@ -182,6 +182,7 @@ async fn load_event_tag_map(
 
 pub(super) async fn load_event_batch_context(
     event_models: &[Event],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<EventBatchContext, crate::error::AppError> {
     if event_models.is_empty() {
         return Ok(EventBatchContext {
@@ -192,9 +193,9 @@ pub(super) async fn load_event_batch_context(
     }
 
     let event_ids: Vec<Uuid> = event_models.iter().map(|event| event.id).collect();
-    let creators = load_creator_previews(event_models).await?;
-    let attendees = load_event_attendee_map(&event_ids).await?;
-    let tags = load_event_tag_map(&event_ids).await?;
+    let creators = load_creator_previews(event_models, conn).await?;
+    let attendees = load_event_attendee_map(&event_ids, conn).await?;
+    let tags = load_event_tag_map(&event_ids, conn).await?;
 
     Ok(EventBatchContext {
         creators,
