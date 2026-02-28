@@ -46,8 +46,8 @@ DerivedData/
 # Environment
 .env
 
-# Stalwart DKIM private key
-deploy/ops/stalwart/dkim-rsa.key
+# Deploy (kept locally, not in repo)
+/deploy/
 
 # Markdown (keep only docs/)
 *.md
