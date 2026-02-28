@@ -20,12 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,9 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
@@ -55,26 +51,36 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.poziomki.app.ui.designsystem.theme.ChatNameColors
+import com.poziomki.app.ui.designsystem.theme.ChatBubble
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
+import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.WarningCircle
 
-private val AvatarSize = 44.dp
-private val AvatarSpacing = 8.dp
+private val AvatarSize = 28.dp
+private val AvatarSpacing = 6.dp
 
 @Composable
 internal fun MessageEventRow(
     event: MatrixTimelineItem.Event,
     groupedWithPrevious: Boolean,
+    showSenderMeta: Boolean,
     onToggleReaction: (String) -> Unit,
     onReactionsClick: () -> Unit,
     onFocusOnReply: () -> Unit,
     onSenderClick: () -> Unit,
     onActionsLongPress: () -> Unit,
     onSwipeReply: () -> Unit,
+    compactTimestamp: Boolean = false,
     avatarOverride: String? = null,
 ) {
     val horizontalAlignment = if (event.isMine) Alignment.End else Alignment.Start
-    val bubbleColor = if (event.isMine) Primary.copy(alpha = 0.68f) else SurfaceColor
+    val bubbleColor = if (event.isMine) Primary.copy(alpha = 0.68f) else ChatBubble
     val canSwipeReply = event.canReply && event.eventId != null
     val density = LocalDensity.current
     val maxSwipePx = with(density) { 84.dp.toPx() }
@@ -98,7 +104,7 @@ internal fun MessageEventRow(
             )
         }
 
-    val showAvatar = !event.isMine && !groupedWithPrevious
+    val showAvatar = showSenderMeta && !event.isMine && !groupedWithPrevious
 
     Column(
         modifier =
@@ -107,25 +113,6 @@ internal fun MessageEventRow(
                 .padding(top = if (groupedWithPrevious) 2.dp else 10.dp),
         horizontalAlignment = horizontalAlignment,
     ) {
-        if (!event.isMine && !groupedWithPrevious) {
-            Text(
-                text = event.senderDisplayName ?: event.senderId,
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    Modifier
-                        .clickable(onClick = onSenderClick)
-                        .padding(
-                            start = if (!event.isMine) AvatarSize + AvatarSpacing + 10.dp else 10.dp,
-                            end = 10.dp,
-                            top = 2.dp,
-                            bottom = 2.dp,
-                        ),
-            )
-        }
-
         Box(modifier = Modifier.fillMaxWidth()) {
             if (canSwipeReply) {
                 Surface(
@@ -142,7 +129,7 @@ internal fun MessageEventRow(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            imageVector = PhosphorIcons.Bold.ArrowBendUpLeft,
                             contentDescription = null,
                             tint = Primary,
                             modifier = Modifier.size(16.dp),
@@ -198,7 +185,11 @@ internal fun MessageEventRow(
                                             onLongClick = onActionsLongPress,
                                         ),
                             ) {
-                                BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
+                                BubbleContent(
+                                    event = event,
+                                    onFocusOnReply = onFocusOnReply,
+                                    compactTimestamp = compactTimestamp,
+                                )
                             }
                             if (event.reactions.isNotEmpty()) {
                                 Row(
@@ -210,24 +201,37 @@ internal fun MessageEventRow(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
                                     event.reactions.forEach { reaction ->
+                                        val reactionCount = reaction.senders.map { it.senderId }.distinct().size
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceColor,
                                             modifier = Modifier.clickable { onReactionsClick() },
                                         ) {
-                                            Text(
-                                                text = reaction.emoji,
-                                                style = MaterialTheme.typography.bodyMedium,
+                                            Row(
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                            )
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Text(
+                                                    text = reaction.emoji,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                                if (reactionCount > 1) {
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(
+                                                        text = reactionCount.toString(),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = TextSecondary,
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     } else {
-                        // Not mine: avatar + bubble row
-                        Row(verticalAlignment = Alignment.Bottom) {
+                        // Not mine: avatar + name on same line, bubble below
+                        Row(verticalAlignment = Alignment.Top) {
                             if (showAvatar) {
                                 UserAvatar(
                                     picture = avatarOverride,
@@ -236,23 +240,41 @@ internal fun MessageEventRow(
                                     size = AvatarSize,
                                     modifier = Modifier.clickable(onClick = onSenderClick),
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.width(AvatarSize))
+                                Spacer(modifier = Modifier.width(AvatarSpacing))
+                            } else if (showSenderMeta) {
+                                Spacer(modifier = Modifier.width(AvatarSize + AvatarSpacing))
                             }
-                            Spacer(modifier = Modifier.width(AvatarSpacing))
                             Column {
+                                if (showAvatar) {
+                                    val senderNameColor = ChatNameColors[abs(event.senderId.hashCode()) % ChatNameColors.size]
+                                    Text(
+                                        text = event.senderDisplayName ?: event.senderId,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = senderNameColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier =
+                                            Modifier
+                                                .clickable(onClick = onSenderClick)
+                                                .padding(top = 2.dp, bottom = 2.dp),
+                                    )
+                                }
                                 Surface(
                                     color = bubbleColor,
                                     shape = bubbleShape,
                                     modifier =
                                         Modifier
-                                            .widthIn(max = maxBubbleWidth - AvatarSize - AvatarSpacing)
+                                            .widthIn(max = if (showSenderMeta) maxBubbleWidth - AvatarSize - AvatarSpacing else maxBubbleWidth)
                                             .combinedClickable(
                                                 onClick = {},
                                                 onLongClick = onActionsLongPress,
                                             ),
                                 ) {
-                                    BubbleContent(event = event, onFocusOnReply = onFocusOnReply)
+                                    BubbleContent(
+                                        event = event,
+                                        onFocusOnReply = onFocusOnReply,
+                                        compactTimestamp = compactTimestamp,
+                                    )
                                 }
                                 if (event.reactions.isNotEmpty()) {
                                     Row(
@@ -263,16 +285,29 @@ internal fun MessageEventRow(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
                                         event.reactions.forEach { reaction ->
+                                            val reactionCount = reaction.senders.map { it.senderId }.distinct().size
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceColor,
                                                 modifier = Modifier.clickable { onReactionsClick() },
                                             ) {
-                                                Text(
-                                                    text = reaction.emoji,
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                Row(
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                                )
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    Text(
+                                                        text = reaction.emoji,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                    )
+                                                    if (reactionCount > 1) {
+                                                        Spacer(modifier = Modifier.width(3.dp))
+                                                        Text(
+                                                            text = reactionCount.toString(),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = TextSecondary,
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -290,6 +325,7 @@ internal fun MessageEventRow(
 private fun BubbleContent(
     event: MatrixTimelineItem.Event,
     onFocusOnReply: () -> Unit,
+    compactTimestamp: Boolean,
 ) {
     Column(
         modifier =
@@ -316,7 +352,12 @@ private fun BubbleContent(
         ) {
             Text(
                 text = formatTime(event.timestampMillis),
-                style = MaterialTheme.typography.labelSmall,
+                style =
+                    if (compactTimestamp) {
+                        MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    } else {
+                        MaterialTheme.typography.labelSmall
+                    },
                 color = TextSecondary,
             )
             if (event.isMine) {
@@ -329,24 +370,43 @@ private fun BubbleContent(
 
 @Composable
 private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
-    val (icon, tint) =
-        when {
-            event.sendStatus == MatrixEventSendStatus.Failed ->
-                Icons.Filled.ErrorOutline to MaterialTheme.colorScheme.error
-            event.sendStatus == MatrixEventSendStatus.Sending ->
-                Icons.Filled.Schedule to TextSecondary
-            event.readByCount > 0 ->
-                Icons.Filled.DoneAll to Primary
-            else ->
-                Icons.Filled.Check to TextSecondary
+    when {
+        event.sendStatus == MatrixEventSendStatus.Failed -> {
+            Icon(
+                imageVector = PhosphorIcons.Bold.WarningCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(14.dp),
+            )
         }
 
-    Icon(
-        imageVector = icon,
-        contentDescription = null,
-        tint = tint,
-        modifier = Modifier.size(14.dp),
-    )
+        event.sendStatus == MatrixEventSendStatus.Sending -> {
+            Icon(
+                imageVector = PhosphorIcons.Bold.Clock,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+
+        event.readByCount > 0 -> {
+            Text(
+                text = "✓✓",
+                color = Primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        else -> {
+            Text(
+                text = "✓",
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
 }
 
 @Composable

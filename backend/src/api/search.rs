@@ -88,6 +88,56 @@ fn apply_resolved_search_image_urls(
     }
 }
 
+#[derive(Deserialize)]
+pub(super) struct MessageSearchQuery {
+    q: String,
+    limit: Option<u8>,
+}
+
+#[derive(serde::Serialize)]
+struct MessageSearchResults {
+    room_ids: Vec<String>,
+}
+
+pub(super) async fn search_messages(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Query(query): Query<MessageSearchQuery>,
+) -> Result<Response> {
+    let (_session, user) = match require_auth_db(&headers).await {
+        Ok(auth) => auth,
+        Err(response) => return Ok(*response),
+    };
+
+    let limit = usize::from(query.limit.unwrap_or(20).clamp(1, 50));
+    let q = query.q.trim().to_string();
+
+    if q.is_empty() {
+        return Ok(with_private_cache_header(
+            Json(DataResponse {
+                data: MessageSearchResults {
+                    room_ids: vec![],
+                },
+            })
+            .into_response(),
+        ));
+    }
+
+    let room_ids = crate::search::search_message_rooms(&q, &user.pid, limit)
+        .await
+        .map_err(|e| {
+            tracing::error!("Message room search failed: {e}");
+            crate::error::AppError::Message("Search failed".to_string())
+        })?;
+
+    Ok(with_private_cache_header(
+        Json(DataResponse {
+            data: MessageSearchResults { room_ids },
+        })
+        .into_response(),
+    ))
+}
+
 pub(super) async fn search(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,

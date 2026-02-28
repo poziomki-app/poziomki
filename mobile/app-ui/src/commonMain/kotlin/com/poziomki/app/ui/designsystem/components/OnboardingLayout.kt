@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -33,6 +31,9 @@ import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Secondary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
 
 @Composable
 fun OnboardingLayout(
@@ -89,7 +90,7 @@ fun OnboardingLayout(
                         modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = PhosphorIcons.Bold.ArrowLeft,
                             contentDescription = "Back",
                             tint = TextPrimary,
                         )

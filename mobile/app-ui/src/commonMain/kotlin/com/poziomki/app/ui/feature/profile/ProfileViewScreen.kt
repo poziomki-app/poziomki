@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +37,9 @@ import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.isImageUrl
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.fill.PaperPlaneRight
 
 @Composable
 fun ProfileViewScreen(
@@ -111,7 +112,7 @@ fun ProfileViewScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    imageVector = PhosphorIcons.Fill.PaperPlaneRight,
                                     contentDescription = null,
                                     tint = Primary,
                                     modifier = Modifier.size(20.dp),

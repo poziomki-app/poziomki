@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +64,9 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MapPinLine
 
 private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
 private const val DEFAULT_ZOOM = 12.0
@@ -93,7 +94,7 @@ internal fun NearbyEventsContent(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                Icons.Filled.LocationOff,
+                PhosphorIcons.Bold.MapPinLine,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
                 tint = TextMuted,

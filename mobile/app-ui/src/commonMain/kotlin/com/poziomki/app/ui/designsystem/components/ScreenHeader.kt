@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +18,9 @@ import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
 
 @Composable
 fun ScreenHeader(
@@ -43,7 +44,7 @@ fun ScreenHeader(
         if (onBack != null) {
             IconButton(onClick = onBack) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    PhosphorIcons.Bold.ArrowLeft,
                     contentDescription = "Wstecz",
                     tint = TextPrimary,
                 )

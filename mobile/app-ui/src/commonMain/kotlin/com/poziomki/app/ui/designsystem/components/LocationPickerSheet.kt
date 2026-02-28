@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -63,6 +60,10 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
 
 private const val DEBOUNCE_MS = 350L
 private const val DEFAULT_ZOOM = 13.0
@@ -181,7 +182,7 @@ fun LocationPickerSheet(
                 ) {
                     IconButton(onClick = onDismiss) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = PhosphorIcons.Bold.ArrowLeft,
                             contentDescription = "Wstecz",
                             tint = TextPrimary,
                             modifier = Modifier.size(20.dp),
@@ -197,7 +198,7 @@ fun LocationPickerSheet(
                         Text("szukaj miejsca...", color = TextMuted, fontFamily = NunitoFamily)
                     },
                     leadingIcon = {
-                        Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted)
+                        Icon(PhosphorIcons.Bold.MagnifyingGlass, contentDescription = null, tint = TextMuted)
                     },
                     colors =
                         TextFieldDefaults.colors(

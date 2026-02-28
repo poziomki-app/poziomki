@@ -22,14 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +50,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +60,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.poziomki.app.chat.matrix.api.MatrixReaction
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.core.ids.appUserIdFromMatrixUserId
+import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -79,10 +74,22 @@ import com.poziomki.app.ui.shared.rememberSingleFilePicker
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
+import com.adamglin.phosphoricons.bold.CaretDown
+import com.adamglin.phosphoricons.bold.Copy
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.fill.PaperPlaneRight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +101,6 @@ fun ChatContent(
     onSendImageAttachment: (ByteArray) -> Unit,
     onSendFileAttachment: (PickedFile) -> Unit,
     onToggleReaction: (String, String) -> Unit,
-    onPaginateBackwards: () -> Unit,
     onMarkAsRead: () -> Unit,
     onViewportChanged: (Int?) -> Unit,
     onJumpToLatest: () -> Unit,
@@ -105,8 +111,11 @@ fun ChatContent(
     onClearError: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     resolveDisplayNames: suspend (List<String>) -> Map<String, String>,
+    resolveAvatarUrls: suspend (List<String>) -> Map<String, String>,
+    showSenderMeta: Boolean = !state.isDirectRoom,
     modifier: Modifier = Modifier,
     avatarOverrides: Map<String, String> = emptyMap(),
+    avatarOverridesByName: Map<String, String> = emptyMap(),
     headerContent: (@Composable () -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -155,6 +164,13 @@ fun ChatContent(
         }
 
         run {
+            val reversedItems = state.timelineItems.asReversed()
+            val topTimelineLabel by remember(reversedItems, timelineListState) {
+                derivedStateOf {
+                    val topVisibleIndex = timelineListState.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index }
+                    formatTimelineCapsuleLabel(topVisibleIndex?.let(reversedItems::getOrNull))
+                }
+            }
             Box(
                 modifier =
                     Modifier
@@ -189,10 +205,6 @@ fun ChatContent(
                         }
                     }
 
-                    // Reverse items: SDK gives oldest-first, but reverseLayout renders
-                    // index 0 at the bottom, so we need newest-first.
-                    val reversedItems = state.timelineItems.asReversed()
-
                     itemsIndexed(
                         items = reversedItems,
                         key = { _, item -> timelineItemKey(item) },
@@ -200,7 +212,7 @@ fun ChatContent(
                         Box(modifier = itemPadding) {
                             when (item) {
                                 is MatrixTimelineItem.DateDivider -> {
-                                    DateDivider(timestampMillis = item.timestampMillis)
+                                    Spacer(modifier = Modifier.height(2.dp))
                                 }
 
                                 is MatrixTimelineItem.Event -> {
@@ -210,6 +222,7 @@ fun ChatContent(
                                     MessageEventRow(
                                         event = item,
                                         groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
+                                        showSenderMeta = showSenderMeta,
                                         onToggleReaction = { emoji ->
                                             onToggleReaction(item.eventOrTransactionId, emoji)
                                         },
@@ -218,7 +231,13 @@ fun ChatContent(
                                         onSenderClick = { onNavigateToProfile(item.senderId) },
                                         onActionsLongPress = { selectedActionEvent = item },
                                         onSwipeReply = { onStartReply(item) },
-                                        avatarOverride = resolveAvatarOverride(item.senderId, avatarOverrides),
+                                        compactTimestamp = showSenderMeta,
+                                        avatarOverride =
+                                            resolveAvatarOverride(item.senderId, avatarOverrides)
+                                                ?: item.senderDisplayName
+                                                    ?.trim()
+                                                    ?.lowercase()
+                                                    ?.let { avatarOverridesByName[it] },
                                     )
                                 }
 
@@ -233,26 +252,29 @@ fun ChatContent(
                         }
                     }
 
-                    item {
-                        TextButton(
-                            onClick = { onPaginateBackwards() },
-                            enabled = state.hasMoreBackwards && !state.isPaginatingBackwards,
-                            modifier = itemPadding.fillMaxWidth(),
-                        ) {
-                            val label =
-                                when {
-                                    state.isPaginatingBackwards -> "Ładowanie..."
-                                    state.hasMoreBackwards -> "Pokaż starsze wiadomości"
-                                    else -> "Brak starszych wiadomości"
-                                }
-                            Text(label)
-                        }
-                    }
-
                     if (headerContent != null) {
                         item(key = "event_header") {
                             headerContent()
                         }
+                    }
+                }
+
+                if (timelineListState.isScrollInProgress && topTimelineLabel != null) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.Black.copy(alpha = 0.86f),
+                        shadowElevation = 1.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 10.dp),
+                    ) {
+                        Text(
+                            text = topTimelineLabel.orEmpty(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
                     }
                 }
 
@@ -276,7 +298,7 @@ fun ChatContent(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.KeyboardArrowDown,
+                                imageVector = PhosphorIcons.Bold.CaretDown,
                                 contentDescription = "Najnowsze",
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -316,7 +338,7 @@ fun ChatContent(
                     Box {
                         IconButton(onClick = { showAttachmentMenu = true }) {
                             Icon(
-                                imageVector = Icons.Filled.Add,
+                                imageVector = PhosphorIcons.Bold.Plus,
                                 contentDescription = "Załącznik",
                                 tint = TextSecondary,
                             )
@@ -374,7 +396,7 @@ fun ChatContent(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        imageVector = PhosphorIcons.Fill.PaperPlaneRight,
                         contentDescription = "Wyślij",
                         tint = if (state.messageDraft.isBlank()) TextSecondary else Background,
                     )
@@ -415,12 +437,17 @@ fun ChatContent(
                     .distinct()
             }
         var senderNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        var senderAvatars by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         LaunchedEffect(senderIds) {
             senderNames = resolveDisplayNames(senderIds)
+            senderAvatars = resolveAvatarUrls(senderIds)
         }
         ReactionBreakdownSheet(
             reactions = event.reactions,
             senderDisplayNames = senderNames,
+            senderAvatarUrls = senderAvatars,
+            avatarOverrides = avatarOverrides,
+            avatarOverridesByName = avatarOverridesByName,
             onDismiss = { selectedReactionEvent = null },
         )
     }
@@ -492,14 +519,14 @@ private fun MessageActionDialog(
 
                 if (event.canReply && eventId != null) {
                     ActionMenuItem(
-                        icon = Icons.AutoMirrored.Filled.Reply,
+                        icon = PhosphorIcons.Bold.ArrowBendUpLeft,
                         label = "Odpowiedz",
                         onClick = onReply,
                     )
                 }
 
                 ActionMenuItem(
-                    icon = Icons.Filled.ContentCopy,
+                    icon = PhosphorIcons.Bold.Copy,
                     label = "Skopiuj",
                     onClick = {
                         clipboardManager.setText(AnnotatedString(event.body))
@@ -509,12 +536,12 @@ private fun MessageActionDialog(
 
                 if (event.isEditable) {
                     ActionMenuItem(
-                        icon = Icons.Filled.Edit,
+                        icon = PhosphorIcons.Bold.PencilSimple,
                         label = "Edytuj",
                         onClick = onEdit,
                     )
                     ActionMenuItem(
-                        icon = Icons.Filled.Delete,
+                        icon = PhosphorIcons.Bold.Trash,
                         label = "Usuń",
                         onClick = onDelete,
                     )
@@ -530,11 +557,20 @@ private fun MessageActionDialog(
 private fun ReactionBreakdownSheet(
     reactions: List<MatrixReaction>,
     senderDisplayNames: Map<String, String>,
+    senderAvatarUrls: Map<String, String>,
+    avatarOverrides: Map<String, String>,
+    avatarOverridesByName: Map<String, String>,
     onDismiss: () -> Unit,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val allSenders = reactions.flatMap { r -> r.senders.map { s -> s to r.emoji } }
-    val totalCount = reactions.sumOf { it.count }
+    val allSenders =
+        reactions
+            .flatMap { reaction ->
+                reaction.senders
+                    .distinctBy { sender -> sender.senderId }
+                    .map { sender -> sender to reaction.emoji }
+            }.distinctBy { (sender, emoji) -> sender.senderId to emoji }
+    val totalCount = allSenders.size
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -569,7 +605,7 @@ private fun ReactionBreakdownSheet(
                         onClick = { selectedTab = index + 1 },
                         text = {
                             Text(
-                                text = "${reaction.emoji} ${reaction.count}",
+                                text = "${reaction.emoji} ${reaction.senders.map { it.senderId }.distinct().size}",
                                 fontWeight = if (selectedTab == index + 1) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
@@ -584,7 +620,9 @@ private fun ReactionBreakdownSheet(
                     allSenders
                 } else {
                     val reaction = reactions[selectedTab - 1]
-                    reaction.senders.map { s -> s to reaction.emoji }
+                    reaction.senders
+                        .distinctBy { sender -> sender.senderId }
+                        .map { sender -> sender to reaction.emoji }
                 }
 
             displaySenders.forEach { (sender, emoji) ->
@@ -596,19 +634,16 @@ private fun ReactionBreakdownSheet(
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(
-                        modifier = Modifier.size(36.dp),
-                        shape = CircleShape,
-                        color = Primary.copy(alpha = 0.2f),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = name.first().uppercase(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Primary,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        picture =
+                            senderAvatarUrls[sender.senderId]
+                                ?: resolveAvatarOverride(sender.senderId, avatarOverrides)
+                                ?: avatarOverridesByName[name.trim().lowercase()],
+                        displayName = name,
+                        size = 36.dp,
+                        backgroundColor = Primary.copy(alpha = 0.2f),
+                        iconTint = Primary,
+                    )
 
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -623,7 +658,7 @@ private fun ReactionBreakdownSheet(
 
                     Text(
                         text = emoji,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
@@ -724,7 +759,7 @@ internal fun ComposerModeBanner(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                        imageVector = PhosphorIcons.Bold.ArrowBendUpLeft,
                         contentDescription = null,
                         tint = TextSecondary,
                         modifier = Modifier.size(16.dp),
@@ -791,12 +826,54 @@ internal fun shouldGroupWithPrevious(
 }
 
 internal fun formatDate(timestampMillis: Long): String {
-    val localDateTime = Instant.fromEpochMilliseconds(timestampMillis).toLocalDateTime(TimeZone.currentSystemDefault())
-    val day = localDateTime.dayOfMonth.toString().padStart(2, '0')
-    val month = localDateTime.monthNumber.toString().padStart(2, '0')
-    val year = localDateTime.year
-    return "$day.$month.$year"
+    val zone = TimeZone.currentSystemDefault()
+    val now = Clock.System.now().toLocalDateTime(zone).date
+    val date = Instant.fromEpochMilliseconds(timestampMillis).toLocalDateTime(zone).date
+    val daysDiff = now.toEpochDays() - date.toEpochDays()
+
+    return when {
+        daysDiff == 0 -> "Dzisiaj"
+        daysDiff == 1 -> "Wczoraj"
+        daysDiff in 2..6 -> weekdayShort(date.dayOfWeek)
+        now.year == date.year -> "${date.dayOfMonth} ${monthShort(date.monthNumber)}"
+        else -> "${date.dayOfMonth} ${monthShort(date.monthNumber)} ${date.year}"
+    }
 }
+
+private fun formatTimelineCapsuleLabel(item: MatrixTimelineItem?): String? =
+    when (item) {
+        is MatrixTimelineItem.DateDivider -> formatDate(item.timestampMillis)
+        is MatrixTimelineItem.Event -> formatDate(item.timestampMillis)
+        else -> null
+    }
+
+private fun weekdayShort(dayOfWeek: DayOfWeek): String =
+    when (dayOfWeek) {
+        DayOfWeek.MONDAY -> "pon"
+        DayOfWeek.TUESDAY -> "wt"
+        DayOfWeek.WEDNESDAY -> "śr"
+        DayOfWeek.THURSDAY -> "czw"
+        DayOfWeek.FRIDAY -> "pt"
+        DayOfWeek.SATURDAY -> "sob"
+        DayOfWeek.SUNDAY -> "niedz"
+    }
+
+private fun monthShort(monthNumber: Int): String =
+    when (monthNumber) {
+        1 -> "sty"
+        2 -> "lut"
+        3 -> "mar"
+        4 -> "kwi"
+        5 -> "maj"
+        6 -> "cze"
+        7 -> "lip"
+        8 -> "sie"
+        9 -> "wrz"
+        10 -> "paź"
+        11 -> "lis"
+        12 -> "gru"
+        else -> "?"
+    }
 
 internal fun timelineItemKey(item: MatrixTimelineItem): String =
     when (item) {

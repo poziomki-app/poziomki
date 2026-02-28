@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +38,9 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.X
 
 @Composable
 fun BasicInfoScreen(
@@ -116,7 +117,7 @@ fun BasicInfoScreen(
                                 modifier = Modifier.size(40.dp),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Close,
+                                    imageVector = PhosphorIcons.Bold.X,
                                     contentDescription = "wyczyść",
                                     tint = TextMuted,
                                     modifier = Modifier.size(20.dp),

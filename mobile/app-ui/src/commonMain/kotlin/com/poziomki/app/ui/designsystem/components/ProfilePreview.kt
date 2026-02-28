@@ -22,9 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -55,6 +52,10 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.resolveImageUrl
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.User
+import com.adamglin.phosphoricons.bold.X
 
 sealed class ProfileImage {
     data class Bytes(
@@ -139,7 +140,7 @@ fun ProfilePreview(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Filled.Person,
+                                        imageVector = PhosphorIcons.Bold.User,
                                         contentDescription = null,
                                         modifier = Modifier.size(64.dp),
                                         tint = TextMuted,
@@ -217,7 +218,7 @@ fun ProfilePreview(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Person,
+                        imageVector = PhosphorIcons.Bold.User,
                         contentDescription = null,
                         modifier = Modifier.size(80.dp),
                         tint = TextMuted,
@@ -237,7 +238,7 @@ fun ProfilePreview(
                         .background(Black.copy(alpha = 0.45f)),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Close,
+                    imageVector = PhosphorIcons.Bold.X,
                     contentDescription = "Zamknij",
                     tint = White,
                     modifier = Modifier.size(24.dp),

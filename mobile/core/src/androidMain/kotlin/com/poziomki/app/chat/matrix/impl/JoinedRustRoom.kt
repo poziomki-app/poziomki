@@ -110,6 +110,8 @@ class JoinedRustRoom(
 
     override suspend fun getMemberDisplayName(userId: String): String? = runCatching { innerRoom.memberDisplayName(userId) }.getOrNull()
 
+    override suspend fun getMemberAvatarUrl(userId: String): String? = runCatching { innerRoom.memberAvatarUrl(userId) }.getOrNull()
+
     fun close() {
         typingHandle?.cancel()
         roomInfoHandle?.cancel()

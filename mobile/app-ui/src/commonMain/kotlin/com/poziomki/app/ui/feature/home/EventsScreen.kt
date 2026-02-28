@@ -21,13 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +72,16 @@ import com.poziomki.app.ui.shared.rememberLocationPermissionLauncher
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowSquareOut
+import com.adamglin.phosphoricons.bold.BookmarkSimple
+import com.adamglin.phosphoricons.bold.CaretDown
+import com.adamglin.phosphoricons.bold.CaretUp
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.MapPin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,7 +112,7 @@ fun EventsScreen(
         ScreenHeader(title = "wydarzenia") {
             IconButton(onClick = onNavigateToEventCreate) {
                 Icon(
-                    Icons.Filled.Edit,
+                    PhosphorIcons.Bold.PencilSimple,
                     contentDescription = "Utwórz wydarzenie",
                     modifier = Modifier.size(22.dp),
                     tint = TextSecondary,
@@ -263,7 +266,7 @@ private fun EventCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Filled.CalendarMonth,
+                            PhosphorIcons.Fill.CalendarDots,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = TextMuted,
@@ -283,7 +286,7 @@ private fun EventCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.BookmarkBorder,
+                        PhosphorIcons.Bold.BookmarkSimple,
                         contentDescription = "Zapisz",
                         modifier = Modifier.size(22.dp),
                         tint = TextPrimary,
@@ -318,6 +321,27 @@ private fun EventCard(
                     fontSize = 15.sp,
                     color = TextSecondary,
                 )
+
+                // Location
+                event.location?.let { location ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            PhosphorIcons.Fill.MapPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = TextMuted,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = location,
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = TextMuted,
+                            maxLines = 1,
+                        )
+                    }
+                }
 
                 // Creator
                 event.creator?.let { creator ->
@@ -413,7 +437,7 @@ private fun WeekEventsContent(
                         modifier = Modifier.weight(1f),
                     )
                     Icon(
-                        if (isCollapsed) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess,
+                        if (isCollapsed) PhosphorIcons.Bold.CaretDown else PhosphorIcons.Bold.CaretUp,
                         contentDescription = if (isCollapsed) "Rozwiń" else "Zwiń",
                         modifier = Modifier.size(24.dp),
                         tint = TextMuted,
@@ -468,7 +492,7 @@ private fun EventRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.CalendarMonth,
+                        PhosphorIcons.Fill.CalendarDots,
                         contentDescription = null,
                         modifier = Modifier.size(32.dp),
                         tint = TextMuted,
@@ -500,6 +524,25 @@ private fun EventRow(
                     fontSize = 14.sp,
                     color = TextSecondary,
                 )
+                event.location?.let { location ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            PhosphorIcons.Fill.MapPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = TextMuted,
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = location,
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                            maxLines = 1,
+                        )
+                    }
+                }
                 event.creator?.let { creator ->
                     Text(
                         text = "od ${creator.name}",
@@ -512,7 +555,7 @@ private fun EventRow(
             }
 
             Icon(
-                Icons.AutoMirrored.Filled.OpenInNew,
+                PhosphorIcons.Bold.ArrowSquareOut,
                 contentDescription = "Otwórz",
                 modifier =
                     Modifier

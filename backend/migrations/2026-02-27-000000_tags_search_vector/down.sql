@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_tags_fts;
+ALTER TABLE tags DROP COLUMN IF EXISTS search_vector;

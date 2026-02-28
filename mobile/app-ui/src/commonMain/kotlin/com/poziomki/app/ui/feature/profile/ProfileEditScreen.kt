@@ -28,13 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -94,6 +87,14 @@ import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Image
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.SlidersHorizontal
+import com.adamglin.phosphoricons.bold.X
 
 @Composable
 fun ProfileEditScreen(
@@ -238,7 +239,7 @@ fun ProfileEditScreen(
                     )
                     if (state.program.isNotEmpty()) {
                         Icon(
-                            Icons.Filled.Close,
+                            PhosphorIcons.Bold.X,
                             contentDescription = "Wyczyść",
                             tint = TextMuted,
                             modifier =
@@ -257,13 +258,16 @@ fun ProfileEditScreen(
                     query = state.interestQuery,
                     onQueryChange = { viewModel.updateInterestQuery(it) },
                     searchPlaceholder = "szukaj zainteresowań...",
-                    allTags = state.allTags.filter { it.scope == "interest" },
+                    searchResults = state.interestSearchResults,
+                    isSearching = state.isSearchingInterests,
                     selectedTags = state.selectedTags.filter { it.scope == "interest" },
                     onAddTag = {
                         viewModel.addTag(it)
                         viewModel.updateInterestQuery("")
                     },
                     onRemoveTag = { viewModel.removeTag(it) },
+                    onCreateTag = { name -> viewModel.createAndAddTag(name, "interest") },
+                    isCreatingTag = state.isCreatingTag,
                 )
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
@@ -274,13 +278,16 @@ fun ProfileEditScreen(
                     query = state.activityQuery,
                     onQueryChange = { viewModel.updateActivityQuery(it) },
                     searchPlaceholder = "szukaj aktywności...",
-                    allTags = state.allTags.filter { it.scope == "activity" },
+                    searchResults = state.activitySearchResults,
+                    isSearching = state.isSearchingActivities,
                     selectedTags = state.selectedTags.filter { it.scope == "activity" },
                     onAddTag = {
                         viewModel.addTag(it)
                         viewModel.updateActivityQuery("")
                     },
                     onRemoveTag = { viewModel.removeTag(it) },
+                    onCreateTag = { name -> viewModel.createAndAddTag(name, "activity") },
+                    isCreatingTag = state.isCreatingTag,
                 )
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
@@ -329,9 +336,12 @@ fun ProfileEditScreen(
             name = state.name,
             program = state.program,
             bio = state.bio,
-            selectedStart = state.gradientStart,
-            selectedEnd = state.gradientEnd,
-            onSelect = { start, end -> viewModel.updateGradient(start, end) },
+            initialStart = state.gradientStart,
+            initialEnd = state.gradientEnd,
+            onSave = { start, end ->
+                viewModel.updateGradient(start, end)
+                showGradientPicker = false
+            },
             onDismiss = { showGradientPicker = false },
         )
     }
@@ -380,7 +390,7 @@ private fun ImageGalleryRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Filled.Close,
+                        PhosphorIcons.Bold.X,
                         contentDescription = "Usuń",
                         tint = White,
                         modifier = Modifier.size(14.dp),
@@ -433,7 +443,7 @@ private fun ImageGalleryRow(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    Icons.Filled.Add,
+                    PhosphorIcons.Bold.Plus,
                     contentDescription = "Dodaj zdjęcie",
                     tint = Primary,
                     modifier = Modifier.size(28.dp),
@@ -454,7 +464,7 @@ private fun ImageGalleryRow(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Edit,
+                PhosphorIcons.Bold.PencilSimple,
                 contentDescription = "Edytuj zdjęcia",
                 tint = TextMuted,
                 modifier = Modifier.size(24.dp),
@@ -470,17 +480,21 @@ private fun TagSection(
     query: String,
     onQueryChange: (String) -> Unit,
     searchPlaceholder: String,
-    allTags: List<Tag>,
+    searchResults: List<Tag>,
+    isSearching: Boolean,
     selectedTags: List<Tag>,
     onAddTag: (Tag) -> Unit,
     onRemoveTag: (Tag) -> Unit,
+    onCreateTag: ((String) -> Unit)? = null,
+    isCreatingTag: Boolean = false,
 ) {
     val nunito = NunitoFamily
-    val filtered =
-        allTags.filter { tag ->
-            selectedTags.none { it.id == tag.id } &&
-                (query.isBlank() || tag.name.contains(query, ignoreCase = true))
-        }
+    val filtered = searchResults.filter { tag ->
+        selectedTags.none { it.id == tag.id }
+    }
+    val trimmedQuery = query.trim()
+    val hasExactMatch = searchResults.any { it.name.equals(trimmedQuery, ignoreCase = true) } ||
+        selectedTags.any { it.name.equals(trimmedQuery, ignoreCase = true) }
 
     SectionLabel(label)
 
@@ -490,18 +504,36 @@ private fun TagSection(
         placeholder = searchPlaceholder,
     )
 
-    if (query.isNotBlank() && filtered.isNotEmpty()) {
+    if (query.isNotBlank()) {
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-        ) {
-            filtered.take(10).forEach { tag ->
-                TagChip(
-                    tag = tag,
-                    selected = false,
-                    onClick = { onAddTag(tag) },
-                )
+
+        if (isSearching) {
+            CircularProgressIndicator(
+                color = Primary,
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            ) {
+                filtered.take(10).forEach { tag ->
+                    TagChip(
+                        tag = tag,
+                        selected = false,
+                        onClick = { onAddTag(tag) },
+                    )
+                }
+
+                // "Create new" option when no exact match
+                if (onCreateTag != null && trimmedQuery.length >= 2 && !hasExactMatch) {
+                    CreateTagChip(
+                        name = trimmedQuery,
+                        isCreating = isCreatingTag,
+                        onClick = { onCreateTag(trimmedQuery) },
+                    )
+                }
             }
         }
     }
@@ -524,6 +556,51 @@ private fun TagSection(
 }
 
 @Composable
+private fun CreateTagChip(
+    name: String,
+    isCreating: Boolean,
+    onClick: () -> Unit,
+) {
+    val nunito = NunitoFamily
+    val shape = RoundedCornerShape(8.dp)
+
+    Row(
+        modifier =
+            Modifier
+                .background(Color.Transparent, shape)
+                .border(1.dp, Primary, shape)
+                .clip(shape)
+                .clickable(enabled = !isCreating, onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isCreating) {
+            CircularProgressIndicator(
+                color = Primary,
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+            )
+        } else {
+            Icon(
+                PhosphorIcons.Bold.Plus,
+                contentDescription = null,
+                tint = Primary,
+                modifier = Modifier.size(12.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = "dodaj \"$name\"",
+            fontFamily = nunito,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = Primary,
+            lineHeight = 14.sp,
+        )
+    }
+}
+
+@Composable
 private fun TagSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
@@ -541,7 +618,7 @@ private fun TagSearchBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.Filled.Search,
+            PhosphorIcons.Bold.MagnifyingGlass,
             contentDescription = null,
             tint = TextMuted,
             modifier = Modifier.size(20.dp),
@@ -583,7 +660,7 @@ private fun TagSearchBar(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
-            Icons.Filled.Tune,
+            PhosphorIcons.Bold.SlidersHorizontal,
             contentDescription = null,
             tint = TextMuted,
             modifier = Modifier.size(20.dp),
@@ -757,7 +834,7 @@ private fun BioEditorDialog(
                         )
                     } else {
                         Icon(
-                            Icons.Filled.Image,
+                            PhosphorIcons.Bold.Image,
                             contentDescription = "Dodaj zdjęcie",
                             tint = TextMuted,
                             modifier =
@@ -848,13 +925,16 @@ private fun GradientPickerDialog(
     name: String,
     program: String,
     bio: String,
-    selectedStart: String?,
-    selectedEnd: String?,
-    onSelect: (String?, String?) -> Unit,
+    initialStart: String?,
+    initialEnd: String?,
+    onSave: (String?, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val nunito = NunitoFamily
     val montserrat = MontserratFamily
+
+    var selectedStart by remember { mutableStateOf(initialStart) }
+    var selectedEnd by remember { mutableStateOf(initialEnd) }
 
     // Build darkened preview background from currently selected gradient
     val previewStart = selectedStart?.let { blendWithBg(parseHex(it), 0.18f) }
@@ -869,9 +949,11 @@ private fun GradientPickerDialog(
             Modifier.background(SurfaceColor, RoundedCornerShape(20.dp))
         }
 
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Column(
             modifier =
@@ -944,7 +1026,10 @@ private fun GradientPickerDialog(
                     gradientEnd = null,
                     size = dotSize,
                     isSelected = selectedStart == null && selectedEnd == null,
-                    onClick = { onSelect(null, null) },
+                    onClick = {
+                        selectedStart = null
+                        selectedEnd = null
+                    },
                 )
 
                 gradientPresets.forEach { preset ->
@@ -953,10 +1038,24 @@ private fun GradientPickerDialog(
                         gradientEnd = preset.end,
                         size = dotSize,
                         isSelected = selectedStart == preset.start && selectedEnd == preset.end,
-                        onClick = { onSelect(preset.start, preset.end) },
+                        onClick = {
+                            selectedStart = preset.start
+                            selectedEnd = preset.end
+                        },
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Save button
+            PoziomkiButton(
+                text = "zapisz",
+                onClick = { onSave(selectedStart, selectedEnd) },
+                variant = ButtonVariant.PRIMARY,
+            )
+
+            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
 }
@@ -994,7 +1093,7 @@ private fun TagChip(
         if (selected) {
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                Icons.Filled.Close,
+                PhosphorIcons.Bold.X,
                 contentDescription = "Usuń",
                 tint = textColor,
                 modifier = Modifier.size(12.dp),

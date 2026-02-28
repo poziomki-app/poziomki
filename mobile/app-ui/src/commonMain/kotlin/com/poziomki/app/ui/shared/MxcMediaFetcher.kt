@@ -18,12 +18,22 @@ import okio.IOException
 
 private const val THUMBNAIL_SIZE = 256L
 private const val CLIENT_READY_TIMEOUT_MS = 15_000L
+private const val IN_MEMORY_MXC_CACHE_MAX_ENTRIES = 256
 
 class MxcMediaFetcher(
     private val matrixClient: MatrixClient,
     private val mxcUrl: String,
 ) : Fetcher {
     override suspend fun fetch(): FetchResult {
+        MxcMediaCache.get(mxcUrl)?.let { cached ->
+            val cachedBuffer = Buffer().apply { write(cached) }
+            return SourceFetchResult(
+                source = ImageSource(source = cachedBuffer, fileSystem = FileSystem.SYSTEM),
+                mimeType = null,
+                dataSource = DataSource.NETWORK,
+            )
+        }
+
         withTimeoutOrNull(CLIENT_READY_TIMEOUT_MS) {
             matrixClient.state.first { it is MatrixClientState.Ready }
         } ?: throw IOException("Matrix client not ready for media fetch")
@@ -33,6 +43,7 @@ class MxcMediaFetcher(
                 ?: matrixClient.getMediaContent(mxcUrl)
                 ?: throw IOException("Matrix media not available for $mxcUrl")
         if (bytes.isEmpty()) throw IOException("Matrix media empty for $mxcUrl")
+        MxcMediaCache.put(mxcUrl, bytes)
         val buffer = Buffer().apply { write(bytes) }
         return SourceFetchResult(
             source = ImageSource(source = buffer, fileSystem = FileSystem.SYSTEM),
@@ -52,6 +63,26 @@ class MxcMediaFetcher(
             val url = data.toString()
             if (!url.startsWith("mxc://")) return null
             return MxcMediaFetcher(matrixClient, url)
+        }
+    }
+}
+
+private object MxcMediaCache {
+    private val lock = Any()
+    private val cache =
+        object : LinkedHashMap<String, ByteArray>(IN_MEMORY_MXC_CACHE_MAX_ENTRIES, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean =
+                size > IN_MEMORY_MXC_CACHE_MAX_ENTRIES
+        }
+
+    fun get(url: String): ByteArray? = synchronized(lock) { cache[url] }
+
+    fun put(
+        url: String,
+        bytes: ByteArray,
+    ) {
+        synchronized(lock) {
+            cache[url] = bytes
         }
     }
 }

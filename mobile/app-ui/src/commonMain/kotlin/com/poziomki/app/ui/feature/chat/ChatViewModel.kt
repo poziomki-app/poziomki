@@ -11,6 +11,7 @@ import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.chat.matrix.api.Timeline
 import com.poziomki.app.chat.timeline.TimelineController
 import com.poziomki.app.core.ids.matrixLocalpartFromUserId
+import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
@@ -31,10 +32,13 @@ class ChatViewModel(
     private val matrixClient: MatrixClient,
     private val roomComposerDraftStore: RoomComposerDraftStore,
     private val matchProfileRepository: MatchProfileRepository,
+    private val eventRepository: EventRepository,
 ) : ViewModel() {
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
         const val TYPING_STOP_IDLE_MS = 5_000L
+        const val INITIAL_PAGINATION_MAX_BATCHES = 12
+        val INITIAL_PAGINATION_BATCH_SIZE: UShort = 1000u
     }
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -60,9 +64,11 @@ class ChatViewModel(
     private var latestRoomSummaries: List<MatrixRoomSummary> = emptyList()
     private var activeDirectUserId: String? = null
     private var latestAvatarByName: Map<String, String> = emptyMap()
+    private var eventCoverByRoomId: Map<String, String> = emptyMap()
 
     init {
         observeAvatarOverrides()
+        observeEventCovers()
     }
 
     fun loadRoom(
@@ -79,6 +85,7 @@ class ChatViewModel(
                     roomDisplayName = fallbackDisplayName.orEmpty(),
                     roomAvatarUrl =
                         fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
+                    isDirectRoom = fallbackDirectUserId != null,
                     avatarOverrides = avatarOverrides,
                     error = "Invalid chat route id. Expected Matrix room id (!...)",
                 )
@@ -355,6 +362,16 @@ class ChatViewModel(
         }
     }
 
+    suspend fun resolveAvatarUrls(userIds: List<String>): Map<String, String> {
+        val room = activeRoom ?: return emptyMap()
+        return userIds
+            .mapNotNull { userId ->
+                room.getMemberAvatarUrl(userId)?.takeIf { avatar -> avatar.isNotBlank() }?.let { avatar ->
+                    userId to avatar
+                }
+            }.toMap()
+    }
+
     override fun onCleared() {
         bindJob?.cancel()
         pendingRoomRetryJob?.cancel()
@@ -464,11 +481,13 @@ class ChatViewModel(
                 currentAvatar = null,
                 directUserIdFallback = activeDirectUserId,
             )
+        val initialIsDirect = initialSummary?.isDirect ?: (activeDirectUserId != null)
         _uiState.update {
             it.copy(
                 roomId = room.roomId,
                 roomDisplayName = initialDisplayName,
                 roomAvatarUrl = initialAvatar,
+                isDirectRoom = initialIsDirect,
                 timelineItems = emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
@@ -500,6 +519,7 @@ class ChatViewModel(
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
+                            isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
@@ -533,6 +553,7 @@ class ChatViewModel(
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
+                            isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
@@ -751,11 +772,11 @@ class ChatViewModel(
         timelineJobs.forEach { it.cancel() }
         timelineJobs.clear()
 
-        // Auto-paginate on first bind for live timelines to fill the screen with messages.
+        // Auto-paginate on first bind for live timelines to load full history.
         if (timeline.mode == MatrixTimelineMode.Live) {
             timelineJobs +=
                 viewModelScope.launch {
-                    timeline.paginateBackwards()
+                    paginateAllBackwards(timeline)
                 }
         }
 
@@ -817,6 +838,13 @@ class ChatViewModel(
             }
     }
 
+    private suspend fun paginateAllBackwards(timeline: Timeline) {
+        repeat(INITIAL_PAGINATION_MAX_BATCHES) {
+            val loadedMore = timeline.paginateBackwards(INITIAL_PAGINATION_BATCH_SIZE).getOrElse { return }
+            if (!loadedMore) return
+        }
+    }
+
     private fun observeAvatarOverrides() {
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
@@ -867,6 +895,27 @@ class ChatViewModel(
         }
     }
 
+    private fun observeEventCovers() {
+        viewModelScope.launch {
+            eventRepository.observeEvents().collect { events ->
+                val covers =
+                    events
+                        .filter { it.isAttending && it.conversationId != null && it.coverImage != null }
+                        .associate { it.conversationId!! to it.coverImage!! }
+                eventCoverByRoomId = covers
+                _uiState.update { current ->
+                    val rid = current.roomId
+                    val eventCover = covers[rid]
+                    if (eventCover != null && current.roomAvatarUrl != eventCover) {
+                        current.copy(roomAvatarUrl = eventCover)
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
     private fun resolveRoomAvatar(
         summary: MatrixRoomSummary?,
         overrides: Map<String, String>,
@@ -875,6 +924,8 @@ class ChatViewModel(
         timelineAvatar: String? = null,
         directUserIdFallback: String? = null,
     ): String? {
+        val eventCover = summary?.roomId?.let { eventCoverByRoomId[it] }
+        if (eventCover != null) return eventCover
         val directUserId = summary?.directUserId ?: directUserIdFallback
         val summaryAvatar =
             summary?.avatarUrl
@@ -943,6 +994,7 @@ class ChatViewModel(
         val trimmed = value.trim()
         if (trimmed.isBlank()) return true
         if (trimmed == roomId) return true
+        if (isMemberCountName(trimmed)) return true
         return when (trimmed.lowercase()) {
             "chat", "dm", "direct message", "wiadomość", "wiadomosc" -> true
             else -> false
@@ -967,3 +1019,7 @@ class ChatViewModel(
         return index > 0
     }
 }
+
+private val MEMBER_COUNT_PATTERN = Regex("^\\d+\\s+(people|person|members?|users?)$", RegexOption.IGNORE_CASE)
+
+private fun isMemberCountName(value: String): Boolean = MEMBER_COUNT_PATTERN.matches(value.trim())

@@ -7,8 +7,10 @@ fun resolveRoomProfilePicture(
     room: MatrixRoomSummary,
     profilePictures: Map<String, String>,
     profilePicturesByName: Map<String, String>,
+    eventRoomAvatars: Map<String, String> = emptyMap(),
 ): String? =
-    room.directUserId
+    eventRoomAvatars[room.roomId]
+        ?: room.directUserId
         ?.let { directUserId ->
             val localpart = directUserId.substringAfter("@").substringBefore(":")
             val appUserId = appUserIdFromMatrixUserId(directUserId)

@@ -19,10 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +60,11 @@ import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.rememberMultiImagePicker
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowsOut
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.User
 
 private const val BIO_MAX_LENGTH = 300
 private const val TAG_PREVIEW_LIMIT = 2
@@ -200,7 +201,7 @@ fun ProfileSetupScreen(
 
                             else -> {
                                 Icon(
-                                    imageVector = Icons.Filled.Person,
+                                    imageVector = PhosphorIcons.Bold.User,
                                     contentDescription = null,
                                     modifier = Modifier.size(36.dp),
                                     tint = TextMuted,
@@ -219,7 +220,7 @@ fun ProfileSetupScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Edit,
+                            imageVector = PhosphorIcons.Bold.PencilSimple,
                             contentDescription = "Zmie\u0144 avatar",
                             tint = Black,
                             modifier = Modifier.size(14.dp),
@@ -273,7 +274,7 @@ fun ProfileSetupScreen(
                     modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.OpenInFull,
+                        imageVector = PhosphorIcons.Bold.ArrowsOut,
                         contentDescription = "Podgl\u0105d profilu",
                         tint = TextMuted,
                         modifier = Modifier.size(20.dp),

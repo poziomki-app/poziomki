@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Text};
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
@@ -66,23 +67,54 @@ pub(super) async fn tags_search(
 
     let mut conn = crate::db::conn().await?;
 
-    let mut query_builder = tags::table.into_boxed();
-
-    if let Some(scope) = query.scope {
-        query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
-    }
-
-    if !search.is_empty() {
+    let data = if !search.is_empty() {
+        // Use tsvector + ILIKE fallback for ranked search
         let pattern = format!("%{search}%");
-        query_builder = query_builder.filter(tags::name.ilike(pattern));
-    }
+        let scope_filter = query.scope.map(scope_to_str);
 
-    let all_tags = query_builder.limit(limit).load::<Tag>(&mut conn).await?;
+        use diesel::sql_types::Nullable;
+        let rows = diesel::sql_query(
+            r"
+            SELECT t.id, t.name, t.scope, t.category, t.emoji
+            FROM tags t
+            WHERE
+                ($3 IS NULL OR t.scope = $3)
+                AND (
+                    t.search_vector @@ websearch_to_tsquery('simple', $1)
+                    OR LOWER(t.name) LIKE $2
+                )
+            ORDER BY
+                ts_rank_cd(t.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+                t.name ASC
+            LIMIT $4
+            ",
+        )
+        .bind::<Text, _>(&search)
+        .bind::<Text, _>(&pattern)
+        .bind::<Nullable<Text>, _>(scope_filter)
+        .bind::<BigInt, _>(limit)
+        .load::<crate::search::TagSearchRow>(&mut conn)
+        .await?;
 
-    let data = all_tags
-        .iter()
-        .map(tag_model_to_response)
-        .collect::<Vec<_>>();
+        rows.into_iter()
+            .map(|row| TagResponse {
+                id: row.id.to_string(),
+                name: row.name,
+                scope: str_to_scope(&row.scope),
+                category: row.category,
+                emoji: row.emoji,
+                onboarding_order: None,
+            })
+            .collect::<Vec<_>>()
+    } else {
+        // No search term: use Diesel query builder
+        let mut query_builder = tags::table.into_boxed();
+        if let Some(scope) = query.scope {
+            query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
+        }
+        let all_tags = query_builder.limit(limit).load::<Tag>(&mut conn).await?;
+        all_tags.iter().map(tag_model_to_response).collect::<Vec<_>>()
+    };
 
     let mut response = Json(DataResponse { data }).into_response();
     response

@@ -14,4 +14,7 @@ data class MessagesUiState(
     val profilePicturesByName: Map<String, String> = emptyMap(),
     val displayNameOverrides: Map<String, String> = emptyMap(),
     val eventRoomIds: Set<String> = emptySet(),
+    val eventRoomAvatars: Map<String, String> = emptyMap(),
+    val searchQuery: String = "",
+    val searchMatchingRoomIds: Set<String>? = null,
 )

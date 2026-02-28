@@ -19,15 +19,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -85,6 +76,18 @@ import com.poziomki.app.ui.feature.profile.ProfileViewScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.bold.User
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.ChatCircle
+import com.adamglin.phosphoricons.fill.UsersThree
+import com.adamglin.phosphoricons.regular.CalendarDots
+import com.adamglin.phosphoricons.regular.ChatCircle
+import com.adamglin.phosphoricons.regular.User
+import com.adamglin.phosphoricons.regular.UsersThree
 
 data class BottomNavItem(
     val label: String,
@@ -97,15 +100,15 @@ val LocalNavBarPadding = compositionLocalOf { 0.dp }
 
 val bottomNavItems =
     listOf(
-        BottomNavItem("Poznaj", Icons.Outlined.Groups, Icons.Filled.Groups, Route.Explore),
-        BottomNavItem("Wydarzenia", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth, Route.Events),
+        BottomNavItem("Poznaj", PhosphorIcons.Regular.UsersThree, PhosphorIcons.Fill.UsersThree, Route.Explore),
+        BottomNavItem("Wydarzenia", PhosphorIcons.Regular.CalendarDots, PhosphorIcons.Fill.CalendarDots, Route.Events),
         BottomNavItem(
             "Wiadomości",
-            Icons.AutoMirrored.Outlined.Chat,
-            Icons.AutoMirrored.Filled.Chat,
+            PhosphorIcons.Regular.ChatCircle,
+            PhosphorIcons.Fill.ChatCircle,
             Route.Messages,
         ),
-        BottomNavItem("Profil", Icons.Outlined.Person, Icons.Filled.Person, Route.ProfileTab),
+        BottomNavItem("Profil", PhosphorIcons.Regular.User, PhosphorIcons.Bold.User, Route.ProfileTab),
     )
 
 @Composable

@@ -23,10 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -90,6 +86,11 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MapPin
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.X
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -266,7 +267,7 @@ fun EventCreateScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Filled.Close,
+                                imageVector = PhosphorIcons.Bold.X,
                                 contentDescription = "Usuń zdjęcie",
                                 tint = White,
                                 modifier = Modifier.size(18.dp),
@@ -292,7 +293,7 @@ fun EventCreateScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Add,
+                            imageVector = PhosphorIcons.Bold.Plus,
                             contentDescription = null,
                             tint = Primary,
                             modifier = Modifier.size(32.dp),
@@ -345,7 +346,7 @@ fun EventCreateScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(
-                        imageVector = Icons.Filled.LocationOn,
+                        imageVector = PhosphorIcons.Bold.MapPin,
                         contentDescription = null,
                         tint = Primary,
                         modifier = Modifier.size(20.dp),

@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +47,10 @@ import com.poziomki.app.ui.feature.home.messages.resolveRoomDisplayName
 import com.poziomki.app.ui.feature.home.messages.resolveRoomProfilePicture
 import com.poziomki.app.ui.feature.home.messages.roomFilterTabs
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Bell
+import com.adamglin.phosphoricons.bold.PencilSimple
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,11 +61,15 @@ fun MessagesScreen(
     viewModel: MessagesViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf(MessagesRoomFilter.Direct) }
+    var selectedFilter by remember { mutableStateOf(MessagesRoomFilter.All) }
 
     val unreadTotal = state.rooms.sumOf { it.unreadCount }
-    val filteredRooms = state.rooms.filterMessagesRooms(selectedFilter, searchQuery, state.eventRoomIds)
+    val filteredRooms = state.rooms.filterMessagesRooms(
+        selectedFilter,
+        state.searchQuery,
+        state.eventRoomIds,
+        state.searchMatchingRoomIds,
+    )
     val roomFilterTabs = roomFilterTabs()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -78,7 +83,7 @@ fun MessagesScreen(
                 if (unreadTotal > 0) {
                     Box {
                         Icon(
-                            imageVector = Icons.Filled.Notifications,
+                            imageVector = PhosphorIcons.Bold.Bell,
                             contentDescription = "Powiadomienia",
                             tint = TextSecondary,
                             modifier = Modifier.size(24.dp),
@@ -96,7 +101,7 @@ fun MessagesScreen(
                 }
                 IconButton(onClick = onNavigateToNewChat) {
                     Icon(
-                        imageVector = Icons.Filled.Edit,
+                        imageVector = PhosphorIcons.Bold.PencilSimple,
                         contentDescription = "Nowa wiadomość",
                         tint = TextSecondary,
                         modifier = Modifier.size(22.dp),
@@ -104,8 +109,8 @@ fun MessagesScreen(
                 }
             }
             PoziomkiSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
+                query = state.searchQuery,
+                onQueryChange = { viewModel.onSearchQueryChanged(it) },
                 placeholder = "szukaj wiadomości...",
             )
             FilterTabs(
@@ -144,12 +149,17 @@ fun MessagesScreen(
                                             room = room,
                                             profilePictures = state.profilePictures,
                                             profilePicturesByName = state.profilePicturesByName,
+                                            eventRoomAvatars = state.eventRoomAvatars,
                                         )
                                     val displayNameOverride =
-                                        resolveRoomDisplayName(
-                                            room = room,
-                                            displayNameOverrides = state.displayNameOverrides,
-                                        )
+                                        if (room.roomId in state.eventRoomIds) {
+                                            null
+                                        } else {
+                                            resolveRoomDisplayName(
+                                                room = room,
+                                                displayNameOverrides = state.displayNameOverrides,
+                                            )
+                                        }
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,

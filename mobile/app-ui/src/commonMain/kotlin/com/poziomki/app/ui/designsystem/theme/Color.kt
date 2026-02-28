@@ -23,6 +23,7 @@ val AccentLight = SecondaryLight
 val Background = Color(0xFF000000)
 val Surface = Color(0xFF0A0A0A)
 val SurfaceElevated = Color(0xFF141414)
+val ChatBubble = Color(0xFF1E1E1E)
 val TextPrimary = Color(0xFFF0F6FC)
 val TextSecondary = Color(0xFFA8B3C4)
 val TextMuted = Color(0xFF6E7A8A)
@@ -41,3 +42,15 @@ val Warning = Color(0xFFE65100)
 val White = Color(0xFFF0F6FC)
 val Black = Color(0xFF000000)
 val Overlay = Color(0x99000000)
+
+// Chat name colors for group conversations
+val ChatNameColors = listOf(
+    Color(0xFFE8A87C), // Warm peach
+    Color(0xFF85C1E9), // Soft blue
+    Color(0xFF95DAC1), // Sage mint
+    Color(0xFFC3A6E0), // Soft lavender
+    Color(0xFFE8D175), // Muted gold
+    Color(0xFFF1948A), // Soft coral
+    Color(0xFFABD9A0), // Soft green
+    Color(0xFFD4A5C4), // Dusty rose
+)

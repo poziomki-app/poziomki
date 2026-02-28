@@ -11,11 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +34,10 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.WarningCircle
 
 @Composable
 fun RoomRow(
@@ -88,6 +87,15 @@ fun RoomRow(
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
+            val statusIcon =
+                if (room.unreadCount == 0 && room.latestMessageIsMine) {
+                    latestRoomStatusIconSpec(
+                        sendStatus = room.latestMessageSendStatus,
+                        readByCount = room.latestMessageReadByCount,
+                    )
+                } else {
+                    null
+                }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
@@ -123,36 +131,47 @@ fun RoomRow(
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 )
                             }
-                        } else if (room.latestMessageIsMine) {
-                            val statusIcon =
-                                latestRoomStatusIconSpec(
-                                    sendStatus = room.latestMessageSendStatus,
-                                    readByCount = room.latestMessageReadByCount,
-                                )
-                            if (statusIcon != null) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Icon(
-                                    imageVector = statusIcon.icon,
-                                    contentDescription = null,
-                                    tint = statusIcon.tint,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
                         }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = room.latestMessage?.takeIf { it.isNotBlank() } ?: "Brak wiadomości",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (statusIcon != null) {
+                    if (statusIcon.symbol != null) {
+                        Text(
+                            text = statusIcon.symbol,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusIcon.tint,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    } else if (statusIcon.icon != null) {
+                        Icon(
+                            imageVector = statusIcon.icon,
+                            contentDescription = null,
+                            tint = statusIcon.tint,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = room.latestMessagePreview(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
+
+private fun MatrixRoomSummary.latestMessagePreview(): String =
+    latestMessage
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: "Wiadomość"
 
 private fun formatRoomTimestamp(timestampMillis: Long): String {
     val nowMillis = Clock.System.now().toEpochMilliseconds()
@@ -207,7 +226,8 @@ private fun monthShort(monthNumber: Int): String =
     }
 
 private data class RoomStatusIconSpec(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    val symbol: String? = null,
     val tint: androidx.compose.ui.graphics.Color,
 )
 
@@ -218,12 +238,12 @@ private fun latestRoomStatusIconSpec(
 ): RoomStatusIconSpec? =
     when {
         sendStatus == MatrixEventSendStatus.Failed ->
-            RoomStatusIconSpec(Icons.Filled.ErrorOutline, MaterialTheme.colorScheme.error)
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
         sendStatus == MatrixEventSendStatus.Sending ->
-            RoomStatusIconSpec(Icons.Filled.Schedule, TextSecondary)
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
         readByCount > 0 ->
-            RoomStatusIconSpec(Icons.Filled.DoneAll, Primary)
+            RoomStatusIconSpec(symbol = "✓✓", tint = Primary)
         sendStatus == MatrixEventSendStatus.Sent ->
-            RoomStatusIconSpec(Icons.Filled.Check, TextSecondary)
+            RoomStatusIconSpec(symbol = "✓", tint = TextSecondary)
         else -> null
     }

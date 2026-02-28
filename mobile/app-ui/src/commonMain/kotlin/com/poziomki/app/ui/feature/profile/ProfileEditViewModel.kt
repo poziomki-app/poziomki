@@ -9,9 +9,13 @@ import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.Tag
 import com.poziomki.app.network.UpdateProfileRequest
 import com.poziomki.app.ui.designsystem.components.SnackbarType
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 data class ProfileEditState(
@@ -28,12 +32,18 @@ data class ProfileEditState(
     val selectedTags: List<Tag> = emptyList(),
     val interestQuery: String = "",
     val activityQuery: String = "",
+    val interestSearchResults: List<Tag> = emptyList(),
+    val activitySearchResults: List<Tag> = emptyList(),
+    val isSearchingInterests: Boolean = false,
+    val isSearchingActivities: Boolean = false,
+    val isCreatingTag: Boolean = false,
     val gradientStart: String? = null,
     val gradientEnd: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
 
+@OptIn(FlowPreview::class)
 class ProfileEditViewModel(
     private val profileRepository: ProfileRepository,
     private val tagRepository: TagRepository,
@@ -42,8 +52,55 @@ class ProfileEditViewModel(
     private val _state = MutableStateFlow(ProfileEditState())
     val state: StateFlow<ProfileEditState> = _state.asStateFlow()
 
+    private val interestSearchFlow = MutableStateFlow("")
+    private val activitySearchFlow = MutableStateFlow("")
+
     init {
         loadData()
+        setupDebouncedSearch()
+    }
+
+    private fun setupDebouncedSearch() {
+        viewModelScope.launch {
+            interestSearchFlow
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { query ->
+                    if (query.length >= 2) {
+                        _state.value = _state.value.copy(isSearchingInterests = true)
+                        val results = tagRepository.searchTags("interest", query)
+                        _state.value = _state.value.copy(
+                            interestSearchResults = results,
+                            isSearchingInterests = false,
+                        )
+                    } else {
+                        _state.value = _state.value.copy(
+                            interestSearchResults = emptyList(),
+                            isSearchingInterests = false,
+                        )
+                    }
+                }
+        }
+        viewModelScope.launch {
+            activitySearchFlow
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { query ->
+                    if (query.length >= 2) {
+                        _state.value = _state.value.copy(isSearchingActivities = true)
+                        val results = tagRepository.searchTags("activity", query)
+                        _state.value = _state.value.copy(
+                            activitySearchResults = results,
+                            isSearchingActivities = false,
+                        )
+                    } else {
+                        _state.value = _state.value.copy(
+                            activitySearchResults = emptyList(),
+                            isSearchingActivities = false,
+                        )
+                    }
+                }
+        }
     }
 
     private fun loadData() {
@@ -102,10 +159,48 @@ class ProfileEditViewModel(
 
     fun updateInterestQuery(query: String) {
         _state.value = _state.value.copy(interestQuery = query)
+        interestSearchFlow.value = query.trim()
     }
 
     fun updateActivityQuery(query: String) {
         _state.value = _state.value.copy(activityQuery = query)
+        activitySearchFlow.value = query.trim()
+    }
+
+    fun createAndAddTag(
+        name: String,
+        scope: String,
+    ) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isCreatingTag = true)
+            when (val result = tagRepository.createTag(name.trim(), scope)) {
+                is ApiResult.Success -> {
+                    addTag(result.data)
+                    if (scope == "interest") {
+                        updateInterestQuery("")
+                    } else {
+                        updateActivityQuery("")
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    if (result.code == "CONFLICT") {
+                        // Tag already exists — try to find and add it
+                        val existing = tagRepository.searchTags(scope, name.trim())
+                        existing.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }?.let {
+                            addTag(it)
+                            if (scope == "interest") updateInterestQuery("") else updateActivityQuery("")
+                        }
+                    } else {
+                        _state.value = _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 utworzy\u0107 tagu",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                    }
+                }
+            }
+            _state.value = _state.value.copy(isCreatingTag = false)
+        }
     }
 
     fun addTag(tag: Tag) {

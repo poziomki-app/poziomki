@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,6 +30,10 @@ import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.SlidersHorizontal
 
 @Composable
 fun PoziomkiSearchBar(
@@ -59,7 +60,7 @@ fun PoziomkiSearchBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Filled.Search,
+                PhosphorIcons.Bold.MagnifyingGlass,
                 contentDescription = null,
                 modifier = Modifier.size(22.dp),
                 tint = TextMuted,
@@ -94,7 +95,7 @@ fun PoziomkiSearchBar(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Icon(
-                Icons.Filled.Tune,
+                PhosphorIcons.Bold.SlidersHorizontal,
                 contentDescription = "Filtruj",
                 modifier = Modifier.size(22.dp),
                 tint = TextMuted,

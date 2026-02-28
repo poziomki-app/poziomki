@@ -30,7 +30,7 @@ fun EventChatScreen(
         val event = eventState.event
         val roomId = event?.conversationId
         if (event?.isAttending == true && roomId != null && roomId.startsWith("!")) {
-            chatViewModel.loadRoom(roomId)
+            chatViewModel.loadRoom(roomId, fallbackDisplayName = event.title)
         }
     }
 
@@ -44,6 +44,17 @@ fun EventChatScreen(
     val avatarOverrides =
         remember(eventState.attendees) {
             buildEventAvatarOverrides(eventState.attendees)
+        }
+    val avatarOverridesByName =
+        remember(eventState.attendees) {
+            eventState.attendees
+                .asSequence()
+                .filter { attendee -> attendee.profilePicture?.isNotBlank() == true }
+                .groupBy { attendee -> attendee.name.trim().lowercase() }
+                .mapNotNull { (name, sameNameAttendees) ->
+                    val pictures = sameNameAttendees.mapNotNull { attendee -> attendee.profilePicture }.distinct()
+                    if (pictures.size == 1) name to pictures.first() else null
+                }.toMap()
         }
 
     Column(modifier = Modifier.fillMaxSize().background(Background)) {
@@ -82,7 +93,6 @@ fun EventChatScreen(
                     onSendImageAttachment = chatViewModel::sendImageAttachment,
                     onSendFileAttachment = chatViewModel::sendFileAttachment,
                     onToggleReaction = chatViewModel::toggleReaction,
-                    onPaginateBackwards = chatViewModel::paginateBackwards,
                     onMarkAsRead = chatViewModel::markAsRead,
                     onViewportChanged = chatViewModel::onTimelineViewportChanged,
                     onJumpToLatest = chatViewModel::jumpToLatestHandled,
@@ -93,7 +103,10 @@ fun EventChatScreen(
                     onClearError = chatViewModel::clearError,
                     onNavigateToProfile = onNavigateToProfile,
                     resolveDisplayNames = chatViewModel::resolveDisplayNames,
+                    resolveAvatarUrls = chatViewModel::resolveAvatarUrls,
+                    showSenderMeta = true,
                     avatarOverrides = avatarOverrides,
+                    avatarOverridesByName = avatarOverridesByName,
                 )
             }
         }

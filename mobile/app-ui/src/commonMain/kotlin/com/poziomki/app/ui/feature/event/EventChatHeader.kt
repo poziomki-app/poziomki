@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -47,6 +42,14 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.formatEventDateFull
 import com.poziomki.app.ui.shared.pluralizePolish
 import com.poziomki.app.ui.shared.resolveImageUrl
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.MapPin
+import com.adamglin.phosphoricons.fill.UsersThree
 
 @Composable
 @Suppress("LongMethod", "LongParameterList")
@@ -105,7 +108,7 @@ fun EventChatHeader(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = PhosphorIcons.Bold.ArrowLeft,
                     contentDescription = "Wstecz",
                     tint = Color.White,
                 )
@@ -115,7 +118,7 @@ fun EventChatHeader(
             Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
-                        imageVector = Icons.Filled.MoreVert,
+                        imageVector = PhosphorIcons.Bold.DotsThreeVertical,
                         contentDescription = "Więcej",
                         tint = Color.White,
                     )
@@ -183,7 +186,7 @@ fun EventChatHeader(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Filled.CalendarMonth,
+                    imageVector = PhosphorIcons.Fill.CalendarDots,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = TextSecondary,
@@ -196,11 +199,30 @@ fun EventChatHeader(
                 )
             }
 
+            event.location?.let { location ->
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = PhosphorIcons.Fill.MapPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = TextSecondary,
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = location,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        maxLines = 1,
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(2.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Filled.Groups,
+                    imageVector = PhosphorIcons.Fill.UsersThree,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = TextSecondary,

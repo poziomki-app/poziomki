@@ -7,11 +7,17 @@ import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
+import com.poziomki.app.network.ApiResult
+import com.poziomki.app.network.Event
+import com.poziomki.app.network.ApiService
 import com.poziomki.app.ui.feature.home.messages.MessagesUiState
 import com.poziomki.app.ui.feature.home.messages.buildDisplayNameOverrides
 import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByName
 import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByUserId
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,13 +30,20 @@ class MessagesViewModel(
     private val matrixClient: MatrixClient,
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
+    private val apiService: ApiService,
 ) : ViewModel() {
     private companion object {
         const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
         const val EMPTY_ROOMS_FALLBACK_MS = 15_000L
+        const val PREVIEW_WARMUP_BATCH_SIZE = 4
     }
 
     private var emptyRoomsFallbackJob: Job? = null
+    private var searchJob: Job? = null
+    private var warmupPreviewsJob: Job? = null
+    private val queuedWarmupRoomIds = ArrayDeque<String>()
+    private val queuedWarmupRoomIdSet = mutableSetOf<String>()
+    private val warmedPreviewRoomIds = mutableSetOf<String>()
 
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
@@ -45,6 +58,7 @@ class MessagesViewModel(
         observeClientState()
         observeRooms()
         observeEventRooms()
+        observeEventRoomAvatars()
         observeProfilePictures()
         observeProfilePicturesByName()
         observeDisplayNameOverrides()
@@ -133,6 +147,28 @@ class MessagesViewModel(
         }
     }
 
+    fun onSearchQueryChanged(query: String) {
+        _state.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+
+        if (query.length < 2) {
+            _state.update { it.copy(searchMatchingRoomIds = null) }
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            delay(300)
+            when (val result = apiService.searchMessageRooms(query)) {
+                is ApiResult.Success -> {
+                    _state.update { it.copy(searchMatchingRoomIds = result.data.roomIds.toSet()) }
+                }
+                is ApiResult.Error -> {
+                    _state.update { it.copy(searchMatchingRoomIds = null) }
+                }
+            }
+        }
+    }
+
     fun clearError() {
         _state.update { it.copy(error = null) }
     }
@@ -162,6 +198,7 @@ class MessagesViewModel(
         viewModelScope.launch {
             matrixClient.rooms.collect { rooms ->
                 val deduplicatedRooms = deduplicateAndSortRooms(rooms)
+                warmupMissingRoomPreviews(deduplicatedRooms)
                 _state.update { current ->
                     if (current.rooms == deduplicatedRooms && (!current.isLoading || deduplicatedRooms.isEmpty())) {
                         return@update current
@@ -173,6 +210,41 @@ class MessagesViewModel(
                 }
             }
         }
+    }
+
+    private fun warmupMissingRoomPreviews(rooms: List<MatrixRoomSummary>) {
+        rooms.forEach { room ->
+            if (!room.latestMessage.isNullOrBlank()) return@forEach
+            val roomId = room.roomId
+            if (roomId in warmedPreviewRoomIds || roomId in queuedWarmupRoomIdSet) return@forEach
+            queuedWarmupRoomIds.addLast(roomId)
+            queuedWarmupRoomIdSet += roomId
+        }
+        if (queuedWarmupRoomIds.isEmpty()) return
+        if (warmupPreviewsJob?.isActive == true) return
+
+        warmupPreviewsJob =
+            viewModelScope.launch {
+                while (queuedWarmupRoomIds.isNotEmpty()) {
+                    val batch = mutableListOf<String>()
+                    repeat(PREVIEW_WARMUP_BATCH_SIZE) {
+                        val roomId = queuedWarmupRoomIds.removeFirstOrNull() ?: return@repeat
+                        queuedWarmupRoomIdSet -= roomId
+                        batch += roomId
+                    }
+                    if (batch.isEmpty()) continue
+
+                    coroutineScope {
+                        batch
+                            .map { roomId ->
+                                async {
+                                    runCatching { matrixClient.getJoinedRoom(roomId) }
+                                    warmedPreviewRoomIds += roomId
+                                }
+                            }.awaitAll()
+                    }
+                }
+            }
     }
 
     private fun observeProfilePictures() {
@@ -207,6 +279,18 @@ class MessagesViewModel(
         }
     }
 
+
+    private fun observeEventRoomAvatars() {
+        viewModelScope.launch {
+            eventRepository.observeEvents().collect { events ->
+                val avatars =
+                    events
+                        .filter { it.isAttending && it.conversationId != null && it.coverImage != null }
+                        .associate { it.conversationId!! to it.coverImage!! }
+                _state.update { it.copy(eventRoomAvatars = avatars) }
+            }
+        }
+    }
     private fun refreshProfilePictures() {
         viewModelScope.launch {
             matchProfileRepository.refreshProfiles()
@@ -239,7 +323,7 @@ class MessagesViewModel(
     }
 
     private fun stableRoomKey(room: MatrixRoomSummary): String =
-        if (room.isDirect) {
+        if (room.isDirect && room.roomId !in _state.value.eventRoomIds) {
             room.directUserId
                 ?.trim()
                 ?.lowercase()

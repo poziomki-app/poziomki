@@ -95,6 +95,17 @@ class ApiService(
         return client.get("/api/v1/tags$query")
     }
 
+    suspend fun searchTags(
+        scope: String,
+        search: String,
+    ): ApiResult<List<Tag>> {
+        val encoded = search.encodeURLQueryComponent()
+        return client.get("/api/v1/tags?scope=$scope&search=$encoded")
+    }
+
+    suspend fun createTag(request: CreateTagRequest): ApiResult<Tag> =
+        client.post("/api/v1/tags", request)
+
     // Degrees
 
     suspend fun getDegrees(): ApiResult<List<Degree>> = client.get("/api/v1/degrees")
@@ -115,6 +126,13 @@ class ApiService(
             if (radiusM != null) sb.append("&radiusM=$radiusM")
         }
         return client.get(sb.toString())
+    }
+
+    // Message search
+
+    suspend fun searchMessageRooms(query: String): ApiResult<MessageSearchResults> {
+        val encoded = query.encodeURLQueryComponent()
+        return client.get("/api/v1/messages/search?q=$encoded")
     }
 
     // Search

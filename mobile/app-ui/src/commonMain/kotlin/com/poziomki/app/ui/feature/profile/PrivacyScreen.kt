@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,6 +37,10 @@ import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.DownloadSimple
+import com.adamglin.phosphoricons.bold.Trash
 
 @Composable
 fun PrivacyScreen(
@@ -108,7 +109,7 @@ fun PrivacyScreen(
                 text = "eksportuj dane",
                 onClick = { viewModel.exportData() },
                 variant = ButtonVariant.OUTLINE,
-                icon = Icons.Filled.Download,
+                icon = PhosphorIcons.Bold.DownloadSimple,
                 loading = state.isExporting,
             )
 
@@ -163,7 +164,7 @@ fun PrivacyScreen(
                 text = "usuń konto",
                 onClick = { showDeleteDialog = true },
                 variant = ButtonVariant.DESTRUCTIVE,
-                icon = Icons.Filled.Delete,
+                icon = PhosphorIcons.Bold.Trash,
                 loading = state.isDeleting,
             )
 

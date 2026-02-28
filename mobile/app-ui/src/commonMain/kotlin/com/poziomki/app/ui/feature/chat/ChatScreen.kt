@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +30,11 @@ import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
 
 @Composable
 fun ChatScreen(
@@ -76,7 +77,6 @@ fun ChatScreen(
             onSendImageAttachment = viewModel::sendImageAttachment,
             onSendFileAttachment = viewModel::sendFileAttachment,
             onToggleReaction = viewModel::toggleReaction,
-            onPaginateBackwards = viewModel::paginateBackwards,
             onMarkAsRead = viewModel::markAsRead,
             onViewportChanged = viewModel::onTimelineViewportChanged,
             onJumpToLatest = viewModel::jumpToLatestHandled,
@@ -87,8 +87,10 @@ fun ChatScreen(
             onClearError = viewModel::clearError,
             onNavigateToProfile = onNavigateToProfile,
             resolveDisplayNames = viewModel::resolveDisplayNames,
+            resolveAvatarUrls = viewModel::resolveAvatarUrls,
             avatarOverrides = state.avatarOverrides,
-            modifier = Modifier.padding(padding),
+            avatarOverridesByName = emptyMap(),
+            modifier = Modifier.padding(top = padding.calculateTopPadding()),
         )
     }
 }
@@ -114,7 +116,7 @@ private fun ChatTopBar(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = PhosphorIcons.Bold.ArrowLeft,
                     contentDescription = "Wstecz",
                     tint = TextPrimary,
                 )
@@ -141,14 +143,14 @@ private fun ChatTopBar(
 
             IconButton(onClick = { }) {
                 Icon(
-                    imageVector = Icons.Filled.Search,
+                    imageVector = PhosphorIcons.Bold.MagnifyingGlass,
                     contentDescription = "Szukaj",
                     tint = TextSecondary,
                 )
             }
             IconButton(onClick = { }) {
                 Icon(
-                    imageVector = Icons.Filled.MoreVert,
+                    imageVector = PhosphorIcons.Bold.DotsThreeVertical,
                     contentDescription = "Więcej",
                     tint = TextSecondary,
                 )

@@ -9,6 +9,7 @@ package com.poziomki.app.chat.matrix.impl
 import android.content.Context
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
@@ -34,6 +35,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
+import org.matrix.rustcomponents.sdk.RequestConfig
+import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.HttpPusherData
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.Membership
@@ -61,6 +64,7 @@ class RustMatrixClient(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val appContext: Context,
+    private val db: PoziomkiDatabase,
 ) : MatrixClient {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val startStopMutex = Mutex()
@@ -85,6 +89,11 @@ class RustMatrixClient(
     private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
     private val openedRoomSummaryJobs = mutableMapOf<String, Job>()
     private val timelinePreviewByRoomId = mutableMapOf<String, TimelinePreview>()
+
+    init {
+        loadCachedPreviews()
+    }
+
     private val roomSummaryComparator: Comparator<MatrixRoomSummary> =
         compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
             .thenByDescending { it.unreadCount }
@@ -140,10 +149,17 @@ class RustMatrixClient(
                 runCatching {
                     val matrixDeviceId = loadOrCreateMatrixDeviceId(storeNamespace)
 
+                    val sqliteStore = SqliteStoreBuilder(dataPath.absolutePath, cachePath.absolutePath)
                     val newClient =
                         ClientBuilder()
                             .homeserverUrl(homeserver)
-                            .sessionPaths(dataPath.absolutePath, cachePath.absolutePath)
+                            .sqliteStore(sqliteStore)
+                            .requestConfig(RequestConfig(
+                                retryLimit = 3u,
+                                timeout = 30_000u,
+                                maxConcurrentRequests = null,
+                                maxRetryTime = null,
+                            ))
                             .autoEnableBackups(true)
                             .autoEnableCrossSigning(true)
                             .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
@@ -198,7 +214,10 @@ class RustMatrixClient(
                         ),
                     )
 
-                    val newSyncService = newClient.syncService().finish()
+                    val newSyncService = newClient.syncService()
+                        .withOfflineMode()
+                        .withSharePos(true)
+                        .finish()
                     newSyncService.start()
 
                     // Enable send queues so outgoing messages are flushed to the homeserver.
@@ -217,6 +236,17 @@ class RustMatrixClient(
                         ) {
                             encryption.enableBackups()
                         }
+                    }
+
+                    runCatching {
+                        newClient.setMediaRetentionPolicy(
+                            uniffi.matrix_sdk_base.MediaRetentionPolicy(
+                                maxCacheSize = 500uL * 1024uL * 1024uL,
+                                maxFileSize = 20uL * 1024uL * 1024uL,
+                                lastAccessExpiry = java.time.Duration.ofDays(30),
+                                cleanupFrequency = java.time.Duration.ofDays(1),
+                            ),
+                        )
                     }
 
                     subscribeRoomList(newSyncService)
@@ -286,25 +316,30 @@ class RustMatrixClient(
                 if (room.membership() == Membership.JOINED) {
                     val ownUserId = runCatching { room.ownUserId() }.getOrNull()
                     if (!ownUserId.isNullOrBlank()) {
-                        val directPeer =
-                            runCatching { resolveDirectPeer(room, ownUserId) }
-                                .getOrNull()
-                        val directPeerUserId = directPeer?.userId?.takeIf { it.isNotBlank() }
-                        if (!directPeerUserId.isNullOrBlank()) {
-                            val normalizedDirectUserId = normalizeUserId(directPeerUserId)
-                            synchronized(dmRoomIdsByUserId) {
-                                dmRoomIdsByUserId[normalizedDirectUserId] = roomId
-                            }
-                            synchronized(dmUserIdsByRoomId) {
-                                dmUserIdsByRoomId[roomId] = directPeerUserId
-                            }
-                            directPeer.avatarUrl
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { avatarUrl ->
-                                    synchronized(dmAvatarUrlsByUserId) {
-                                        dmAvatarUrlsByUserId[normalizedDirectUserId] = avatarUrl
-                                    }
+                        val roomInfo = runCatching { room.roomInfo() }.getOrNull()
+                        val cachedDirectUserId = synchronized(dmUserIdsByRoomId) { dmUserIdsByRoomId[roomId] }
+                        val shouldResolveDirectPeer = roomInfo?.isDirect == true || !cachedDirectUserId.isNullOrBlank()
+                        if (shouldResolveDirectPeer) {
+                            val directPeer =
+                                runCatching { resolveDirectPeer(room, ownUserId) }
+                                    .getOrNull()
+                            val directPeerUserId = directPeer?.userId?.takeIf { it.isNotBlank() }
+                            if (!directPeerUserId.isNullOrBlank()) {
+                                val normalizedDirectUserId = normalizeUserId(directPeerUserId)
+                                synchronized(dmRoomIdsByUserId) {
+                                    dmRoomIdsByUserId[normalizedDirectUserId] = roomId
                                 }
+                                synchronized(dmUserIdsByRoomId) {
+                                    dmUserIdsByRoomId[roomId] = directPeerUserId
+                                }
+                                directPeer.avatarUrl
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let { avatarUrl ->
+                                        synchronized(dmAvatarUrlsByUserId) {
+                                            dmAvatarUrlsByUserId[normalizedDirectUserId] = avatarUrl
+                                        }
+                                    }
+                            }
                         }
                     }
 
@@ -348,8 +383,11 @@ class RustMatrixClient(
                 val ownUserId = room.ownUserId()
                 val cachedDirectUserId =
                     synchronized(dmUserIdsByRoomId) { dmUserIdsByRoomId[info.id] }
-                val directPeer = runCatching { resolveDirectPeer(room, ownUserId) }.getOrNull()
-                val directHero =
+                val shouldResolveDirectPeer = info.isDirect || !cachedDirectUserId.isNullOrBlank()
+                val directPeer = if (shouldResolveDirectPeer) {
+                    runCatching { resolveDirectPeer(room, ownUserId) }.getOrNull()
+                } else null
+                val directHero = if (shouldResolveDirectPeer) {
                     runCatching {
                         pickDirectHeroCandidate(
                             ownUserId = ownUserId,
@@ -357,8 +395,11 @@ class RustMatrixClient(
                             preferredUserId = directPeer?.userId ?: cachedDirectUserId,
                         )
                     }.getOrNull()
-                val heroUserId = directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
-                val effectiveIsDirect = info.isDirect || !heroUserId.isNullOrBlank()
+                } else null
+                val heroUserId = if (shouldResolveDirectPeer) {
+                    directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
+                } else null
+                val effectiveIsDirect = info.isDirect
                 val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
 
                 var resolvedAvatarUrl =
@@ -400,6 +441,9 @@ class RustMatrixClient(
                         if (effectiveIsDirect) {
                             directPeer?.displayName
                                 ?: directHero?.displayName
+                                ?: info.displayName?.takeIf { !isMemberCountName(it) }
+                                ?: room.displayName()?.takeIf { !isMemberCountName(it) }
+                                ?: heroUserId?.matrixDisplayFallback()
                                 ?: info.displayName
                                 ?: room.displayName()
                                 ?: info.id
@@ -422,6 +466,8 @@ class RustMatrixClient(
                     latestMessageSendStatus = latest?.toRoomSendStatus(ownUserId),
                 )
                 mapped = applyTimelinePreviewOverride(mapped)
+                mapped = applyExistingSummaryPreviewFallback(mapped, _rooms.value.firstOrNull { it.roomId == mapped.roomId })
+                rememberPreviewSummary(mapped)
                 mapped
             }.getOrNull() ?: return
 
@@ -545,8 +591,9 @@ class RustMatrixClient(
         val roomBuffer = mutableListOf<Room>()
 
         val result =
-            roomList.entriesWithDynamicAdapters(
-                200u,
+            roomList.entriesWithDynamicAdaptersWith(
+                pageSize = 200u,
+                enableLatestEventSorter = true,
                 object : RoomListEntriesListener {
                     override fun onUpdate(roomEntriesUpdate: List<RoomListEntriesUpdate>) {
                         synchronized(roomBuffer) {
@@ -580,6 +627,7 @@ class RustMatrixClient(
         }
 
         scope.launch(Dispatchers.Default) {
+            val existingRoomsById = _rooms.value.associateBy { it.roomId }
             val mappedRooms = mutableListOf<MatrixRoomSummary>()
             for (room in roomsSnapshot) {
                 val mappedRoom =
@@ -613,7 +661,7 @@ class RustMatrixClient(
                             } else {
                                 null
                             }
-                        val effectiveIsDirect = info.isDirect || !heroUserId.isNullOrBlank()
+                        val effectiveIsDirect = info.isDirect
 
                         val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
                         var resolvedAvatarUrl =
@@ -645,6 +693,9 @@ class RustMatrixClient(
                                 if (effectiveIsDirect) {
                                     directPeer?.displayName
                                         ?: directHero?.displayName
+                                        ?: info.displayName?.takeIf { !isMemberCountName(it) }
+                                        ?: room.displayName()?.takeIf { !isMemberCountName(it) }
+                                        ?: heroUserId?.matrixDisplayFallback()
                                         ?: info.displayName
                                         ?: room.displayName()
                                         ?: info.id
@@ -667,6 +718,8 @@ class RustMatrixClient(
                             latestMessageSendStatus = latest.toRoomSendStatus(ownUserId),
                         )
                         mapped = applyTimelinePreviewOverride(mapped)
+                        mapped = applyExistingSummaryPreviewFallback(mapped, existingRoomsById[mapped.roomId])
+                        rememberPreviewSummary(mapped)
                         mapped
                     }.getOrNull()
 
@@ -797,16 +850,18 @@ class RustMatrixClient(
                                     ?.takeIf { it.body.isNotBlank() }
                             } ?: return@collectLatest
 
+                    val preview =
+                        TimelinePreview(
+                            message = latestMessageEvent.body,
+                            timestampMillis = latestMessageEvent.timestampMillis,
+                            isMine = latestMessageEvent.isMine,
+                            sendStatus = latestMessageEvent.sendStatus,
+                            readByCount = latestMessageEvent.readByCount,
+                        )
                     synchronized(timelinePreviewByRoomId) {
-                        timelinePreviewByRoomId[roomId] =
-                            TimelinePreview(
-                                message = latestMessageEvent.body,
-                                timestampMillis = latestMessageEvent.timestampMillis,
-                                isMine = latestMessageEvent.isMine,
-                                sendStatus = latestMessageEvent.sendStatus,
-                                readByCount = latestMessageEvent.readByCount,
-                            )
+                        timelinePreviewByRoomId[roomId] = preview
                     }
+                    persistPreview(roomId, preview)
 
                     publishTimelinePreview(roomId, latestMessageEvent)
                 }
@@ -838,6 +893,51 @@ class RustMatrixClient(
         }
     }
 
+    private fun applyExistingSummaryPreviewFallback(
+        summary: MatrixRoomSummary,
+        previous: MatrixRoomSummary?,
+    ): MatrixRoomSummary {
+        if (hasMeaningfulPreview(summary.latestMessage)) return summary
+
+        val previousSummary = previous ?: return summary
+        if (!hasMeaningfulPreview(previousSummary.latestMessage)) return summary
+
+        val previousTimestamp = previousSummary.latestTimestampMillis ?: return summary
+        val previousMessage = previousSummary.latestMessage ?: return summary
+        return summary.copy(
+            latestMessage = previousMessage,
+            latestTimestampMillis = previousTimestamp,
+            latestMessageIsMine = previousSummary.latestMessageIsMine,
+            latestMessageSendStatus = previousSummary.latestMessageSendStatus,
+            latestMessageReadByCount = previousSummary.latestMessageReadByCount,
+        )
+    }
+
+    private fun rememberPreviewSummary(summary: MatrixRoomSummary) {
+        if (!hasMeaningfulPreview(summary.latestMessage)) return
+        val message = summary.latestMessage ?: return
+        val timestamp = summary.latestTimestampMillis ?: return
+        val preview =
+            TimelinePreview(
+                message = message,
+                timestampMillis = timestamp,
+                isMine = summary.latestMessageIsMine,
+                sendStatus = summary.latestMessageSendStatus,
+                readByCount = summary.latestMessageReadByCount,
+            )
+        var changed = false
+        synchronized(timelinePreviewByRoomId) {
+            val existing = timelinePreviewByRoomId[summary.roomId]
+            if (existing == null || existing.timestampMillis <= preview.timestampMillis) {
+                timelinePreviewByRoomId[summary.roomId] = preview
+                changed = existing != preview
+            }
+        }
+        if (changed) {
+            persistPreview(summary.roomId, preview)
+        }
+    }
+
     private fun applyTimelinePreviewOverride(summary: MatrixRoomSummary): MatrixRoomSummary {
         val timelinePreview =
             synchronized(timelinePreviewByRoomId) { timelinePreviewByRoomId[summary.roomId] }
@@ -858,6 +958,9 @@ class RustMatrixClient(
         )
     }
 
+    private fun hasMeaningfulPreview(message: String?): Boolean =
+        !message.isNullOrBlank() && !isStatusPreview(message)
+
     private fun isStatusPreview(message: String?): Boolean =
         when (message?.trim()) {
             null, "" -> true
@@ -867,6 +970,47 @@ class RustMatrixClient(
             -> true
             else -> false
         }
+
+    private fun loadCachedPreviews() {
+        try {
+            val rows = db.roomPreviewQueries.selectAll().executeAsList()
+            synchronized(timelinePreviewByRoomId) {
+                for (row in rows) {
+                    timelinePreviewByRoomId[row.room_id] =
+                        TimelinePreview(
+                            message = row.message,
+                            timestampMillis = row.timestamp_millis,
+                            isMine = row.is_mine != 0L,
+                            sendStatus = row.send_status?.toSendStatus(),
+                            readByCount = row.read_by_count.toInt(),
+                        )
+                }
+            }
+        } catch (_: Exception) {
+            // DB not yet migrated or corrupted — proceed with empty cache
+        }
+    }
+
+    private fun persistPreview(
+        roomId: String,
+        preview: TimelinePreview,
+    ) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                db.roomPreviewQueries.upsert(
+                    room_id = roomId,
+                    message = preview.message,
+                    timestamp_millis = preview.timestampMillis,
+                    is_mine = if (preview.isMine) 1L else 0L,
+                    send_status = preview.sendStatus?.toDbString(),
+                    read_by_count = preview.readByCount.toLong(),
+                    updated_at = System.currentTimeMillis(),
+                )
+            } catch (_: Exception) {
+                // Best-effort persistence
+            }
+        }
+    }
 
     private suspend fun matrixStoreNamespace(): String =
         sessionManager
@@ -1098,12 +1242,13 @@ private fun TimelineItemContent.toPreviewText(): String? =
     when (this) {
         is TimelineItemContent.MsgLike -> {
             when (val kind = this.content.kind) {
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Message -> kind.content.body
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Message ->
+                    kind.content.body.takeIf { it.isNotBlank() } ?: "Wiadomość"
                 org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Wiadomość usunięta"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Ankieta: ${kind.question}"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Wiadomość zaszyfrowana"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> null
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> "Nieobsługiwana wiadomość"
             }
         }
 
@@ -1156,6 +1301,21 @@ private data class TimelinePreview(
     val sendStatus: MatrixEventSendStatus?,
     val readByCount: Int,
 )
+
+private fun MatrixEventSendStatus.toDbString(): String =
+    when (this) {
+        MatrixEventSendStatus.Sending -> "sending"
+        MatrixEventSendStatus.Sent -> "sent"
+        MatrixEventSendStatus.Failed -> "failed"
+    }
+
+private fun String.toSendStatus(): MatrixEventSendStatus? =
+    when (this) {
+        "sending" -> MatrixEventSendStatus.Sending
+        "sent" -> MatrixEventSendStatus.Sent
+        "failed" -> MatrixEventSendStatus.Failed
+        else -> null
+    }
 
 private suspend fun resolveDirectPeer(
     room: Room,
@@ -1211,3 +1371,12 @@ private fun pickDirectHeroCandidate(
 }
 
 private fun String.sameMatrixUser(other: String): Boolean = trim().equals(other.trim(), ignoreCase = true)
+
+private val MEMBER_COUNT_PATTERN = Regex("^\\d+\\s+(people|person|members?|users?)$", RegexOption.IGNORE_CASE)
+
+private fun isMemberCountName(value: String): Boolean = MEMBER_COUNT_PATTERN.matches(value.trim())
+
+private fun String.matrixDisplayFallback(): String? {
+    val localpart = substringAfter("@").substringBefore(":")
+    return localpart.takeIf { it.isNotBlank() && it != this }
+}

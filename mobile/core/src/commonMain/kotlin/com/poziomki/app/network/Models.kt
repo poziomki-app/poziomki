@@ -223,6 +223,12 @@ data class Tag(
     val emoji: String? = null,
 )
 
+@Serializable
+data class CreateTagRequest(
+    val name: String,
+    val scope: String,
+)
+
 // Upload models
 
 @Serializable
@@ -311,6 +317,14 @@ data class MatrixRoomResolveData(
 data class MatrixDirectRoomRequest(
     @SerialName("userId")
     val targetUserId: String,
+)
+
+// Message search models
+
+@Serializable
+data class MessageSearchResults(
+    @SerialName("room_ids")
+    val roomIds: List<String> = emptyList(),
 )
 
 // Search models

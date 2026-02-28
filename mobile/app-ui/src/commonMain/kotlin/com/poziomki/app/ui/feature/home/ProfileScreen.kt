@@ -17,12 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +52,13 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.CaretRight
+import com.adamglin.phosphoricons.bold.GearSix
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Shield
+import com.adamglin.phosphoricons.bold.SignOut
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,19 +114,19 @@ fun ProfileScreen(
                                 // Settings menu
                                 Column {
                                     SettingsMenuItem(
-                                        icon = Icons.Outlined.Edit,
+                                        icon = PhosphorIcons.Bold.PencilSimple,
                                         label = "edytuj profil",
                                         onClick = onNavigateToEdit,
                                     )
                                     HorizontalDivider(color = Border, thickness = 1.dp)
                                     SettingsMenuItem(
-                                        icon = Icons.Outlined.Shield,
+                                        icon = PhosphorIcons.Bold.Shield,
                                         label = "prywatność",
                                         onClick = onNavigateToPrivacy,
                                     )
                                     HorizontalDivider(color = Border, thickness = 1.dp)
                                     SettingsMenuItem(
-                                        icon = Icons.Outlined.Settings,
+                                        icon = PhosphorIcons.Bold.GearSix,
                                         label = "ustawienia aplikacji",
                                         onClick = {},
                                     )
@@ -153,7 +154,7 @@ fun ProfileScreen(
                                         horizontalArrangement = Arrangement.Center,
                                     ) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                            imageVector = PhosphorIcons.Bold.SignOut,
                                             contentDescription = null,
                                             tint = Error,
                                             modifier = Modifier.size(20.dp),
@@ -244,7 +245,7 @@ private fun SettingsMenuItem(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = PhosphorIcons.Bold.CaretRight,
             contentDescription = null,
             tint = TextMuted,
             modifier = Modifier.size(20.dp),

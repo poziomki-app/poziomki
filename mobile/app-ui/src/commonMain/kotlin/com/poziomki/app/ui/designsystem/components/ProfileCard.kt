@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +34,9 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowUpRight
 
 @Composable
 fun ProfileCard(
@@ -132,7 +133,7 @@ fun ProfileCard(
 
             // Expand arrow top-right
             Icon(
-                Icons.AutoMirrored.Filled.OpenInNew,
+                PhosphorIcons.Bold.ArrowUpRight,
                 contentDescription = "View profile",
                 modifier =
                     Modifier

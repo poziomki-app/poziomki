@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +43,11 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.bold.X
 
 internal val EMOJI_AVATARS =
     listOf(
@@ -135,7 +136,7 @@ internal fun AvatarPickerContent(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Close,
+                                imageVector = PhosphorIcons.Bold.X,
                                 contentDescription = "Usu\u0144",
                                 tint = White,
                                 modifier = Modifier.size(14.dp),
@@ -162,7 +163,7 @@ internal fun AvatarPickerContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Add,
+                    imageVector = PhosphorIcons.Bold.Plus,
                     contentDescription = null,
                     tint = Black,
                     modifier = Modifier.size(20.dp),
@@ -259,7 +260,7 @@ internal fun AvatarPickerContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
+                    imageVector = PhosphorIcons.Bold.Trash,
                     contentDescription = null,
                     tint = Error,
                     modifier = Modifier.size(18.dp),

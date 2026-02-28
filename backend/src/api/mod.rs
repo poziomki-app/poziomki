@@ -108,6 +108,7 @@ fn settings_routes() -> Router<AppContext> {
 fn search_routes() -> Router<AppContext> {
     Router::new()
         .route("/search", get(search::search))
+        .route("/messages/search", get(search::search_messages))
         .layer(cache_layer("private, max-age=60"))
 }
 

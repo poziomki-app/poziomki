@@ -3,8 +3,6 @@ package com.poziomki.app.ui.designsystem.components
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +27,9 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.shared.isImageUrl
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.regular.User
 
 /**
  * Returns true when the string looks like an emoji (no ASCII letters or digits).
@@ -122,7 +123,7 @@ private fun FallbackUserIcon(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Outlined.Person,
+            PhosphorIcons.Regular.User,
             contentDescription = null,
             modifier = Modifier.size(iconSize),
             tint = iconTint,

@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -41,6 +38,10 @@ import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Eye
+import com.adamglin.phosphoricons.bold.EyeSlash
 
 @Composable
 fun PoziomkiTextField(
@@ -177,9 +178,9 @@ fun PoziomkiPasswordField(
                 Icon(
                     imageVector =
                         if (passwordVisible) {
-                            Icons.Filled.Visibility
+                            PhosphorIcons.Bold.Eye
                         } else {
-                            Icons.Filled.VisibilityOff
+                            PhosphorIcons.Bold.EyeSlash
                         },
                     contentDescription = if (passwordVisible) "Hide password" else "Show password",
                     tint = TextMuted,

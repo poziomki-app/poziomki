@@ -17,9 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +48,10 @@ import com.poziomki.app.ui.shared.isImageUrl
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.EnvelopeSimple
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +70,7 @@ fun EventDetailScreen(
                 title = { Text(state.event?.title ?: "Event") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(PhosphorIcons.Bold.ArrowLeft, contentDescription = "Back")
                     }
                 },
             )
@@ -167,7 +168,7 @@ fun EventDetailScreen(
                                         )
                                     } else {
                                         Icon(
-                                            imageVector = Icons.Filled.Email,
+                                            imageVector = PhosphorIcons.Bold.EnvelopeSimple,
                                             contentDescription = null,
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))

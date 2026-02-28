@@ -79,7 +79,7 @@ pub async fn search_all(
 
     let profiles_fut = search_profiles_postgres(&normalized_query, &pattern, limit_i64);
     let events_fut = search_events_postgres(&normalized_query, &pattern, limit_i64, geo);
-    let tags_fut = search_tags_postgres(&pattern, limit_i64);
+    let tags_fut = search_tags_postgres(&normalized_query, &pattern, limit_i64);
 
     let (profiles, events, tags) = tokio::try_join!(profiles_fut, events_fut, tags_fut)?;
 
@@ -233,6 +233,7 @@ fn event_row_to_doc(row: EventSearchRow) -> EventDocument {
 }
 
 async fn search_tags_postgres(
+    query: &str,
     pattern: &str,
     limit_i64: i64,
 ) -> crate::error::AppResult<Vec<TagDocument>> {
@@ -247,11 +248,16 @@ async fn search_tags_postgres(
             t.category,
             t.emoji
         FROM tags t
-        WHERE LOWER(t.name) LIKE $1
-        ORDER BY t.name ASC
-        LIMIT $2
+        WHERE
+            t.search_vector @@ websearch_to_tsquery('simple', $1)
+            OR LOWER(t.name) LIKE $2
+        ORDER BY
+            ts_rank_cd(t.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            t.name ASC
+        LIMIT $3
         ",
     )
+    .bind::<Text, _>(query)
     .bind::<Text, _>(pattern)
     .bind::<BigInt, _>(limit_i64)
     .load::<TagSearchRow>(&mut conn)
@@ -267,6 +273,109 @@ async fn search_tags_postgres(
             emoji: tag.emoji,
         })
         .collect())
+}
+
+// --- Message room search ---
+
+#[derive(Debug, Clone, QueryableByName)]
+struct RoomIdRow {
+    #[diesel(sql_type = Text)]
+    room_id: String,
+}
+
+pub async fn search_message_rooms(
+    query: &str,
+    user_pid: &uuid::Uuid,
+    limit: usize,
+) -> crate::error::AppResult<Vec<String>> {
+    let normalized_query = query.trim().to_ascii_lowercase();
+
+    if normalized_query.len() < 2 {
+        return Ok(vec![]);
+    }
+
+    let pattern = format!("%{normalized_query}%");
+    let limit_i64 = i64::try_from(limit).unwrap_or(20);
+
+    let dm_fut = search_dm_room_ids(&normalized_query, &pattern, user_pid, limit_i64);
+    let event_fut = search_event_room_ids(&normalized_query, &pattern, limit_i64);
+
+    let (dm_rooms, event_rooms) = tokio::try_join!(dm_fut, event_fut)?;
+
+    let mut room_ids = dm_rooms;
+    room_ids.extend(event_rooms);
+    Ok(room_ids)
+}
+
+async fn search_dm_room_ids(
+    query: &str,
+    pattern: &str,
+    user_pid: &uuid::Uuid,
+    limit_i64: i64,
+) -> crate::error::AppResult<Vec<String>> {
+    let mut conn = crate::db::conn().await?;
+
+    let rows = diesel::sql_query(
+        r"
+        SELECT dmr.room_id
+        FROM profiles p
+        JOIN users u ON u.id = p.user_id
+        JOIN matrix_dm_rooms dmr
+          ON (dmr.user_low_pid = p.id AND dmr.user_high_pid = $3)
+          OR (dmr.user_high_pid = p.id AND dmr.user_low_pid = $3)
+        WHERE
+            p.id != $3
+            AND (
+                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                OR LOWER(p.name) LIKE $2
+            )
+        ORDER BY
+            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC
+        LIMIT $4
+        ",
+    )
+    .bind::<Text, _>(query)
+    .bind::<Text, _>(pattern)
+    .bind::<DieselUuid, _>(user_pid)
+    .bind::<BigInt, _>(limit_i64)
+    .load::<RoomIdRow>(&mut conn)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| r.room_id).collect())
+}
+
+async fn search_event_room_ids(
+    query: &str,
+    pattern: &str,
+    limit_i64: i64,
+) -> crate::error::AppResult<Vec<String>> {
+    let mut conn = crate::db::conn().await?;
+
+    let rows = diesel::sql_query(
+        r"
+        SELECT e.conversation_id AS room_id
+        FROM events e
+        LEFT JOIN profiles p ON p.id = e.creator_id
+        WHERE
+            e.conversation_id IS NOT NULL
+            AND (
+                e.search_vector @@ websearch_to_tsquery('simple', $1)
+                OR LOWER(e.title) LIKE $2
+                OR LOWER(COALESCE(p.name, '')) LIKE $2
+            )
+        ORDER BY
+            ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            e.starts_at DESC
+        LIMIT $3
+        ",
+    )
+    .bind::<Text, _>(query)
+    .bind::<Text, _>(pattern)
+    .bind::<BigInt, _>(limit_i64)
+    .load::<RoomIdRow>(&mut conn)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| r.room_id).collect())
 }
 
 #[derive(Debug, Clone, QueryableByName)]
@@ -310,15 +419,15 @@ struct EventSearchRow {
 }
 
 #[derive(Debug, Clone, QueryableByName)]
-struct TagSearchRow {
+pub struct TagSearchRow {
     #[diesel(sql_type = DieselUuid)]
-    id: uuid::Uuid,
+    pub id: uuid::Uuid,
     #[diesel(sql_type = Text)]
-    name: String,
+    pub name: String,
     #[diesel(sql_type = Text)]
-    scope: String,
+    pub scope: String,
     #[diesel(sql_type = Nullable<Text>)]
-    category: Option<String>,
+    pub category: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
-    emoji: Option<String>,
+    pub emoji: Option<String>,
 }

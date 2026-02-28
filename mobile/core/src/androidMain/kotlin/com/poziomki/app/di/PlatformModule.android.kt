@@ -38,7 +38,7 @@ actual fun platformModule(): Module =
         }
         single { createDataStore(get<Context>()) }
         single<SessionTokenStore> { AndroidSecureSessionTokenStore(get<Context>()) }
-        single<MatrixClient> { RustMatrixClient(get(), get(), get()) }
+        single<MatrixClient> { RustMatrixClient(get(), get(), get(), get()) }
         single<SqlDriver> {
             val context = get<Context>()
             val dbName = "poziomki.db"

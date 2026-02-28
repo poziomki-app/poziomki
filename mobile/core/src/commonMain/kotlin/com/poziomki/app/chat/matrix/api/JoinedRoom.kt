@@ -23,4 +23,6 @@ interface JoinedRoom {
     suspend fun inviteUserById(userId: String): Result<Unit>
 
     suspend fun getMemberDisplayName(userId: String): String?
+
+    suspend fun getMemberAvatarUrl(userId: String): String?
 }
