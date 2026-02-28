@@ -3,18 +3,17 @@ mod auth_otp_email;
 pub(super) use auth_otp_email::send_otp_email;
 
 use axum::response::Response;
-use axum::{http::HeaderMap, response::IntoResponse, Json};
+use axum::{Json, http::HeaderMap, response::IntoResponse};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use super::super::{
-    error_response,
+    ErrorSpec, error_response,
     state::{
-        create_session_db, normalize_email, session_model_to_view, upsert_otp, user_model_to_view,
-        validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
+        DataResponse, SignUpBody, create_session_db, normalize_email, session_model_to_view,
+        upsert_otp, user_model_to_view, validate_signup_payload, verify_otp_db,
     },
-    ErrorSpec,
 };
 use crate::db::models::users::{NewUser, User, UserChangeset};
 use crate::db::schema::users;
@@ -102,16 +101,9 @@ pub(super) async fn create_user_or_error(
             registration_failed_response(headers)
         })?;
 
-    if existing.is_some() {
-        return Err(error_response(
-            axum::http::StatusCode::CONFLICT,
-            headers,
-            ErrorSpec {
-                error: "User already exists".to_string(),
-                code: "CONFLICT",
-                details: None,
-            },
-        ));
+    if let Some(user) = existing {
+        // Return an equivalent success path to avoid account enumeration.
+        return Ok(user);
     }
 
     let password_hash = crate::security::hash_password(&payload.password).map_err(|e| {

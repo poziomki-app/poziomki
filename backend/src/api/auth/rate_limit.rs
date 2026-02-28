@@ -4,7 +4,7 @@ use diesel::deserialize::QueryableByName;
 use diesel::sql_types::Integer;
 use diesel_async::RunQueryDsl;
 
-use super::{error_response, ErrorSpec};
+use super::{ErrorSpec, error_response};
 
 const AUTH_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const AUTH_SIGN_UP_MAX_ATTEMPTS: u32 = 12;
@@ -38,27 +38,6 @@ impl AuthRateLimitAction {
             Self::ResendOtp => "auth_resend_otp_email",
         }
     }
-}
-
-fn client_ip(headers: &HeaderMap) -> String {
-    // Use the *last* x-forwarded-for entry — the one appended by our trusted
-    // reverse proxy (Caddy).  Earlier entries are client-controlled and spoofable.
-    headers
-        .get("x-forwarded-for")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.rsplit(',').next())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .or_else(|| {
-            headers
-                .get("x-real-ip")
-                .and_then(|value| value.to_str().ok())
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-        })
-        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn rate_limit_response(headers: &HeaderMap) -> Response {
@@ -118,8 +97,9 @@ pub(super) async fn enforce_rate_limit(
     action: AuthRateLimitAction,
     subject: &str,
 ) -> std::result::Result<(), Box<Response>> {
-    let ip = client_ip(headers);
-    let key = format!("{}:{subject}:{ip}", action.key_prefix());
+    // Key by action + subject only. Client-provided forwarding headers are spoofable
+    // and should not influence auth throttling decisions.
+    let key = format!("{}:{subject}", action.key_prefix());
 
     let attempts = match upsert_attempt(&key, AUTH_RATE_LIMIT_WINDOW_SECS).await {
         Ok(value) => value,
