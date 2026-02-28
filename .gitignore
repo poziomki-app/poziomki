@@ -1,7 +1,6 @@
 # Rust
 /target/
 backend/target/
-imgproxy/target/
 **/*.rs.bk
 Cargo.lock
 
@@ -49,6 +48,10 @@ DerivedData/
 
 # Stalwart DKIM private key
 deploy/ops/stalwart/dkim-rsa.key
+
+# Markdown (keep only docs/)
+*.md
+!docs/**/*.md
 
 # OS
 .DS_Store
