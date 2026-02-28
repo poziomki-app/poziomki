@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::HeaderMap,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -65,15 +65,13 @@ pub fn extract_filename(value: &str) -> String {
 }
 
 /// Resolve a stored image value (filename or legacy presigned URL) to a fresh signed URL.
-/// Prefers imgproxy (feed/800px, webp) when configured; falls back to S3 presigned.
+/// Prefers imgproxy (feed/800px, webp) when configured; otherwise uses app-routed media URL.
 pub async fn resolve_image_url(stored: &str) -> String {
     let filename = extract_filename(stored);
     if let Some(url) = super::imgproxy_signing::signed_url(&filename, "feed", "webp") {
         return url;
     }
-    super::uploads::uploads_storage::signed_get_url(&filename)
-        .await
-        .unwrap_or(filename)
+    format!("/api/v1/uploads/{filename}")
 }
 
 /// Resolve multiple image URLs in parallel.
@@ -87,8 +85,8 @@ pub async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
 pub async fn resolve_thumbhashes(
     filenames: &[String],
 ) -> std::collections::HashMap<String, String> {
-    use base64::Engine;
     use crate::db::schema::uploads;
+    use base64::Engine;
     use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
 
@@ -108,11 +106,6 @@ pub async fn resolve_thumbhashes(
     };
 
     rows.into_iter()
-        .map(|(name, raw)| {
-            (
-                name,
-                base64::engine::general_purpose::STANDARD.encode(&raw),
-            )
-        })
+        .map(|(name, raw)| (name, base64::engine::general_purpose::STANDARD.encode(&raw)))
         .collect()
 }

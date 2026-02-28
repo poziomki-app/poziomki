@@ -1,10 +1,9 @@
 use super::{
-    bad_request, build_signed_upload_redirect, encode_thumbhash,
-    extract_filename_from_original_uri, fallback_variant_urls, header, is_s3_storage_configured,
-    load_owned_original_for_variant, load_owned_upload, public_upload_url, require_auth_profile,
-    resolve_upload_mime_type, storage_read, uploads_resize, validate_filename, AppContext,
-    DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path, Response, Result, State,
-    UploadStatusResponse,
+    AppContext, DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path, Response, Result,
+    State, UploadStatusResponse, bad_request, encode_thumbhash, extract_filename_from_original_uri,
+    fallback_variant_urls, header, load_owned_original_for_variant, load_owned_upload,
+    public_upload_url, require_auth_profile, resolve_upload_mime_type, storage_read,
+    uploads_resize, validate_filename,
 };
 use axum::response::IntoResponse;
 
@@ -81,12 +80,8 @@ pub(in crate::api) async fn file_get(
         if let Some(url) = crate::api::imgproxy_signing::signed_url(&filename, "full", "webp") {
             return Ok(Json(super::super::state::UploadUrlResponse { url }).into_response());
         }
-        if is_s3_storage_configured() {
-            build_signed_upload_redirect(&headers, &filename).await
-        } else {
-            let bytes = storage_read(&headers, &filename).await?;
-            Ok(build_local_file_response(bytes, &mime_type))
-        }
+        let bytes = storage_read(&headers, &filename).await?;
+        Ok(build_local_file_response(bytes, &mime_type))
     }
     .await;
 

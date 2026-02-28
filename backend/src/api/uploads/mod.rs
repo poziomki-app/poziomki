@@ -28,19 +28,19 @@ type Result<T> = crate::error::AppResult<T>;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
-    extract::{Multipart, Path, State},
-    http::{header, HeaderMap, HeaderValue},
     Json,
+    extract::{Multipart, Path, State},
+    http::{HeaderMap, HeaderValue, header},
 };
 use chrono::Utc;
 use uuid::Uuid;
 
 use super::state::{
-    create_upload_filename, is_s3_storage_configured, validate_filename, DataResponse,
-    DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
-    SuccessResponse, UploadResponse, UploadStatusResponse,
+    DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
+    SuccessResponse, UploadResponse, UploadStatusResponse, create_upload_filename,
+    validate_filename,
 };
-use super::{error_response, ErrorSpec};
+use super::{ErrorSpec, error_response};
 use crate::db::models::uploads::{NewUpload, UploadChangeset};
 use crate::jobs::enqueue_upload_variants_generation;
 use uploads_auth_service::{
@@ -52,9 +52,7 @@ use uploads_http::{
 };
 use uploads_multipart::HandlerError;
 pub(super) use uploads_read_handler::{auth_check, file_get, file_status};
-use uploads_url_service::{
-    build_signed_upload_redirect, encode_thumbhash, fallback_variant_urls, public_upload_url,
-};
+use uploads_url_service::{encode_thumbhash, fallback_variant_urls, public_upload_url};
 use uploads_validation_service::{extract_filename_from_original_uri, validate_presign_payload};
 pub(super) use uploads_write_handler::{
     file_delete, file_upload, file_upload_complete, file_upload_presign,
