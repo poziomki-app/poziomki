@@ -68,7 +68,7 @@ base64 = "=0.22.1"
 tower-http = { version = "=0.6.8", features = ["set-header"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
-jsonwebtoken = "=9.3.1"
+jsonwebtoken = "=10.3.0"
 dotenvy = "=0.15.7"
 diesel = { version = "2.2", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.5", features = ["postgres", "deadpool"] }
