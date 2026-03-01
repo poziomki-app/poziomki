@@ -5,10 +5,11 @@ use sha2::Sha256;
 use std::sync::OnceLock;
 
 type HmacSha256 = Hmac<Sha256>;
-const SIG_BYTES: usize = 16;
+const SIG_BYTES: usize = 32;
 
 struct ImgproxyConfig {
     hmac_key: Vec<u8>,
+    hmac_salt: Vec<u8>,
     base_url: String,
     expiry_secs: u64,
     object_prefix: String,
@@ -23,6 +24,10 @@ fn config() -> Option<&'static ImgproxyConfig> {
                 .ok()
                 .filter(|v| !v.trim().is_empty())?;
             let hmac_key = STANDARD.decode(&key_b64).ok()?;
+            let salt_b64 = std::env::var("IMGPROXY_HMAC_SALT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())?;
+            let hmac_salt = STANDARD.decode(&salt_b64).ok()?;
             let base_url = std::env::var("IMGPROXY_BASE_URL")
                 .ok()
                 .filter(|v| !v.trim().is_empty())
@@ -40,6 +45,7 @@ fn config() -> Option<&'static ImgproxyConfig> {
             )?;
             Some(ImgproxyConfig {
                 hmac_key,
+                hmac_salt,
                 base_url,
                 expiry_secs,
                 object_prefix,
@@ -66,12 +72,13 @@ pub fn signed_url(filename: &str, variant: &str, format: &str) -> Option<String>
     let expiry = now + cfg.expiry_secs;
     let object_key = format!("{}{}", cfg.object_prefix, filename);
     let path = format!("{expiry}/{variant}.{format}/{object_key}");
-    let sig = sign(&cfg.hmac_key, &path).ok()?;
+    let sig = sign(&cfg.hmac_key, &cfg.hmac_salt, &path).ok()?;
     Some(format!("{}/img/{sig}/{path}", cfg.base_url))
 }
 
-fn sign(key: &[u8], path: &str) -> Result<String, String> {
+fn sign(key: &[u8], salt: &[u8], path: &str) -> Result<String, String> {
     let mut mac = HmacSha256::new_from_slice(key).map_err(|e| format!("HMAC key error: {e}"))?;
+    mac.update(salt);
     mac.update(path.as_bytes());
     let tag = mac.finalize().into_bytes();
     let bytes = tag.get(..SIG_BYTES).ok_or("HMAC tag too short")?;
