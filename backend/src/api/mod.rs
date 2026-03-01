@@ -1,7 +1,7 @@
 use axum::{
-    http::{header, HeaderValue},
-    routing::{delete, get, patch, post},
     Router,
+    http::{HeaderValue, header},
+    routing::{delete, get, patch, post},
 };
 use tower_http::set_header::SetResponseHeaderLayer;
 
@@ -23,8 +23,8 @@ mod state;
 mod uploads;
 
 pub(crate) use common::{
-    env_non_empty, error_response, extract_filename, resolve_image_url, resolve_image_urls,
-    resolve_thumbhashes, ErrorSpec,
+    ErrorSpec, env_non_empty, error_response, extract_filename, resolve_image_url,
+    resolve_image_urls, resolve_thumbhashes,
 };
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
@@ -115,7 +115,7 @@ fn search_routes() -> Router<AppContext> {
 fn matrix_config_routes() -> Router<AppContext> {
     Router::new()
         .route("/config", get(root::matrix_config))
-        .layer(cache_layer("public, max-age=3600"))
+        .layer(cache_layer("no-store"))
 }
 
 fn matrix_session_routes() -> Router<AppContext> {

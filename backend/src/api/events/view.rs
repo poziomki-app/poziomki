@@ -94,7 +94,16 @@ pub(in crate::api) async fn build_event_responses(
     event_models: &[Event],
     profile_id: &Uuid,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
-    let batch_ctx = load_event_batch_context(event_models).await?;
+    let mut conn = crate::db::conn().await?;
+    build_event_responses_with_conn(event_models, profile_id, &mut conn).await
+}
+
+pub(in crate::api) async fn build_event_responses_with_conn(
+    event_models: &[Event],
+    profile_id: &Uuid,
+    conn: &mut crate::db::DbConn,
+) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
+    let batch_ctx = load_event_batch_context(event_models, conn).await?;
     let mut responses: Vec<EventResponse> = event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))

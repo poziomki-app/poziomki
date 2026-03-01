@@ -12,15 +12,15 @@ use crate::db::schema::users;
 
 async fn load_users_for_profiles(
     rows: &[AttendeeRow],
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<Vec<User>, crate::error::AppError> {
     let user_ids: Vec<i32> = rows.iter().map(|r| r.profile.user_id).collect();
     if user_ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut conn = crate::db::conn().await?;
     Ok(users::table
         .filter(users::id.eq_any(&user_ids))
-        .load::<User>(&mut conn)
+        .load::<User>(conn)
         .await?)
 }
 
@@ -51,8 +51,9 @@ fn build_attendee_info(
 pub(in crate::api) async fn attendee_info(
     event_id: Uuid,
 ) -> std::result::Result<Vec<AttendeeFullInfo>, crate::error::AppError> {
-    let rows = load_attendee_rows(event_id).await?;
-    let user_models = load_users_for_profiles(&rows).await?;
+    let mut conn = crate::db::conn().await?;
+    let rows = load_attendee_rows(event_id, &mut conn).await?;
+    let user_models = load_users_for_profiles(&rows, &mut conn).await?;
 
     let filenames = rows
         .iter()

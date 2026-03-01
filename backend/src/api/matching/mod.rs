@@ -52,7 +52,9 @@ pub(super) async fn profiles_recommendations(
 
     // Batch-load all candidate tag IDs in one query
     let candidate_ids: Vec<Uuid> = candidates.iter().map(|c| c.id).collect();
-    let all_candidate_tags = repo.batch_load_profile_tag_ids(&candidate_ids).await?;
+    let all_candidate_tags = repo
+        .batch_load_profile_tag_ids(&candidate_ids, &mut conn)
+        .await?;
 
     let my_program = my_profile.as_ref().and_then(|p| p.program.clone());
 
@@ -76,7 +78,7 @@ pub(super) async fn profiles_recommendations(
 
     let top = rank_and_take(&mut scored, limit);
 
-    let data = build_recommendations_response(&top, &repo).await?;
+    let data = build_recommendations_response(&top, &repo, &mut conn).await?;
 
     let mut response = Json(DataResponse { data }).into_response();
     response
@@ -109,7 +111,7 @@ pub(super) async fn events_recommendations(
 
     // Batch-load all event tag IDs in one query
     let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();
-    let all_event_tags = repo.batch_load_event_tag_ids(&event_ids).await?;
+    let all_event_tags = repo.batch_load_event_tag_ids(&event_ids, &mut conn).await?;
 
     // Resolve user geo query: lat, lng, max radius in km (default 20 km)
     let user_geo = query.lat.zip(query.lng).map(|(lat, lng)| {
@@ -134,7 +136,9 @@ pub(super) async fn events_recommendations(
     let top = rank_events_and_take(&mut scored, limit);
 
     let top_models: Vec<Event> = top.iter().map(|(_, event)| (*event).clone()).collect();
-    let base = super::events::build_event_responses(&top_models, &my_profile_id).await?;
+    let base =
+        super::events::build_event_responses_with_conn(&top_models, &my_profile_id, &mut conn)
+            .await?;
     let score_by_event: HashMap<String, f64> = top
         .iter()
         .map(|(score, event)| (event.id.to_string(), *score))

@@ -1,5 +1,5 @@
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::sync::OnceLock;
@@ -11,6 +11,7 @@ struct ImgproxyConfig {
     hmac_key: Vec<u8>,
     base_url: String,
     expiry_secs: u64,
+    object_prefix: String,
 }
 
 static CONFIG: OnceLock<Option<ImgproxyConfig>> = OnceLock::new();
@@ -30,13 +31,36 @@ fn config() -> Option<&'static ImgproxyConfig> {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(120);
+            let object_prefix = normalize_prefix(
+                std::env::var("IMGPROXY_ALLOWED_PREFIX")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .as_deref()
+                    .unwrap_or("uploads/"),
+            )?;
             Some(ImgproxyConfig {
                 hmac_key,
                 base_url,
                 expiry_secs,
+                object_prefix,
             })
         })
         .as_ref()
+}
+
+fn normalize_prefix(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
+        return None;
+    }
+    let mut prefix = trimmed.trim_start_matches('/').to_string();
+    if !prefix.ends_with('/') {
+        prefix.push('/');
+    }
+    Some(prefix)
 }
 
 pub fn is_configured() -> bool {
@@ -51,7 +75,8 @@ pub fn signed_url(filename: &str, variant: &str, format: &str) -> Option<String>
         .ok()?
         .as_secs();
     let expiry = now + cfg.expiry_secs;
-    let path = format!("{expiry}/{variant}.{format}/{filename}");
+    let object_key = format!("{}{}", cfg.object_prefix, filename);
+    let path = format!("{expiry}/{variant}.{format}/{object_key}");
     let sig = sign(&cfg.hmac_key, &path).ok()?;
     Some(format!("{}/img/{sig}/{path}", cfg.base_url))
 }
