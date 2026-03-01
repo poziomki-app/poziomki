@@ -49,18 +49,7 @@ fn config() -> Option<&'static ImgproxyConfig> {
 }
 
 fn normalize_prefix(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
-        return None;
-    }
-    let mut prefix = trimmed.trim_start_matches('/').to_string();
-    if !prefix.ends_with('/') {
-        prefix.push('/');
-    }
-    Some(prefix)
+    super::common::normalize_object_prefix(raw).ok()
 }
 
 pub fn is_configured() -> bool {
