@@ -24,9 +24,10 @@ use diesel_async::RunQueryDsl;
 use super::{
     error_response,
     state::{
-        extract_bearer_token, hash_session_token, is_valid_email, normalize_email, otp_in_cooldown,
-        require_auth_db, upsert_otp, user_model_to_view, DataResponse, ResendOtpBody,
-        SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
+        extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
+        normalize_email, otp_in_cooldown, require_auth_db, upsert_otp, user_model_to_view,
+        DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse,
+        VerifyOtpBody,
     },
     ErrorSpec,
 };
@@ -157,6 +158,7 @@ pub(super) async fn sign_out(
                 .execute(&mut conn)
                 .await;
         }
+        invalidate_auth_cache_for_token(&token).await;
     }
     Ok(Json(SuccessResponse { success: true }).into_response())
 }

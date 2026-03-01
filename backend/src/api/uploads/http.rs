@@ -1,7 +1,7 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 
-use super::super::{error_response, ErrorSpec};
+use super::super::{ErrorSpec, error_response};
 use super::{
     uploads_multipart::HandlerResult,
     uploads_storage,
@@ -61,15 +61,6 @@ fn storage_error_to_response(headers: &HeaderMap, err: &StorageError) -> Respons
         Some(StorageErrorKind::NotFound) => not_found(headers),
         _ => internal_error(headers, "Upload storage is unavailable"),
     }
-}
-
-pub(super) async fn storage_signed_url(
-    headers: &HeaderMap,
-    filename: &str,
-) -> HandlerResult<String> {
-    uploads_storage::signed_get_url(filename)
-        .await
-        .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
 }
 
 pub(super) async fn storage_signed_put_url(

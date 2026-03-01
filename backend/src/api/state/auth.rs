@@ -1,9 +1,13 @@
 use axum::http::HeaderMap;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::env;
 use std::fmt::Write as _;
+use std::sync::OnceLock;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::super::{error_response, ErrorSpec};
@@ -14,6 +18,7 @@ use crate::db::schema::{sessions, users};
 
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
+const AUTH_CACHE_TTL_DEFAULT_SECS: i64 = 15;
 const SESSION_TOKEN_HASH_PREFIX: &str = "st2:";
 
 pub(in crate::api) fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
@@ -26,6 +31,19 @@ pub(in crate::api) fn extract_bearer_token(headers: &HeaderMap) -> Option<String
 pub(in crate::api) struct CreatedSession {
     pub(in crate::api) model: Session,
     pub(in crate::api) token: String,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::api) struct AuthContext {
+    pub(in crate::api) session: Session,
+    pub(in crate::api) user: User,
+}
+
+#[derive(Clone)]
+struct CachedAuthEntry {
+    session: Session,
+    user: User,
+    cached_until: DateTime<Utc>,
 }
 
 fn session_token_hash(token: &str) -> String {
@@ -43,6 +61,64 @@ pub(in crate::api) fn hash_session_token(token: &str) -> String {
     session_token_hash(token)
 }
 
+fn auth_cache() -> &'static RwLock<HashMap<String, CachedAuthEntry>> {
+    static AUTH_CACHE: OnceLock<RwLock<HashMap<String, CachedAuthEntry>>> = OnceLock::new();
+    AUTH_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn auth_cache_ttl() -> Duration {
+    static AUTH_CACHE_TTL: OnceLock<Duration> = OnceLock::new();
+    *AUTH_CACHE_TTL.get_or_init(|| {
+        let ttl_secs = env::var("AUTH_CACHE_TTL_SECS")
+            .ok()
+            .and_then(|raw| raw.parse::<i64>().ok())
+            .filter(|value| *value >= 0)
+            .unwrap_or(AUTH_CACHE_TTL_DEFAULT_SECS);
+        Duration::seconds(ttl_secs)
+    })
+}
+
+async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
+    let now = Utc::now();
+    let cached = {
+        let guard = auth_cache().read().await;
+        guard.get(hashed_token).cloned()
+    };
+    let Some(entry) = cached else {
+        return None;
+    };
+    if entry.cached_until <= now || entry.session.expires_at <= now {
+        auth_cache().write().await.remove(hashed_token);
+        return None;
+    }
+    Some((entry.session, entry.user))
+}
+
+async fn cache_auth_put(hashed_token: String, session: &Session, user: &User) {
+    let now = Utc::now();
+    let ttl_until = now + auth_cache_ttl();
+    let cached_until = if session.expires_at < ttl_until {
+        session.expires_at
+    } else {
+        ttl_until
+    };
+    auth_cache().write().await.insert(
+        hashed_token,
+        CachedAuthEntry {
+            session: session.clone(),
+            user: user.clone(),
+            cached_until,
+        },
+    );
+}
+
+pub(in crate::api) async fn invalidate_auth_cache_for_token(token: &str) {
+    auth_cache()
+        .write()
+        .await
+        .remove(&session_token_hash(token));
+}
+
 pub(in crate::api) async fn resolve_session_by_token(
     token: &str,
 ) -> std::result::Result<Option<Session>, crate::error::AppError> {
@@ -58,45 +134,46 @@ pub(in crate::api) async fn resolve_session_by_token(
 pub(in crate::api) async fn require_auth_db(
     headers: &HeaderMap,
 ) -> std::result::Result<(Session, User), Box<axum::response::Response>> {
+    let context = require_auth_context(headers).await?;
+    Ok((context.session, context.user))
+}
+
+pub(in crate::api) async fn require_auth_context(
+    headers: &HeaderMap,
+) -> std::result::Result<AuthContext, Box<axum::response::Response>> {
     let token =
         extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+    let hashed = session_token_hash(&token);
 
-    let session = resolve_session_by_token(&token)
-        .await
-        .map_err(|_| Box::new(unauthorized_response(headers)))?
-        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-
-    delete_if_expired(&session, headers).await?;
-    maybe_renew_session(&session).await;
+    if let Some((session, user)) = cache_auth_get(&hashed).await {
+        maybe_renew_session(&session).await;
+        return Ok(AuthContext { session, user });
+    }
 
     let mut conn = crate::db::conn()
         .await
         .map_err(|_| Box::new(unauthorized_response(headers)))?;
-    let user = users::table
-        .find(session.user_id)
-        .first::<User>(&mut conn)
+    let (session, user) = sessions::table
+        .inner_join(users::table.on(users::id.eq(sessions::user_id)))
+        .filter(sessions::token.eq(&hashed))
+        .select((Session::as_select(), User::as_select()))
+        .first::<(Session, User)>(&mut conn)
         .await
         .optional()
         .map_err(|_| Box::new(unauthorized_response(headers)))?
         .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
 
-    Ok((session, user))
-}
-
-async fn delete_if_expired(
-    session: &Session,
-    headers: &HeaderMap,
-) -> std::result::Result<(), Box<axum::response::Response>> {
     let now = Utc::now();
     if session.expires_at <= now {
-        if let Ok(mut conn) = crate::db::conn().await {
-            let _ = diesel::delete(sessions::table.find(session.id))
-                .execute(&mut conn)
-                .await;
-        }
+        let _ = diesel::delete(sessions::table.find(session.id))
+            .execute(&mut conn)
+            .await;
         return Err(Box::new(unauthorized_response(headers)));
     }
-    Ok(())
+
+    let session = maybe_renew_session_on_conn(session, &mut conn).await;
+    cache_auth_put(hashed, &session, &user).await;
+    Ok(AuthContext { session, user })
 }
 
 async fn maybe_renew_session(session: &Session) {
@@ -113,6 +190,28 @@ async fn maybe_renew_session(session: &Session) {
                 .execute(&mut conn)
                 .await;
         }
+    }
+}
+
+async fn maybe_renew_session_on_conn(session: Session, conn: &mut crate::db::DbConn) -> Session {
+    let now = Utc::now();
+    if now - session.updated_at < Duration::seconds(SESSION_UPDATE_AGE_SECS) {
+        return session;
+    }
+
+    let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
+    let _ = diesel::update(sessions::table.find(session.id))
+        .set(&SessionUpdate {
+            updated_at: Some(now),
+            expires_at: Some(new_expires),
+        })
+        .execute(conn)
+        .await;
+
+    Session {
+        updated_at: now,
+        expires_at: new_expires,
+        ..session
     }
 }
 

@@ -20,11 +20,11 @@ impl MatchingRepository {
     async fn load_profile_tag_ids(
         &self,
         profile_id: Uuid,
+        conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
-        let mut conn = crate::db::conn().await?;
         let tag_links = profile_tags::table
             .filter(profile_tags::profile_id.eq(profile_id))
-            .load::<ProfileTag>(&mut conn)
+            .load::<ProfileTag>(conn)
             .await?;
         Ok(tag_links.iter().map(|link| link.tag_id).collect())
     }
@@ -40,7 +40,7 @@ impl MatchingRepository {
             .await
             .optional()?;
         let my_tag_ids = match &my_profile {
-            Some(profile) => self.load_profile_tag_ids(profile.id).await?,
+            Some(profile) => self.load_profile_tag_ids(profile.id, conn).await?,
             None => HashSet::new(),
         };
         Ok((my_profile, my_tag_ids))
@@ -79,16 +79,15 @@ impl MatchingRepository {
     pub(super) async fn batch_load_profile_tags(
         &self,
         profile_ids: &[Uuid],
+        conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashMap<Uuid, Vec<MatchingTagResponse>>, crate::error::AppError> {
         if profile_ids.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = crate::db::conn().await?;
-
         let all_links = profile_tags::table
             .filter(profile_tags::profile_id.eq_any(profile_ids))
-            .load::<ProfileTag>(&mut conn)
+            .load::<ProfileTag>(conn)
             .await?;
 
         let all_tag_ids: HashSet<Uuid> = all_links.iter().map(|link| link.tag_id).collect();
@@ -97,7 +96,7 @@ impl MatchingRepository {
         } else {
             tags::table
                 .filter(tags::id.eq_any(&all_tag_ids.into_iter().collect::<Vec<_>>()))
-                .load::<Tag>(&mut conn)
+                .load::<Tag>(conn)
                 .await?
         };
 
@@ -122,16 +121,15 @@ impl MatchingRepository {
     pub(super) async fn batch_load_profile_tag_ids(
         &self,
         profile_ids: &[Uuid],
+        conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
         if profile_ids.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = crate::db::conn().await?;
-
         let all_links = profile_tags::table
             .filter(profile_tags::profile_id.eq_any(profile_ids))
-            .load::<ProfileTag>(&mut conn)
+            .load::<ProfileTag>(conn)
             .await?;
 
         let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
@@ -147,16 +145,15 @@ impl MatchingRepository {
     pub(super) async fn batch_load_event_tag_ids(
         &self,
         event_ids: &[Uuid],
+        conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
         if event_ids.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = crate::db::conn().await?;
-
         let all_links = event_tags::table
             .filter(event_tags::event_id.eq_any(event_ids))
-            .load::<EventTag>(&mut conn)
+            .load::<EventTag>(conn)
             .await?;
 
         let mut result: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
@@ -169,15 +166,15 @@ impl MatchingRepository {
     pub(super) async fn load_users_by_ids(
         &self,
         user_ids: &[i32],
+        conn: &mut crate::db::DbConn,
     ) -> std::result::Result<Vec<User>, crate::error::AppError> {
         if user_ids.is_empty() {
             return Ok(vec![]);
         }
 
-        let mut conn = crate::db::conn().await?;
         users::table
             .filter(users::id.eq_any(user_ids))
-            .load::<User>(&mut conn)
+            .load::<User>(conn)
             .await
             .map_err(Into::into)
     }

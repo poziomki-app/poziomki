@@ -1,6 +1,6 @@
 use axum::http::{HeaderName, HeaderValue};
-use axum_test::multipart::{MultipartForm, Part};
 use axum_test::TestServer;
+use axum_test::multipart::{MultipartForm, Part};
 use base64::Engine as _;
 use chrono::Utc;
 use serial_test::serial;
@@ -224,6 +224,24 @@ async fn matrix_session_is_not_cacheable() {
             .json(&serde_json::json!({}))
             .await;
         assert_eq!(response.status_code(), 401);
+
+        let cache_control = response
+            .headers()
+            .get("cache-control")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
+        assert_eq!(cache_control, "no-store");
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn matrix_config_is_not_cacheable() {
+    request(|request, _ctx| async move {
+        let response = request.get("/api/v1/matrix/config").await;
+        assert_eq!(response.status_code(), 200);
 
         let cache_control = response
             .headers()
@@ -1004,6 +1022,93 @@ async fn delete_returns_error_when_upload_row_update_fails() {
         .expect("drop update-fail trigger");
 
         assert_eq!(delete.status_code(), 500);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn sign_up_existing_email_returns_generic_success_and_keeps_single_user() {
+    request(|request, _ctx| async move {
+        use diesel::dsl::count_star;
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+        use poziomki_backend::db::models::users::User;
+        use poziomki_backend::db::schema::users;
+
+        let email = "existing-signup@example.com";
+
+        let first = request
+            .post("/api/v1/auth/sign-up/email")
+            .json(&sign_up_json(email, "first-password"))
+            .await;
+        assert_eq!(first.status_code(), 200);
+
+        let second = request
+            .post("/api/v1/auth/sign-up/email")
+            .json(&sign_up_json(email, "different-password"))
+            .await;
+        assert_eq!(second.status_code(), 200);
+        let second_payload: serde_json::Value = second.json();
+        assert!(second_payload["data"]["token"].is_null());
+        assert_eq!(second_payload["data"]["user"]["email"], email);
+
+        let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
+        let count = users::table
+            .filter(users::email.eq(email))
+            .select(count_star())
+            .first::<i64>(&mut conn)
+            .await
+            .expect("count users by email");
+        assert_eq!(count, 1);
+
+        let saved = users::table
+            .filter(users::email.eq(email))
+            .first::<User>(&mut conn)
+            .await
+            .expect("load saved user");
+        assert!(
+            poziomki_backend::security::verify_password("first-password", &saved.password),
+            "second sign-up must not overwrite existing password hash"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn sign_in_rate_limit_not_bypassed_by_spoofed_forwarded_for_headers() {
+    request(|request, _ctx| async move {
+        let email = "no-account-rate-limit@example.com";
+        let password = "wrong-password";
+
+        for i in 1..=20 {
+            let response = request
+                .post("/api/v1/auth/sign-in/email")
+                .add_header(
+                    HeaderName::from_static("x-forwarded-for"),
+                    HeaderValue::from_str(&format!("203.0.113.{i}")).expect("valid ip header"),
+                )
+                .json(&serde_json::json!({
+                    "email": email,
+                    "password": password,
+                }))
+                .await;
+            assert_eq!(response.status_code(), 401);
+        }
+
+        let limited = request
+            .post("/api/v1/auth/sign-in/email")
+            .add_header(
+                HeaderName::from_static("x-forwarded-for"),
+                HeaderValue::from_static("198.51.100.250"),
+            )
+            .json(&serde_json::json!({
+                "email": email,
+                "password": password,
+            }))
+            .await;
+        assert_eq!(limited.status_code(), 429);
     })
     .await;
 }

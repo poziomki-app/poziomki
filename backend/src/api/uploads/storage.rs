@@ -1,5 +1,5 @@
-use axum::http::{header, HeaderMap, HeaderValue};
-use s3::{creds::Credentials, error::S3Error, Bucket, Region};
+use axum::http::{HeaderMap, HeaderValue, header};
+use s3::{Bucket, Region, creds::Credentials, error::S3Error};
 use std::sync::OnceLock;
 use url::Url;
 
@@ -12,6 +12,7 @@ struct StorageConfig {
     bucket: Box<Bucket>,
     public_url: Option<String>,
     presign_expiry_secs: u64,
+    object_prefix: String,
 }
 
 static STORAGE: OnceLock<Result<StorageConfig, String>> = OnceLock::new();
@@ -61,8 +62,23 @@ fn presign_expiry_secs_u32(seconds: u64) -> u32 {
     u32::try_from(bounded).unwrap_or(MAX_PRESIGN_EXPIRY_SECS)
 }
 
-fn object_path(filename: &str) -> String {
-    format!("/{filename}")
+fn normalize_prefix(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("IMGPROXY_ALLOWED_PREFIX must be non-empty".to_string());
+    }
+    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
+        return Err("IMGPROXY_ALLOWED_PREFIX contains invalid characters".to_string());
+    }
+    let mut prefix = trimmed.trim_start_matches('/').to_string();
+    if !prefix.ends_with('/') {
+        prefix.push('/');
+    }
+    Ok(prefix)
+}
+
+fn object_path(object_prefix: &str, filename: &str) -> String {
+    format!("/{object_prefix}{filename}")
 }
 
 fn build_bucket() -> Result<StorageConfig, String> {
@@ -77,6 +93,11 @@ fn build_bucket() -> Result<StorageConfig, String> {
     let region_name = env_any(&["GARAGE_S3_REGION"]).unwrap_or_else(|| DEFAULT_REGION.to_string());
     let public_url = env_any(&["GARAGE_S3_PUBLIC_URL"]);
     let virtual_host = parse_bool_env("GARAGE_S3_VIRTUAL_HOST_STYLE", false);
+    let object_prefix = normalize_prefix(
+        env_any(&["IMGPROXY_ALLOWED_PREFIX"])
+            .as_deref()
+            .unwrap_or("uploads/"),
+    )?;
 
     let region = Region::Custom {
         region: region_name,
@@ -96,6 +117,7 @@ fn build_bucket() -> Result<StorageConfig, String> {
         bucket,
         public_url,
         presign_expiry_secs: parse_presign_expiry_secs(),
+        object_prefix,
     })
 }
 
@@ -155,7 +177,11 @@ pub(super) async fn upload(
     let config = storage().map_err(|_message| storage_error(None))?;
     let response = config
         .bucket
-        .put_object_with_content_type(object_path(filename), bytes, mime_type)
+        .put_object_with_content_type(
+            object_path(&config.object_prefix, filename),
+            bytes,
+            mime_type,
+        )
         .await
         .map_err(|err| map_s3_error(&err))?;
     ensure_ok_status(response.status_code())
@@ -165,7 +191,7 @@ pub(in crate::api) async fn read(filename: &str) -> Result<Vec<u8>, StorageError
     let config = storage().map_err(|_message| storage_error(None))?;
     let response = config
         .bucket
-        .get_object(object_path(filename))
+        .get_object(object_path(&config.object_prefix, filename))
         .await
         .map_err(|err| map_s3_error(&err))?;
     ensure_ok_status(response.status_code())?;
@@ -176,7 +202,7 @@ pub(in crate::api) async fn exists(filename: &str) -> Result<bool, StorageError>
     let config = storage().map_err(|_message| storage_error(None))?;
     let (_head, status_code) = config
         .bucket
-        .head_object(object_path(filename))
+        .head_object(object_path(&config.object_prefix, filename))
         .await
         .map_err(|err| map_s3_error(&err))?;
     if (200..300).contains(&status_code) {
@@ -192,27 +218,10 @@ pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
     let response = config
         .bucket
-        .delete_object(object_path(filename))
+        .delete_object(object_path(&config.object_prefix, filename))
         .await
         .map_err(|err| map_s3_error(&err))?;
     ensure_ok_status(response.status_code())
-}
-
-pub(in crate::api) async fn signed_get_url(filename: &str) -> Result<String, StorageError> {
-    let config = storage().map_err(|_message| storage_error(None))?;
-    let signed = config
-        .bucket
-        .presign_get(
-            object_path(filename),
-            presign_expiry_secs_u32(config.presign_expiry_secs),
-            None,
-        )
-        .await
-        .map_err(|err| map_s3_error(&err))?;
-    if let Some(public_url) = &config.public_url {
-        return Ok(rewrite_signed_url(&signed, public_url));
-    }
-    Ok(signed)
 }
 
 pub(in crate::api) async fn signed_put_url(
@@ -231,7 +240,7 @@ pub(in crate::api) async fn signed_put_url(
     let signed = config
         .bucket
         .presign_put(
-            object_path(filename),
+            object_path(&config.object_prefix, filename),
             presign_expiry_secs_u32(config.presign_expiry_secs),
             Some(headers),
             None,

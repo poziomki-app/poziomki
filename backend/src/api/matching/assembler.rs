@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::matching_repo::MatchingRepository;
-use crate::api::{resolve_image_urls, resolve_thumbhashes};
 use crate::api::state::{MatchingTagResponse, ProfileRecommendation};
+use crate::api::{resolve_image_urls, resolve_thumbhashes};
 use crate::db::models::profiles::Profile;
 use crate::db::models::users::User;
 
@@ -56,12 +56,13 @@ fn build_profile_recommendation(
 pub(super) async fn build_recommendations_response(
     top: &[(f64, &Profile)],
     repo: &MatchingRepository,
+    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<Vec<ProfileRecommendation>, crate::error::AppError> {
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
-    let user_models = repo.load_users_by_ids(&user_ids).await?;
+    let user_models = repo.load_users_by_ids(&user_ids, conn).await?;
 
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
-    let top_tags = repo.batch_load_profile_tags(&top_ids).await?;
+    let top_tags = repo.batch_load_profile_tags(&top_ids, conn).await?;
 
     let pic_filenames: Vec<String> = top
         .iter()
@@ -72,8 +73,7 @@ pub(super) async fn build_recommendations_response(
         resolve_image_urls(&pic_filenames),
         resolve_thumbhashes(&pic_filenames),
     );
-    let pic_map: HashMap<String, String> =
-        pic_filenames.into_iter().zip(resolved_pics).collect();
+    let pic_map: HashMap<String, String> = pic_filenames.into_iter().zip(resolved_pics).collect();
 
     let ctx = RecommendationContext {
         user_models: &user_models,
