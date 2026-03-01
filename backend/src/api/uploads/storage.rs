@@ -63,18 +63,7 @@ fn presign_expiry_secs_u32(seconds: u64) -> u32 {
 }
 
 fn normalize_prefix(raw: &str) -> Result<String, String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err("IMGPROXY_ALLOWED_PREFIX must be non-empty".to_string());
-    }
-    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
-        return Err("IMGPROXY_ALLOWED_PREFIX contains invalid characters".to_string());
-    }
-    let mut prefix = trimmed.trim_start_matches('/').to_string();
-    if !prefix.ends_with('/') {
-        prefix.push('/');
-    }
-    Ok(prefix)
+    crate::api::common::normalize_object_prefix(raw)
 }
 
 fn object_path(object_prefix: &str, filename: &str) -> String {
