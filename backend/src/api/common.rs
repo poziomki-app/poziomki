@@ -50,6 +50,23 @@ pub fn error_response(
         .into_response()
 }
 
+/// Normalize an S3 object prefix: strip leading `/`, ensure trailing `/`,
+/// reject path-traversal patterns.
+pub fn normalize_object_prefix(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("object prefix must be non-empty".to_string());
+    }
+    if trimmed.contains("..") || trimmed.contains('\\') || trimmed.contains('\0') {
+        return Err("object prefix contains invalid characters".to_string());
+    }
+    let mut prefix = trimmed.trim_start_matches('/').to_string();
+    if !prefix.ends_with('/') {
+        prefix.push('/');
+    }
+    Ok(prefix)
+}
+
 /// Strip a presigned URL down to just the filename (last path segment).
 /// If the value is already a plain filename, return it unchanged.
 pub fn extract_filename(value: &str) -> String {
