@@ -102,8 +102,40 @@ pub(super) async fn create_user_or_error(
         })?;
 
     if let Some(user) = existing {
-        // Return an equivalent success path to avoid account enumeration.
-        return Ok(user);
+        if user.email_verified_at.is_some() {
+            // Already verified — they should log in instead.
+            return Err(error_response(
+                axum::http::StatusCode::CONFLICT,
+                headers,
+                ErrorSpec {
+                    error: "Account already exists".to_string(),
+                    code: "CONFLICT",
+                    details: None,
+                },
+            ));
+        }
+
+        // Unverified — update password/name in case they changed and let them
+        // proceed through OTP verification again.
+        let password_hash = crate::security::hash_password(&payload.password).map_err(|e| {
+            tracing::error!("Password hashing failed: {e}");
+            registration_failed_response(headers)
+        })?;
+        let now = chrono::Utc::now();
+        let _ = diesel::update(users::table.find(user.id))
+            .set((
+                users::password.eq(&password_hash),
+                users::name.eq(name.trim()),
+                users::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await;
+
+        let mut updated = user;
+        updated.password = password_hash;
+        updated.name = name;
+        updated.updated_at = now;
+        return Ok(updated);
     }
 
     let password_hash = crate::security::hash_password(&payload.password).map_err(|e| {
