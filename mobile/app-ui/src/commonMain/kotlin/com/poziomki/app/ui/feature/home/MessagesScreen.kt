@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
@@ -38,6 +41,7 @@ import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.home.messages.MessagesRoomFilter
@@ -176,6 +180,26 @@ fun MessagesScreen(
                     }
                 }
             }
+        }
+
+        // FAB: new message
+        FloatingActionButton(
+            onClick = onNavigateToNewChat,
+            containerColor = Primary,
+            contentColor = Color.White,
+            shape = CircleShape,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = PoziomkiTheme.spacing.lg,
+                    bottom = LocalNavBarPadding.current + 24.dp,
+                ),
+        ) {
+            Icon(
+                PhosphorIcons.Bold.PencilSimple,
+                contentDescription = "Nowa wiadomo\u015b\u0107",
+                modifier = Modifier.size(24.dp),
+            )
         }
 
         // Refresh error snackbar
