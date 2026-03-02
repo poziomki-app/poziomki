@@ -88,6 +88,7 @@ import com.adamglin.phosphoricons.fill.MapPin
 fun EventsScreen(
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToEventCreate: () -> Unit,
+    profileAvatarAction: @Composable () -> Unit = {},
     viewModel: EventsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -110,14 +111,7 @@ fun EventsScreen(
                 .background(Background),
     ) {
         ScreenHeader(title = "wydarzenia") {
-            IconButton(onClick = onNavigateToEventCreate) {
-                Icon(
-                    PhosphorIcons.Bold.PencilSimple,
-                    contentDescription = "Utwórz wydarzenie",
-                    modifier = Modifier.size(22.dp),
-                    tint = TextSecondary,
-                )
-            }
+            profileAvatarAction()
         }
 
         PoziomkiSearchBar(
