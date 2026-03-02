@@ -52,7 +52,12 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.data.repository.ChatRoomRepository
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.collectAsState
+import coil3.compose.AsyncImage
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
+import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -65,8 +70,10 @@ import com.poziomki.app.ui.feature.event.EventChatScreen
 import com.poziomki.app.ui.feature.event.EventCreateScreen
 import com.poziomki.app.ui.feature.home.EventsScreen
 import com.poziomki.app.ui.feature.home.ExploreScreen
+import com.poziomki.app.ui.feature.home.GroupsScreen
 import com.poziomki.app.ui.feature.home.MessagesScreen
 import com.poziomki.app.ui.feature.home.ProfileScreen
+import com.poziomki.app.ui.feature.home.ProfileViewModel
 import com.poziomki.app.ui.feature.onboarding.BasicInfoScreen
 import com.poziomki.app.ui.feature.onboarding.InterestsScreen
 import com.poziomki.app.ui.feature.onboarding.ProfileSetupScreen
@@ -80,14 +87,17 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.bold.User
+import com.adamglin.phosphoricons.bold.GearSix
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.ChatCircle
+import com.adamglin.phosphoricons.fill.UsersFour
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.adamglin.phosphoricons.regular.CalendarDots
 import com.adamglin.phosphoricons.regular.ChatCircle
-import com.adamglin.phosphoricons.regular.User
+import com.adamglin.phosphoricons.regular.UsersFour
 import com.adamglin.phosphoricons.regular.UsersThree
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 
 data class BottomNavItem(
     val label: String,
@@ -108,7 +118,7 @@ val bottomNavItems =
             PhosphorIcons.Fill.ChatCircle,
             Route.Messages,
         ),
-        BottomNavItem("Profil", PhosphorIcons.Regular.User, PhosphorIcons.Bold.User, Route.ProfileTab),
+        BottomNavItem("Grupy", PhosphorIcons.Regular.UsersFour, PhosphorIcons.Fill.UsersFour, Route.Groups),
     )
 
 @Composable
@@ -383,6 +393,27 @@ fun MainScreen(
     val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val safeTop = maxOf(topInsets, 16.dp)
 
+    val profileViewModel: ProfileViewModel = koinViewModel()
+    val profileState by profileViewModel.state.collectAsState()
+    val profilePicture = profileState.profile?.profilePicture
+
+    val navigateToProfileTab: () -> Unit = {
+        tabNavController.navigate(Route.ProfileTab) {
+            popUpTo(tabNavController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    val profileAvatarAction: @Composable () -> Unit = {
+        ProfileAvatarButton(
+            profilePicture = profilePicture,
+            onClick = navigateToProfileTab,
+        )
+    }
+
     Scaffold(
         containerColor = Background,
         bottomBar = {},
@@ -405,12 +436,14 @@ fun MainScreen(
                         ExploreScreen(
                             onNavigateToProfile = onNavigateToProfileView,
                             onNavigateToEventDetail = onNavigateToEventDetail,
+                            profileAvatarAction = profileAvatarAction,
                         )
                     }
                     composable<Route.Events> {
                         EventsScreen(
                             onNavigateToEventDetail = onNavigateToEventDetail,
                             onNavigateToEventCreate = onNavigateToEventCreate,
+                            profileAvatarAction = profileAvatarAction,
                         )
                     }
                     composable<Route.Messages> {
@@ -418,6 +451,7 @@ fun MainScreen(
                             onNavigateToChat = onNavigateToChat,
                             onNavigateToNewChat = onNavigateToNewChat,
                             onNavigateToProfile = onNavigateToProfileView,
+                            profileAvatarAction = profileAvatarAction,
                         )
                     }
                     composable<Route.ProfileTab> {
@@ -426,6 +460,11 @@ fun MainScreen(
                             onNavigateToPrivacy = onNavigateToPrivacy,
                             onNavigateToProfileView = onNavigateToProfileView,
                             onSignOut = onSignOut,
+                        )
+                    }
+                    composable<Route.Groups> {
+                        GroupsScreen(
+                            profileAvatarAction = profileAvatarAction,
                         )
                     }
                 }
@@ -494,6 +533,30 @@ fun MainScreen(
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatarButton(
+    profilePicture: String?,
+    onClick: () -> Unit,
+) {
+    val avatarSize = 28.dp
+    IconButton(onClick = onClick) {
+        if (profilePicture != null) {
+            UserAvatar(
+                picture = profilePicture,
+                displayName = null,
+                size = avatarSize,
+            )
+        } else {
+            Icon(
+                PhosphorIcons.Bold.GearSix,
+                contentDescription = "Profil",
+                modifier = Modifier.size(22.dp),
+                tint = TextMuted,
+            )
         }
     }
 }

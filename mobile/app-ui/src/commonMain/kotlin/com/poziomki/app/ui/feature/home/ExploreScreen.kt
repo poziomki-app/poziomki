@@ -50,6 +50,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ExploreScreen(
     onNavigateToProfile: (String) -> Unit,
     onNavigateToEventDetail: (String) -> Unit = {},
+    profileAvatarAction: @Composable () -> Unit = {},
     viewModel: ExploreViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -61,7 +62,9 @@ fun ExploreScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        ScreenHeader(title = "poznaj")
+        ScreenHeader(title = "poznaj") {
+            profileAvatarAction()
+        }
 
         PoziomkiSearchBar(
             query = state.query,
