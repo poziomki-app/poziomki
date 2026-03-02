@@ -58,6 +58,7 @@ fun MessagesScreen(
     onNavigateToChat: (String) -> Unit,
     onNavigateToNewChat: () -> Unit,
     onNavigateToProfile: (String) -> Unit = {},
+    profileAvatarAction: @Composable () -> Unit = {},
     viewModel: MessagesViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -99,14 +100,7 @@ fun MessagesScreen(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                 }
-                IconButton(onClick = onNavigateToNewChat) {
-                    Icon(
-                        imageVector = PhosphorIcons.Bold.PencilSimple,
-                        contentDescription = "Nowa wiadomość",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                profileAvatarAction()
             }
             PoziomkiSearchBar(
                 query = state.searchQuery,
