@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -226,13 +229,14 @@ fun ProfilePreview(
                 }
             }
 
-            // Close button — positioned a bit lower
+            // Close button — respects status bar safe area
+            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             IconButton(
                 onClick = onClose,
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 28.dp, end = 12.dp)
+                        .padding(top = statusBarTop + 8.dp, end = 20.dp)
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Black.copy(alpha = 0.45f)),

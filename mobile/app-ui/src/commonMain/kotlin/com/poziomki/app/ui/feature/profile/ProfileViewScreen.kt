@@ -90,7 +90,7 @@ fun ProfileViewScreen(
                                     .align(Alignment.BottomEnd)
                                     .padding(
                                         end = 16.dp,
-                                        bottom = bottomInsets + 8.dp,
+                                        bottom = bottomInsets + 20.dp,
                                     ),
                             shape = RoundedCornerShape(28.dp),
                             color = Color.Transparent,
