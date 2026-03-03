@@ -84,6 +84,10 @@
       default = pkgs.mkShell {
         buildInputs = with pkgs; [
           (getToolchain pkgs)
+          pkg-config
+          openssl
+          libwebp
+          libpq
         ];
       };
     });
