@@ -1,0 +1,47 @@
+{
+	auto_https off
+}
+
+:8080 {
+	# Suppress full URIs from access logs — signed paths are short-lived
+	# credentials that should not persist in log files.
+	log {
+		format filter {
+			wrap console
+			fields {
+				request>uri regexp "^(/img/)[^/]+(/.*)$" "${1}{redacted}${2}"
+			}
+		}
+	}
+
+	@uploads path /uploads/*
+	handle @uploads {
+		forward_auth {$CADDY_API_UPSTREAM} {
+			uri /api/v1/uploads/auth-check
+			header_up Authorization {http.request.header.Authorization}
+			header_up X-Original-URI {uri}
+		}
+
+		header {
+			X-Robots-Tag "noindex"
+			Cache-Control "private, max-age=3600"
+		}
+
+		# Garage S3 path-style request: /<bucket>/<object-key>.
+		rewrite * /{$GARAGE_S3_BUCKET}{uri}
+		reverse_proxy {$CADDY_GARAGE_S3_UPSTREAM}
+	}
+
+	@img path /img/*
+	handle @img {
+		header {
+			X-Robots-Tag "noindex"
+		}
+
+		# Rate limiting: add caddy-ratelimit plugin or enforce at the
+		# outermost proxy (e.g. rate_limit {remote.ip} 30r/m).
+		reverse_proxy {$CADDY_IMGPROXY_UPSTREAM}
+	}
+
+	respond "Not Found" 404
+}
