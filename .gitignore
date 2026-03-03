@@ -46,9 +46,6 @@ DerivedData/
 # Environment
 .env
 
-# Deploy (kept locally, not in repo)
-/deploy/
-
 # Markdown (keep only docs/)
 *.md
 !docs/**/*.md
