@@ -5,12 +5,14 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     fenix.url = "github:nix-community/fenix/monthly";
     treefmt-nix.url = "github:numtide/treefmt-nix";
+    git-hooks.url = "github:cachix/git-hooks.nix";
   };
 
   outputs = {
     self,
     nixpkgs,
     treefmt-nix,
+    git-hooks,
     fenix,
   }: let
     inherit (nixpkgs) legacyPackages lib;
@@ -30,6 +32,14 @@
     formatter = eachSystem (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
     checks = eachSystem (pkgs: {
       formatting = treefmtEval.${pkgs.system}.config.build.check self;
+       pre-commit-check = git-hooks.lib.${pkgs.system}.run {
+          src = ./.;
+          hooks = {
+            clippy.enable = true;
+            shellcheck.enable = true;
+            hadolint.enable = true;
+          };
+        };
     });
     devShells = eachSystem (pkgs: {
       default = pkgs.mkShell {
