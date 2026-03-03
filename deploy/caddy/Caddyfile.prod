@@ -1,0 +1,113 @@
+(secure_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+mobile.poziomki.app {
+	import secure_headers
+
+	handle_path /download/* {
+		header Content-Disposition "attachment"
+		root * /var/www/download
+		file_server browse
+	}
+
+	handle {
+		reverse_proxy localhost:5150 {
+			header_down -X-Powered-By
+		}
+	}
+}
+
+cdn.poziomki.app {
+	import secure_headers
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	@presigned path /poziomki-uploads/*
+	handle @presigned {
+		header Cache-Control "private, max-age=3600"
+		reverse_proxy localhost:3900 {
+			header_up Host garage:3900
+		}
+	}
+
+	@uploads path /uploads/*
+	handle @uploads {
+		header Cache-Control "private, max-age=3600"
+		route {
+			forward_auth localhost:5150 {
+				uri /api/v1/uploads/auth-check
+				copy_headers Authorization
+				header_up X-Original-URI {uri}
+			}
+			uri strip_prefix /uploads
+			uri path_regexp .* /poziomki-uploads{path}
+			reverse_proxy localhost:3900
+		}
+	}
+
+	respond 404
+}
+
+rs.poziomki.app {
+	import secure_headers
+	log {
+		output file /var/log/caddy/rs-access.log {
+			roll_size 50MiB
+			roll_keep 3
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "^(/img/)[^/]+(/.*)$" "${1}REDACTED${2}"
+			}
+		}
+	}
+
+	@img path /img/*
+	handle @img {
+		header {
+			X-Robots-Tag "noindex, nofollow, noarchive"
+		}
+		reverse_proxy localhost:3080
+	}
+
+	handle {
+		reverse_proxy localhost:5150 {
+			header_down -X-Powered-By
+		}
+	}
+}
+
+chat.poziomki.app {
+	import secure_headers
+	reverse_proxy localhost:6167
+}
+
+ntfy.poziomki.app {
+	import secure_headers
+	reverse_proxy localhost:2586
+}
+
+mail.poziomki.app {
+	import secure_headers
+	respond "OK" 200
+}
+
+mta-sts.poziomki.app {
+	import secure_headers
+	header Content-Type "text/plain"
+	handle_path /.well-known/mta-sts.txt {
+		respond "version: STSv1
+mode: enforce
+mx: mail.poziomki.app
+max_age: 31557600
+" 200
+	}
+	respond 404
+}
