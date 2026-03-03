@@ -1,4 +1,4 @@
-# Rust
+ Rust
 /target/
 backend/target/
 **/*.rs.bk
@@ -50,9 +50,6 @@ DerivedData/
 /.pre-commit-config.yaml
 result
 result-*
-
-# Deploy (kept locally, not in repo)
-/deploy/
 
 # Markdown (keep only docs/)
 *.md
