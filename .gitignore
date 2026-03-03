@@ -46,6 +46,9 @@ DerivedData/
 # Environment
 .env
 
+# gewnerated by nix, doesnt need to be commited
+/.pre-commit-config.yaml
+
 # Deploy (kept locally, not in repo)
 /deploy/
 
