@@ -1,4 +1,4 @@
-# Rust
+ Rust
 /target/
 backend/target/
 **/*.rs.bk
@@ -45,6 +45,11 @@ DerivedData/
 
 # Environment
 .env
+
+# gewnerated by nix, doesnt need to be commited
+/.pre-commit-config.yaml
+result
+result-*
 
 # Markdown (keep only docs/)
 *.md
