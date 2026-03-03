@@ -48,6 +48,8 @@ DerivedData/
 
 # gewnerated by nix, doesnt need to be commited
 /.pre-commit-config.yaml
+result
+result-*
 
 # Deploy (kept locally, not in repo)
 /deploy/
