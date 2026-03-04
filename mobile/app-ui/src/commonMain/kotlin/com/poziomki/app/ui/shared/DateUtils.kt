@@ -51,8 +51,8 @@ fun formatEventDate(isoString: String): String {
     val instant = Instant.parse(isoString)
     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     val weekday = POLISH_WEEKDAYS[dt.dayOfWeek.ordinal]
-    val day = dt.dayOfMonth
-    val month = POLISH_MONTHS[dt.monthNumber - 1]
+    val day = dt.date.day
+    val month = POLISH_MONTHS[dt.month.number - 1]
     val hour = dt.hour.toString().padStart(2, '0')
     val minute = dt.minute.toString().padStart(2, '0')
     return "$weekday, $day $month · $hour:$minute"
@@ -62,8 +62,8 @@ fun formatEventDateFull(isoString: String): String {
     val instant = Instant.parse(isoString)
     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     val weekday = POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]
-    val day = dt.dayOfMonth
-    val month = POLISH_MONTHS_GENITIVE[dt.monthNumber - 1]
+    val day = dt.date.day
+    val month = POLISH_MONTHS_GENITIVE[dt.month.number - 1]
     val hour = dt.hour.toString().padStart(2, '0')
     val minute = dt.minute.toString().padStart(2, '0')
     return "$weekday, $day $month · $hour:$minute"
