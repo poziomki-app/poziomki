@@ -1,22 +1,22 @@
 [versions]
 agp = "9.0.1"
-androidx-activityCompose = "1.10.1"
-androidx-ui-tooling = "1.7.8"
-coil = "3.3.0"
+androidx-activityCompose = "1.12.4"
+androidx-ui-tooling = "1.10.4"
+coil = "3.4.0"
 compose-multiplatform = "1.10.1"
-datastore = "1.1.7"
+datastore = "1.2.0"
 detekt = "1.23.8"
 koin = "4.1.1"
 kotlin = "2.3.0"
 ktlint = "1.8.0"
-kotlinx-datetime = "0.6.2"
+kotlinx-datetime = "0.7.1"
 maplibre-compose = "0.12.1"
 ktor = "3.4.0"
 materialIconsCore = "1.7.3"
 phosphorIcons = "1.0.0"
 navigationCompose = "2.9.2"
 lifecycleCompose = "2.9.1"
-matrixSdk = "26.2.6"
+matrixSdk = "26.03.1"
 securityCrypto = "1.1.0"
 playServicesLocation = "21.3.0"
 sqldelight = "2.2.1"
@@ -49,7 +49,7 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphorIcons" }
 matrix-sdk = { module = "org.matrix.rustcomponents:sdk-android", version.ref = "matrixSdk" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
-kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version = "1.9.0" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version = "1.10.2" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
