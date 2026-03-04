@@ -192,8 +192,8 @@ private fun formatRoomTimestamp(timestampMillis: Long): String {
 
     return when {
         daysDiff in 1..6 -> weekdayShort(date.dayOfWeek)
-        nowDate.year == date.year -> "${date.dayOfMonth} ${monthShort(date.monthNumber)}"
-        else -> "${date.dayOfMonth} ${monthShort(date.monthNumber)} ${date.year}"
+        nowDate.year == date.year -> "${date.day} ${monthShort(date.month.number)}"
+        else -> "${date.day} ${monthShort(date.month.number)} ${date.year}"
     }
 }
 
