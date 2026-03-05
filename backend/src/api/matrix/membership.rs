@@ -18,7 +18,16 @@ pub(super) async fn sync_event_membership_after_attend_result(
         .as_deref()
         .filter(|value| is_matrix_room_id(value))
     {
-        ensure_profile_joined_room_best_effort(headers, event, profile, room_id).await?;
+        let result =
+            ensure_profile_joined_room_best_effort(headers, event, profile, room_id).await;
+        if let Some(m) = crate::metrics::metrics() {
+            if result.is_ok() {
+                m.matrix_membership.inc_success();
+            } else {
+                m.matrix_membership.inc_failure();
+            }
+        }
+        result?;
     }
     Ok(())
 }
@@ -38,16 +47,20 @@ pub(super) async fn sync_event_membership_after_leave_result(
         .await
         .ok_or_else(|| "matrix bootstrap unavailable during leave sync".to_string())?;
 
-    bootstrap
-        .client()
-        .leave_room(room_id)
-        .await
-        .map_err(|error| {
-            format!(
-                "leave room failed: status={} errcode={:?} message={} room_id={room_id}",
-                error.status_code, error.errcode, error.message
-            )
-        })?;
+    let result = bootstrap.client().leave_room(room_id).await;
+    if let Some(m) = crate::metrics::metrics() {
+        if result.is_ok() {
+            m.matrix_membership.inc_success();
+        } else {
+            m.matrix_membership.inc_failure();
+        }
+    }
+    result.map_err(|error| {
+        format!(
+            "leave room failed: status={} errcode={:?} message={} room_id={room_id}",
+            error.status_code, error.errcode, error.message
+        )
+    })?;
     Ok(())
 }
 
