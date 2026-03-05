@@ -1,0 +1,21 @@
+DROP TABLE IF EXISTS room_preview;
+
+CREATE TABLE room_preview (
+    owner_user_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    avatar_url TEXT,
+    is_direct INTEGER NOT NULL DEFAULT 0,
+    direct_user_id TEXT,
+    unread_count INTEGER NOT NULL DEFAULT 0,
+    latest_message TEXT,
+    latest_timestamp_millis INTEGER,
+    latest_is_mine INTEGER NOT NULL DEFAULT 0,
+    latest_send_status TEXT,
+    latest_read_by_count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (owner_user_id, room_id)
+);
+
+CREATE INDEX IF NOT EXISTS room_preview_owner_updated_idx
+ON room_preview(owner_user_id, updated_at DESC);

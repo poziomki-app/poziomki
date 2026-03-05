@@ -40,8 +40,6 @@ class CacheManager(
                 db.chatDraftQueries.deleteAll()
                 db.userSettingsQueries.deleteAll()
                 db.roomPreviewQueries.deleteAll()
-                db.roomTimelineEventQueries.deleteAllEvents()
-                db.roomTimelineEventQueries.deleteAllTxnMappings()
                 db.roomTimelineCacheQueries.deleteAll()
             }
         }

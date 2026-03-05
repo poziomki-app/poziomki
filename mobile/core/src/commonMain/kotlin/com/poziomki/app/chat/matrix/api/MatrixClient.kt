@@ -38,6 +38,13 @@ data class MatrixRoomSummary(
     val latestMessageReadByCount: Int = 0,
 )
 
+data class RoomTimelineCacheSnapshot(
+    val items: List<MatrixTimelineItem>,
+    val isHydrated: Boolean,
+    val cachedItemCount: Int,
+    val updatedAtMillis: Long,
+)
+
 interface MatrixClient {
     val state: StateFlow<MatrixClientState>
     val rooms: StateFlow<List<MatrixRoomSummary>>
@@ -47,6 +54,13 @@ interface MatrixClient {
     suspend fun refreshRooms(): Result<Unit>
 
     suspend fun getJoinedRoom(roomId: String): JoinedRoom?
+
+    suspend fun getRoomTimelineCache(
+        roomId: String,
+        limit: Int = 500,
+    ): RoomTimelineCacheSnapshot
+
+    suspend fun requestRoomTimelineBackfill(roomId: String): Result<Unit>
 
     suspend fun createDM(
         userId: String,

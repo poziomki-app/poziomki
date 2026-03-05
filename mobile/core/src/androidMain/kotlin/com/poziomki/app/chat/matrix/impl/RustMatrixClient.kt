@@ -7,6 +7,7 @@
 package com.poziomki.app.chat.matrix.impl
 
 import android.content.Context
+import com.poziomki.app.chat.cache.RoomTimelineCacheSnapshotData
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
@@ -14,6 +15,7 @@ import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.matrix.api.RoomTimelineCacheSnapshot
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.network.ApiResult
@@ -58,6 +60,7 @@ import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import org.matrix.rustcomponents.sdk.DateDividerMode
+import org.matrix.rustcomponents.sdk.Timeline
 import org.matrix.rustcomponents.sdk.TimelineConfiguration
 import org.matrix.rustcomponents.sdk.TimelineFilter
 import org.matrix.rustcomponents.sdk.TimelineFocus
@@ -74,6 +77,13 @@ class RustMatrixClient(
     private val db: PoziomkiDatabase,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
 ) : MatrixClient {
+    private companion object {
+        const val HOT_TIMELINE_CACHE_ITEMS = 500
+        val BACKFILL_BATCH_SIZE: UShort = 200u
+        const val MAX_BACKFILL_STEPS = 80
+        const val STARTUP_ERROR_MESSAGE = "Messaging service is temporarily unavailable"
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val startStopMutex = Mutex()
     private val roomCreationMutex = Mutex()
@@ -96,6 +106,7 @@ class RustMatrixClient(
     private val dmUserIdsByRoomId = mutableMapOf<String, String>()
     private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
     private val openedRoomSummaryJobs = mutableMapOf<String, Job>()
+    private val timelineBackfillJobs = mutableMapOf<String, Job>()
     private val timelinePreviewByRoomId = mutableMapOf<String, TimelinePreview>()
     init {
         loadCachedPreviews()
@@ -127,7 +138,8 @@ class RustMatrixClient(
                     }
 
                     is ApiResult.Error -> {
-                        val message = "Failed to load Matrix config: ${configResult.message}"
+                        println("Matrix config fetch failed: ${configResult.message}")
+                        val message = STARTUP_ERROR_MESSAGE
                         _state.value = MatrixClientState.Error(message)
                         return@withLock Result.failure(IllegalStateException(message))
                     }
@@ -136,14 +148,14 @@ class RustMatrixClient(
             cachedConfig = config
             val homeserver = config.homeserver
             if (homeserver.isNullOrBlank()) {
-                val message = "Matrix homeserver is not configured"
+                val message = STARTUP_ERROR_MESSAGE
                 _state.value = MatrixClientState.Error(message)
                 return@withLock Result.failure(IllegalStateException(message))
             }
 
             val jwt = sessionManager.getToken()
             if (jwt.isNullOrBlank()) {
-                val message = "User session token is missing"
+                val message = STARTUP_ERROR_MESSAGE
                 _state.value = MatrixClientState.Error(message)
                 return@withLock Result.failure(IllegalStateException(message))
             }
@@ -185,7 +197,8 @@ class RustMatrixClient(
                             }
 
                             is ApiResult.Error -> {
-                                val message = "Failed to initialize secure messaging: ${sessionResult.message}"
+                                println("Matrix session bootstrap failed: ${sessionResult.message}")
+                                val message = STARTUP_ERROR_MESSAGE
                                 _state.value = MatrixClientState.Error(message)
                                 return Result.failure(IllegalStateException(message))
                             }
@@ -202,7 +215,7 @@ class RustMatrixClient(
                         userId.isNullOrBlank() ||
                         deviceId.isNullOrBlank()
                     ) {
-                        val message = "Failed to initialize secure messaging session"
+                        val message = STARTUP_ERROR_MESSAGE
                         _state.value = MatrixClientState.Error(message)
                         return Result.failure(IllegalStateException(message))
                     }
@@ -273,7 +286,8 @@ class RustMatrixClient(
                         wipeMatrixStore(storeNamespace)
                         return attemptConnect(retried = true)
                     }
-                    _state.value = MatrixClientState.Error(throwable.message ?: "Failed to initialize Matrix")
+                    println("Matrix SDK startup failed: ${throwable.message}")
+                    _state.value = MatrixClientState.Error(STARTUP_ERROR_MESSAGE)
                 }
 
             attemptConnect()
@@ -284,7 +298,7 @@ class RustMatrixClient(
                 registerPusherIfConfigured()
                 Result.success(Unit)
             } else {
-                Result.failure(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: "Failed to initialize Matrix"))
+                Result.failure(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: STARTUP_ERROR_MESSAGE))
             }
         }
 
@@ -357,12 +371,22 @@ class RustMatrixClient(
                                 println("Matrix getJoinedRoom($roomId): timeline creation failed: ${throwable.message}")
                             }.getOrNull()
                     if (liveTimeline != null) {
-                        val cachedTimelineItems =
+                        val cachedTimeline =
                             runCatching {
                                 withContext(Dispatchers.IO) {
-                                    roomTimelineCacheStore.load(roomId = roomId)
+                                    roomTimelineCacheStore.loadSnapshot(
+                                        roomId = roomId,
+                                        limit = HOT_TIMELINE_CACHE_ITEMS,
+                                    )
                                 }
-                            }.getOrDefault(emptyList())
+                            }.getOrDefault(
+                                RoomTimelineCacheSnapshotData(
+                                    items = emptyList(),
+                                    isHydrated = false,
+                                    cachedItemCount = 0,
+                                    updatedAtMillis = 0L,
+                                ),
+                            )
                         val wrappedRoom =
                             JoinedRustRoom(
                                 innerRoom = room,
@@ -374,12 +398,17 @@ class RustMatrixClient(
                                         coroutineScope = scope,
                                         roomId = roomId,
                                         timelineCacheStore = roomTimelineCacheStore,
-                                        initialItems = cachedTimelineItems,
+                                        initialItems = cachedTimeline.items,
                                     ),
                                 coroutineScope = scope,
                             )
                         openedRooms[roomId] = wrappedRoom
                         observeOpenedRoomTimelineSummary(room, wrappedRoom)
+                        if (!cachedTimeline.isHydrated) {
+                            scope.launch(Dispatchers.Default) {
+                                requestRoomTimelineBackfill(roomId)
+                            }
+                        }
                         scope.launch(Dispatchers.Default) {
                             publishOpenedRoomSummary(room)
                         }
@@ -397,6 +426,63 @@ class RustMatrixClient(
         }
         return null
     }
+
+    override suspend fun getRoomTimelineCache(
+        roomId: String,
+        limit: Int,
+    ): RoomTimelineCacheSnapshot {
+        val snapshot =
+            withContext(Dispatchers.IO) {
+                roomTimelineCacheStore.loadSnapshot(roomId = roomId, limit = limit)
+            }
+        return RoomTimelineCacheSnapshot(
+            items = snapshot.items,
+            isHydrated = snapshot.isHydrated,
+            cachedItemCount = snapshot.cachedItemCount,
+            updatedAtMillis = snapshot.updatedAtMillis,
+        )
+    }
+
+    override suspend fun requestRoomTimelineBackfill(roomId: String): Result<Unit> =
+        runCatching {
+            if (roomId.isBlank()) return@runCatching
+            ensureStarted().getOrThrow()
+            val innerClient = client ?: return@runCatching
+
+            val shouldStart =
+                synchronized(timelineBackfillJobs) {
+                    val active = timelineBackfillJobs[roomId]?.isActive == true
+                    if (active) {
+                        false
+                    } else {
+                        true
+                    }
+                }
+            if (!shouldStart) return@runCatching
+
+            val room = innerClient.getRoom(roomId) ?: return@runCatching
+            val backfillJob =
+                scope.launch(Dispatchers.Default) {
+                    runCatching {
+                        val hiddenTimeline = room.timelineWithConfiguration(createLiveTimelineConfiguration())
+                        hydrateRoomTimelineCache(
+                            roomId = roomId,
+                            hiddenTimeline = hiddenTimeline,
+                            ownUserId = room.ownUserId(),
+                        )
+                    }.onFailure { throwable ->
+                        println("Timeline backfill failed for $roomId: ${throwable.message}")
+                    }.also {
+                        synchronized(timelineBackfillJobs) {
+                            timelineBackfillJobs.remove(roomId)
+                        }
+                    }
+                }
+
+            synchronized(timelineBackfillJobs) {
+                timelineBackfillJobs[roomId] = backfillJob
+            }
+        }
 
     private suspend fun publishOpenedRoomSummary(room: Room) {
         val mappedRoom =
@@ -493,6 +579,8 @@ class RustMatrixClient(
                 rememberPreviewSummary(mapped)
                 mapped
             }.getOrNull() ?: return
+
+        persistRoomSummaryMetadata(mappedRoom)
 
         val updated =
             (_rooms.value + mappedRoom)
@@ -766,6 +854,21 @@ class RustMatrixClient(
             if (_rooms.value != sortedRooms) {
                 _rooms.value = sortedRooms
             }
+            persistRoomSummariesMetadata(sortedRooms)
+
+            // Eagerly open timelines for rooms where we sent the latest message but have
+            // no read receipt data yet. Once the SDK hydrates the timeline,
+            // observeOpenedRoomTimelineSummary will pick up readByCount and update the preview.
+            val roomsNeedingReadState = sortedRooms
+                .filter { it.latestMessageIsMine && it.latestMessageReadByCount == 0 }
+                .filter { openedRooms[it.roomId] == null }
+                .take(10)
+
+            for (summary in roomsNeedingReadState) {
+                scope.launch(Dispatchers.Default) {
+                    runCatching { getJoinedRoom(summary.roomId) }
+                }
+            }
         }
     }
 
@@ -843,11 +946,58 @@ class RustMatrixClient(
         reportUtds = false,
     )
 
+    private suspend fun hydrateRoomTimelineCache(
+        roomId: String,
+        hiddenTimeline: Timeline,
+        ownUserId: String,
+    ) {
+        val wrapped =
+            ChatTimeline(
+                inner = hiddenTimeline,
+                mode = MatrixTimelineMode.Live,
+                ownUserId = ownUserId,
+                coroutineScope = scope,
+                roomId = roomId,
+                timelineCacheStore = roomTimelineCacheStore,
+                initialItems = emptyList(),
+            )
+
+        try {
+            var hasMore = true
+            var steps = 0
+            while (hasMore && steps < MAX_BACKFILL_STEPS) {
+                hasMore = wrapped.paginateBackwards(BACKFILL_BATCH_SIZE).getOrElse { false }
+                steps += 1
+            }
+
+            val fullSnapshot = wrapped.items.value
+            val hitStart = !hasMore || fullSnapshot.any { it is MatrixTimelineItem.TimelineStart }
+            withContext(Dispatchers.IO) {
+                if (fullSnapshot.isNotEmpty()) {
+                    roomTimelineCacheStore.saveSnapshot(
+                        roomId = roomId,
+                        items = fullSnapshot,
+                        isHydrated = hitStart,
+                    )
+                }
+                if (hitStart) {
+                    roomTimelineCacheStore.markHydrated(roomId)
+                }
+            }
+        } finally {
+            wrapped.close()
+        }
+    }
+
     private fun cleanupInternal() {
         openedRooms.values.forEach { room -> room.close() }
         openedRooms.clear()
         openedRoomSummaryJobs.values.forEach { it.cancel() }
         openedRoomSummaryJobs.clear()
+        synchronized(timelineBackfillJobs) {
+            timelineBackfillJobs.values.forEach { it.cancel() }
+            timelineBackfillJobs.clear()
+        }
         synchronized(dmRoomIdsByUserId) { dmRoomIdsByUserId.clear() }
         synchronized(dmAvatarUrlsByUserId) { dmAvatarUrlsByUserId.clear() }
         synchronized(timelinePreviewByRoomId) { timelinePreviewByRoomId.clear() }
@@ -1030,7 +1180,7 @@ class RustMatrixClient(
                             avatarUrl = row.avatar_url,
                             isDirect = row.is_direct != 0L,
                             directUserId = row.direct_user_id,
-                            unreadCount = 0,
+                            unreadCount = row.unread_count.toInt(),
                             latestMessage = row.message,
                             latestTimestampMillis = row.timestamp_millis,
                             latestMessageIsMine = row.is_mine != 0L,
@@ -1078,6 +1228,45 @@ class RustMatrixClient(
                 // Best-effort persistence
             }
         }
+    }
+
+    private fun persistRoomSummariesMetadata(summaries: List<MatrixRoomSummary>) {
+        if (summaries.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            val updatedAt = System.currentTimeMillis()
+            try {
+                summaries.forEach { summary ->
+                    persistRoomSummaryMetadata(summary = summary, updatedAt = updatedAt)
+                }
+            } catch (_: Exception) {
+                // Best-effort persistence
+            }
+        }
+    }
+
+    private fun persistRoomSummaryMetadata(summary: MatrixRoomSummary) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                persistRoomSummaryMetadata(summary = summary, updatedAt = System.currentTimeMillis())
+            } catch (_: Exception) {
+                // Best-effort persistence
+            }
+        }
+    }
+
+    private fun persistRoomSummaryMetadata(
+        summary: MatrixRoomSummary,
+        updatedAt: Long,
+    ) {
+        db.roomPreviewQueries.upsertMetadataOnly(
+            room_id = summary.roomId,
+            updated_at = updatedAt,
+            display_name = summary.displayName,
+            avatar_url = summary.avatarUrl,
+            is_direct = if (summary.isDirect) 1L else 0L,
+            direct_user_id = summary.directUserId,
+            unread_count = summary.unreadCount.toLong(),
+        )
     }
 
     private suspend fun matrixStoreNamespace(): String =

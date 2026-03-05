@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS room_preview;
+
+CREATE TABLE room_preview (
+    room_id TEXT NOT NULL PRIMARY KEY,
+    message TEXT NOT NULL,
+    timestamp_millis INTEGER NOT NULL,
+    is_mine INTEGER NOT NULL DEFAULT 0,
+    send_status TEXT,
+    read_by_count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    display_name TEXT,
+    avatar_url TEXT,
+    is_direct INTEGER NOT NULL DEFAULT 0,
+    direct_user_id TEXT,
+    unread_count INTEGER NOT NULL DEFAULT 0
+);

@@ -1,0 +1,2 @@
+-- No-op migration reserved for timeline cache stabilization.
+SELECT 1;

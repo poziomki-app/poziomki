@@ -15,6 +15,19 @@ class NoopMatrixClient : MatrixClient {
 
     override suspend fun getJoinedRoom(roomId: String): JoinedRoom? = null
 
+    override suspend fun getRoomTimelineCache(
+        roomId: String,
+        limit: Int,
+    ): RoomTimelineCacheSnapshot =
+        RoomTimelineCacheSnapshot(
+            items = emptyList(),
+            isHydrated = false,
+            cachedItemCount = 0,
+            updatedAtMillis = 0L,
+        )
+
+    override suspend fun requestRoomTimelineBackfill(roomId: String): Result<Unit> = Result.success(Unit)
+
     override suspend fun createDM(
         userId: String,
         displayName: String?,
