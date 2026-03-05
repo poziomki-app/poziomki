@@ -1,0 +1,27 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    paths: [mobile/**]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew :androidApp:assembleDebug
+      - run: ./gradlew detekt
+      - run: ./gradlew ktlintCheck
