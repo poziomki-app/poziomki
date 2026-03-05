@@ -21,7 +21,6 @@ pub(in crate::api) struct EventsQuery {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) title: String,
     #[serde(default)]
@@ -45,7 +44,7 @@ pub(in crate::api) struct CreateEventBody {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::option_option, dead_code)]
+#[allow(clippy::option_option)]
 pub(in crate::api) struct UpdateEventBody {
     #[serde(default)]
     pub(in crate::api) title: Option<String>,

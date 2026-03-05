@@ -18,7 +18,7 @@ fn decode_profile_images(profile: &Profile) -> Vec<String> {
 
 async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
     let pic = profile_picture?;
-    let map = resolve_thumbhashes(&[pic.clone()]).await;
+    let map = resolve_thumbhashes(std::slice::from_ref(pic)).await;
     map.into_values().next()
 }
 

@@ -13,10 +13,11 @@ use diesel::sql_types::{BigInt, Text};
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
+use crate::api::auth_or_respond;
 use super::{
     error_response,
     state::{
-        require_auth_db, CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse,
+        CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse,
         TagScope, TagsQuery,
     },
     ErrorSpec,
@@ -67,12 +68,20 @@ pub(super) async fn tags_search(
 
     let mut conn = crate::db::conn().await?;
 
-    let data = if !search.is_empty() {
+    let data = if search.is_empty() {
+        // No search term: use Diesel query builder
+        let mut query_builder = tags::table.into_boxed();
+        if let Some(scope) = query.scope {
+            query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
+        }
+        let all_tags = query_builder.limit(limit).load::<Tag>(&mut conn).await?;
+        all_tags.iter().map(tag_model_to_response).collect::<Vec<_>>()
+    } else {
         // Use tsvector + ILIKE fallback for ranked search
+        use diesel::sql_types::Nullable;
         let pattern = format!("%{search}%");
         let scope_filter = query.scope.map(scope_to_str);
 
-        use diesel::sql_types::Nullable;
         let rows = diesel::sql_query(
             r"
             SELECT t.id, t.name, t.scope, t.category, t.emoji
@@ -106,14 +115,6 @@ pub(super) async fn tags_search(
                 onboarding_order: None,
             })
             .collect::<Vec<_>>()
-    } else {
-        // No search term: use Diesel query builder
-        let mut query_builder = tags::table.into_boxed();
-        if let Some(scope) = query.scope {
-            query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
-        }
-        let all_tags = query_builder.limit(limit).load::<Tag>(&mut conn).await?;
-        all_tags.iter().map(tag_model_to_response).collect::<Vec<_>>()
     };
 
     let mut response = Json(DataResponse { data }).into_response();
@@ -222,10 +223,7 @@ pub(super) async fn tags_create(
     headers: HeaderMap,
     Json(payload): Json<CreateTagBody>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, _user) = auth_or_respond!(headers);
 
     match validate_and_insert_tag(&headers, payload).await {
         Ok(inserted) => {
