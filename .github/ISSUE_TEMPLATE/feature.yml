@@ -1,0 +1,27 @@
+name: Propozycja
+description: Zaproponuj nowa funkcjonalnosc
+labels: [enhancement]
+body:
+  - type: textarea
+    id: opis
+    attributes:
+      label: Opis
+      description: Co chcesz dodac lub zmienic?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motywacja
+    attributes:
+      label: Motywacja
+      description: Dlaczego ta zmiana jest potrzebna?
+    validations:
+      required: false
+
+  - type: textarea
+    id: kontekst
+    attributes:
+      label: Dodatkowy kontekst
+      description: Inne informacje, mockupy, linki.
+    validations:
+      required: false
