@@ -74,7 +74,7 @@ async fn metrics_returns_json_with_valid_token() {
 
     let payload: serde_json::Value = response.json();
     assert_eq!(payload["meta"]["source"], "memory");
-    assert_eq!(payload["meta"]["degraded"], false);
+    assert_eq!(payload["meta"]["degraded"], true);
     assert_eq!(payload["meta"]["sample_interval_seconds"], 10);
     let sections = payload["charts"]
         .as_array()

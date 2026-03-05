@@ -98,6 +98,18 @@ fn init_diesel_pool() -> crate::error::AppResult<()> {
     crate::db::init_pool(&url).map_err(crate::error::AppError::Message)
 }
 
+fn metrics_instance_id() -> String {
+    std::env::var("METRICS_INSTANCE_ID")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            std::env::var("HOSTNAME")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .unwrap_or_else(|| format!("pid-{}", std::process::id()))
+}
+
 fn build_app_context() -> crate::error::AppResult<AppContext> {
     let url = std::env::var("DATABASE_URL")
         .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
@@ -112,6 +124,7 @@ pub fn build_test_app_context() -> crate::error::AppResult<AppContext> {
 
 pub fn init_test_metrics() {
     crate::metrics::init(crate::metrics::MetricsConfig {
+        instance_id: String::from("test"),
         pool_status: Box::new(|| None),
         auth_cache_size: Box::new(|| 0),
         outbox_snapshot: Box::new(|| Box::pin(async { None })),
@@ -135,6 +148,7 @@ pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
 
 fn init_metrics() {
     crate::metrics::init(crate::metrics::MetricsConfig {
+        instance_id: metrics_instance_id(),
         pool_status: Box::new(crate::db::pool_status),
         auth_cache_size: Box::new(crate::api::auth_cache_len),
         outbox_snapshot: Box::new(|| {
