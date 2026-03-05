@@ -134,7 +134,7 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.date.day.toString().padStart(2, '0')}.${dt.month.number.toString().padStart(2, '0')}.${dt.year}"
+                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${dt.monthNumber.toString().padStart(2, '0')}.${dt.year}"
                 }.getOrDefault("")
             } else {
                 ""
@@ -161,7 +161,7 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.endsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.date.day.toString().padStart(2, '0')}.${dt.month.number.toString().padStart(2, '0')}.${dt.year}"
+                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${dt.monthNumber.toString().padStart(2, '0')}.${dt.year}"
                 }.getOrDefault("")
             } else {
                 ""
@@ -726,7 +726,7 @@ private fun toIsoString(
 ): String {
     val dateInstant = Instant.fromEpochMilliseconds(dateMillis)
     val dateLd = dateInstant.toLocalDateTime(TimeZone.currentSystemDefault())
-    return "${dateLd.year}-${dateLd.month.number.toString().padStart(2, '0')}-${dateLd.date.day.toString().padStart(2, '0')}T${
+    return "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${
         hour.toString().padStart(2, '0')
     }:${minute.toString().padStart(2, '0')}:00Z"
 }

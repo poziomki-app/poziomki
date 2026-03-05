@@ -5,10 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.network.ApiResult
-import com.poziomki.app.network.Event
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.ui.feature.home.messages.MessagesUiState
 import com.poziomki.app.ui.feature.home.messages.buildDisplayNameOverrides
@@ -31,6 +31,7 @@ class MessagesViewModel(
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
     private val apiService: ApiService,
+    private val connectivityMonitor: ConnectivityMonitor,
 ) : ViewModel() {
     private companion object {
         const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
@@ -44,6 +45,7 @@ class MessagesViewModel(
     private val queuedWarmupRoomIds = ArrayDeque<String>()
     private val queuedWarmupRoomIdSet = mutableSetOf<String>()
     private val warmedPreviewRoomIds = mutableSetOf<String>()
+    private var pendingConnectivityRetry = false
 
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
@@ -55,6 +57,11 @@ class MessagesViewModel(
             .thenBy { it.roomId }
 
     init {
+        val cachedRooms = deduplicateAndSortRooms(matrixClient.rooms.value)
+        if (cachedRooms.isNotEmpty()) {
+            _state.value = _state.value.copy(rooms = cachedRooms, isLoading = false)
+        }
+        observeConnectivity()
         observeClientState()
         observeRooms()
         observeEventRooms()
@@ -70,29 +77,22 @@ class MessagesViewModel(
     fun refresh() {
         viewModelScope.launch {
             if (_state.value.rooms.isEmpty()) {
-                _state.update { it.copy(isLoading = true, error = null) }
+                _state.update { it.copy(isLoading = true) }
             }
 
-            matrixClient.ensureStarted().onFailure { throwable ->
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        error = throwable.message ?: "Failed to initialize Matrix",
-                    )
-                }
+            matrixClient.ensureStarted().onFailure {
+                pendingConnectivityRetry = true
+                _state.update { current -> current.copy(isLoading = false) }
                 return@launch
             }
 
-            matrixClient.refreshRooms().onFailure { throwable ->
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        error = throwable.message ?: "Failed to refresh Matrix room list",
-                    )
-                }
+            matrixClient.refreshRooms().onFailure {
+                pendingConnectivityRetry = true
+                _state.update { current -> current.copy(isLoading = false) }
                 return@launch
             }
 
+            pendingConnectivityRetry = false
             _state.update { current ->
                 if (current.rooms.isNotEmpty()) {
                     current.copy(isLoading = false)
@@ -122,26 +122,19 @@ class MessagesViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isRefreshing = true) }
 
-            matrixClient.ensureStarted().onFailure { throwable ->
-                _state.update {
-                    it.copy(
-                        isRefreshing = false,
-                        refreshError = throwable.message ?: "Failed to initialize Matrix",
-                    )
-                }
+            matrixClient.ensureStarted().onFailure {
+                pendingConnectivityRetry = true
+                _state.update { it.copy(isRefreshing = false) }
                 return@launch
             }
 
-            matrixClient.refreshRooms().onFailure { throwable ->
-                _state.update {
-                    it.copy(
-                        isRefreshing = false,
-                        refreshError = throwable.message ?: "Failed to refresh Matrix room list",
-                    )
-                }
+            matrixClient.refreshRooms().onFailure {
+                pendingConnectivityRetry = true
+                _state.update { it.copy(isRefreshing = false) }
                 return@launch
             }
 
+            pendingConnectivityRetry = false
             matchProfileRepository.refreshProfiles(forceRefresh = true)
             _state.update { it.copy(isRefreshing = false) }
         }
@@ -169,27 +162,22 @@ class MessagesViewModel(
         }
     }
 
-    fun clearError() {
-        _state.update { it.copy(error = null) }
-    }
-
-    fun clearRefreshError() {
-        _state.update { it.copy(refreshError = null) }
+    private fun observeConnectivity() {
+        viewModelScope.launch {
+            connectivityMonitor.isOnline.collect { isOnline ->
+                val shouldRetry = isOnline && pendingConnectivityRetry
+                if (shouldRetry) {
+                    pendingConnectivityRetry = false
+                    refresh()
+                }
+            }
+        }
     }
 
     private fun observeClientState() {
         viewModelScope.launch {
             matrixClient.state.collect { matrixState ->
-                _state.update { current ->
-                    current.copy(
-                        matrixState = matrixState,
-                        error =
-                            when (matrixState) {
-                                is MatrixClientState.Error -> matrixState.message
-                                else -> current.error
-                            },
-                    )
-                }
+                _state.update { current -> current.copy(matrixState = matrixState) }
             }
         }
     }
