@@ -35,8 +35,7 @@ where
     poziomki_backend::app::reset_test_database()
         .await
         .expect("truncate test tables");
-    let server = TestServer::new(poziomki_backend::app::build_router_with_state(ctx.clone()))
-        .expect("create axum test server");
+    let server = TestServer::new(poziomki_backend::app::build_router_with_state(ctx.clone()));
     f(server, ctx).await;
 }
 
