@@ -136,7 +136,9 @@ impl<'a> MatrixClient<'a> {
             "invite": invited_user_ids,
         });
         if let Some(name) = room_name {
-            payload["name"] = json!(name);
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("name".to_string(), json!(name));
+            }
         }
         let body: MatrixCreateRoomResponse = execute_matrix_json_request(
             self.http_client

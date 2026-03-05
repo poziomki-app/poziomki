@@ -88,13 +88,12 @@ fn bearer_token(headers: &HeaderMap) -> Option<String> {
 fn query_token_fallback_enabled() -> bool {
     std::env::var("PUSH_GATEWAY_QUERY_TOKEN_FALLBACK")
         .ok()
-        .map(|value| {
+        .is_none_or(|value| {
             matches!(
                 value.to_ascii_lowercase().as_str(),
                 "1" | "true" | "yes" | "on"
             )
         })
-        .unwrap_or(true)
 }
 
 fn provided_gateway_token(headers: &HeaderMap, query: &PushGatewayAuthQuery) -> Option<String> {

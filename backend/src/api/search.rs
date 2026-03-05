@@ -9,7 +9,8 @@ use axum::{
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use super::state::{require_auth_db, DataResponse};
+use crate::api::auth_or_respond;
+use super::state::DataResponse;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 type Result<T> = crate::error::AppResult<T>;
@@ -104,10 +105,7 @@ pub(super) async fn search_messages(
     headers: HeaderMap,
     Query(query): Query<MessageSearchQuery>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(20).clamp(1, 50));
     let q = query.q.trim().to_string();
@@ -143,10 +141,7 @@ pub(super) async fn search(
     headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, _user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(10).clamp(1, 50));
     let q = query.q.trim().to_string();

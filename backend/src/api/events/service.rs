@@ -105,17 +105,7 @@ pub(in crate::api) async fn load_event(
     headers: &HeaderMap,
     id: &str,
 ) -> std::result::Result<(Event, Uuid), HandlerError> {
-    let event_uuid = Uuid::parse_str(id).map_err(|_| {
-        Box::new(error_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            headers,
-            ErrorSpec {
-                error: "Invalid event ID".to_string(),
-                code: "BAD_REQUEST",
-                details: None,
-            },
-        ))
-    })?;
+    let event_uuid = crate::api::parse_uuid_response(id, "event", headers)?;
 
     let mut conn = crate::db::conn()
         .await

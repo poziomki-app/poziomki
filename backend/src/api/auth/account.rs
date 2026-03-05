@@ -5,9 +5,10 @@ use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 
-use super::super::state::{require_auth_db, DataResponse, DeleteAccountBody, SuccessResponse};
+use crate::api::auth_or_respond;
+use super::super::state::{DataResponse, DeleteAccountBody, SuccessResponse};
 use super::auth_service::unauthorized_error;
 type Result<T> = crate::error::AppResult<T>;
 
@@ -18,15 +19,21 @@ use crate::db::schema::{profiles, sessions, users};
 async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
 
-    let _ = diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
-        .execute(&mut conn)
-        .await;
-    let _ = diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
-        .execute(&mut conn)
-        .await;
-    let _ = diesel::delete(users::table.find(user_id))
-        .execute(&mut conn)
-        .await;
+    conn.transaction(|conn| {
+        Box::pin(async move {
+            diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
+                .execute(conn)
+                .await?;
+            diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+                .execute(conn)
+                .await?;
+            diesel::delete(users::table.find(user_id))
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        })
+    })
+    .await?;
     Ok(())
 }
 
@@ -35,10 +42,7 @@ pub(in crate::api) async fn delete_account(
     headers: HeaderMap,
     Json(payload): Json<DeleteAccountBody>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     if payload.password.is_empty()
         || !crate::security::verify_password(&payload.password, &user.password)
@@ -55,10 +59,7 @@ pub(in crate::api) async fn export_data(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let mut conn = crate::db::conn().await?;
 

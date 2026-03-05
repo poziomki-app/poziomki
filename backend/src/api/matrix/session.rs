@@ -8,7 +8,7 @@ use axum::{extract::State, http::HeaderMap, Json};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use super::super::state::require_auth_db;
+use crate::api::auth_or_respond;
 use super::{chat_bootstrap_error, matrix_service, MatrixSessionRequest};
 use crate::db::models::profiles::Profile;
 use crate::db::schema::profiles;
@@ -19,10 +19,7 @@ pub(super) async fn create_session(
     Json(payload): Json<MatrixSessionRequest>,
 ) -> Result<Response> {
     let (user_pid, user_name, profile_picture) = {
-        let (_session, user) = match require_auth_db(&headers).await {
-            Ok(auth) => auth,
-            Err(response) => return Ok(*response),
-        };
+        let (_session, user) = auth_or_respond!(headers);
         let pic = {
             let mut conn = crate::db::conn().await.ok();
             match conn.as_mut() {
