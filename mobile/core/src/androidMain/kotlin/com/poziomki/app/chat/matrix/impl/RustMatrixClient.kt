@@ -67,6 +67,8 @@ import org.matrix.rustcomponents.sdk.TimelineFocus
 import uniffi.matrix_sdk.BackupDownloadStrategy
 import uniffi.matrix_sdk_ui.LatestEventValueLocalState
 import uniffi.matrix_sdk_ui.TimelineReadReceiptTracking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 
@@ -100,6 +102,38 @@ class RustMatrixClient(
     private var roomListSubscription: RoomListSubscription? = null
     private var activeAppUserId: String? = null
 
+    @Serializable
+    private data class CachedBootstrap(
+        val homeserver: String,
+        val accessToken: String,
+        val refreshToken: String,
+        val userId: String,
+        val deviceId: String,
+    )
+
+    private val bootstrapJson = Json { ignoreUnknownKeys = true }
+
+    private fun bootstrapCacheFile(): File = File(appContext.filesDir, "matrix-bootstrap-cache.json")
+
+    private fun saveCachedBootstrap(bootstrap: CachedBootstrap) {
+        runCatching {
+            val file = bootstrapCacheFile()
+            file.parentFile?.mkdirs()
+            file.writeText(bootstrapJson.encodeToString(CachedBootstrap.serializer(), bootstrap))
+        }
+    }
+
+    private fun loadCachedBootstrap(): CachedBootstrap? =
+        runCatching {
+            val file = bootstrapCacheFile()
+            if (!file.exists()) return@runCatching null
+            bootstrapJson.decodeFromString(CachedBootstrap.serializer(), file.readText())
+        }.getOrNull()
+
+    private fun clearCachedBootstrap() {
+        runCatching { bootstrapCacheFile().delete() }
+    }
+
     private val openedRooms = mutableMapOf<String, JoinedRustRoom>()
     private var cachedConfig: MatrixConfigData? = null
     private val dmRoomIdsByUserId = mutableMapOf<String, String>()
@@ -125,6 +159,7 @@ class RustMatrixClient(
             }
             if (client != null && activeAppUserId != currentAppUserId) {
                 cleanupInternal()
+                clearCachedBootstrap()
                 _rooms.value = emptyList()
                 _state.value = MatrixClientState.Idle
             }
@@ -139,6 +174,10 @@ class RustMatrixClient(
 
                     is ApiResult.Error -> {
                         println("Matrix config fetch failed: ${configResult.message}")
+                        val cached = loadCachedBootstrap()
+                        if (cached != null) {
+                            return@withLock startFromCachedBootstrap(cached, currentAppUserId)
+                        }
                         val message = STARTUP_ERROR_MESSAGE
                         _state.value = MatrixClientState.Error(message)
                         return@withLock Result.failure(IllegalStateException(message))
@@ -198,6 +237,10 @@ class RustMatrixClient(
 
                             is ApiResult.Error -> {
                                 println("Matrix session bootstrap failed: ${sessionResult.message}")
+                                val cached = loadCachedBootstrap()
+                                if (cached != null && cached.homeserver == homeserver) {
+                                    return startFromCachedBootstrap(cached, currentAppUserId)
+                                }
                                 val message = STARTUP_ERROR_MESSAGE
                                 _state.value = MatrixClientState.Error(message)
                                 return Result.failure(IllegalStateException(message))
@@ -274,6 +317,13 @@ class RustMatrixClient(
                     client = newClient
                     syncService = newSyncService
                     _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId())
+                    saveCachedBootstrap(CachedBootstrap(
+                        homeserver = homeserver,
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
+                        userId = userId,
+                        deviceId = deviceId,
+                    ))
                 }.onFailure { throwable ->
                     cleanupInternal()
                     if (!retried) {
@@ -691,8 +741,67 @@ class RustMatrixClient(
     override suspend fun stop() {
         startStopMutex.withLock {
             cleanupInternal()
+            clearCachedBootstrap()
             _rooms.value = emptyList()
             _state.value = MatrixClientState.Idle
+        }
+    }
+
+    private suspend fun startFromCachedBootstrap(
+        cached: CachedBootstrap,
+        currentAppUserId: String?,
+    ): Result<Unit> {
+        val storeNamespace = matrixStoreNamespace()
+        val dataPath = File(appContext.filesDir, "matrix-sdk/$storeNamespace/data").apply { mkdirs() }
+        val cachePath = File(appContext.cacheDir, "matrix-sdk/$storeNamespace/cache").apply { mkdirs() }
+
+        return runCatching {
+            val matrixDeviceId = loadOrCreateMatrixDeviceId(storeNamespace)
+            val newClient = ClientBuilder()
+                .homeserverUrl(cached.homeserver)
+                .sqliteStore(SqliteStoreBuilder(dataPath.absolutePath, cachePath.absolutePath))
+                .requestConfig(RequestConfig(
+                    retryLimit = 3u,
+                    timeout = 30_000u,
+                    maxConcurrentRequests = null,
+                    maxRetryTime = null,
+                ))
+                .autoEnableBackups(true)
+                .autoEnableCrossSigning(true)
+                .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
+                .build()
+
+            newClient.restoreSession(
+                org.matrix.rustcomponents.sdk.Session(
+                    accessToken = cached.accessToken,
+                    refreshToken = cached.refreshToken,
+                    userId = cached.userId,
+                    deviceId = cached.deviceId,
+                    homeserverUrl = cached.homeserver,
+                    oidcData = null,
+                    slidingSyncVersion = SlidingSyncVersion.NATIVE,
+                ),
+            )
+
+            val newSyncService = newClient.syncService()
+                .withOfflineMode()
+                .withSharePos(true)
+                .finish()
+            newSyncService.start()
+
+            runCatching { newClient.enableAllSendQueues(true) }
+
+            subscribeRoomList(newSyncService)
+
+            client = newClient
+            syncService = newSyncService
+            activeAppUserId = currentAppUserId
+            cachedConfig = MatrixConfigData(homeserver = cached.homeserver)
+            _state.value = MatrixClientState.Ready(cached.userId, cached.homeserver, cached.deviceId)
+        }.onFailure {
+            println("Cached bootstrap startup failed: ${it.message}")
+            clearCachedBootstrap()
+            _state.value = MatrixClientState.Error(STARTUP_ERROR_MESSAGE)
         }
     }
 
