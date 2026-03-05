@@ -5,15 +5,36 @@ CREATE TABLE room_preview (
     is_mine INTEGER NOT NULL DEFAULT 0,
     send_status TEXT,
     read_by_count INTEGER NOT NULL DEFAULT 0,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    display_name TEXT,
+    avatar_url TEXT,
+    is_direct INTEGER NOT NULL DEFAULT 0,
+    direct_user_id TEXT,
+    unread_count INTEGER NOT NULL DEFAULT 0
 );
 
 selectAll:
 SELECT * FROM room_preview;
 
-upsert:
-INSERT OR REPLACE INTO room_preview(room_id, message, timestamp_millis, is_mine, send_status, read_by_count, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+upsertMessage:
+INSERT INTO room_preview(room_id, message, timestamp_millis, is_mine, send_status, read_by_count, updated_at, display_name, avatar_url, is_direct, direct_user_id, unread_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, 0)
+ON CONFLICT(room_id) DO UPDATE SET
+    message = excluded.message,
+    timestamp_millis = excluded.timestamp_millis,
+    is_mine = excluded.is_mine,
+    send_status = excluded.send_status,
+    read_by_count = excluded.read_by_count,
+    updated_at = excluded.updated_at;
+
+updateMetadata:
+UPDATE room_preview SET
+    display_name = ?,
+    avatar_url = ?,
+    is_direct = ?,
+    direct_user_id = ?,
+    unread_count = ?
+WHERE room_id = ?;
 
 deleteAll:
 DELETE FROM room_preview;

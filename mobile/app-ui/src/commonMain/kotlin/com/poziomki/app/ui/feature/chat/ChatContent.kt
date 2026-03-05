@@ -835,8 +835,8 @@ internal fun formatDate(timestampMillis: Long): String {
         daysDiff == 0 -> "Dzisiaj"
         daysDiff == 1 -> "Wczoraj"
         daysDiff in 2..6 -> weekdayShort(date.dayOfWeek)
-        now.year == date.year -> "${date.day} ${monthShort(date.month.number)}"
-        else -> "${date.day} ${monthShort(date.month.number)} ${date.year}"
+        now.year == date.year -> "${date.dayOfMonth} ${monthShort(date.monthNumber)}"
+        else -> "${date.dayOfMonth} ${monthShort(date.monthNumber)} ${date.year}"
     }
 }
 

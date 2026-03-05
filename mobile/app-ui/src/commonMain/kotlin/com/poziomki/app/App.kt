@@ -12,6 +12,7 @@ import coil3.PlatformContext
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
+import coil3.annotation.ExperimentalCoilApi
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.data.sync.SyncEngine
@@ -104,6 +105,7 @@ private fun buildImageLoaderFactory(
             }.components {
                 add(ImgproxyCacheInterceptor())
                 add(MxcMediaFetcher.Factory(matrixClient))
+                @OptIn(ExperimentalCoilApi::class)
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()
     }
