@@ -54,6 +54,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    metrics_histogram_samples (ts, instance_id, chart, series, bucket) {
+        ts -> Timestamptz,
+        instance_id -> Text,
+        chart -> Int2,
+        series -> Int2,
+        bucket -> Int2,
+        count -> Int8,
+    }
+}
+
+diesel::table! {
+    metrics_scalar_samples (ts, instance_id, chart, series) {
+        ts -> Timestamptz,
+        instance_id -> Text,
+        chart -> Int2,
+        series -> Int2,
+        value -> Float4,
+    }
+}
+
+diesel::table! {
     job_outbox (id) {
         id -> Uuid,
         topic -> Varchar,
@@ -212,6 +233,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     event_tags,
     events,
     job_outbox,
+    metrics_histogram_samples,
+    metrics_scalar_samples,
     matrix_dm_rooms,
     otp_codes,
     profile_tags,
