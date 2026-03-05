@@ -1,6 +1,6 @@
-# Jak kontrybować
+## Jak kontrybować?
 
-## Wymagania
+### Wymagania
 
 - [Rust](https://rustup.rs/) (stable) — backend
 - [JDK 21](https://adoptium.net/) — aplikacja mobilna
@@ -8,7 +8,7 @@
 - Opcjonalnie: [Nix](https://nixos.org/) — `nix develop` dostarczy cały toolchain za Ciebie
 - Opcjonalnie: [Docker](https://www.docker.com/) — wygodny sposób na uruchomienie Postgres
 
-## Przygotowanie
+### Przygotowanie
 
 Skopiuj plik konfiguracji i uzupełnij wartości:
 
@@ -18,7 +18,7 @@ cp .env.example .env
 
 Potrzebujesz co najmniej `DATABASE_URL` i `JWT_SECRET`. Przykładowe wartości znajdziesz w `.env.example`.
 
-## Backend
+### Backend
 
 ```sh
 cd backend
@@ -40,7 +40,7 @@ cargo test
 
 Jeśli korzystasz z Nix, `nix fmt` uruchomi treefmt (rustfmt, ktfmt, shfmt i inne) dla całego repozytorium.
 
-## Aplikacja mobilna
+### Aplikacja mobilna
 
 ```sh
 cd mobile
@@ -54,11 +54,9 @@ Lintowanie:
 ./gradlew ktlintCheck
 ```
 
-## Zgłaszanie issues
+### Issues
 
 Użyj szablonów w zakładce [Issues](../../issues/new/choose):
 
-- **Błąd** — opis problemu, kroki do odtworzenia, platforma
-- **Propozycja** — opis funkcjonalności i motywacja
-
-W razie wątpliwości — zgłoś, ustalimy.
+- **Błąd** - opis problemu, kroki do odtworzenia, platforma (Android/iOS)
+- **Propozycja** - opis funkcjonalności i motywacja
