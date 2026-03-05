@@ -38,6 +38,7 @@ use super::ErrorSpec;
 use crate::db::models::otp_codes::{NewOtpCode, OtpCode};
 use crate::db::schema::otp_codes;
 pub(super) use auth::*;
+pub use auth::{auth_cache_len, spawn_auth_cache_eviction};
 pub(super) use auth_requests::*;
 pub(super) use auth_responses::*;
 pub(super) use catalog_requests::*;

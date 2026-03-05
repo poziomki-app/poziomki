@@ -26,6 +26,7 @@ pub(crate) use common::{
     ErrorSpec, env_non_empty, error_response, extract_filename, resolve_image_url,
     resolve_image_urls, resolve_thumbhashes,
 };
+pub(crate) use state::{auth_cache_len, spawn_auth_cache_eviction};
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
