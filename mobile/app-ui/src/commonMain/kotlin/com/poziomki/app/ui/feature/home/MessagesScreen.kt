@@ -19,11 +19,9 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -123,7 +121,7 @@ fun MessagesScreen(
                 }
 
                 state.rooms.isEmpty() -> {
-                    EmptyView(state.error ?: "brak rozmów")
+                    EmptyView("brak rozmów")
                 }
 
                 else -> {
@@ -194,22 +192,6 @@ fun MessagesScreen(
                 contentDescription = "Nowa wiadomo\u015b\u0107",
                 modifier = Modifier.size(24.dp),
             )
-        }
-
-        // Refresh error snackbar
-        state.refreshError?.let { error ->
-            Snackbar(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(PoziomkiTheme.spacing.md),
-            ) {
-                Text(text = error)
-            }
-            LaunchedEffect(error) {
-                kotlinx.coroutines.delay(3000)
-                viewModel.clearRefreshError()
-            }
         }
     }
 }

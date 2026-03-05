@@ -8,8 +8,6 @@ data class MessagesUiState(
     val matrixState: MatrixClientState = MatrixClientState.Idle,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
-    val error: String? = null,
-    val refreshError: String? = null,
     val profilePictures: Map<String, String> = emptyMap(),
     val profilePicturesByName: Map<String, String> = emptyMap(),
     val displayNameOverrides: Map<String, String> = emptyMap(),

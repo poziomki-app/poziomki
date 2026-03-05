@@ -7,6 +7,7 @@
 package com.poziomki.app.chat.matrix.impl
 
 import android.content.Context
+import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.db.PoziomkiDatabase
@@ -33,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
 import org.matrix.rustcomponents.sdk.RequestConfig
@@ -55,8 +57,13 @@ import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
 import org.matrix.rustcomponents.sdk.TimelineItemContent
+import org.matrix.rustcomponents.sdk.DateDividerMode
+import org.matrix.rustcomponents.sdk.TimelineConfiguration
+import org.matrix.rustcomponents.sdk.TimelineFilter
+import org.matrix.rustcomponents.sdk.TimelineFocus
 import uniffi.matrix_sdk.BackupDownloadStrategy
 import uniffi.matrix_sdk_ui.LatestEventValueLocalState
+import uniffi.matrix_sdk_ui.TimelineReadReceiptTracking
 import java.io.File
 import java.util.UUID
 
@@ -65,6 +72,7 @@ class RustMatrixClient(
     private val sessionManager: SessionManager,
     private val appContext: Context,
     private val db: PoziomkiDatabase,
+    private val roomTimelineCacheStore: RoomTimelineCacheStore,
 ) : MatrixClient {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val startStopMutex = Mutex()
@@ -89,7 +97,6 @@ class RustMatrixClient(
     private val dmAvatarUrlsByUserId = mutableMapOf<String, String>()
     private val openedRoomSummaryJobs = mutableMapOf<String, Job>()
     private val timelinePreviewByRoomId = mutableMapOf<String, TimelinePreview>()
-
     init {
         loadCachedPreviews()
     }
@@ -344,15 +351,31 @@ class RustMatrixClient(
                     }
 
                     val liveTimeline =
-                        runCatching { room.timeline() }
-                            .onFailure { throwable ->
+                        runCatching {
+                            room.timelineWithConfiguration(createLiveTimelineConfiguration())
+                        }.onFailure { throwable ->
                                 println("Matrix getJoinedRoom($roomId): timeline creation failed: ${throwable.message}")
                             }.getOrNull()
                     if (liveTimeline != null) {
+                        val cachedTimelineItems =
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    roomTimelineCacheStore.load(roomId = roomId)
+                                }
+                            }.getOrDefault(emptyList())
                         val wrappedRoom =
                             JoinedRustRoom(
                                 innerRoom = room,
-                                liveTimeline = RustTimeline(liveTimeline, MatrixTimelineMode.Live, room.ownUserId(), scope),
+                                liveTimeline =
+                                    ChatTimeline(
+                                        inner = liveTimeline,
+                                        mode = MatrixTimelineMode.Live,
+                                        ownUserId = room.ownUserId(),
+                                        coroutineScope = scope,
+                                        roomId = roomId,
+                                        timelineCacheStore = roomTimelineCacheStore,
+                                        initialItems = cachedTimelineItems,
+                                    ),
                                 coroutineScope = scope,
                             )
                         openedRooms[roomId] = wrappedRoom
@@ -809,6 +832,17 @@ class RustMatrixClient(
         }
     }
 
+    private fun createLiveTimelineConfiguration(
+        trackReadReceipts: TimelineReadReceiptTracking = TimelineReadReceiptTracking.ALL_EVENTS,
+    ): TimelineConfiguration = TimelineConfiguration(
+        focus = TimelineFocus.Live(hideThreadedEvents = false),
+        filter = TimelineFilter.All,
+        internalIdPrefix = null,
+        dateDividerMode = DateDividerMode.DAILY,
+        trackReadReceipts = trackReadReceipts,
+        reportUtds = false,
+    )
+
     private fun cleanupInternal() {
         openedRooms.values.forEach { room -> room.close() }
         openedRooms.clear()
@@ -861,7 +895,8 @@ class RustMatrixClient(
                     synchronized(timelinePreviewByRoomId) {
                         timelinePreviewByRoomId[roomId] = preview
                     }
-                    persistPreview(roomId, preview)
+                    val currentSummary = _rooms.value.firstOrNull { it.roomId == roomId }
+                    persistPreview(roomId, preview, currentSummary)
 
                     publishTimelinePreview(roomId, latestMessageEvent)
                 }
@@ -934,7 +969,7 @@ class RustMatrixClient(
             }
         }
         if (changed) {
-            persistPreview(summary.roomId, preview)
+            persistPreview(summary.roomId, preview, summary)
         }
     }
 
@@ -942,6 +977,8 @@ class RustMatrixClient(
         val timelinePreview =
             synchronized(timelinePreviewByRoomId) { timelinePreviewByRoomId[summary.roomId] }
                 ?: return summary
+
+        if (!hasMeaningfulPreview(timelinePreview.message)) return summary
 
         val shouldOverride =
             summary.latestMessage.isNullOrBlank() ||
@@ -967,6 +1004,7 @@ class RustMatrixClient(
             "Rozpoczęto rozmowę",
             "Zaproszenie",
             "Zaproszenie wysłane",
+            "Wiadomość",
             -> true
             else -> false
         }
@@ -974,6 +1012,7 @@ class RustMatrixClient(
     private fun loadCachedPreviews() {
         try {
             val rows = db.roomPreviewQueries.selectAll().executeAsList()
+            val cachedSummaries = mutableListOf<MatrixRoomSummary>()
             synchronized(timelinePreviewByRoomId) {
                 for (row in rows) {
                     timelinePreviewByRoomId[row.room_id] =
@@ -984,7 +1023,25 @@ class RustMatrixClient(
                             sendStatus = row.send_status?.toSendStatus(),
                             readByCount = row.read_by_count.toInt(),
                         )
+                    if (row.display_name != null) {
+                        cachedSummaries += MatrixRoomSummary(
+                            roomId = row.room_id,
+                            displayName = row.display_name,
+                            avatarUrl = row.avatar_url,
+                            isDirect = row.is_direct != 0L,
+                            directUserId = row.direct_user_id,
+                            unreadCount = 0,
+                            latestMessage = row.message,
+                            latestTimestampMillis = row.timestamp_millis,
+                            latestMessageIsMine = row.is_mine != 0L,
+                            latestMessageSendStatus = row.send_status?.toSendStatus(),
+                            latestMessageReadByCount = row.read_by_count.toInt(),
+                        )
+                    }
                 }
+            }
+            if (cachedSummaries.isNotEmpty()) {
+                _rooms.value = cachedSummaries.sortedWith(roomSummaryComparator)
             }
         } catch (_: Exception) {
             // DB not yet migrated or corrupted — proceed with empty cache
@@ -994,10 +1051,11 @@ class RustMatrixClient(
     private fun persistPreview(
         roomId: String,
         preview: TimelinePreview,
+        summary: MatrixRoomSummary? = null,
     ) {
         scope.launch(Dispatchers.IO) {
             try {
-                db.roomPreviewQueries.upsert(
+                db.roomPreviewQueries.upsertMessage(
                     room_id = roomId,
                     message = preview.message,
                     timestamp_millis = preview.timestampMillis,
@@ -1006,6 +1064,16 @@ class RustMatrixClient(
                     read_by_count = preview.readByCount.toLong(),
                     updated_at = System.currentTimeMillis(),
                 )
+                if (summary != null) {
+                    db.roomPreviewQueries.updateMetadata(
+                        display_name = summary.displayName,
+                        avatar_url = summary.avatarUrl,
+                        is_direct = if (summary.isDirect) 1L else 0L,
+                        direct_user_id = summary.directUserId,
+                        unread_count = summary.unreadCount.toLong(),
+                        room_id = roomId,
+                    )
+                }
             } catch (_: Exception) {
                 // Best-effort persistence
             }
@@ -1243,7 +1311,7 @@ private fun TimelineItemContent.toPreviewText(): String? =
         is TimelineItemContent.MsgLike -> {
             when (val kind = this.content.kind) {
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Message ->
-                    kind.content.body.takeIf { it.isNotBlank() } ?: "Wiadomość"
+                    kind.content.body.takeIf { it.isNotBlank() }
                 org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Wiadomość usunięta"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Ankieta: ${kind.question}"
                 is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body

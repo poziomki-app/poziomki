@@ -2,6 +2,8 @@ package com.poziomki.app.di
 
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.chat.draft.SqlDelightRoomComposerDraftStore
+import com.poziomki.app.chat.cache.RoomTimelineCacheStore
+import com.poziomki.app.chat.cache.SqlDelightRoomTimelineCacheStore
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.data.repository.DegreeRepository
@@ -27,6 +29,7 @@ val sharedModule =
     module {
         single { SessionManager(get(), get()) }
         single<RoomComposerDraftStore> { SqlDelightRoomComposerDraftStore(get()) }
+        single<RoomTimelineCacheStore> { SqlDelightRoomTimelineCacheStore(get()) }
         single {
             val sessionManager = get<SessionManager>()
             ApiClient(

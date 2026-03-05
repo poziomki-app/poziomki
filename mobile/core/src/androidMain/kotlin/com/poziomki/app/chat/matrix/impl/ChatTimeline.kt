@@ -6,6 +6,7 @@
  */
 package com.poziomki.app.chat.matrix.impl
 
+import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.matrix.api.MatrixReaction
 import com.poziomki.app.chat.matrix.api.MatrixReactionSender
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
@@ -15,9 +16,10 @@ import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.chat.matrix.api.Timeline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EmbeddedEventDetails
@@ -38,14 +40,24 @@ import org.matrix.rustcomponents.sdk.UploadParameters
 import org.matrix.rustcomponents.sdk.UploadSource
 import org.matrix.rustcomponents.sdk.VirtualTimelineItem
 import org.matrix.rustcomponents.sdk.messageEventContentFromMarkdown
-import uniffi.matrix_sdk.RoomPaginationStatus
+import uniffi.matrix_sdk.PaginationStatus
 
-class RustTimeline(
+class ChatTimeline(
     private val inner: org.matrix.rustcomponents.sdk.Timeline,
     override val mode: MatrixTimelineMode,
     private val ownUserId: String,
     private val coroutineScope: CoroutineScope,
+    private val roomId: String? = null,
+    private val timelineCacheStore: RoomTimelineCacheStore? = null,
+    initialItems: List<MatrixTimelineItem> = emptyList(),
 ) : Timeline {
+    private companion object {
+        const val EMIT_DEBOUNCE_MS = 120L
+        const val PERSIST_DEBOUNCE_MS = 350L
+        const val STARTUP_REPLACE_GUARD_MS = 3_000L
+        const val HOT_CACHE_MAX_ITEMS = 500
+    }
+
     private val rawItems = mutableListOf<TimelineItem>()
 
     private val _items = MutableStateFlow<List<MatrixTimelineItem>>(emptyList())
@@ -60,8 +72,29 @@ class RustTimeline(
     private var listenerHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
     private var paginationStatusHandle: org.matrix.rustcomponents.sdk.TaskHandle? = null
     private val inFlightTextSendHandles = mutableSetOf<org.matrix.rustcomponents.sdk.SendHandle>()
+    private var emitJob: Job? = null
+    private var hasPendingDiffs = false
+    private val initialItemsSnapshot = initialItems.toList()
+    private val initialItemsSize = initialItemsSnapshot.size
+    private val initialItemsIds: Set<String> = initialItemsSnapshot
+        .filterIsInstance<MatrixTimelineItem.Event>()
+        .mapTo(HashSet()) { it.eventOrTransactionId }
+    private var startupGuardEnabled = initialItemsSize > 0
+    private var startupGuardDeadlineMillis =
+        if (startupGuardEnabled) {
+            System.currentTimeMillis() + STARTUP_REPLACE_GUARD_MS
+        } else {
+            Long.MIN_VALUE
+        }
+    private val persistLock = Any()
+    private var persistJob: Job? = null
+    private var pendingPersistItems: List<MatrixTimelineItem>? = null
 
     init {
+        if (initialItemsSnapshot.isNotEmpty()) {
+            _items.value = initialItemsSnapshot
+        }
+
         coroutineScope.launch(Dispatchers.Default) {
             runCatching {
                 inner.addListener(
@@ -88,14 +121,14 @@ class RustTimeline(
                 runCatching {
                     inner.subscribeToBackPaginationStatus(
                         object : PaginationStatusListener {
-                            override fun onUpdate(status: RoomPaginationStatus) {
+                            override fun onUpdate(status: PaginationStatus) {
                                 when (status) {
-                                    is RoomPaginationStatus.Idle -> {
+                                    is PaginationStatus.Idle -> {
                                         _isPaginatingBackwards.value = false
                                         _hasMoreBackwards.value = !status.hitTimelineStart
                                     }
 
-                                    is RoomPaginationStatus.Paginating -> {
+                                    is PaginationStatus.Paginating -> {
                                         _isPaginatingBackwards.value = true
                                         _hasMoreBackwards.value = true
                                     }
@@ -171,8 +204,166 @@ class RustTimeline(
                 }
             }
 
-            _items.value = rawItems.mapNotNull { item -> item.toUiTimelineItem(ownUserId) }
+            hasPendingDiffs = true
+            scheduleEmit()
         }
+    }
+
+    private fun flushItems() {
+        val rawSnapshot =
+            synchronized(rawItems) {
+                rawItems.toList()
+            }
+        val mappedSnapshot = rawSnapshot.mapNotNull { item -> item.toUiTimelineItem(ownUserId) }
+        val visibleSnapshot = resolveVisibleSnapshot(mappedSnapshot)
+        val resolvedSnapshot = resolveUnfilledReplyDetails(visibleSnapshot)
+        if (_items.value != resolvedSnapshot) {
+            _items.value = resolvedSnapshot
+            schedulePersist(resolvedSnapshot)
+        }
+    }
+
+    private fun resolveUnfilledReplyDetails(items: List<MatrixTimelineItem>): List<MatrixTimelineItem> {
+        val hasUnresolved = items.any { item ->
+            item is MatrixTimelineItem.Event &&
+                item.inReplyTo != null &&
+                (item.inReplyTo.body == null || item.inReplyTo.senderDisplayName == null)
+        }
+        if (!hasUnresolved) return items
+
+        val eventsById = HashMap<String, MatrixTimelineItem.Event>()
+        for (item in items) {
+            if (item !is MatrixTimelineItem.Event) continue
+            item.eventId?.let { eventsById[it] = item }
+            eventsById[item.eventOrTransactionId] = item
+        }
+
+        return items.map { item ->
+            if (item !is MatrixTimelineItem.Event) return@map item
+            val reply = item.inReplyTo ?: return@map item
+            if (reply.body != null && reply.senderDisplayName != null) return@map item
+            val referenced = eventsById[reply.eventId] ?: return@map item
+            item.copy(
+                inReplyTo = reply.copy(
+                    body = reply.body ?: referenced.body,
+                    senderDisplayName = reply.senderDisplayName
+                        ?: referenced.senderDisplayName
+                        ?: referenced.senderId,
+                ),
+            )
+        }
+    }
+
+    private fun resolveVisibleSnapshot(liveSnapshot: List<MatrixTimelineItem>): List<MatrixTimelineItem> {
+        if (!startupGuardEnabled) return liveSnapshot
+        if (liveSnapshot.size >= initialItemsSize) {
+            startupGuardEnabled = false
+            return liveSnapshot
+        }
+        if (liveSnapshot.isEmpty()) return initialItemsSnapshot
+        val newEvents = liveSnapshot.filter { item ->
+            item is MatrixTimelineItem.Event && item.eventOrTransactionId !in initialItemsIds
+        }
+        if (newEvents.isNotEmpty()) return initialItemsSnapshot + newEvents
+        if (System.currentTimeMillis() < startupGuardDeadlineMillis) return initialItemsSnapshot
+        startupGuardEnabled = false
+        return liveSnapshot
+    }
+
+    private fun scheduleEmit() {
+        if (emitJob?.isActive == true) return
+        emitJob =
+            coroutineScope.launch {
+                while (true) {
+                    delay(EMIT_DEBOUNCE_MS)
+                    synchronized(rawItems) {
+                        hasPendingDiffs = false
+                    }
+                    flushItems()
+                    val continueBatching =
+                        synchronized(rawItems) {
+                            if (hasPendingDiffs) {
+                                true
+                            } else {
+                                emitJob = null
+                                false
+                            }
+                        }
+                    if (!continueBatching) return@launch
+                }
+            }
+    }
+
+    private fun schedulePersist(items: List<MatrixTimelineItem>) {
+        val targetRoomId = roomId ?: return
+        val store = timelineCacheStore ?: return
+        if (mode != MatrixTimelineMode.Live || items.isEmpty()) return
+
+        synchronized(persistLock) {
+            pendingPersistItems = items
+        }
+        if (persistJob?.isActive == true) return
+
+        persistJob =
+            coroutineScope.launch(Dispatchers.IO) {
+                while (true) {
+                    delay(PERSIST_DEBOUNCE_MS)
+                    val snapshot =
+                        synchronized(persistLock) {
+                            val pending = pendingPersistItems
+                            pendingPersistItems = null
+                            pending
+                        } ?: break
+
+                    runCatching {
+                        val isHydrated = snapshot.any { it is MatrixTimelineItem.TimelineStart }
+                        store.saveSnapshot(
+                            roomId = targetRoomId,
+                            items = snapshot.takeLast(HOT_CACHE_MAX_ITEMS),
+                            isHydrated = isHydrated,
+                        )
+                    }
+
+                    val hasMore =
+                        synchronized(persistLock) {
+                            pendingPersistItems != null
+                        }
+                    if (!hasMore) break
+                }
+                persistJob = null
+            }
+    }
+
+    private fun flushPendingPersistImmediately() {
+        persistJob?.cancel()
+        persistJob = null
+        val targetRoomId = roomId ?: return
+        val store = timelineCacheStore ?: return
+        if (mode != MatrixTimelineMode.Live) return
+        val snapshot =
+            synchronized(persistLock) {
+                val pending = pendingPersistItems
+                pendingPersistItems = null
+                pending
+            } ?: return
+        if (snapshot.isEmpty()) return
+        runCatching {
+            val isHydrated = snapshot.any { it is MatrixTimelineItem.TimelineStart }
+            store.saveSnapshot(
+                roomId = targetRoomId,
+                items = snapshot.takeLast(HOT_CACHE_MAX_ITEMS),
+                isHydrated = isHydrated,
+            )
+        }
+    }
+
+    private fun flushPendingDiffsImmediately() {
+        emitJob?.cancel()
+        emitJob = null
+        synchronized(rawItems) {
+            hasPendingDiffs = false
+        }
+        flushItems()
     }
 
     override suspend fun paginateBackwards(count: UShort): Result<Boolean> {
@@ -327,6 +518,8 @@ class RustTimeline(
         }
 
     override fun close() {
+        flushPendingDiffsImmediately()
+        flushPendingPersistImmediately()
         paginationStatusHandle?.cancel()
         listenerHandle?.cancel()
         synchronized(inFlightTextSendHandles) {
@@ -408,10 +601,11 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         }
     val inReplyTo = extractReplyDetails(event.content)
 
+    val sendStateEventId = (event.localSendState as? EventSendState.Sent)?.eventId
     val eventId =
         when (val eventOrTransactionId = event.eventOrTransactionId) {
             is EventOrTransactionId.EventId -> eventOrTransactionId.eventId
-            is EventOrTransactionId.TransactionId -> null
+            is EventOrTransactionId.TransactionId -> sendStateEventId
         }
 
     val rawId =
@@ -435,7 +629,11 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         reactions = reactions,
         isEditable = event.isEditable,
         sendStatus = event.localSendState.toUiSendStatus(eventId != null),
-        readByCount = event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) },
+        readByCount = event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) }.also { count ->
+            if (event.isOwn && count > 0) {
+                println("ReadReceipt: event=${rawId} readBy=${event.readReceipts.keys}")
+            }
+        },
         canReply = event.canBeRepliedTo,
     )
 }

@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.poziomki.app"
-    compileSdk = 35
+    compileSdk = 36
 
     buildFeatures {
         buildConfig = true
@@ -16,8 +16,8 @@ android {
         applicationId = "com.poziomki.rs.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 27
-        versionName = "0.1.4.15"
+        versionCode = 28
+        versionName = "0.1.4.18"
 
         val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")

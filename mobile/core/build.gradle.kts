@@ -13,7 +13,7 @@ kotlin {
 
     androidLibrary {
         namespace = "com.poziomki.shared"
-        compileSdk = 35
+        compileSdk = 36
         minSdk = 24
     }
 
@@ -59,6 +59,7 @@ sqldelight {
     databases {
         create("PoziomkiDatabase") {
             packageName.set("com.poziomki.app.db")
+            dialect("app.cash.sqldelight:sqlite-3-25-dialect:${libs.versions.sqldelight.get()}")
         }
     }
 }
