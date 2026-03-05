@@ -1,0 +1,24 @@
+CREATE TABLE room_timeline_cache (
+    room_id TEXT NOT NULL PRIMARY KEY,
+    payload_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+selectByRoomId:
+SELECT room_id, payload_json, updated_at
+FROM room_timeline_cache
+WHERE room_id = ?;
+
+upsertSnapshot:
+INSERT INTO room_timeline_cache(room_id, payload_json, updated_at)
+VALUES (?, ?, ?)
+ON CONFLICT(room_id) DO UPDATE SET
+    payload_json = excluded.payload_json,
+    updated_at = excluded.updated_at;
+
+deleteByRoomId:
+DELETE FROM room_timeline_cache
+WHERE room_id = ?;
+
+deleteAll:
+DELETE FROM room_timeline_cache;
