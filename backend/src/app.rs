@@ -136,7 +136,7 @@ pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
 fn init_metrics() {
     crate::metrics::init(crate::metrics::MetricsConfig {
         pool_status: Box::new(crate::db::pool_status),
-        auth_cache_size: Box::new(|| 0),
+        auth_cache_size: Box::new(crate::api::auth_cache_len),
         outbox_snapshot: Box::new(|| {
             Box::pin(async {
                 let snap = crate::jobs::outbox_stats_snapshot().await.ok()?;
@@ -158,6 +158,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     let cfg = load_runtime_config()?;
     let ctx = build_app_context()?;
     init_metrics();
+    crate::api::spawn_auth_cache_eviction();
     let router = build_router_with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
