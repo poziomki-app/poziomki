@@ -3,6 +3,8 @@ name: Security
 on:
   pull_request:
     paths: [backend/**, mobile/**]
+  push:
+    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
 
@@ -19,7 +21,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: backend
 
-  trivy:
+  trivy-backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +29,88 @@ jobs:
       - uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
+          scan-ref: backend
           severity: HIGH,CRITICAL
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-backend.sarif
 
       - uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+  trivy-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: mobile
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-mobile.sarif
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-mobile.sarif
+          category: trivy-mobile
+
+  clippy-sarif:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: poziomki
+          POSTGRES_PASSWORD: poziomki
+          POSTGRES_DB: poziomki_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U poziomki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://poziomki:poziomki@localhost:5432/poziomki_test
+      JWT_SECRET: ci-test-secret
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - run: cargo install clippy-sarif sarif-fmt
+
+      - name: Clippy SARIF
+        run: >
+          cargo clippy --all-targets --all-features --message-format=json
+          | clippy-sarif
+          | tee ../clippy-results.sarif
+          | sarif-fmt
+        continue-on-error: true
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: clippy-results.sarif
+          category: clippy
