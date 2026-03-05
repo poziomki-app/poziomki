@@ -1,0 +1,59 @@
+name: Blad
+description: Zglos blad w aplikacji
+labels: [bug]
+body:
+  - type: textarea
+    id: opis
+    attributes:
+      label: Opis
+      description: Co sie stalo?
+    validations:
+      required: true
+
+  - type: textarea
+    id: kroki
+    attributes:
+      label: Kroki do odtworzenia
+      description: Jak odtworzyc ten blad?
+      placeholder: |
+        1. Otworz...
+        2. Kliknij...
+        3. Pojawia sie...
+    validations:
+      required: true
+
+  - type: textarea
+    id: oczekiwane
+    attributes:
+      label: Oczekiwane zachowanie
+      description: Co powinno sie stac zamiast tego?
+    validations:
+      required: false
+
+  - type: textarea
+    id: zrzuty
+    attributes:
+      label: Zrzuty ekranu
+      description: Dolacz zrzuty ekranu jesli to mozliwe.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platforma
+    attributes:
+      label: Platforma
+      options:
+        - Android
+        - iOS
+        - Backend
+        - Inne
+    validations:
+      required: true
+
+  - type: textarea
+    id: kontekst
+    attributes:
+      label: Dodatkowy kontekst
+      description: Inne informacje ktore moga pomoc w naprawieniu bledu.
+    validations:
+      required: false
