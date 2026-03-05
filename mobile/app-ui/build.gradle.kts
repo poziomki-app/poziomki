@@ -13,7 +13,7 @@ kotlin {
 
     androidLibrary {
         namespace = "com.poziomki.app.ui"
-        compileSdk = 35
+        compileSdk = 36
         minSdk = 24
         androidResources.enable = true
     }

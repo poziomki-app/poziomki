@@ -86,7 +86,7 @@ class JoinedRustRoom(
                     ),
                 )
 
-            RustTimeline(
+            ChatTimeline(
                 inner = focusedInnerTimeline,
                 mode = MatrixTimelineMode.FocusedOnEvent(eventId),
                 ownUserId = innerRoom.ownUserId(),

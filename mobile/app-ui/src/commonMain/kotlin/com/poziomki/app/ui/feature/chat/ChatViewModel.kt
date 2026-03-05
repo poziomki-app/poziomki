@@ -37,8 +37,6 @@ class ChatViewModel(
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
         const val TYPING_STOP_IDLE_MS = 5_000L
-        const val INITIAL_PAGINATION_MAX_BATCHES = 12
-        val INITIAL_PAGINATION_BATCH_SIZE: UShort = 1000u
     }
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -403,30 +401,60 @@ class ChatViewModel(
         clearTypingTimers()
         typingState = false
         activeDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() }
+        if (latestRoomSummaries.isEmpty()) {
+            latestRoomSummaries = matrixClient.rooms.value
+        }
+        val cachedTimeline =
+            runCatching {
+                matrixClient.getRoomTimelineCache(roomId = roomId, limit = 500)
+            }.getOrNull()
+        val knownSummary = latestRoomSummaries.firstOrNull { it.roomId == roomId }
+        val inferredDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() } ?: knownSummary?.directUserId
+        val inferredIsDirect = knownSummary?.isDirect ?: (inferredDirectUserId != null)
+        activeDirectUserId = inferredDirectUserId
 
         val avatarOverrides = _uiState.value.avatarOverrides
-        val seededDisplayName = fallbackDisplayName?.trim().orEmpty()
+        val seededDisplayName =
+            fallbackDisplayName
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: knownSummary?.displayName.orEmpty()
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
                 roomDisplayName = seededDisplayName,
                 roomAvatarUrl =
-                    fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
+                    knownSummary?.avatarUrl
+                        ?: inferredDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
+                isDirectRoom = inferredIsDirect,
                 avatarOverrides = avatarOverrides,
-                isLoading = true,
+                timelineItems = cachedTimeline?.items ?: emptyList(),
+                isLoading = cachedTimeline?.items.isNullOrEmpty(),
             )
         lastVisibleTimelineIndex = null
         totalTimelineItemCount = 0
 
         matrixClient.ensureStarted().getOrElse { throwable ->
-            val currentOverrides = _uiState.value.avatarOverrides
-            _uiState.value =
-                ChatUiState(
+            _uiState.update { current ->
+                if (current.timelineItems.isNotEmpty()) {
+                    current.copy(
+                        isLoading = false,
+                        error = null,
+                    )
+                } else {
+                    current.copy(
+                        isLoading = false,
+                        error = throwable.message ?: "Failed to initialize Matrix",
+                    )
+                }
+            }
+            if (seededDisplayName.isNotBlank() || activeDirectUserId != null) {
+                schedulePendingRoomRetry(
                     roomId = roomId,
-                    avatarOverrides = currentOverrides,
-                    isLoading = false,
-                    error = throwable.message ?: "Failed to initialize Matrix",
+                    fallbackDisplayName = fallbackDisplayName,
+                    fallbackDirectUserId = activeDirectUserId,
                 )
+            }
             return
         }
         runCatching { matrixClient.refreshRooms() }
@@ -456,7 +484,7 @@ class ChatViewModel(
                             roomId = roomId,
                             avatarOverrides = currentOverrides,
                             isLoading = false,
-                            error = "Cannot open this conversation yet",
+                            error = "Nie można jeszcze otworzyć tej rozmowy.",
                         )
                 }
                 return
@@ -488,13 +516,13 @@ class ChatViewModel(
                 roomDisplayName = initialDisplayName,
                 roomAvatarUrl = initialAvatar,
                 isDirectRoom = initialIsDirect,
-                timelineItems = emptyList(),
+                timelineItems = cachedTimeline?.items ?: emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
                 typingUserIds = emptyList(),
                 messageDraft = restoredDraft,
                 composerMode = ComposerMode.NewMessage,
-                isLoading = false,
+                isLoading = cachedTimeline?.items.isNullOrEmpty(),
                 timelineMode = MatrixTimelineMode.Live,
                 error = null,
             )
@@ -771,51 +799,15 @@ class ChatViewModel(
         activeTimeline = timeline
         timelineJobs.forEach { it.cancel() }
         timelineJobs.clear()
-
-        // Auto-paginate on first bind for live timelines to load full history.
-        if (timeline.mode == MatrixTimelineMode.Live) {
-            timelineJobs +=
-                viewModelScope.launch {
-                    paginateAllBackwards(timeline)
-                }
+        val initialSnapshot = timeline.items.value
+        if (initialSnapshot.isNotEmpty()) {
+            applyTimelineItems(timeline = timeline, items = initialSnapshot)
         }
 
         timelineJobs +=
             viewModelScope.launch {
                 timeline.items.collectLatest { items ->
-                    totalTimelineItemCount = items.size
-                    val unreadBelowCount = computeUnreadBelowCount(items)
-                    _uiState.update { current ->
-                        val timelineAvatar =
-                            items
-                                .asSequence()
-                                .filterIsInstance<MatrixTimelineItem.Event>()
-                                .filter { !it.isMine }
-                                .mapNotNull { event ->
-                                    resolveAvatarOverride(event.senderId, current.avatarOverrides)
-                                        ?: event.senderAvatarUrl
-                                }.firstOrNull()
-                        val summary = latestRoomSummaries.firstOrNull { it.roomId == current.roomId }
-                        current.copy(
-                            timelineItems = items,
-                            roomAvatarUrl =
-                                resolveRoomAvatar(
-                                    summary = summary,
-                                    overrides = current.avatarOverrides,
-                                    roomDisplayName = current.roomDisplayName,
-                                    currentAvatar = current.roomAvatarUrl,
-                                    timelineAvatar = timelineAvatar,
-                                ),
-                            isAwayFromLatest =
-                                isAwayFromLatest(
-                                    firstVisibleItemIndex = lastVisibleTimelineIndex,
-                                    totalItems = items.size,
-                                ),
-                            unreadBelowCount = unreadBelowCount,
-                            timelineMode = timeline.mode,
-                            isLoading = false,
-                        )
-                    }
+                    applyTimelineItems(timeline = timeline, items = items)
                 }
             }
 
@@ -838,10 +830,44 @@ class ChatViewModel(
             }
     }
 
-    private suspend fun paginateAllBackwards(timeline: Timeline) {
-        repeat(INITIAL_PAGINATION_MAX_BATCHES) {
-            val loadedMore = timeline.paginateBackwards(INITIAL_PAGINATION_BATCH_SIZE).getOrElse { return }
-            if (!loadedMore) return
+    private fun applyTimelineItems(
+        timeline: Timeline,
+        items: List<MatrixTimelineItem>,
+    ) {
+        totalTimelineItemCount = items.size
+        val unreadBelowCount = computeUnreadBelowCount(items)
+        _uiState.update { current ->
+            val timelineAvatar =
+                items
+                    .asSequence()
+                    .filterIsInstance<MatrixTimelineItem.Event>()
+                    .filter { !it.isMine }
+                    .mapNotNull { event ->
+                        resolveAvatarOverride(event.senderId, current.avatarOverrides)
+                            ?: event.senderAvatarUrl
+                    }.firstOrNull()
+            val summary = latestRoomSummaries.firstOrNull { it.roomId == current.roomId }
+            val updated =
+                current.copy(
+                    timelineItems = items,
+                    roomAvatarUrl =
+                        resolveRoomAvatar(
+                            summary = summary,
+                            overrides = current.avatarOverrides,
+                            roomDisplayName = current.roomDisplayName,
+                            currentAvatar = current.roomAvatarUrl,
+                            timelineAvatar = timelineAvatar,
+                        ),
+                    isAwayFromLatest =
+                        isAwayFromLatest(
+                            firstVisibleItemIndex = lastVisibleTimelineIndex,
+                            totalItems = items.size,
+                        ),
+                    unreadBelowCount = unreadBelowCount,
+                    timelineMode = timeline.mode,
+                    isLoading = false,
+                )
+            if (updated == current) current else updated
         }
     }
 
