@@ -159,6 +159,9 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_room_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
+        .layer(axum::middleware::from_fn(
+            crate::metrics::metrics_middleware,
+        ))
 }
 
 pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {

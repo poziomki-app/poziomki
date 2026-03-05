@@ -117,7 +117,16 @@ async fn do_create_session(
     }
 
     if let Some(pic_filename) = req.profile_picture_filename {
-        if let Err(error) = sync_matrix_avatar(&client, &matrix_auth.user_id, pic_filename).await {
+        let avatar_result =
+            sync_matrix_avatar(&client, &matrix_auth.user_id, pic_filename).await;
+        if let Some(m) = crate::metrics::metrics() {
+            if avatar_result.is_ok() {
+                m.matrix_avatar.inc_success();
+            } else {
+                m.matrix_avatar.inc_failure();
+            }
+        }
+        if let Err(error) = avatar_result {
             tracing::warn!(error = %error, "failed to set matrix avatar");
         }
     }
