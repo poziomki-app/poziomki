@@ -54,6 +54,7 @@ result-*
 # Markdown (keep only docs/)
 *.md
 !docs/**/*.md
+!.github/**/*.md
 
 # OS
 .DS_Store
