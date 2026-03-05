@@ -84,9 +84,7 @@ async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
         let guard = auth_cache().read().await;
         guard.get(hashed_token).cloned()
     };
-    let Some(entry) = cached else {
-        return None;
-    };
+    let entry = cached?;
     if entry.cached_until <= now || entry.session.expires_at <= now {
         auth_cache().write().await.remove(hashed_token);
         return None;
@@ -146,7 +144,10 @@ pub(in crate::api) async fn require_auth_context(
     let hashed = session_token_hash(&token);
 
     if let Some((session, user)) = cache_auth_get(&hashed).await {
-        maybe_renew_session(&session).await;
+        let elapsed = Utc::now() - session.updated_at;
+        if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
+            maybe_renew_session(&session).await;
+        }
         return Ok(AuthContext { session, user });
     }
 

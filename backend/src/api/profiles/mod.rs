@@ -21,9 +21,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use uuid::Uuid;
-
-use super::state::{require_auth_db, DataResponse};
+use crate::api::auth_or_respond;
+use super::state::DataResponse;
 use profiles_http::not_found_profile;
 pub(super) use profiles_http::validation_error;
 use profiles_repo::{load_profile_by_user_id, load_profile_with_owner_pid};
@@ -36,10 +35,7 @@ pub(super) async fn profile_me(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let profile = load_profile_by_user_id(user.id).await?;
 
@@ -56,13 +52,9 @@ pub(super) async fn profile_get(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, _user) = auth_or_respond!(headers);
 
-    let profile_uuid = Uuid::parse_str(&id)
-        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
+    let profile_uuid = super::parse_uuid(&id, "profile")?;
 
     let Some((profile, user_pid)) = load_profile_with_owner_pid(profile_uuid).await? else {
         return Ok(not_found_profile(&headers, &id));
@@ -77,13 +69,9 @@ pub(super) async fn profile_get_full(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (_session, _user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, _user) = auth_or_respond!(headers);
 
-    let profile_uuid = Uuid::parse_str(&id)
-        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
+    let profile_uuid = super::parse_uuid(&id, "profile")?;
 
     let Some((profile, user_pid)) = load_profile_with_owner_pid(profile_uuid).await? else {
         return Ok(not_found_profile(&headers, &id));

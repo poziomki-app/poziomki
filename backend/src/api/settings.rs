@@ -8,7 +8,8 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use super::state::{require_auth_db, DataResponse};
+use crate::api::auth_or_respond;
+use super::state::DataResponse;
 use crate::db::models::user_settings::{NewUserSetting, UserSetting, UserSettingChangeset};
 use crate::db::schema::user_settings;
 
@@ -70,10 +71,7 @@ pub(super) async fn settings_get(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let mut conn = crate::db::conn().await?;
     let settings = user_settings::table
@@ -93,10 +91,7 @@ pub(super) async fn settings_update(
     headers: HeaderMap,
     Json(body): Json<UpdateSettingsBody>,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let mut conn = crate::db::conn().await?;
     let existing = user_settings::table

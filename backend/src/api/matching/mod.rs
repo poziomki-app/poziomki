@@ -20,7 +20,8 @@ use axum::{
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::state::{require_auth_db, DataResponse, MatchingQuery};
+use crate::api::auth_or_respond;
+use super::state::{DataResponse, MatchingQuery};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
 use matching_assembler::build_recommendations_response;
@@ -35,10 +36,7 @@ pub(super) async fn profiles_recommendations(
     Query(query): Query<MatchingQuery>,
 ) -> Result<Response> {
     let repo = MatchingRepository;
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let limit = query.limit.unwrap_or(10).clamp(1, 50) as usize;
 
@@ -93,10 +91,7 @@ pub(super) async fn events_recommendations(
     Query(query): Query<MatchingQuery>,
 ) -> Result<Response> {
     let repo = MatchingRepository;
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let limit = query.limit.unwrap_or(20).clamp(1, 100) as usize;
 
