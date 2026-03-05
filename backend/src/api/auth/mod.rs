@@ -21,11 +21,12 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+use crate::api::auth_or_respond;
 use super::{
     error_response,
     state::{
         extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
-        normalize_email, otp_in_cooldown, require_auth_db, upsert_otp, user_model_to_view,
+        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view,
         DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse,
         VerifyOtpBody,
     },
@@ -167,10 +168,7 @@ pub(super) async fn sessions(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    let (_session, user) = match require_auth_db(&headers).await {
-        Ok(auth) => auth,
-        Err(response) => return Ok(*response),
-    };
+    let (_session, user) = auth_or_respond!(headers);
 
     let now = Utc::now();
     let mut conn = crate::db::conn().await?;

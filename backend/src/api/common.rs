@@ -6,6 +6,18 @@ use axum::{
 use serde::Serialize;
 use uuid::Uuid;
 
+/// Authenticate via `require_auth_db` and early-return on failure.
+macro_rules! auth_or_respond {
+    ($headers:expr) => {
+        match $crate::api::state::require_auth_db(&$headers).await {
+            Ok(auth) => auth,
+            Err(response) => return Ok(*response),
+        }
+    };
+}
+
+pub(crate) use auth_or_respond;
+
 #[derive(Clone, Debug, Serialize)]
 struct ErrorResponse {
     error: String,
@@ -48,6 +60,29 @@ pub fn error_response(
         }),
     )
         .into_response()
+}
+
+pub fn parse_uuid(id: &str, label: &str) -> std::result::Result<Uuid, crate::error::AppError> {
+    Uuid::parse_str(id)
+        .map_err(|_| crate::error::AppError::Message(format!("Invalid {label} ID")))
+}
+
+pub fn parse_uuid_response(
+    id: &str,
+    label: &str,
+    headers: &HeaderMap,
+) -> std::result::Result<Uuid, Box<Response>> {
+    Uuid::parse_str(id).map_err(|_| {
+        Box::new(error_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            headers,
+            ErrorSpec {
+                error: format!("Invalid {label} ID"),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        ))
+    })
 }
 
 /// Normalize an S3 object prefix: strip leading `/`, ensure trailing `/`,

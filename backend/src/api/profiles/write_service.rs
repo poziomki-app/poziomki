@@ -244,17 +244,7 @@ pub(super) async fn load_and_verify_profile(
     id: &str,
 ) -> std::result::Result<(Profile, crate::db::models::users::User), Box<Response>> {
     let (_session, user) = require_auth_db(headers).await?;
-    let profile_uuid = Uuid::parse_str(id).map_err(|_| {
-        Box::new(error_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            headers,
-            ErrorSpec {
-                error: "Invalid profile ID".to_string(),
-                code: "BAD_REQUEST",
-                details: None,
-            },
-        ))
-    })?;
+    let profile_uuid = crate::api::parse_uuid_response(id, "profile", headers)?;
 
     let mut conn = crate::db::conn().await.map_err(|_| {
         Box::new(error_response(

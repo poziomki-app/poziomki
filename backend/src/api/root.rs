@@ -132,6 +132,7 @@ mod tests {
     use super::redact_push_gateway_url;
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn redact_push_gateway_url_strips_query_and_fragment() {
         let raw = "https://user:pass@push.example/_matrix/push/v1/notify?token=secret#frag";
         let redacted = redact_push_gateway_url(raw).expect("valid url");

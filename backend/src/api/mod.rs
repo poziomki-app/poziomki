@@ -23,8 +23,8 @@ mod state;
 mod uploads;
 
 pub(crate) use common::{
-    ErrorSpec, env_non_empty, error_response, extract_filename, resolve_image_url,
-    resolve_image_urls, resolve_thumbhashes,
+    ErrorSpec, auth_or_respond, env_non_empty, error_response, extract_filename, parse_uuid,
+    parse_uuid_response, resolve_image_url, resolve_image_urls, resolve_thumbhashes,
 };
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
