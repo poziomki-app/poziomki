@@ -37,6 +37,9 @@ class ChatViewModel(
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
         const val TYPING_STOP_IDLE_MS = 5_000L
+
+        // UI failsafe if the clearing typing sync update is never observed.
+        const val TYPING_INDICATOR_TIMEOUT_MS = 10_000L
     }
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -57,6 +60,7 @@ class ChatViewModel(
     private var typingState = false
     private var typingStartJob: Job? = null
     private var typingStopJob: Job? = null
+    private var typingIndicatorTimeoutJob: Job? = null
     private var lastVisibleTimelineIndex: Int? = null
     private var totalTimelineItemCount: Int = 0
     private var latestRoomSummaries: List<MatrixRoomSummary> = emptyList()
@@ -374,6 +378,7 @@ class ChatViewModel(
         bindJob?.cancel()
         pendingRoomRetryJob?.cancel()
         clearTypingTimers()
+        typingIndicatorTimeoutJob?.cancel()
         focusedTimeline?.close()
         focusedTimeline = null
         timelineJobs.forEach { it.cancel() }
@@ -399,6 +404,8 @@ class ChatViewModel(
         roomJobs.clear()
         activeRoom = null
         clearTypingTimers()
+        typingIndicatorTimeoutJob?.cancel()
+        typingIndicatorTimeoutJob = null
         typingState = false
         activeDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() }
         if (latestRoomSummaries.isEmpty()) {
@@ -519,7 +526,7 @@ class ChatViewModel(
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
-                typingUserIds = emptyList(),
+                typingDisplayNames = emptyList(),
                 messageDraft = restoredDraft,
                 composerMode = ComposerMode.NewMessage,
                 isLoading = cachedTimeline?.items.isNullOrEmpty(),
@@ -596,9 +603,17 @@ class ChatViewModel(
 
         roomJobs +=
             viewModelScope.launch {
-                room.typingUserIds.collectLatest { typingUsers ->
-                    _uiState.update { current ->
-                        current.copy(typingUserIds = typingUsers)
+                room.typingUserIds.collectLatest { typingUserIds ->
+                    typingIndicatorTimeoutJob?.cancel()
+                    if (typingUserIds.isEmpty()) {
+                        _uiState.update { it.copy(typingDisplayNames = emptyList()) }
+                        return@collectLatest
+                    }
+                    val names = typingUserIds.map { room.getMemberDisplayName(it) ?: it }
+                    _uiState.update { it.copy(typingDisplayNames = names) }
+                    typingIndicatorTimeoutJob = viewModelScope.launch {
+                        delay(TYPING_INDICATOR_TIMEOUT_MS)
+                        _uiState.update { it.copy(typingDisplayNames = emptyList()) }
                     }
                 }
             }
