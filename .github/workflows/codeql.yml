@@ -45,12 +45,12 @@ jobs:
         if: matrix.language == 'java-kotlin'
         uses: android-actions/setup-android@v3
 
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/autobuild@v4
         if: matrix.build-mode == 'autobuild'
 
       - name: Build mobile
@@ -58,4 +58,4 @@ jobs:
         working-directory: mobile
         run: ./gradlew --no-daemon testClasses
 
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
