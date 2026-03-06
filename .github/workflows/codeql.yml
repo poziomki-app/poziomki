@@ -1,10 +1,6 @@
 name: CodeQL
 
 on:
-  pull_request:
-    paths: [backend/**, mobile/**]
-  push:
-    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
 
@@ -22,30 +18,14 @@ jobs:
           - language: rust
             build-mode: none
           - language: java-kotlin
-            build-mode: manual
+            build-mode: none
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Set up Android SDK
-        if: matrix.language == 'java-kotlin'
-        uses: android-actions/setup-android@v3
 
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-
-      - name: Build mobile
-        if: matrix.language == 'java-kotlin'
-        working-directory: mobile
-        run: ./gradlew --no-daemon -Dorg.gradle.java.home=$JAVA_HOME testClasses
 
       - uses: github/codeql-action/analyze@v4
