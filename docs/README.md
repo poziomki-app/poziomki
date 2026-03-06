@@ -10,6 +10,10 @@
 
 aplikacja społecznościowa dla studentów, łącząca według wspólnych zainteresowań i zachęcająca do spędzania więcej czasu razem za pomocą lokalnych wydarzeń
 
+## rozwój
+
+jeśli masz pomysł na dodanie nowej funkcjonalności lub chcesz zgłosić istniejący błąd w aplikacji dodaj [Issue](../../issues/new/choose). 
+
 ## licencja
 
 projekt udostępniany jest na warunkach licencji AGPLv3
