@@ -1,9 +1,4 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{body::Body, extract::Request, middleware::Next, response::Response};
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -23,11 +18,17 @@ pub async fn metrics_middleware(req: Request<Body>, next: Next) -> Response {
     let group = EndpointGroup::from_path(&path);
     let start = Instant::now();
 
+    if let Some(m) = super::metrics() {
+        m.http_inflight.fetch_add(1, Ordering::Relaxed);
+    }
+
     let response = next.run(req).await;
 
     if let Some(m) = super::metrics() {
         let elapsed = start.elapsed();
         let status = response.status().as_u16();
+
+        m.http_inflight.fetch_sub(1, Ordering::Relaxed);
 
         m.req_total.fetch_add(1, Ordering::Relaxed);
         if (400..500).contains(&status) {
@@ -36,7 +37,9 @@ pub async fn metrics_middleware(req: Request<Body>, next: Next) -> Response {
             m.req_5xx.fetch_add(1, Ordering::Relaxed);
         }
 
-        m.latency_for_group(group).record(elapsed);
+        if let Some(histogram) = m.latency_for_group(group) {
+            histogram.record(elapsed);
+        }
     }
 
     response

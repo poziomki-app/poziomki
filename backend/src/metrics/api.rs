@@ -12,7 +12,9 @@ use subtle::ConstantTimeEq;
 use super::store::TimeSeries;
 
 fn ops_status_token() -> Option<String> {
-    std::env::var("OPS_STATUS_TOKEN").ok().filter(|v| !v.trim().is_empty())
+    std::env::var("OPS_STATUS_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
 }
 
 fn token_matches(actual: &str, expected: &str) -> bool {
@@ -55,7 +57,18 @@ struct NamedSeries {
 
 #[derive(Serialize)]
 struct MetricsResponse {
+    meta: MetricsMeta,
     charts: Vec<ChartData>,
+}
+
+#[derive(Serialize)]
+struct MetricsMeta {
+    source: &'static str,
+    degraded: bool,
+    sample_interval_seconds: u32,
+    generated_at_epoch: u32,
+    last_sample_epoch: Option<u32>,
+    sample_failures_total: u64,
 }
 
 fn read_series(ts: &TimeSeries, from: u32, to: u32) -> SeriesData {
@@ -78,10 +91,7 @@ fn range_seconds(range: Option<&String>) -> u32 {
     }
 }
 
-async fn metrics_handler(
-    headers: HeaderMap,
-    Query(query): Query<MetricsQuery>,
-) -> Response {
+async fn metrics_handler(headers: HeaderMap, Query(query): Query<MetricsQuery>) -> Response {
     if !check_ops_token(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
@@ -96,6 +106,9 @@ async fn metrics_handler(
         .unwrap_or(0);
     let range = range_seconds(query.range.as_ref());
     let from = now.saturating_sub(range);
+    let last_sample_epoch = m
+        .last_sample_epoch
+        .load(std::sync::atomic::Ordering::Relaxed);
 
     let charts = vec![
         ChartData {
@@ -105,6 +118,10 @@ async fn metrics_handler(
                 named("4xx/s", &m.ts_4xx_rate, from, now),
                 named("5xx/s", &m.ts_5xx_rate, from, now),
             ],
+        },
+        ChartData {
+            label: "HTTP Concurrency",
+            series: vec![named("inflight", &m.ts_http_inflight, from, now)],
         },
         ChartData {
             label: "p95 Latency (ms)",
@@ -141,6 +158,13 @@ async fn metrics_handler(
             ],
         },
         ChartData {
+            label: "Outbox Lag (s)",
+            series: vec![
+                named("oldest_ready", &m.ts_outbox_oldest_ready_age, from, now),
+                named("oldest_pending", &m.ts_outbox_oldest_pending_age, from, now),
+            ],
+        },
+        ChartData {
             label: "Auth Cache",
             series: vec![
                 named("hit%", &m.ts_auth_hit_rate, from, now),
@@ -168,7 +192,24 @@ async fn metrics_handler(
         },
     ];
 
-    Json(MetricsResponse { charts }).into_response()
+    Json(MetricsResponse {
+        meta: MetricsMeta {
+            source: "memory",
+            degraded: false,
+            sample_interval_seconds: 10,
+            generated_at_epoch: now,
+            last_sample_epoch: if last_sample_epoch == 0 {
+                None
+            } else {
+                Some(last_sample_epoch)
+            },
+            sample_failures_total: m
+                .sample_failures_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+        },
+        charts,
+    })
+    .into_response()
 }
 
 pub fn routes() -> Router {
