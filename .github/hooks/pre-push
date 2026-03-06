@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+
+# Only run if backend files changed vs remote
+remote="$1"
+url="$2"
+
+if git diff --name-only HEAD @{u} 2>/dev/null | grep -q '^backend/'; then
+    echo "Running cargo audit..."
+    (cd backend && cargo audit)
+fi

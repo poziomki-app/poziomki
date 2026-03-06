@@ -18,6 +18,19 @@ cp .env.example .env
 
 Potrzebujesz co najmniej `DATABASE_URL` i `JWT_SECRET`. Przykładowe wartości znajdziesz w `.env.example`.
 
+### Git hooks
+
+Po sklonowaniu repozytorium ustaw ścieżkę hooków:
+
+```sh
+git config core.hooksPath .github/hooks
+```
+
+Hooki uruchamiają automatycznie:
+
+- **pre-commit** — `cargo fmt --check` + `cargo clippy` (tylko przy zmianach w `backend/`)
+- **pre-push** — `cargo audit` (tylko przy zmianach w `backend/`)
+
 ### Backend
 
 ```sh
