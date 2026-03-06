@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+
+# Only run backend checks if backend files are staged
+if git diff --cached --name-only | grep -q '^backend/'; then
+    echo "Running cargo fmt check..."
+    (cd backend && cargo fmt --all -- --check)
+
+    echo "Running cargo clippy..."
+    (cd backend && cargo clippy --all-targets --all-features -- -D warnings)
+fi
