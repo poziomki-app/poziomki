@@ -90,7 +90,9 @@ jobs:
         with:
           workspaces: backend
 
-      - run: cargo install clippy-sarif sarif-fmt
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: clippy-sarif,sarif-fmt
 
       - name: Clippy SARIF
         run: >
