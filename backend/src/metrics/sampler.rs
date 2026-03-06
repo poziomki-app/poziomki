@@ -29,6 +29,7 @@ async fn sample(m: &MetricsStore) {
     let ts = now_epoch();
 
     sample_request_rates(m, ts);
+    sample_http_inflight(m, ts);
     sample_latencies(m, ts);
     sample_pool(m, ts);
     sample_db_latency(m, ts);
@@ -36,6 +37,7 @@ async fn sample(m: &MetricsStore) {
     sample_auth_cache(m, ts);
     sample_matrix(m, ts);
     sample_smtp(m, ts);
+    m.last_sample_epoch.store(ts, Ordering::Relaxed);
 }
 
 fn sample_request_rates(m: &MetricsStore, ts: u32) {
@@ -51,6 +53,11 @@ fn sample_request_rates(m: &MetricsStore, ts: u32) {
     m.ts_req_rate.push(ts, rate);
     m.ts_4xx_rate.push(ts, rate_4xx);
     m.ts_5xx_rate.push(ts, rate_5xx);
+}
+
+fn sample_http_inflight(m: &MetricsStore, ts: u32) {
+    m.ts_http_inflight
+        .push(ts, m.http_inflight.load(Ordering::Relaxed) as f32);
 }
 
 fn sample_latencies(m: &MetricsStore, ts: u32) {
@@ -77,12 +84,16 @@ fn sample_db_latency(m: &MetricsStore, ts: u32) {
 
 async fn sample_outbox(m: &MetricsStore, ts: u32) {
     let future = (m.config.outbox_snapshot)();
-    if let Some((pending, ready, retrying, inflight, failed)) = future.await {
-        m.ts_outbox_pending.push(ts, pending as f32);
-        m.ts_outbox_ready.push(ts, ready as f32);
-        m.ts_outbox_retrying.push(ts, retrying as f32);
-        m.ts_outbox_inflight.push(ts, inflight as f32);
-        m.ts_outbox_failed.push(ts, failed as f32);
+    if let Some(snapshot) = future.await {
+        m.ts_outbox_pending.push(ts, snapshot.pending_jobs as f32);
+        m.ts_outbox_ready.push(ts, snapshot.ready_jobs as f32);
+        m.ts_outbox_retrying.push(ts, snapshot.retrying_jobs as f32);
+        m.ts_outbox_inflight.push(ts, snapshot.inflight_jobs as f32);
+        m.ts_outbox_failed.push(ts, snapshot.failed_jobs as f32);
+        m.ts_outbox_oldest_ready_age
+            .push(ts, snapshot.oldest_ready_job_age_seconds as f32);
+        m.ts_outbox_oldest_pending_age
+            .push(ts, snapshot.oldest_pending_job_age_seconds as f32);
     }
 }
 

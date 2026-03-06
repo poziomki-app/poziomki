@@ -140,13 +140,15 @@ fn init_metrics() {
         outbox_snapshot: Box::new(|| {
             Box::pin(async {
                 let snap = crate::jobs::outbox_stats_snapshot().await.ok()?;
-                Some((
-                    snap.pending_jobs,
-                    snap.ready_jobs,
-                    snap.retrying_jobs,
-                    snap.inflight_jobs,
-                    snap.failed_jobs,
-                ))
+                Some(crate::metrics::collector::OutboxMetricsSnapshot {
+                    pending_jobs: snap.pending_jobs,
+                    ready_jobs: snap.ready_jobs,
+                    retrying_jobs: snap.retrying_jobs,
+                    inflight_jobs: snap.inflight_jobs,
+                    failed_jobs: snap.failed_jobs,
+                    oldest_ready_job_age_seconds: snap.oldest_ready_job_age_seconds,
+                    oldest_pending_job_age_seconds: snap.oldest_pending_job_age_seconds,
+                })
             })
         }),
     });

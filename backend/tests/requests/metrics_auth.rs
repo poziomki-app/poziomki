@@ -73,8 +73,13 @@ async fn metrics_returns_json_with_valid_token() {
     assert_eq!(response.status_code(), 200);
 
     let payload: serde_json::Value = response.json();
-    let sections = payload["charts"].as_array().expect("charts should be array");
-    assert_eq!(sections.len(), 8);
+    assert_eq!(payload["meta"]["source"], "memory");
+    assert_eq!(payload["meta"]["degraded"], false);
+    assert_eq!(payload["meta"]["sample_interval_seconds"], 10);
+    let sections = payload["charts"]
+        .as_array()
+        .expect("charts should be array");
+    assert_eq!(sections.len(), 10);
 }
 
 #[tokio::test]
@@ -90,6 +95,7 @@ async fn metrics_supports_range_param() {
 
     let payload: serde_json::Value = response.json();
     assert!(payload["charts"].is_array());
+    assert!(payload["meta"].is_object());
 }
 
 #[tokio::test]
@@ -101,12 +107,23 @@ async fn metrics_series_have_correct_shape() {
     assert_eq!(response.status_code(), 200);
 
     let payload: serde_json::Value = response.json();
+    assert!(payload["meta"]["generated_at_epoch"].is_number());
+    assert!(
+        payload["meta"]["last_sample_epoch"].is_null()
+            || payload["meta"]["last_sample_epoch"].is_number()
+    );
+    assert!(payload["meta"]["sample_failures_total"].is_number());
     let sections = payload["charts"].as_array().unwrap();
 
     for section in sections {
         assert!(section["label"].is_string(), "section missing label");
-        let series = section["series"].as_array().expect("series should be array");
-        assert!(!series.is_empty(), "section should have at least one series");
+        let series = section["series"]
+            .as_array()
+            .expect("series should be array");
+        assert!(
+            !series.is_empty(),
+            "section should have at least one series"
+        );
 
         for s in series {
             assert!(s["name"].is_string(), "series missing name");

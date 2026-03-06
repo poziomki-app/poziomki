@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use super::store::TimeSeries;
 
@@ -8,17 +8,7 @@ const HISTOGRAM_BUCKETS: usize = 12;
 /// Bucket upper bounds in microseconds.
 /// <1ms, <2ms, <5ms, <10ms, <25ms, <50ms, <100ms, <250ms, <500ms, <1s, <2s, <5s
 const BUCKET_UPPER_MICROS: [u64; HISTOGRAM_BUCKETS] = [
-    1_000,
-    2_000,
-    5_000,
-    10_000,
-    25_000,
-    50_000,
-    100_000,
-    250_000,
-    500_000,
-    1_000_000,
-    2_000_000,
+    1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000,
     5_000_000,
 ];
 
@@ -29,7 +19,6 @@ const BUCKET_UPPER_MICROS: [u64; HISTOGRAM_BUCKETS] = [
 pub struct LatencyHistogram {
     buckets: [AtomicU64; HISTOGRAM_BUCKETS],
     overflow: AtomicU64,
-    sum_micros: AtomicU64,
     count: AtomicU64,
 }
 
@@ -38,7 +27,6 @@ impl LatencyHistogram {
         Self {
             buckets: std::array::from_fn(|_| AtomicU64::new(0)),
             overflow: AtomicU64::new(0),
-            sum_micros: AtomicU64::new(0),
             count: AtomicU64::new(0),
         }
     }
@@ -46,7 +34,6 @@ impl LatencyHistogram {
     /// Record a duration sample.
     pub fn record(&self, duration: std::time::Duration) {
         let micros = duration.as_micros().min(u128::from(u64::MAX)) as u64;
-        self.sum_micros.fetch_add(micros, Ordering::Relaxed);
         self.count.fetch_add(1, Ordering::Relaxed);
 
         let mut placed = false;
@@ -67,7 +54,6 @@ impl LatencyHistogram {
     /// Drain the histogram, compute approximate p95 latency in milliseconds, and reset.
     pub fn drain_p95(&self) -> f32 {
         let total = self.count.swap(0, Ordering::Relaxed);
-        self.sum_micros.swap(0, Ordering::Relaxed);
 
         if total == 0 {
             return 0.0;
@@ -75,20 +61,20 @@ impl LatencyHistogram {
 
         let target = (total as f64 * 0.95).ceil() as u64;
         let mut cumulative: u64 = 0;
+        let mut p95_ms = 5000.0;
 
         for (i, bucket) in self.buckets.iter().enumerate() {
             let bucket_count = bucket.swap(0, Ordering::Relaxed);
             cumulative += bucket_count;
             if cumulative >= target {
                 if let Some(&upper) = BUCKET_UPPER_MICROS.get(i) {
-                    return upper as f32 / 1000.0;
+                    p95_ms = upper as f32 / 1000.0;
                 }
+                break;
             }
         }
-        // Drain overflow
         let _overflow_count = self.overflow.swap(0, Ordering::Relaxed);
-        // If p95 is in overflow, return 5000ms (our max bucket)
-        5000.0
+        p95_ms
     }
 }
 
@@ -135,9 +121,20 @@ impl Default for CounterPair {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OutboxMetricsSnapshot {
+    pub pending_jobs: i64,
+    pub ready_jobs: i64,
+    pub retrying_jobs: i64,
+    pub inflight_jobs: i64,
+    pub failed_jobs: i64,
+    pub oldest_ready_job_age_seconds: i64,
+    pub oldest_pending_job_age_seconds: i64,
+}
+
 /// Future type for the outbox snapshot callback.
 type OutboxSnapshotFuture =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Option<(i64, i64, i64, i64, i64)>> + Send>>;
+    std::pin::Pin<Box<dyn std::future::Future<Output = Option<OutboxMetricsSnapshot>> + Send>>;
 
 /// Callback configuration for sampling external state.
 ///
@@ -149,7 +146,7 @@ pub struct MetricsConfig {
     /// Returns the number of entries in the auth cache.
     pub auth_cache_size: Box<dyn Fn() -> usize + Send + Sync>,
 
-    /// Returns outbox queue depths: `(pending, ready, retrying, inflight, failed)` or `None`.
+    /// Returns outbox queue depths and ages or `None`.
     pub outbox_snapshot: Box<dyn Fn() -> OutboxSnapshotFuture + Send + Sync>,
 }
 
@@ -199,7 +196,11 @@ pub struct MetricsStore {
     pub ts_4xx_rate: TimeSeries,
     pub ts_5xx_rate: TimeSeries,
 
-    // -- Chart 2: p95 latency per endpoint group --
+    // -- Chart 2: HTTP concurrency --
+    pub http_inflight: AtomicU64,
+    pub ts_http_inflight: TimeSeries,
+
+    // -- Chart 3: p95 latency per endpoint group --
     pub latency_auth: LatencyHistogram,
     pub latency_profiles: LatencyHistogram,
     pub latency_events: LatencyHistogram,
@@ -215,29 +216,33 @@ pub struct MetricsStore {
     pub ts_p95_matching: TimeSeries,
     pub ts_p95_matrix: TimeSeries,
 
-    // -- Chart 3: DB pool utilization --
+    // -- Chart 4: DB pool utilization --
     pub ts_pool_size: TimeSeries,
     pub ts_pool_available: TimeSeries,
     pub ts_pool_waiting: TimeSeries,
 
-    // -- Chart 4: DB query duration p95 --
+    // -- Chart 5: DB query duration p95 --
     pub latency_db_conn: LatencyHistogram,
     pub ts_p95_db_conn: TimeSeries,
 
-    // -- Chart 5: Outbox queue depth --
+    // -- Chart 6: Outbox queue depth --
     pub ts_outbox_pending: TimeSeries,
     pub ts_outbox_ready: TimeSeries,
     pub ts_outbox_retrying: TimeSeries,
     pub ts_outbox_inflight: TimeSeries,
     pub ts_outbox_failed: TimeSeries,
 
-    // -- Chart 6: Auth cache hit rate --
+    // -- Chart 7: Outbox lag --
+    pub ts_outbox_oldest_ready_age: TimeSeries,
+    pub ts_outbox_oldest_pending_age: TimeSeries,
+
+    // -- Chart 8: Auth cache hit rate --
     pub auth_cache_hits: AtomicU64,
     pub auth_cache_misses: AtomicU64,
     pub ts_auth_hit_rate: TimeSeries,
     pub ts_auth_cache_entries: TimeSeries,
 
-    // -- Chart 7: Matrix deliverability --
+    // -- Chart 9: Matrix deliverability --
     pub matrix_room_create: CounterPair,
     pub matrix_membership: CounterPair,
     pub matrix_avatar: CounterPair,
@@ -248,12 +253,16 @@ pub struct MetricsStore {
     pub ts_matrix_avatar_ok: TimeSeries,
     pub ts_matrix_avatar_fail: TimeSeries,
 
-    // -- Chart 8: SMTP deliverability --
+    // -- Chart 10: SMTP deliverability --
     pub smtp_otp: CounterPair,
     pub latency_smtp: LatencyHistogram,
     pub ts_smtp_ok: TimeSeries,
     pub ts_smtp_fail: TimeSeries,
     pub ts_smtp_p95: TimeSeries,
+
+    // -- Sampler health metadata --
+    pub last_sample_epoch: AtomicU32,
+    pub sample_failures_total: AtomicU64,
 
     // -- Config callbacks --
     pub config: MetricsConfig,
@@ -269,6 +278,9 @@ impl MetricsStore {
             ts_req_rate: TimeSeries::new(),
             ts_4xx_rate: TimeSeries::new(),
             ts_5xx_rate: TimeSeries::new(),
+
+            http_inflight: AtomicU64::new(0),
+            ts_http_inflight: TimeSeries::new(),
 
             latency_auth: LatencyHistogram::new(),
             latency_profiles: LatencyHistogram::new(),
@@ -297,6 +309,8 @@ impl MetricsStore {
             ts_outbox_retrying: TimeSeries::new(),
             ts_outbox_inflight: TimeSeries::new(),
             ts_outbox_failed: TimeSeries::new(),
+            ts_outbox_oldest_ready_age: TimeSeries::new(),
+            ts_outbox_oldest_pending_age: TimeSeries::new(),
 
             auth_cache_hits: AtomicU64::new(0),
             auth_cache_misses: AtomicU64::new(0),
@@ -319,20 +333,49 @@ impl MetricsStore {
             ts_smtp_fail: TimeSeries::new(),
             ts_smtp_p95: TimeSeries::new(),
 
+            last_sample_epoch: AtomicU32::new(0),
+            sample_failures_total: AtomicU64::new(0),
+
             config,
         }
     }
 
     /// Get the latency histogram for a given endpoint group.
-    pub const fn latency_for_group(&self, group: EndpointGroup) -> &LatencyHistogram {
+    pub const fn latency_for_group(&self, group: EndpointGroup) -> Option<&LatencyHistogram> {
         match group {
-            EndpointGroup::Profiles => &self.latency_profiles,
-            EndpointGroup::Events => &self.latency_events,
-            EndpointGroup::Uploads => &self.latency_uploads,
-            EndpointGroup::Search => &self.latency_search,
-            EndpointGroup::Matching => &self.latency_matching,
-            EndpointGroup::Matrix => &self.latency_matrix,
-            EndpointGroup::Auth | EndpointGroup::Other => &self.latency_auth,
+            EndpointGroup::Auth => Some(&self.latency_auth),
+            EndpointGroup::Profiles => Some(&self.latency_profiles),
+            EndpointGroup::Events => Some(&self.latency_events),
+            EndpointGroup::Uploads => Some(&self.latency_uploads),
+            EndpointGroup::Search => Some(&self.latency_search),
+            EndpointGroup::Matching => Some(&self.latency_matching),
+            EndpointGroup::Matrix => Some(&self.latency_matrix),
+            EndpointGroup::Other => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{EndpointGroup, LatencyHistogram};
+
+    #[test]
+    fn drain_p95_resets_histogram_state() {
+        let histogram = LatencyHistogram::new();
+        histogram.record(Duration::from_millis(1));
+        histogram.record(Duration::from_millis(400));
+
+        assert_eq!(histogram.drain_p95(), 500.0);
+        assert_eq!(histogram.drain_p95(), 0.0);
+    }
+
+    #[test]
+    fn unrelated_routes_are_not_classified_as_auth() {
+        assert!(matches!(
+            EndpointGroup::from_path("/api/v1/catalog"),
+            EndpointGroup::Other
+        ));
     }
 }
