@@ -37,6 +37,8 @@ class ChatViewModel(
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
         const val TYPING_STOP_IDLE_MS = 5_000L
+
+        // UI failsafe if the clearing typing sync update is never observed.
         const val TYPING_INDICATOR_TIMEOUT_MS = 10_000L
     }
 
@@ -439,15 +441,27 @@ class ChatViewModel(
         lastVisibleTimelineIndex = null
         totalTimelineItemCount = 0
 
-        matrixClient.ensureStarted().getOrElse {
+        matrixClient.ensureStarted().getOrElse { throwable ->
             _uiState.update { current ->
-                current.copy(isLoading = false, error = null)
+                if (current.timelineItems.isNotEmpty()) {
+                    current.copy(
+                        isLoading = false,
+                        error = null,
+                    )
+                } else {
+                    current.copy(
+                        isLoading = false,
+                        error = throwable.message ?: "Failed to initialize Matrix",
+                    )
+                }
             }
-            schedulePendingRoomRetry(
-                roomId = roomId,
-                fallbackDisplayName = fallbackDisplayName,
-                fallbackDirectUserId = activeDirectUserId,
-            )
+            if (seededDisplayName.isNotBlank() || activeDirectUserId != null) {
+                schedulePendingRoomRetry(
+                    roomId = roomId,
+                    fallbackDisplayName = fallbackDisplayName,
+                    fallbackDirectUserId = activeDirectUserId,
+                )
+            }
             return
         }
         runCatching { matrixClient.refreshRooms() }
