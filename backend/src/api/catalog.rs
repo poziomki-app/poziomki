@@ -1,5 +1,6 @@
 type Result<T> = crate::error::AppResult<T>;
 
+use crate::api::auth_or_respond;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
@@ -13,12 +14,10 @@ use diesel::sql_types::{BigInt, Text};
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::api::auth_or_respond;
 use super::{
     error_response,
     state::{
-        CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse,
-        TagScope, TagsQuery,
+        CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse, TagScope, TagsQuery,
     },
     ErrorSpec,
 };
@@ -63,7 +62,8 @@ pub(super) async fn tags_search(
     State(_ctx): State<AppContext>,
     Query(query): Query<TagsQuery>,
 ) -> Result<Response> {
-    let search = query.search.unwrap_or_default().to_lowercase();
+    let mut search = query.search.unwrap_or_default().to_lowercase();
+    search.truncate(search.floor_char_boundary(200));
     let limit = bounded_limit(query.limit);
 
     let mut conn = crate::db::conn().await?;
@@ -75,7 +75,10 @@ pub(super) async fn tags_search(
             query_builder = query_builder.filter(tags::scope.eq(scope_to_str(scope)));
         }
         let all_tags = query_builder.limit(limit).load::<Tag>(&mut conn).await?;
-        all_tags.iter().map(tag_model_to_response).collect::<Vec<_>>()
+        all_tags
+            .iter()
+            .map(tag_model_to_response)
+            .collect::<Vec<_>>()
     } else {
         // Use tsvector + ILIKE fallback for ranked search
         use diesel::sql_types::Nullable;
@@ -238,7 +241,8 @@ pub(super) async fn degrees_search(
     State(_ctx): State<AppContext>,
     Query(query): Query<DegreesQuery>,
 ) -> Result<Response> {
-    let search = query.search.unwrap_or_default().to_lowercase();
+    let mut search = query.search.unwrap_or_default().to_lowercase();
+    search.truncate(search.floor_char_boundary(200));
     let limit = bounded_limit(query.limit);
 
     let mut conn = crate::db::conn().await?;
