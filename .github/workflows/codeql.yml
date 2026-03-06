@@ -20,19 +20,12 @@ jobs:
       matrix:
         include:
           - language: rust
-            build-mode: autobuild
+            build-mode: none
           - language: java-kotlin
             build-mode: manual
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust dependencies
-        if: matrix.language == 'rust'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: matrix.language == 'rust'
 
       - name: Set up JDK 21
         if: matrix.language == 'java-kotlin'
@@ -50,12 +43,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      - uses: github/codeql-action/autobuild@v4
-        if: matrix.build-mode == 'autobuild'
-
       - name: Build mobile
         if: matrix.language == 'java-kotlin'
         working-directory: mobile
-        run: ./gradlew --no-daemon testClasses
+        run: ./gradlew --no-daemon -Dorg.gradle.java.home=$JAVA_HOME testClasses
 
       - uses: github/codeql-action/analyze@v4
