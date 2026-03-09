@@ -13,6 +13,8 @@ mod profiles_write_handler;
 
 type Result<T> = crate::error::AppResult<T>;
 
+use super::state::DataResponse;
+use crate::api::auth_or_respond;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
@@ -21,8 +23,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use crate::api::auth_or_respond;
-use super::state::DataResponse;
 use profiles_http::not_found_profile;
 pub(super) use profiles_http::validation_error;
 use profiles_repo::{load_profile_by_user_id, load_profile_with_owner_pid};

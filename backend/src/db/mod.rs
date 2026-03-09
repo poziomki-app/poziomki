@@ -129,8 +129,27 @@ pub fn init_pool(database_url: &str) -> Result<(), String> {
 /// Returns an error when the pool is not yet initialised or when obtaining a
 /// connection from the pool fails.
 pub async fn conn() -> Result<DbConn, diesel_async::pooled_connection::deadpool::PoolError> {
-    POOL.get()
+    let start = std::time::Instant::now();
+    let result = POOL
+        .get()
         .ok_or(diesel_async::pooled_connection::deadpool::PoolError::NoRuntimeSpecified)?
         .get()
-        .await
+        .await;
+    if let Some(m) = crate::metrics::metrics() {
+        m.latency_db_conn.record(start.elapsed());
+    }
+    result
+}
+
+/// Returns `(max_size, available, waiting)` for the connection pool, or `None`
+/// if the pool is not yet initialised.
+#[allow(clippy::cast_possible_truncation)]
+pub fn pool_status() -> Option<(u32, u32, u32)> {
+    let pool = POOL.get()?;
+    let status = pool.status();
+    Some((
+        status.max_size as u32,
+        status.available as u32,
+        status.waiting as u32,
+    ))
 }

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 type Result<T> = crate::error::AppResult<T>;
 
+use crate::api::auth_or_respond;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
@@ -20,7 +21,6 @@ use axum::{
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::api::auth_or_respond;
 use super::state::{DataResponse, MatchingQuery};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
