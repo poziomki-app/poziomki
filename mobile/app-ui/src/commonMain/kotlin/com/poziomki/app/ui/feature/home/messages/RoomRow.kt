@@ -36,6 +36,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Check
+import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
 import com.adamglin.phosphoricons.bold.WarningCircle
 
@@ -138,21 +140,12 @@ fun RoomRow(
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (statusIcon != null) {
-                    if (statusIcon.symbol != null) {
-                        Text(
-                            text = statusIcon.symbol,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusIcon.tint,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    } else if (statusIcon.icon != null) {
-                        Icon(
-                            imageVector = statusIcon.icon,
-                            contentDescription = null,
-                            tint = statusIcon.tint,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
+                    Icon(
+                        imageVector = statusIcon.icon,
+                        contentDescription = null,
+                        tint = statusIcon.tint,
+                        modifier = Modifier.size(14.dp),
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(
@@ -226,8 +219,7 @@ private fun monthShort(monthNumber: Int): String =
     }
 
 private data class RoomStatusIconSpec(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    val symbol: String? = null,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val tint: androidx.compose.ui.graphics.Color,
 )
 
@@ -242,8 +234,8 @@ private fun latestRoomStatusIconSpec(
         sendStatus == MatrixEventSendStatus.Sending ->
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
         readByCount > 0 ->
-            RoomStatusIconSpec(symbol = "✓✓", tint = Primary)
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
         sendStatus == MatrixEventSendStatus.Sent ->
-            RoomStatusIconSpec(symbol = "✓", tint = TextSecondary)
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
         else -> null
     }
