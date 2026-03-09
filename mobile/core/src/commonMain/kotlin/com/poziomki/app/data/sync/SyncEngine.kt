@@ -162,6 +162,7 @@ class SyncEngine(
                     conversation_id = serverEvent.conversationId,
                     score = serverEvent.score,
                     cached_at = now,
+                    in_list_feed = 1L,
                     is_dirty = 0L,
                 )
                 db.eventQueries.deleteById(localId)
@@ -212,6 +213,7 @@ class SyncEngine(
                     conversation_id = event.conversationId,
                     score = event.score,
                     cached_at = now,
+                    in_list_feed = 1L,
                     is_dirty = 0L,
                 )
                 pendingOps.complete(op.id)

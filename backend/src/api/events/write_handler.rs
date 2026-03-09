@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use chrono::Utc;
+use diesel_async::AsyncConnection;
 use uuid::Uuid;
 
 use crate::api::state::{
@@ -20,12 +21,16 @@ use crate::db::models::profiles::Profile;
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
 use super::events_interactions_repo::{
-    delete_event_interaction, upsert_event_interaction, EVENT_INTERACTION_JOINED,
-    EVENT_INTERACTION_SAVED,
+    delete_event_interaction, upsert_event_interaction, upsert_event_interaction_with_conn,
+    EVENT_INTERACTION_JOINED, EVENT_INTERACTION_SAVED,
 };
 use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
-use super::events_tags_repo::{sync_event_tags, upsert_attendee};
-use super::events_tags_service::{maybe_sync_tags, resolve_event_tag_ids};
+use super::events_tags_repo::{
+    sync_event_tags_with_conn, upsert_attendee, upsert_attendee_with_conn,
+};
+use super::events_tags_service::{
+    maybe_sync_tags_with_conn, resolve_event_tag_ids, resolve_event_tag_ids_with_conn,
+};
 use super::events_view::{build_event_response, created_event_response};
 use super::events_write_repo;
 use super::events_write_service::event_update_inner;
@@ -72,21 +77,6 @@ fn build_create_event(validated: &ValidatedCreate, payload: &CreateEventBody) ->
     (model, event_id)
 }
 
-async fn finalize_event_create(
-    event_id: Uuid,
-    event: &Event,
-    profile_id: Uuid,
-    tag_ids: Vec<Uuid>,
-) -> Result<Response> {
-    if !tag_ids.is_empty() {
-        sync_event_tags(event_id, &tag_ids).await?;
-    }
-    upsert_attendee(event_id, profile_id, "going").await?;
-    upsert_event_interaction(profile_id, event_id, EVENT_INTERACTION_JOINED).await?;
-    let data = build_event_response(event, &profile_id).await?;
-    Ok(created_event_response(data))
-}
-
 pub(in crate::api) async fn event_create(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
@@ -98,11 +88,58 @@ pub(in crate::api) async fn event_create(
     };
 
     let (new_event, event_id) = build_create_event(&validated, &payload);
+    let tag_names = payload.tags.clone();
+    let validated_tag_ids = match payload.tag_ids.clone() {
+        Some(ids) => match resolve_event_tag_ids(&headers, None, Some(ids)).await {
+            Ok(ids) => Some(ids),
+            Err(response) => return Ok(*response),
+        },
+        None => None,
+    };
 
-    let inserted = events_write_repo::insert_event(&new_event).await?;
+    let mut conn = crate::db::conn().await?;
+    let inserted = conn
+        .transaction(|conn| {
+            let new_event = NewEvent {
+                id: new_event.id,
+                title: new_event.title.clone(),
+                description: new_event.description.clone(),
+                cover_image: new_event.cover_image.clone(),
+                location: new_event.location.clone(),
+                starts_at: new_event.starts_at,
+                ends_at: new_event.ends_at,
+                creator_id: new_event.creator_id,
+                conversation_id: new_event.conversation_id.clone(),
+                latitude: new_event.latitude,
+                longitude: new_event.longitude,
+                created_at: new_event.created_at,
+                updated_at: new_event.updated_at,
+            };
+            let tag_names = tag_names.clone();
+            let validated_tag_ids = validated_tag_ids.clone();
+            let profile_id = validated.profile.id;
+            Box::pin(async move {
+                let inserted = events_write_repo::insert_event_with_conn(conn, &new_event).await?;
+                let tag_ids =
+                    resolve_event_tag_ids_with_conn(conn, tag_names, validated_tag_ids).await?;
+                if !tag_ids.is_empty() {
+                    sync_event_tags_with_conn(conn, event_id, &tag_ids).await?;
+                }
+                upsert_attendee_with_conn(conn, event_id, profile_id, "going").await?;
+                upsert_event_interaction_with_conn(
+                    conn,
+                    profile_id,
+                    event_id,
+                    EVENT_INTERACTION_JOINED,
+                )
+                .await?;
+                Ok::<Event, crate::error::AppError>(inserted)
+            })
+        })
+        .await?;
 
-    let tag_ids = resolve_event_tag_ids(payload.tags, payload.tag_ids).await;
-    finalize_event_create(event_id, &inserted, validated.profile.id, tag_ids).await
+    let data = build_event_response(&inserted, &validated.profile.id).await?;
+    Ok(created_event_response(data))
 }
 
 pub(in crate::api) async fn event_update(
@@ -116,9 +153,41 @@ pub(in crate::api) async fn event_update(
         Err(response) => return Ok(*response),
     };
 
-    let updated = events_write_repo::update_event(event_uuid, &changeset).await?;
+    let tag_names = payload.tags.clone();
+    let validated_tag_ids = if payload.tag_ids.is_some() {
+        match resolve_event_tag_ids(&headers, None, payload.tag_ids.clone()).await {
+            Ok(ids) => Some(ids),
+            Err(response) => return Ok(*response),
+        }
+    } else {
+        None
+    };
 
-    maybe_sync_tags(event_uuid, payload.tags, payload.tag_ids).await?;
+    let mut conn = crate::db::conn().await?;
+    let updated = conn
+        .transaction(|conn| {
+            let changeset = crate::db::models::events::EventChangeset {
+                title: changeset.title.clone(),
+                description: changeset.description.clone(),
+                cover_image: changeset.cover_image.clone(),
+                location: changeset.location.clone(),
+                starts_at: changeset.starts_at,
+                ends_at: changeset.ends_at,
+                conversation_id: changeset.conversation_id.clone(),
+                latitude: changeset.latitude,
+                longitude: changeset.longitude,
+                updated_at: changeset.updated_at,
+            };
+            let tag_names = tag_names.clone();
+            let validated_tag_ids = validated_tag_ids.clone();
+            Box::pin(async move {
+                let updated =
+                    events_write_repo::update_event_with_conn(conn, event_uuid, &changeset).await?;
+                maybe_sync_tags_with_conn(conn, event_uuid, tag_names, validated_tag_ids).await?;
+                Ok::<Event, crate::error::AppError>(updated)
+            })
+        })
+        .await?;
 
     let data = build_event_response(&updated, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -190,7 +259,11 @@ pub(in crate::api) async fn event_attend(
     let status_str = resolve_attend_status(payload);
 
     upsert_attendee(event_uuid, profile.id, status_str).await?;
-    upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
+    if status_str == "going" {
+        upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
+    } else {
+        delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
+    }
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
         tracing::warn!(
             %error,

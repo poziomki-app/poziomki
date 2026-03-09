@@ -28,6 +28,11 @@ class EventRepository(
     private val pendingOps: PendingOperationsManager,
     private val matrixClient: MatrixClient,
 ) {
+    companion object {
+        private const val EVENTS_LIST_CACHE_KEY = "events_list"
+        private const val RECOMMENDED_EVENTS_CACHE_KEY = "recommended_events"
+    }
+
     private val eventRoomManager = EventRoomRepository(db = db, api = api, matrixClient = matrixClient)
     private val eventMutationManager =
         EventMutationRepository(
@@ -75,8 +80,9 @@ class EventRepository(
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
                         result.data.forEach { event ->
-                            eventMutationManager.upsertEvent(event, now)
+                            eventMutationManager.upsertEvent(event, now, inListFeed = false)
                         }
+                        db.cacheStateQueries.upsert(RECOMMENDED_EVENTS_CACHE_KEY, now)
                     }
                     result.data
                 }
@@ -87,20 +93,18 @@ class EventRepository(
     suspend fun refreshEvents(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
             if (!forceRefresh) {
-                val cachedAt =
-                    db.eventQueries
-                        .latestCachedAt()
-                        .executeAsOneOrNull()
-                        ?.MAX
+                val cachedAt = db.cacheStateQueries.selectByKey(EVENTS_LIST_CACHE_KEY).executeAsOneOrNull()?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
             }
             when (val result = api.getEvents()) {
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
+                        db.eventQueries.clearListFeedFlags()
                         result.data.forEach { event ->
-                            eventMutationManager.upsertEvent(event, now)
+                            eventMutationManager.upsertEvent(event, now, inListFeed = true)
                         }
+                        db.cacheStateQueries.upsert(EVENTS_LIST_CACHE_KEY, now)
                     }
                     true
                 }

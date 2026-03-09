@@ -138,16 +138,33 @@ class EventsViewModel(
 
     fun toggleSaved(event: Event) {
         viewModelScope.launch {
+            val updatedSaved = !event.isSaved
             val result =
                 if (event.isSaved) {
                     eventRepository.unsaveEvent(event.id)
                 } else {
                     eventRepository.saveEvent(event.id)
                 }
-            if (result is ApiResult.Error) {
-                _state.value = _state.value.copy(
-                    refreshError = if (event.isSaved) "Nie udało się usunąć zapisu" else "Nie udało się zapisać wydarzenia",
-                )
+            when (result) {
+                is ApiResult.Success -> {
+                    _state.value = _state.value.copy(
+                        recommendedEvents =
+                            _state.value.recommendedEvents.map { recommendedEvent ->
+                                if (recommendedEvent.id == event.id) {
+                                    recommendedEvent.copy(isSaved = updatedSaved)
+                                } else {
+                                    recommendedEvent
+                                }
+                            },
+                    )
+                    filterEvents()
+                }
+
+                is ApiResult.Error -> {
+                    _state.value = _state.value.copy(
+                        refreshError = if (event.isSaved) "Nie udało się usunąć zapisu" else "Nie udało się zapisać wydarzenia",
+                    )
+                }
             }
         }
     }
