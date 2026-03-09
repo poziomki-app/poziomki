@@ -4,8 +4,12 @@ on:
   pull_request:
     paths: [mobile/**]
 
+concurrency:
+  group: mobile-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
 
     defaults:
@@ -23,5 +27,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - run: ./gradlew :androidApp:assembleDebug
+
+  lint:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
       - run: ./gradlew detekt
       - run: ./gradlew ktlintCheck
