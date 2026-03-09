@@ -4,12 +4,49 @@ on:
   pull_request:
     paths: [backend/**]
 
+concurrency:
+  group: rust-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 env:
   DATABASE_URL: postgres://poziomki:poziomki@localhost:5432/poziomki_test
   JWT_SECRET: ci-test-secret
 
 jobs:
-  check:
+  fmt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -38,13 +75,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
 
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all-targets
