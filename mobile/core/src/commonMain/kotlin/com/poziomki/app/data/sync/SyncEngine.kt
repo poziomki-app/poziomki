@@ -148,6 +148,7 @@ class SyncEngine(
                     creator_profile_picture = serverEvent.creator?.profilePicture,
                     attendees_count = serverEvent.attendeesCount.toLong(),
                     is_attending = if (serverEvent.isAttending) 1L else 0L,
+                    is_saved = if (serverEvent.isSaved) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
                             kotlinx.serialization.builtins.ListSerializer(
@@ -156,8 +157,10 @@ class SyncEngine(
                             ),
                             serverEvent.attendeesPreview,
                         ),
+                    tags_json = json.encodeToString(serverEvent.tags),
                     created_at = serverEvent.createdAt,
                     conversation_id = serverEvent.conversationId,
+                    score = serverEvent.score,
                     cached_at = now,
                     is_dirty = 0L,
                 )
@@ -195,6 +198,7 @@ class SyncEngine(
                     creator_profile_picture = event.creator?.profilePicture,
                     attendees_count = event.attendeesCount.toLong(),
                     is_attending = if (event.isAttending) 1L else 0L,
+                    is_saved = if (event.isSaved) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
                             kotlinx.serialization.builtins.ListSerializer(
@@ -203,8 +207,10 @@ class SyncEngine(
                             ),
                             event.attendeesPreview,
                         ),
+                    tags_json = json.encodeToString(event.tags),
                     created_at = event.createdAt,
                     conversation_id = event.conversationId,
+                    score = event.score,
                     cached_at = now,
                     is_dirty = 0L,
                 )

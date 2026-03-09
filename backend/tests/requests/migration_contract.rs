@@ -602,11 +602,13 @@ async fn events_flow_matches_phase_3_contract() {
         assert!(!event_id.is_empty());
         assert_eq!(created_payload["data"]["attendeesCount"], 1);
         assert_eq!(created_payload["data"]["isAttending"], true);
+        assert_eq!(created_payload["data"]["isSaved"], false);
         assert_eq!(created_payload["data"]["latitude"], serde_json::Value::Null);
         assert_eq!(
             created_payload["data"]["longitude"],
             serde_json::Value::Null
         );
+        assert_eq!(created_payload["data"]["tags"][0]["name"], "music");
 
         // Create event with geo coordinates
         let geo_create = request
@@ -694,6 +696,35 @@ async fn events_flow_matches_phase_3_contract() {
         assert_eq!(attend_payload["data"]["attendeesCount"], 2);
         assert_eq!(attend_payload["data"]["isAttending"], true);
 
+        let save_response = request
+            .post(&format!("/api/v1/events/{event_id}/save"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(save_response.status_code(), 200);
+        let save_payload: serde_json::Value = save_response.json();
+        assert_eq!(save_payload["data"]["isSaved"], true);
+
+        let export_response = request
+            .get("/api/v1/auth/export")
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(export_response.status_code(), 200);
+        let export_payload: serde_json::Value = export_response.json();
+        let interactions = export_payload["data"]["eventInteractions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(interactions.iter().any(|row| row["kind"] == "joined"));
+        assert!(interactions.iter().any(|row| row["kind"] == "saved"));
+
+        let unsave_response = request
+            .delete(&format!("/api/v1/events/{event_id}/save"))
+            .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
+            .await;
+        assert_eq!(unsave_response.status_code(), 200);
+        let unsave_payload: serde_json::Value = unsave_response.json();
+        assert_eq!(unsave_payload["data"]["isSaved"], false);
+
         let list_response = request
             .get("/api/v1/events")
             .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
@@ -701,6 +732,21 @@ async fn events_flow_matches_phase_3_contract() {
         assert_eq!(list_response.status_code(), 200);
         let list_payload: serde_json::Value = list_response.json();
         assert_eq!(list_payload["data"][0]["id"], event_id);
+
+        let suggestions_response = request
+            .post("/api/v1/tags/suggestions")
+            .json(&serde_json::json!({
+                "scope": "event",
+                "title": "jam session koncert",
+                "description": "kameralna muzyka na żywo",
+            }))
+            .await;
+        assert_eq!(suggestions_response.status_code(), 200);
+        let suggestions_payload: serde_json::Value = suggestions_response.json();
+        assert!(suggestions_payload["data"]
+            .as_array()
+            .map(|rows| !rows.is_empty())
+            .unwrap_or(false));
     })
     .await;
 }

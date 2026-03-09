@@ -11,9 +11,12 @@ CREATE TABLE event (
     creator_profile_picture TEXT,
     attendees_count INTEGER NOT NULL DEFAULT 0,
     is_attending INTEGER NOT NULL DEFAULT 0,
+    is_saved INTEGER NOT NULL DEFAULT 0,
     attendees_preview_json TEXT,
+    tags_json TEXT,
     created_at TEXT,
     conversation_id TEXT,
+    score REAL NOT NULL DEFAULT 0.0,
     cached_at INTEGER NOT NULL DEFAULT 0,
     is_dirty INTEGER NOT NULL DEFAULT 0,
     latitude REAL,
@@ -34,9 +37,9 @@ upsert:
 INSERT OR REPLACE INTO event(
     id, title, description, cover_image, location,
     starts_at, ends_at, creator_id, creator_name, creator_profile_picture,
-    attendees_count, is_attending, attendees_preview_json, created_at,
-    conversation_id, cached_at, is_dirty, latitude, longitude
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    attendees_count, is_attending, is_saved, attendees_preview_json, tags_json, created_at,
+    conversation_id, score, cached_at, is_dirty, latitude, longitude
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateAttendance:
 UPDATE event

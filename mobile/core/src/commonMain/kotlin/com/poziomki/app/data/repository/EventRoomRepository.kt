@@ -89,9 +89,12 @@ internal class EventRoomRepository(
             creator_profile_picture = current.creator_profile_picture,
             attendees_count = current.attendees_count,
             is_attending = current.is_attending,
+            is_saved = current.is_saved,
             attendees_preview_json = current.attendees_preview_json,
+            tags_json = current.tags_json,
             created_at = current.created_at,
             conversation_id = conversationId,
+            score = current.score,
             cached_at = current.cached_at,
             is_dirty = current.is_dirty,
         )

@@ -44,6 +44,8 @@ pub struct TagDocument {
     pub scope: String,
     pub category: Option<String>,
     pub emoji: Option<String>,
+    #[serde(rename = "parentId")]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,7 +248,8 @@ async fn search_tags_postgres(
             t.name,
             t.scope,
             t.category,
-            t.emoji
+            t.emoji,
+            t.parent_id
         FROM tags t
         WHERE
             t.search_vector @@ websearch_to_tsquery('simple', $1)
@@ -271,6 +274,7 @@ async fn search_tags_postgres(
             scope: tag.scope,
             category: tag.category,
             emoji: tag.emoji,
+            parent_id: tag.parent_id.map(|id| id.to_string()),
         })
         .collect())
 }
@@ -430,4 +434,6 @@ pub struct TagSearchRow {
     pub category: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     pub emoji: Option<String>,
+    #[diesel(sql_type = Nullable<DieselUuid>)]
+    pub parent_id: Option<uuid::Uuid>,
 }

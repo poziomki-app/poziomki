@@ -8,6 +8,7 @@ import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.CreateTagRequest
 import com.poziomki.app.network.Tag
+import com.poziomki.app.network.TagSuggestion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +54,7 @@ class TagRepository(
                                 scope = tag.scope,
                                 category = tag.category,
                                 emoji = tag.emoji,
+                                parent_id = tag.parentId,
                             )
                         }
                     }
@@ -90,9 +92,10 @@ class TagRepository(
     suspend fun createTag(
         name: String,
         scope: String,
+        parentId: String? = null,
     ): ApiResult<Tag> =
         withContext(Dispatchers.IO) {
-            val result = api.createTag(CreateTagRequest(name = name, scope = scope))
+            val result = api.createTag(CreateTagRequest(name = name, scope = scope, parentId = parentId))
             if (result is ApiResult.Success) {
                 val tag = result.data
                 db.tagQueries.upsert(
@@ -101,9 +104,22 @@ class TagRepository(
                     scope = tag.scope,
                     category = tag.category,
                     emoji = tag.emoji,
+                    parent_id = tag.parentId,
                 )
             }
             result
+        }
+
+    suspend fun suggestTags(
+        scope: String,
+        title: String,
+        description: String? = null,
+    ): List<TagSuggestion> =
+        withContext(Dispatchers.IO) {
+            when (val result = api.suggestTags(scope = scope, title = title, description = description)) {
+                is ApiResult.Success -> result.data
+                is ApiResult.Error -> emptyList()
+            }
         }
 
     suspend fun ensureInterestSeedIfEmpty() {
@@ -123,6 +139,7 @@ class TagRepository(
                         scope = tag.scope,
                         category = tag.category,
                         emoji = tag.emoji,
+                        parent_id = tag.parentId,
                     )
                 }
             }

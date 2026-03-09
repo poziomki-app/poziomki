@@ -116,9 +116,12 @@ internal class EventMutationRepository(
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
                     is_attending = current.is_attending,
+                    is_saved = current.is_saved,
                     attendees_preview_json = current.attendees_preview_json,
+                    tags_json = current.tags_json,
                     created_at = current.created_at,
                     conversation_id = current.conversation_id,
+                    score = current.score,
                     cached_at = current.cached_at,
                     is_dirty = 1L,
                 )
@@ -245,6 +248,92 @@ internal class EventMutationRepository(
             }
         }
 
+    suspend fun saveEvent(id: String): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val current = db.eventQueries.selectById(id).executeAsOneOrNull()
+            if (current != null && current.is_saved == 0L) {
+                db.eventQueries.upsert(
+                    id = current.id,
+                    title = current.title,
+                    description = current.description,
+                    cover_image = current.cover_image,
+                    location = current.location,
+                    latitude = current.latitude,
+                    longitude = current.longitude,
+                    starts_at = current.starts_at,
+                    ends_at = current.ends_at,
+                    creator_id = current.creator_id,
+                    creator_name = current.creator_name,
+                    creator_profile_picture = current.creator_profile_picture,
+                    attendees_count = current.attendees_count,
+                    is_attending = current.is_attending,
+                    is_saved = 1L,
+                    attendees_preview_json = current.attendees_preview_json,
+                    tags_json = current.tags_json,
+                    created_at = current.created_at,
+                    conversation_id = current.conversation_id,
+                    score = current.score,
+                    cached_at = current.cached_at,
+                    is_dirty = current.is_dirty,
+                )
+            }
+
+            when (val result = api.saveEvent(id)) {
+                is ApiResult.Success -> {
+                    upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                    ApiResult.Success(Unit)
+                }
+
+                is ApiResult.Error -> {
+                    current?.let(::restoreEvent)
+                    result
+                }
+            }
+        }
+
+    suspend fun unsaveEvent(id: String): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val current = db.eventQueries.selectById(id).executeAsOneOrNull()
+            if (current != null && current.is_saved != 0L) {
+                db.eventQueries.upsert(
+                    id = current.id,
+                    title = current.title,
+                    description = current.description,
+                    cover_image = current.cover_image,
+                    location = current.location,
+                    latitude = current.latitude,
+                    longitude = current.longitude,
+                    starts_at = current.starts_at,
+                    ends_at = current.ends_at,
+                    creator_id = current.creator_id,
+                    creator_name = current.creator_name,
+                    creator_profile_picture = current.creator_profile_picture,
+                    attendees_count = current.attendees_count,
+                    is_attending = current.is_attending,
+                    is_saved = 0L,
+                    attendees_preview_json = current.attendees_preview_json,
+                    tags_json = current.tags_json,
+                    created_at = current.created_at,
+                    conversation_id = current.conversation_id,
+                    score = current.score,
+                    cached_at = current.cached_at,
+                    is_dirty = current.is_dirty,
+                )
+            }
+
+            when (val result = api.unsaveEvent(id)) {
+                is ApiResult.Success -> {
+                    upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                    ApiResult.Success(Unit)
+                }
+
+                is ApiResult.Error -> {
+                    current?.let(::restoreEvent)
+                    result
+                }
+            }
+        }
+
     fun upsertEvent(
         event: Event,
         cachedAt: Long,
@@ -272,9 +361,12 @@ internal class EventMutationRepository(
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
             is_attending = if (event.isAttending) 1L else 0L,
+            is_saved = if (event.isSaved) 1L else 0L,
             attendees_preview_json = json.encodeToString(event.attendeesPreview),
+            tags_json = json.encodeToString(event.tags),
             created_at = event.createdAt,
             conversation_id = conversationId,
+            score = event.score,
             cached_at = cachedAt,
             is_dirty = if (isDirty) 1L else 0L,
         )
@@ -336,9 +428,12 @@ internal class EventMutationRepository(
             creator_profile_picture = event.creator_profile_picture,
             attendees_count = event.attendees_count,
             is_attending = event.is_attending,
+            is_saved = event.is_saved,
             attendees_preview_json = event.attendees_preview_json,
+            tags_json = event.tags_json,
             created_at = event.created_at,
             conversation_id = event.conversation_id,
+            score = event.score,
             cached_at = event.cached_at,
             is_dirty = event.is_dirty,
         )

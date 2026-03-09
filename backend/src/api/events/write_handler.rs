@@ -19,6 +19,10 @@ use crate::db::models::events::{Event, NewEvent};
 use crate::db::models::profiles::Profile;
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
+use super::events_interactions_repo::{
+    delete_event_interaction, upsert_event_interaction, EVENT_INTERACTION_JOINED,
+    EVENT_INTERACTION_SAVED,
+};
 use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
 use super::events_tags_repo::{sync_event_tags, upsert_attendee};
 use super::events_tags_service::{maybe_sync_tags, resolve_event_tag_ids};
@@ -78,6 +82,7 @@ async fn finalize_event_create(
         sync_event_tags(event_id, &tag_ids).await?;
     }
     upsert_attendee(event_id, profile_id, "going").await?;
+    upsert_event_interaction(profile_id, event_id, EVENT_INTERACTION_JOINED).await?;
     let data = build_event_response(event, &profile_id).await?;
     Ok(created_event_response(data))
 }
@@ -185,6 +190,7 @@ pub(in crate::api) async fn event_attend(
     let status_str = resolve_attend_status(payload);
 
     upsert_attendee(event_uuid, profile.id, status_str).await?;
+    upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
         tracing::warn!(
             %error,
@@ -193,6 +199,22 @@ pub(in crate::api) async fn event_attend(
             "failed to enqueue matrix membership sync after attend"
         );
     }
+
+    let data = build_event_response(&event, &profile.id).await?;
+    Ok(Json(DataResponse { data }).into_response())
+}
+
+pub(in crate::api) async fn event_save(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (event, event_uuid, profile) = match load_event_with_profile(&headers, &id).await {
+        Ok(data) => data,
+        Err(response) => return Ok(*response),
+    };
+
+    upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_SAVED).await?;
 
     let data = build_event_response(&event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -233,6 +255,22 @@ pub(in crate::api) async fn event_leave(
             "failed to enqueue matrix membership sync after leave"
         );
     }
+
+    let data = build_event_response(&event, &profile.id).await?;
+    Ok(Json(DataResponse { data }).into_response())
+}
+
+pub(in crate::api) async fn event_unsave(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (event, event_uuid, profile) = match load_event_with_profile(&headers, &id).await {
+        Ok(data) => data,
+        Err(response) => return Ok(*response),
+    };
+
+    delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_SAVED).await?;
 
     let data = build_event_response(&event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())

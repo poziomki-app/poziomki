@@ -136,6 +136,22 @@ class EventsViewModel(
         filterEvents()
     }
 
+    fun toggleSaved(event: Event) {
+        viewModelScope.launch {
+            val result =
+                if (event.isSaved) {
+                    eventRepository.unsaveEvent(event.id)
+                } else {
+                    eventRepository.saveEvent(event.id)
+                }
+            if (result is ApiResult.Error) {
+                _state.value = _state.value.copy(
+                    refreshError = if (event.isSaved) "Nie udało się usunąć zapisu" else "Nie udało się zapisać wydarzenia",
+                )
+            }
+        }
+    }
+
     fun setTimeFilter(filter: TimeFilter) {
         _state.value = _state.value.copy(activeFilter = filter)
         if (filter == TimeFilter.NEARBY) {
@@ -214,7 +230,7 @@ class EventsViewModel(
         val current = _state.value
         val source =
             when (current.activeFilter) {
-                TimeFilter.ALL -> current.recommendedEvents.ifEmpty { current.allEvents }
+                TimeFilter.ALL -> recommendedDisplayEvents(current.recommendedEvents, current.allEvents)
                 TimeFilter.NEARBY -> current.nearbyEvents
                 else -> current.allEvents
             }
@@ -231,4 +247,16 @@ class EventsViewModel(
             }
         _state.value = current.copy(events = filtered)
     }
+
+    private fun recommendedDisplayEvents(
+        recommended: List<Event>,
+        cached: List<Event>,
+    ): List<Event> =
+        if (recommended.isEmpty()) {
+            cached
+        } else {
+            recommended.map { recommendedEvent ->
+                cached.firstOrNull { it.id == recommendedEvent.id } ?: recommendedEvent
+            }
+        }
 }

@@ -1,6 +1,8 @@
 package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -52,8 +55,13 @@ import com.poziomki.app.ui.shared.isImageUrl
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.BookmarkSimple
+import com.adamglin.phosphoricons.bold.EnvelopeSimple
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EventDetailScreen(
     onBack: () -> Unit,
@@ -71,6 +79,24 @@ fun EventDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(PhosphorIcons.Bold.ArrowLeft, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = viewModel::toggleSaved,
+                        enabled = !state.isUpdatingSaved && state.event != null,
+                    ) {
+                        Icon(
+                            imageVector =
+                                PhosphorIcons.Bold.BookmarkSimple,
+                            contentDescription = "Zapisz wydarzenie",
+                            tint =
+                                if (state.event?.isSaved == true) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                        )
                     }
                 },
             )
@@ -121,6 +147,31 @@ fun EventDetailScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                }
+
+                                if (event.tags.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        event.tags.forEach { tag ->
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                            ) {
+                                                Text(
+                                                    text = tag.name,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    modifier =
+                                                        Modifier.padding(
+                                                            horizontal = 12.dp,
+                                                            vertical = 6.dp,
+                                                        ),
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
 
                                 event.description?.let {

@@ -27,7 +27,9 @@ use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
 use matching_assembler::build_recommendations_response;
 use matching_repo::MatchingRepository;
-use matching_scoring::{rank_and_take, rank_events_and_take, score_event, score_profile};
+use matching_scoring::{
+    build_affinity_map, rank_and_take, rank_events_and_take, score_event, score_profile,
+};
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
@@ -42,7 +44,7 @@ pub(super) async fn profiles_recommendations(
     let limit = query.limit.unwrap_or(10).clamp(1, 50) as usize;
 
     let mut conn = crate::db::conn().await?;
-    let (my_profile, my_tag_ids) = repo.load_user_context(user.id, &mut conn).await?;
+    let user_ctx = repo.load_user_context(user.id, &mut conn).await?;
 
     // Fetch candidate profiles (more than limit so we can score and rank)
     let candidates = repo
@@ -55,7 +57,7 @@ pub(super) async fn profiles_recommendations(
         .batch_load_profile_tag_ids(&candidate_ids, &mut conn)
         .await?;
 
-    let my_program = my_profile.as_ref().and_then(|p| p.program.clone());
+    let my_program = user_ctx.profile.as_ref().and_then(|p| p.program.clone());
 
     // Score each candidate
     let mut scored: Vec<(f64, &Profile)> = candidates
@@ -66,7 +68,7 @@ pub(super) async fn profiles_recommendations(
                 .cloned()
                 .unwrap_or_default();
             let score = score_profile(
-                &my_tag_ids,
+                &user_ctx.profile_tag_ids,
                 &candidate_tags,
                 my_program.as_deref(),
                 candidate,
@@ -97,8 +99,8 @@ pub(super) async fn events_recommendations(
     let limit = query.limit.unwrap_or(20).clamp(1, 100) as usize;
 
     let mut conn = crate::db::conn().await?;
-    let (my_profile, my_tag_ids) = repo.load_user_context(user.id, &mut conn).await?;
-    let my_profile_id = my_profile.as_ref().map_or(Uuid::nil(), |p| p.id);
+    let user_ctx = repo.load_user_context(user.id, &mut conn).await?;
+    let my_profile_id = user_ctx.profile.as_ref().map_or(Uuid::nil(), |p| p.id);
 
     let now = Utc::now();
 
@@ -108,6 +110,36 @@ pub(super) async fn events_recommendations(
     // Batch-load all event tag IDs in one query
     let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();
     let all_event_tags = repo.batch_load_event_tag_ids(&event_ids, &mut conn).await?;
+    let tag_parent_map = repo.load_tag_parent_map(&mut conn).await?;
+
+    let profile_affinity = build_affinity_map(
+        user_ctx
+            .profile_tag_ids
+            .iter()
+            .copied()
+            .map(|tag_id| (tag_id, 1.0)),
+        &tag_parent_map,
+    );
+
+    let saved_event_ids: Vec<Uuid> = user_ctx.saved_event_ids.iter().copied().collect();
+    let joined_event_ids: Vec<Uuid> = user_ctx.joined_event_ids.iter().copied().collect();
+    let saved_event_tags = repo
+        .batch_load_event_tag_ids(&saved_event_ids, &mut conn)
+        .await?;
+    let joined_event_tags = repo
+        .batch_load_event_tag_ids(&joined_event_ids, &mut conn)
+        .await?;
+    let history_affinity = build_affinity_map(
+        saved_event_tags
+            .values()
+            .flat_map(|tag_ids| tag_ids.iter().copied().map(|tag_id| (tag_id, 1.0)))
+            .chain(
+                joined_event_tags
+                    .values()
+                    .flat_map(|tag_ids| tag_ids.iter().copied().map(|tag_id| (tag_id, 0.5))),
+            ),
+        &tag_parent_map,
+    );
 
     // Resolve user geo query: lat, lng, max radius in km (default 20 km)
     let user_geo = query.lat.zip(query.lng).map(|(lat, lng)| {
@@ -123,7 +155,14 @@ pub(super) async fn events_recommendations(
         .map(|event| {
             let event_tag_ids = all_event_tags.get(&event.id).cloned().unwrap_or_default();
             (
-                score_event(&my_tag_ids, &event_tag_ids, event, user_geo),
+                score_event(
+                    &profile_affinity,
+                    &history_affinity,
+                    &event_tag_ids,
+                    event,
+                    user_geo,
+                    &tag_parent_map,
+                ),
                 event,
             )
         })

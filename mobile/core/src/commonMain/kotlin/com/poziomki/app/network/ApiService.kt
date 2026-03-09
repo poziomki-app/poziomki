@@ -80,6 +80,10 @@ class ApiService(
 
     suspend fun leaveEvent(id: String): ApiResult<Event> = client.delete("/api/v1/events/$id/attend")
 
+    suspend fun saveEvent(id: String): ApiResult<Event> = client.post("/api/v1/events/$id/save")
+
+    suspend fun unsaveEvent(id: String): ApiResult<Event> = client.delete("/api/v1/events/$id/save")
+
     // Uploads
 
     suspend fun uploadImage(
@@ -104,6 +108,16 @@ class ApiService(
     }
 
     suspend fun createTag(request: CreateTagRequest): ApiResult<Tag> = client.post("/api/v1/tags", request)
+
+    suspend fun suggestTags(
+        scope: String,
+        title: String,
+        description: String? = null,
+    ): ApiResult<List<TagSuggestion>> =
+        client.post(
+            "/api/v1/tags/suggestions",
+            TagSuggestionsRequest(scope = scope, title = title, description = description),
+        )
 
     // Degrees
 

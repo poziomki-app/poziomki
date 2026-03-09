@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
@@ -74,19 +74,93 @@ pub(super) fn rank_events_and_take<'a>(
     scored.iter().copied().take(limit).collect()
 }
 
+pub(super) fn build_affinity_map<I>(
+    source_tags: I,
+    tag_parent_map: &HashMap<Uuid, Option<Uuid>>,
+) -> HashMap<Uuid, f64>
+where
+    I: IntoIterator<Item = (Uuid, f64)>,
+{
+    let mut affinity = HashMap::new();
+
+    for (tag_id, source_weight) in source_tags {
+        let mut current = Some(tag_id);
+        let mut depth = 0usize;
+        let mut seen = HashSet::new();
+
+        while let Some(node_id) = current {
+            if !seen.insert(node_id) {
+                break;
+            }
+
+            let ancestor_weight = match depth {
+                0 => 1.0,
+                1 => 0.7,
+                _ => 0.4,
+            };
+
+            let entry = affinity.entry(node_id).or_insert(0.0);
+            *entry = (*entry + source_weight * ancestor_weight).clamp(0.0, 1.0);
+
+            current = tag_parent_map.get(&node_id).copied().flatten();
+            depth += 1;
+        }
+    }
+
+    affinity
+}
+
+fn best_affinity_for_event_tag(
+    tag_id: Uuid,
+    affinity_map: &HashMap<Uuid, f64>,
+    tag_parent_map: &HashMap<Uuid, Option<Uuid>>,
+) -> f64 {
+    let mut best = affinity_map.get(&tag_id).copied().unwrap_or(0.0);
+    let mut current = tag_parent_map.get(&tag_id).copied().flatten();
+    let mut seen = HashSet::from([tag_id]);
+
+    while let Some(node_id) = current {
+        if !seen.insert(node_id) {
+            break;
+        }
+        best = best.max(affinity_map.get(&node_id).copied().unwrap_or(0.0));
+        current = tag_parent_map.get(&node_id).copied().flatten();
+    }
+
+    best.clamp(0.0, 1.0)
+}
+
+fn affinity_score(
+    affinity_map: &HashMap<Uuid, f64>,
+    event_tag_ids: &HashSet<Uuid>,
+    tag_parent_map: &HashMap<Uuid, Option<Uuid>>,
+) -> f64 {
+    if affinity_map.is_empty() || event_tag_ids.is_empty() {
+        return 0.0;
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    let total = event_tag_ids
+        .iter()
+        .map(|tag_id| best_affinity_for_event_tag(*tag_id, affinity_map, tag_parent_map))
+        .sum::<f64>();
+
+    #[allow(clippy::cast_precision_loss)]
+    let average = total / event_tag_ids.len() as f64;
+    average * 100.0
+}
+
 #[allow(clippy::cast_precision_loss)]
 pub(super) fn score_event(
-    my_tag_ids: &HashSet<Uuid>,
+    profile_affinity: &HashMap<Uuid, f64>,
+    history_affinity: &HashMap<Uuid, f64>,
     event_tag_ids: &HashSet<Uuid>,
     event: &Event,
     user_geo: Option<(f64, f64, f64)>,
+    tag_parent_map: &HashMap<Uuid, Option<Uuid>>,
 ) -> f64 {
-    let tag_score = if my_tag_ids.is_empty() {
-        0.0
-    } else {
-        let shared = my_tag_ids.intersection(event_tag_ids).count();
-        (shared as f64 / my_tag_ids.len() as f64) * 100.0
-    };
+    let content_score = affinity_score(profile_affinity, event_tag_ids, tag_parent_map);
+    let history_score = affinity_score(history_affinity, event_tag_ids, tag_parent_map);
 
     if let Some((ulat, ulng, max_km)) = user_geo {
         let geo_bonus = match (event.latitude, event.longitude) {
@@ -95,9 +169,9 @@ pub(super) fn score_event(
             }
             _ => 0.0,
         };
-        tag_score * 0.85 + geo_bonus
+        content_score * 0.65 + history_score * 0.20 + geo_bonus
     } else {
-        tag_score
+        content_score * 0.65 + history_score * 0.20
     }
 }
 
@@ -141,28 +215,54 @@ mod tests {
     #[test]
     fn event_combined_score_with_geo_max() {
         let tag_score: f64 = 100.0;
+        let history_score: f64 = 50.0;
         let geo_bonus = proximity_score(0.0, 20.0) * 15.0;
-        let combined = tag_score * 0.85 + geo_bonus;
+        let combined = tag_score * 0.65 + history_score * 0.20 + geo_bonus;
         assert!((combined - 100.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn event_score_is_asymmetric() {
-        let user_tags: HashSet<Uuid> = [id(1), id(2)].into();
-        let event_tags: HashSet<Uuid> = (1..=10).map(id).collect();
-        let shared = user_tags.intersection(&event_tags).count();
-        #[allow(clippy::cast_precision_loss)]
-        let score = (shared as f64 / user_tags.len() as f64) * 100.0;
-        assert!((score - 100.0).abs() < f64::EPSILON);
+    fn affinity_propagates_to_parent_chain() {
+        let tag_parent_map =
+            HashMap::from([(id(1), None), (id(2), Some(id(1))), (id(3), Some(id(2)))]);
 
-        let user_tags2: HashSet<Uuid> = (1..=10).map(id).collect();
-        let event_tags2: HashSet<Uuid> = [id(1), id(2)].into();
-        let shared2 = user_tags2.intersection(&event_tags2).count();
-        #[allow(clippy::cast_precision_loss)]
-        let score2 = (shared2 as f64 / user_tags2.len() as f64) * 100.0;
-        assert!((score2 - 20.0).abs() < f64::EPSILON);
+        let affinity = build_affinity_map([(id(3), 1.0)], &tag_parent_map);
+        assert_eq!(affinity.get(&id(3)).copied(), Some(1.0));
+        assert_eq!(affinity.get(&id(2)).copied(), Some(0.7));
+        assert_eq!(affinity.get(&id(1)).copied(), Some(0.4));
+    }
 
-        assert!((score - score2).abs() > 1.0);
+    #[test]
+    fn event_score_matches_parent_interest() {
+        let tag_parent_map = HashMap::from([(id(1), None), (id(2), Some(id(1)))]);
+        let profile_affinity = build_affinity_map([(id(1), 1.0)], &tag_parent_map);
+        let history_affinity = HashMap::new();
+        let event_tags: HashSet<Uuid> = [id(2)].into();
+        let event = Event {
+            id: id(10),
+            title: "Test".to_string(),
+            description: None,
+            cover_image: None,
+            location: None,
+            starts_at: chrono::Utc::now(),
+            ends_at: None,
+            creator_id: id(20),
+            conversation_id: None,
+            latitude: None,
+            longitude: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let score = score_event(
+            &profile_affinity,
+            &history_affinity,
+            &event_tags,
+            &event,
+            None,
+            &tag_parent_map,
+        );
+        assert!(score > 25.0, "got {score}");
     }
 
     #[test]
