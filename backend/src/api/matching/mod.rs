@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 type Result<T> = crate::error::AppResult<T>;
 
+use crate::api::auth_or_respond;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{

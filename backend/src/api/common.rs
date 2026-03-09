@@ -7,6 +7,12 @@ use serde::Serialize;
 use uuid::Uuid;
 
 /// Authenticate via `require_auth_db` and early-return on failure.
+///
+/// Usage:
+/// ```ignore
+/// let (session, user) = auth_or_respond!(headers);
+/// let (_session, user) = auth_or_respond!(headers);
+/// ```
 macro_rules! auth_or_respond {
     ($headers:expr) => {
         match $crate::api::state::require_auth_db(&$headers).await {
@@ -45,23 +51,6 @@ fn request_id(headers: &HeaderMap) -> String {
         .map_or_else(|| Uuid::new_v4().to_string(), ToOwned::to_owned)
 }
 
-pub fn error_response(
-    status: axum::http::StatusCode,
-    headers: &HeaderMap,
-    spec: ErrorSpec,
-) -> Response {
-    (
-        status,
-        Json(ErrorResponse {
-            error: spec.error,
-            code: spec.code,
-            request_id: request_id(headers),
-            details: spec.details,
-        }),
-    )
-        .into_response()
-}
-
 pub fn parse_uuid(id: &str, label: &str) -> std::result::Result<Uuid, crate::error::AppError> {
     Uuid::parse_str(id).map_err(|_| crate::error::AppError::Message(format!("Invalid {label} ID")))
 }
@@ -82,6 +71,23 @@ pub fn parse_uuid_response(
             },
         ))
     })
+}
+
+pub fn error_response(
+    status: axum::http::StatusCode,
+    headers: &HeaderMap,
+    spec: ErrorSpec,
+) -> Response {
+    (
+        status,
+        Json(ErrorResponse {
+            error: spec.error,
+            code: spec.code,
+            request_id: request_id(headers),
+            details: spec.details,
+        }),
+    )
+        .into_response()
 }
 
 /// Normalize an S3 object prefix: strip leading `/`, ensure trailing `/`,

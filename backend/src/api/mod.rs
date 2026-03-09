@@ -26,6 +26,7 @@ pub(crate) use common::{
     auth_or_respond, env_non_empty, error_response, extract_filename, parse_uuid,
     parse_uuid_response, resolve_image_url, resolve_image_urls, resolve_thumbhashes, ErrorSpec,
 };
+pub(crate) use state::{auth_cache_len, spawn_auth_cache_eviction};
 
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
@@ -159,6 +160,9 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_room_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
+        .layer(axum::middleware::from_fn(
+            crate::metrics::metrics_middleware,
+        ))
 }
 
 pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
