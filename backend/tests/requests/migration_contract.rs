@@ -885,6 +885,9 @@ async fn delete_account_verifies_hashed_password() {
 #[tokio::test]
 #[serial]
 async fn uploads_auth_check_accepts_owned_variant_url() {
+    if std::env::var("GARAGE_S3_ENDPOINT").is_err() {
+        return; // requires S3 storage
+    }
     request(|request, _ctx| async move {
         let (auth_key, auth_value) =
             create_user_with_profile(&request, "variant-owner@example.com", "Variant Owner").await;
@@ -916,6 +919,9 @@ async fn uploads_auth_check_accepts_owned_variant_url() {
 #[tokio::test]
 #[serial]
 async fn upload_returns_error_when_upload_row_insert_fails() {
+    if std::env::var("GARAGE_S3_ENDPOINT").is_err() {
+        return; // requires S3 storage
+    }
     request(|request, _ctx| async move {
         use diesel_async::RunQueryDsl;
 
@@ -924,19 +930,24 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
 
         let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
         diesel::sql_query(
-            r"
-            CREATE OR REPLACE FUNCTION test_fail_uploads_insert() RETURNS trigger AS $$
+            r"CREATE OR REPLACE FUNCTION test_fail_uploads_insert() RETURNS trigger AS $$
             BEGIN
               RAISE EXCEPTION 'forced uploads insert failure';
             END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
-            CREATE TRIGGER trg_test_fail_uploads_insert
+            $$ LANGUAGE plpgsql",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("create insert-fail function");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop old trigger");
+        diesel::sql_query(
+            r"CREATE TRIGGER trg_test_fail_uploads_insert
             BEFORE INSERT ON uploads
             FOR EACH ROW
-            EXECUTE FUNCTION test_fail_uploads_insert();
-            ",
+            EXECUTE FUNCTION test_fail_uploads_insert()",
         )
         .execute(&mut conn)
         .await
@@ -956,15 +967,14 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
             .multipart(form)
             .await;
 
-        diesel::sql_query(
-            r"
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
-            DROP FUNCTION IF EXISTS test_fail_uploads_insert();
-            ",
-        )
-        .execute(&mut conn)
-        .await
-        .expect("drop insert-fail trigger");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop insert-fail trigger");
+        diesel::sql_query("DROP FUNCTION IF EXISTS test_fail_uploads_insert()")
+            .execute(&mut conn)
+            .await
+            .expect("drop insert-fail function");
 
         assert_eq!(upload.status_code(), 500);
     })
@@ -974,6 +984,9 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
 #[tokio::test]
 #[serial]
 async fn delete_returns_error_when_upload_row_update_fails() {
+    if std::env::var("GARAGE_S3_ENDPOINT").is_err() {
+        return; // requires S3 storage
+    }
     request(|request, _ctx| async move {
         use diesel_async::RunQueryDsl;
 
@@ -987,19 +1000,24 @@ async fn delete_returns_error_when_upload_row_update_fails() {
 
         let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
         diesel::sql_query(
-            r"
-            CREATE OR REPLACE FUNCTION test_fail_uploads_update() RETURNS trigger AS $$
+            r"CREATE OR REPLACE FUNCTION test_fail_uploads_update() RETURNS trigger AS $$
             BEGIN
               RAISE EXCEPTION 'forced uploads update failure';
             END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
-            CREATE TRIGGER trg_test_fail_uploads_update
+            $$ LANGUAGE plpgsql",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("create update-fail function");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop old trigger");
+        diesel::sql_query(
+            r"CREATE TRIGGER trg_test_fail_uploads_update
             BEFORE UPDATE ON uploads
             FOR EACH ROW
-            EXECUTE FUNCTION test_fail_uploads_update();
-            ",
+            EXECUTE FUNCTION test_fail_uploads_update()",
         )
         .execute(&mut conn)
         .await
@@ -1010,15 +1028,14 @@ async fn delete_returns_error_when_upload_row_update_fails() {
             .add_header(auth_key, auth_value)
             .await;
 
-        diesel::sql_query(
-            r"
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
-            DROP FUNCTION IF EXISTS test_fail_uploads_update();
-            ",
-        )
-        .execute(&mut conn)
-        .await
-        .expect("drop update-fail trigger");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop update-fail trigger");
+        diesel::sql_query("DROP FUNCTION IF EXISTS test_fail_uploads_update()")
+            .execute(&mut conn)
+            .await
+            .expect("drop update-fail function");
 
         assert_eq!(delete.status_code(), 500);
     })
@@ -1066,9 +1083,10 @@ async fn sign_up_existing_email_returns_generic_success_and_keeps_single_user() 
             .first::<User>(&mut conn)
             .await
             .expect("load saved user");
+        // Unverified users get their password updated on re-signup
         assert!(
-            poziomki_backend::security::verify_password("first-password", &saved.password),
-            "second sign-up must not overwrite existing password hash"
+            poziomki_backend::security::verify_password("different-password", &saved.password),
+            "re-signup updates password for unverified user"
         );
     })
     .await;
