@@ -1,10 +1,3 @@
-// Metrics counters/gauges are small values; precision loss from u64→f32 / i64→f32 is acceptable.
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
-
 mod api;
 pub mod collector;
 mod middleware;
@@ -12,6 +5,7 @@ mod sampler;
 pub mod store;
 
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use collector::{MetricsConfig, MetricsStore};
 pub use middleware::metrics_middleware;
@@ -44,4 +38,13 @@ pub fn init(config: MetricsConfig) {
 /// Returns an Axum `Router<()>` with the metrics endpoints mounted.
 pub fn routes() -> axum::Router {
     api::routes()
+}
+
+/// Current time as a Unix epoch in seconds (u32).
+#[allow(clippy::cast_possible_truncation)]
+pub(crate) fn now_epoch() -> u32 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as u32)
+        .unwrap_or(0)
 }

@@ -134,6 +134,15 @@ impl CounterPair {
     pub fn inc_failure(&self) {
         self.failure.fetch_add(1, Ordering::Relaxed);
     }
+
+    /// Record a success or failure based on a `Result`.
+    pub fn record_result<T, E>(&self, result: &Result<T, E>) {
+        if result.is_ok() {
+            self.inc_success();
+        } else {
+            self.inc_failure();
+        }
+    }
 }
 
 impl Default for CounterPair {
