@@ -1,16 +1,42 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use super::store::TimeSeries;
 
 /// Number of latency histogram buckets.
-const HISTOGRAM_BUCKETS: usize = 12;
+pub const HISTOGRAM_BUCKETS: usize = 12;
 
 /// Bucket upper bounds in microseconds.
 /// <1ms, <2ms, <5ms, <10ms, <25ms, <50ms, <100ms, <250ms, <500ms, <1s, <2s, <5s
-const BUCKET_UPPER_MICROS: [u64; HISTOGRAM_BUCKETS] = [
+pub const BUCKET_UPPER_MICROS: [u64; HISTOGRAM_BUCKETS] = [
     1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000,
     5_000_000,
 ];
+
+/// Snapshot of a latency histogram's bucket counts.
+#[allow(dead_code)]
+pub struct LatencyHistogramSnapshot {
+    pub buckets: [u64; HISTOGRAM_BUCKETS],
+    pub overflow: u64,
+    pub total: u64,
+}
+
+/// Compute approximate p95 latency in milliseconds from a histogram snapshot.
+pub fn p95_from_snapshot(snap: &LatencyHistogramSnapshot) -> f32 {
+    if snap.total == 0 {
+        return 0.0;
+    }
+    let target = (snap.total as f64 * 0.95).ceil() as u64;
+    let mut cumulative: u64 = 0;
+    for (i, &count) in snap.buckets.iter().enumerate() {
+        cumulative += count;
+        if cumulative >= target {
+            if let Some(&upper) = BUCKET_UPPER_MICROS.get(i) {
+                return upper as f32 / 1000.0;
+            }
+        }
+    }
+    5000.0
+}
 
 /// A latency histogram using atomic counters.
 ///
@@ -51,30 +77,25 @@ impl LatencyHistogram {
         }
     }
 
-    /// Drain the histogram, compute approximate p95 latency in milliseconds, and reset.
-    pub fn drain_p95(&self) -> f32 {
+    /// Drain the histogram into a snapshot and reset all counters.
+    pub fn drain_snapshot(&self) -> LatencyHistogramSnapshot {
         let total = self.count.swap(0, Ordering::Relaxed);
-
-        if total == 0 {
-            return 0.0;
-        }
-
-        let target = (total as f64 * 0.95).ceil() as u64;
-        let mut cumulative: u64 = 0;
-        let mut p95_ms = 5000.0;
-
+        let overflow = self.overflow.swap(0, Ordering::Relaxed);
+        let mut buckets = [0u64; HISTOGRAM_BUCKETS];
         for (i, bucket) in self.buckets.iter().enumerate() {
-            let bucket_count = bucket.swap(0, Ordering::Relaxed);
-            cumulative += bucket_count;
-            if cumulative >= target {
-                if let Some(&upper) = BUCKET_UPPER_MICROS.get(i) {
-                    p95_ms = upper as f32 / 1000.0;
-                }
-                break;
-            }
+            buckets[i] = bucket.swap(0, Ordering::Relaxed);
         }
-        let _overflow_count = self.overflow.swap(0, Ordering::Relaxed);
-        p95_ms
+        LatencyHistogramSnapshot {
+            buckets,
+            overflow,
+            total,
+        }
+    }
+
+    /// Drain the histogram, compute approximate p95 latency in milliseconds, and reset.
+    #[cfg(test)]
+    pub fn drain_p95(&self) -> f32 {
+        p95_from_snapshot(&self.drain_snapshot())
     }
 }
 
@@ -125,7 +146,7 @@ impl Default for CounterPair {
 mod tests {
     use std::time::Duration;
 
-    use super::LatencyHistogram;
+    use super::{p95_from_snapshot, LatencyHistogram, LatencyHistogramSnapshot, HISTOGRAM_BUCKETS};
 
     #[test]
     #[allow(clippy::float_cmp)]
@@ -137,6 +158,59 @@ mod tests {
         assert_eq!(histogram.drain_p95(), 500.0);
         assert_eq!(histogram.drain_p95(), 0.0);
     }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn drain_snapshot_captures_buckets_and_resets() {
+        let histogram = LatencyHistogram::new();
+        histogram.record(Duration::from_millis(1));
+        histogram.record(Duration::from_millis(400));
+
+        let snap = histogram.drain_snapshot();
+        assert_eq!(snap.total, 2);
+        assert_eq!(snap.buckets.iter().sum::<u64>(), 2);
+
+        let snap2 = histogram.drain_snapshot();
+        assert_eq!(snap2.total, 0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn p95_from_snapshot_correctness() {
+        // All samples in the <1ms bucket
+        let snap = LatencyHistogramSnapshot {
+            buckets: {
+                let mut b = [0u64; HISTOGRAM_BUCKETS];
+                b[0] = 100;
+                b
+            },
+            overflow: 0,
+            total: 100,
+        };
+        assert_eq!(p95_from_snapshot(&snap), 1.0); // <1ms bucket → 1.0 ms
+
+        // Empty snapshot
+        let empty = LatencyHistogramSnapshot {
+            buckets: [0; HISTOGRAM_BUCKETS],
+            overflow: 0,
+            total: 0,
+        };
+        assert_eq!(p95_from_snapshot(&empty), 0.0);
+
+        // 95th percentile falls in second bucket
+        // target = ceil(100 * 0.95) = 95; b[0]=90 < 95, b[0]+b[1]=100 >= 95 → bucket 1 → 2.0ms
+        let snap2 = LatencyHistogramSnapshot {
+            buckets: {
+                let mut b = [0u64; HISTOGRAM_BUCKETS];
+                b[0] = 90; // <1ms
+                b[1] = 10; // <2ms
+                b
+            },
+            overflow: 0,
+            total: 100,
+        };
+        assert_eq!(p95_from_snapshot(&snap2), 2.0);
+    }
 }
 
 /// Future type for the outbox snapshot callback.
@@ -147,6 +221,9 @@ type OutboxSnapshotFuture =
 ///
 /// These closures decouple the metrics module from other backend internals.
 pub struct MetricsConfig {
+    /// Instance identifier for multi-instance deployments.
+    pub instance_id: String,
+
     /// Returns `(pool_size, available, waiting)` or `None`.
     pub pool_status: Box<dyn Fn() -> Option<(u32, u32, u32)> + Send + Sync>,
 
@@ -259,6 +336,10 @@ pub struct MetricsStore {
     pub ts_smtp_fail: TimeSeries,
     pub ts_smtp_p95: TimeSeries,
 
+    // -- Sampler tracking --
+    pub last_sample_epoch: AtomicU32,
+    pub sample_failures_total: AtomicU64,
+
     // -- Config callbacks --
     pub config: MetricsConfig,
 }
@@ -322,6 +403,9 @@ impl MetricsStore {
             ts_smtp_ok: TimeSeries::new(),
             ts_smtp_fail: TimeSeries::new(),
             ts_smtp_p95: TimeSeries::new(),
+
+            last_sample_epoch: AtomicU32::new(0),
+            sample_failures_total: AtomicU64::new(0),
 
             config,
         }

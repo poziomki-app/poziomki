@@ -71,6 +71,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    metrics_scalar_samples (ts, instance_id, chart, series) {
+        ts -> Timestamptz,
+        instance_id -> Text,
+        chart -> Int2,
+        series -> Int2,
+        value -> Float4,
+    }
+}
+
+diesel::table! {
+    metrics_histogram_samples (ts, instance_id, chart, series, bucket) {
+        ts -> Timestamptz,
+        instance_id -> Text,
+        chart -> Int2,
+        series -> Int2,
+        bucket -> Int2,
+        count -> Int8,
+    }
+}
+
+diesel::table! {
     matrix_dm_rooms (id) {
         id -> Uuid,
         user_low_pid -> Uuid,
@@ -213,6 +234,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     events,
     job_outbox,
     matrix_dm_rooms,
+    metrics_histogram_samples,
+    metrics_scalar_samples,
     otp_codes,
     profile_tags,
     profiles,

@@ -5,6 +5,7 @@ pub mod event_tags;
 pub mod events;
 pub mod job_outbox;
 pub mod matrix_dm_rooms;
+pub mod metrics_samples;
 pub mod otp_codes;
 pub mod profile_tags;
 pub mod profiles;
