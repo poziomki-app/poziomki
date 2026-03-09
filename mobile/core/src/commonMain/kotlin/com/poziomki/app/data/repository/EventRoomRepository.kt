@@ -96,6 +96,7 @@ internal class EventRoomRepository(
             conversation_id = conversationId,
             score = current.score,
             cached_at = current.cached_at,
+            in_list_feed = current.in_list_feed,
             is_dirty = current.is_dirty,
         )
     }

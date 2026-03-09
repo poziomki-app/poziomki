@@ -1,0 +1,6 @@
+ALTER TABLE event ADD COLUMN in_list_feed INTEGER NOT NULL DEFAULT 1;
+
+CREATE TABLE cache_state (
+    key TEXT NOT NULL PRIMARY KEY,
+    cached_at INTEGER NOT NULL
+);

@@ -18,6 +18,7 @@ CREATE TABLE event (
     conversation_id TEXT,
     score REAL NOT NULL DEFAULT 0.0,
     cached_at INTEGER NOT NULL DEFAULT 0,
+    in_list_feed INTEGER NOT NULL DEFAULT 1,
     is_dirty INTEGER NOT NULL DEFAULT 0,
     latitude REAL,
     longitude REAL
@@ -26,6 +27,7 @@ CREATE TABLE event (
 selectAll:
 SELECT *
 FROM event
+WHERE in_list_feed = 1 OR is_dirty = 1
 ORDER BY starts_at ASC;
 
 selectById:
@@ -38,8 +40,8 @@ INSERT OR REPLACE INTO event(
     id, title, description, cover_image, location,
     starts_at, ends_at, creator_id, creator_name, creator_profile_picture,
     attendees_count, is_attending, is_saved, attendees_preview_json, tags_json, created_at,
-    conversation_id, score, cached_at, is_dirty, latitude, longitude
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    conversation_id, score, cached_at, in_list_feed, is_dirty, latitude, longitude
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateAttendance:
 UPDATE event
@@ -62,6 +64,11 @@ clearDirty:
 UPDATE event
 SET is_dirty = 0
 WHERE id = ?;
+
+clearListFeedFlags:
+UPDATE event
+SET in_list_feed = 0
+WHERE is_dirty = 0;
 
 replaceId:
 UPDATE event

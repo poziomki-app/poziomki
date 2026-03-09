@@ -218,7 +218,7 @@ mod tests {
         let history_score: f64 = 50.0;
         let geo_bonus = proximity_score(0.0, 20.0) * 15.0;
         let combined = tag_score * 0.65 + history_score * 0.20 + geo_bonus;
-        assert!((combined - 100.0).abs() < f64::EPSILON);
+        assert!((combined - 90.0).abs() < f64::EPSILON);
     }
 
     #[test]

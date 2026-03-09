@@ -40,6 +40,19 @@ fn bounded_limit(limit: Option<u8>) -> i64 {
     i64::from(limit.unwrap_or(20).clamp(1, 100))
 }
 
+fn build_or_tsquery(search: &str) -> String {
+    let tokens = search
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|token| token.chars().count() >= 2)
+        .collect::<Vec<_>>();
+
+    if tokens.is_empty() {
+        search.to_string()
+    } else {
+        tokens.join(" | ")
+    }
+}
+
 fn str_to_scope(s: &str) -> TagScope {
     match s {
         "activity" => TagScope::Activity,
@@ -305,6 +318,7 @@ pub(super) async fn tags_suggestions(
     }
 
     let pattern = format!("%{search}%");
+    let tsquery = build_or_tsquery(&search);
     let mut conn = crate::db::conn().await?;
     let rows = diesel::sql_query(
         r"
@@ -315,19 +329,19 @@ pub(super) async fn tags_suggestions(
             t.category,
             t.emoji,
             t.parent_id,
-            ts_rank_cd(t.search_vector, websearch_to_tsquery('simple', $1)) AS score
+            ts_rank_cd(t.search_vector, to_tsquery('simple', $1))::double precision AS score
         FROM tags t
         WHERE
             t.scope = $2
             AND (
-                t.search_vector @@ websearch_to_tsquery('simple', $1)
+                t.search_vector @@ to_tsquery('simple', $1)
                 OR LOWER(t.name) LIKE $3
             )
         ORDER BY score DESC, t.name ASC
         LIMIT 5
         ",
     )
-    .bind::<Text, _>(&search)
+    .bind::<Text, _>(&tsquery)
     .bind::<Text, _>(scope)
     .bind::<Text, _>(&pattern)
     .load::<TagSuggestionRow>(&mut conn)
