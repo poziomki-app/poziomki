@@ -74,6 +74,7 @@ diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_jso
 diesel-async = { version = "0.7", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 deadpool = { version = "=0.12.3", features = ["rt_tokio_1"] }
+hostname = "0.4"
 thiserror = "2"
 
 [[bin]]
