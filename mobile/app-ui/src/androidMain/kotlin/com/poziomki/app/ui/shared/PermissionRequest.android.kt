@@ -7,8 +7,9 @@ import androidx.compose.runtime.Composable
 
 @Composable
 actual fun rememberLocationPermissionLauncher(onResult: (Boolean) -> Unit): () -> Unit {
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> onResult(granted) }
+    val launcher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted -> onResult(granted) }
     return { launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
 }
