@@ -36,5 +36,16 @@ UPDATE room_preview SET
     unread_count = ?
 WHERE room_id = ?;
 
+upsertMetadataOnly:
+INSERT INTO room_preview(room_id, message, timestamp_millis, is_mine, send_status, read_by_count, updated_at, display_name, avatar_url, is_direct, direct_user_id, unread_count)
+VALUES (?, 'Wiadomość', 0, 0, NULL, 0, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(room_id) DO UPDATE SET
+    display_name = excluded.display_name,
+    avatar_url = excluded.avatar_url,
+    is_direct = excluded.is_direct,
+    direct_user_id = excluded.direct_user_id,
+    unread_count = excluded.unread_count,
+    updated_at = excluded.updated_at;
+
 deleteAll:
 DELETE FROM room_preview;

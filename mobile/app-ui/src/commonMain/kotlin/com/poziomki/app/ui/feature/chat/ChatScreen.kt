@@ -47,7 +47,6 @@ fun ChatScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val timelineListState = rememberLazyListState()
-
     LaunchedEffect(chatId, initialTitle, initialDirectUserId) {
         viewModel.loadRoom(
             roomId = chatId,
@@ -88,6 +87,7 @@ fun ChatScreen(
             onNavigateToProfile = onNavigateToProfile,
             resolveDisplayNames = viewModel::resolveDisplayNames,
             resolveAvatarUrls = viewModel::resolveAvatarUrls,
+            showSenderMeta = !state.isDirectRoom,
             avatarOverrides = state.avatarOverrides,
             avatarOverridesByName = emptyMap(),
             modifier = Modifier.padding(top = padding.calculateTopPadding()),

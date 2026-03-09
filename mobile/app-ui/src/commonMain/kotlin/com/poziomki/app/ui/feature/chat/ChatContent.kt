@@ -190,18 +190,12 @@ fun ChatContent(
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                     item {
                         if (state.typingUserIds.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = SurfaceColor,
+                            TypingIndicator(
+                                avatarUrl = state.typingAvatarUrls.firstOrNull(),
+                                displayName = state.typingDisplayNames.firstOrNull(),
+                                showAvatar = !state.isDirectRoom,
                                 modifier = itemPadding.padding(vertical = 8.dp),
-                            ) {
-                                Text(
-                                    text = "Pisze: ${state.typingUserIds.joinToString()}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                )
-                            }
+                            )
                         }
                     }
 
