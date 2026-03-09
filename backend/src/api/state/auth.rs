@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -61,9 +62,107 @@ pub(in crate::api) fn hash_session_token(token: &str) -> String {
     session_token_hash(token)
 }
 
-fn auth_cache() -> &'static RwLock<HashMap<String, CachedAuthEntry>> {
-    static AUTH_CACHE: OnceLock<RwLock<HashMap<String, CachedAuthEntry>>> = OnceLock::new();
-    AUTH_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+struct AuthCache {
+    map: RwLock<HashMap<String, CachedAuthEntry>>,
+    size: AtomicUsize,
+}
+
+impl AuthCache {
+    fn new() -> Self {
+        Self {
+            map: RwLock::new(HashMap::new()),
+            size: AtomicUsize::new(0),
+        }
+    }
+
+    async fn get(&self, hashed_token: &str) -> Option<(Session, User)> {
+        let now = Utc::now();
+        let cached = {
+            let guard = self.map.read().await;
+            guard.get(hashed_token).cloned()
+        };
+        let entry = cached?;
+        if entry.cached_until <= now || entry.session.expires_at <= now {
+            if self.map.write().await.remove(hashed_token).is_some() {
+                self.size.fetch_sub(1, AtomicOrdering::Relaxed);
+            }
+            return None;
+        }
+        Some((entry.session, entry.user))
+    }
+
+    async fn put(&self, hashed_token: String, session: &Session, user: &User) {
+        let now = Utc::now();
+        let ttl_until = now + auth_cache_ttl();
+        let cached_until = if session.expires_at < ttl_until {
+            session.expires_at
+        } else {
+            ttl_until
+        };
+        let prev = self.map.write().await.insert(
+            hashed_token,
+            CachedAuthEntry {
+                session: session.clone(),
+                user: user.clone(),
+                cached_until,
+            },
+        );
+        if prev.is_none() {
+            self.size.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
+
+    async fn remove(&self, token: &str) {
+        if self
+            .map
+            .write()
+            .await
+            .remove(&session_token_hash(token))
+            .is_some()
+        {
+            self.size.fetch_sub(1, AtomicOrdering::Relaxed);
+        }
+    }
+
+    fn len(&self) -> usize {
+        AtomicUsize::load(&self.size, AtomicOrdering::Relaxed)
+    }
+
+    async fn evict_expired(&self) {
+        let now = Utc::now();
+        let mut guard = self.map.write().await;
+        let before = guard.len();
+        guard.retain(|_, entry| entry.cached_until > now && entry.session.expires_at > now);
+        let removed = before - guard.len();
+        drop(guard);
+        if removed > 0 {
+            self.size.fetch_sub(removed, AtomicOrdering::Relaxed);
+        }
+    }
+}
+
+fn auth_cache() -> &'static AuthCache {
+    static CACHE: OnceLock<AuthCache> = OnceLock::new();
+    CACHE.get_or_init(AuthCache::new)
+}
+
+pub fn auth_cache_len() -> usize {
+    auth_cache().len()
+}
+
+pub fn spawn_auth_cache_eviction() {
+    tokio::spawn(async {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        interval.tick().await; // skip immediate first tick
+        loop {
+            interval.tick().await;
+            auth_cache().evict_expired().await;
+        }
+    });
+}
+
+pub(in crate::api) async fn invalidate_auth_cache_for_token(token: &str) {
+    auth_cache().remove(token).await;
 }
 
 fn auth_cache_ttl() -> Duration {
@@ -76,45 +175,6 @@ fn auth_cache_ttl() -> Duration {
             .unwrap_or(AUTH_CACHE_TTL_DEFAULT_SECS);
         Duration::seconds(ttl_secs)
     })
-}
-
-async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
-    let now = Utc::now();
-    let cached = {
-        let guard = auth_cache().read().await;
-        guard.get(hashed_token).cloned()
-    };
-    let entry = cached?;
-    if entry.cached_until <= now || entry.session.expires_at <= now {
-        auth_cache().write().await.remove(hashed_token);
-        return None;
-    }
-    Some((entry.session, entry.user))
-}
-
-async fn cache_auth_put(hashed_token: String, session: &Session, user: &User) {
-    let now = Utc::now();
-    let ttl_until = now + auth_cache_ttl();
-    let cached_until = if session.expires_at < ttl_until {
-        session.expires_at
-    } else {
-        ttl_until
-    };
-    auth_cache().write().await.insert(
-        hashed_token,
-        CachedAuthEntry {
-            session: session.clone(),
-            user: user.clone(),
-            cached_until,
-        },
-    );
-}
-
-pub(in crate::api) async fn invalidate_auth_cache_for_token(token: &str) {
-    auth_cache()
-        .write()
-        .await
-        .remove(&session_token_hash(token));
 }
 
 pub(in crate::api) async fn resolve_session_by_token(
@@ -143,12 +203,19 @@ pub(in crate::api) async fn require_auth_context(
         extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
     let hashed = session_token_hash(&token);
 
-    if let Some((session, user)) = cache_auth_get(&hashed).await {
+    if let Some((session, user)) = auth_cache().get(&hashed).await {
+        if let Some(m) = crate::metrics::metrics() {
+            m.auth_cache_hits.fetch_add(1, AtomicOrdering::Relaxed);
+        }
         let elapsed = Utc::now() - session.updated_at;
         if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
             maybe_renew_session(&session).await;
         }
         return Ok(AuthContext { session, user });
+    }
+
+    if let Some(m) = crate::metrics::metrics() {
+        m.auth_cache_misses.fetch_add(1, AtomicOrdering::Relaxed);
     }
 
     let mut conn = crate::db::conn()
@@ -173,7 +240,7 @@ pub(in crate::api) async fn require_auth_context(
     }
 
     let session = maybe_renew_session_on_conn(session, &mut conn).await;
-    cache_auth_put(hashed, &session, &user).await;
+    auth_cache().put(hashed, &session, &user).await;
     Ok(AuthContext { session, user })
 }
 

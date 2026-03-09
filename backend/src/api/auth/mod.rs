@@ -7,6 +7,8 @@ mod auth_service;
 #[path = "session.rs"]
 mod auth_session;
 
+use crate::api::auth_or_respond;
+
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use self::auth_service::{
     create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
@@ -21,14 +23,12 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use crate::api::auth_or_respond;
 use super::{
     error_response,
     state::{
         extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
-        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view,
-        DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse,
-        VerifyOtpBody,
+        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view, DataResponse,
+        ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
     },
     ErrorSpec,
 };

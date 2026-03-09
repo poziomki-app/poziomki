@@ -1,5 +1,5 @@
-use axum::http::{HeaderMap, HeaderValue, header};
-use s3::{Bucket, Region, creds::Credentials, error::S3Error};
+use axum::http::{header, HeaderMap, HeaderValue};
+use s3::{creds::Credentials, error::S3Error, Bucket, Region};
 use std::sync::OnceLock;
 use url::Url;
 
