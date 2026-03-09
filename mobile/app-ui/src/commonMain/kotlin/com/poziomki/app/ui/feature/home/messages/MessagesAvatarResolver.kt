@@ -11,16 +11,16 @@ fun resolveRoomProfilePicture(
 ): String? =
     eventRoomAvatars[room.roomId]
         ?: room.directUserId
-        ?.let { directUserId ->
-            val localpart = directUserId.substringAfter("@").substringBefore(":")
-            val appUserId = appUserIdFromMatrixUserId(directUserId)
-            listOfNotNull(
-                profilePictures[directUserId],
-                profilePictures[directUserId.substringBefore(":")],
-                profilePictures[localpart],
-                appUserId?.let { profilePictures[it] },
-            ).firstOrNull()
-        } ?: profilePicturesByName[room.displayName.trim().lowercase()]
+            ?.let { directUserId ->
+                val localpart = directUserId.substringAfter("@").substringBefore(":")
+                val appUserId = appUserIdFromMatrixUserId(directUserId)
+                listOfNotNull(
+                    profilePictures[directUserId],
+                    profilePictures[directUserId.substringBefore(":")],
+                    profilePictures[localpart],
+                    appUserId?.let { profilePictures[it] },
+                ).firstOrNull()
+            } ?: profilePicturesByName[room.displayName.trim().lowercase()]
 
 fun resolveRoomDisplayName(
     room: MatrixRoomSummary,

@@ -15,12 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
-import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
+import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.TextPrimary
 
 @Composable
 fun ScreenHeader(

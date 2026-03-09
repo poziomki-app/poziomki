@@ -44,13 +44,14 @@ val Black = Color(0xFF000000)
 val Overlay = Color(0x99000000)
 
 // Chat name colors for group conversations
-val ChatNameColors = listOf(
-    Color(0xFFE8A87C), // Warm peach
-    Color(0xFF85C1E9), // Soft blue
-    Color(0xFF95DAC1), // Sage mint
-    Color(0xFFC3A6E0), // Soft lavender
-    Color(0xFFE8D175), // Muted gold
-    Color(0xFFF1948A), // Soft coral
-    Color(0xFFABD9A0), // Soft green
-    Color(0xFFD4A5C4), // Dusty rose
-)
+val ChatNameColors =
+    listOf(
+        Color(0xFFE8A87C), // Warm peach
+        Color(0xFF85C1E9), // Soft blue
+        Color(0xFF95DAC1), // Sage mint
+        Color(0xFFC3A6E0), // Soft lavender
+        Color(0xFFE8D175), // Muted gold
+        Color(0xFFF1948A), // Soft coral
+        Color(0xFFABD9A0), // Soft green
+        Color(0xFFD4A5C4), // Dusty rose
+    )

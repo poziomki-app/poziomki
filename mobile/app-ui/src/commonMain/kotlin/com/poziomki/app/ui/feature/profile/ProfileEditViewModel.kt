@@ -69,15 +69,17 @@ class ProfileEditViewModel(
                     if (query.length >= 2) {
                         _state.value = _state.value.copy(isSearchingInterests = true)
                         val results = tagRepository.searchTags("interest", query)
-                        _state.value = _state.value.copy(
-                            interestSearchResults = results,
-                            isSearchingInterests = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                interestSearchResults = results,
+                                isSearchingInterests = false,
+                            )
                     } else {
-                        _state.value = _state.value.copy(
-                            interestSearchResults = emptyList(),
-                            isSearchingInterests = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                interestSearchResults = emptyList(),
+                                isSearchingInterests = false,
+                            )
                     }
                 }
         }
@@ -89,15 +91,17 @@ class ProfileEditViewModel(
                     if (query.length >= 2) {
                         _state.value = _state.value.copy(isSearchingActivities = true)
                         val results = tagRepository.searchTags("activity", query)
-                        _state.value = _state.value.copy(
-                            activitySearchResults = results,
-                            isSearchingActivities = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                activitySearchResults = results,
+                                isSearchingActivities = false,
+                            )
                     } else {
-                        _state.value = _state.value.copy(
-                            activitySearchResults = emptyList(),
-                            isSearchingActivities = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                activitySearchResults = emptyList(),
+                                isSearchingActivities = false,
+                            )
                     }
                 }
         }
@@ -192,10 +196,11 @@ class ProfileEditViewModel(
                             if (scope == "interest") updateInterestQuery("") else updateActivityQuery("")
                         }
                     } else {
-                        _state.value = _state.value.copy(
-                            snackbarMessage = "nie uda\u0142o si\u0119 utworzy\u0107 tagu",
-                            snackbarType = SnackbarType.ERROR,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                snackbarMessage = "nie uda\u0142o si\u0119 utworzy\u0107 tagu",
+                                snackbarType = SnackbarType.ERROR,
+                            )
                     }
                 }
             }

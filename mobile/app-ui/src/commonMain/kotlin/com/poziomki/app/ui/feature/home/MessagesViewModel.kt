@@ -106,16 +106,17 @@ class MessagesViewModel(
 
     private fun scheduleEmptyRoomsFallback() {
         emptyRoomsFallbackJob?.cancel()
-        emptyRoomsFallbackJob = viewModelScope.launch {
-            delay(EMPTY_ROOMS_FALLBACK_MS)
-            _state.update { current ->
-                if (current.isLoading && current.rooms.isEmpty()) {
-                    current.copy(isLoading = false)
-                } else {
-                    current
+        emptyRoomsFallbackJob =
+            viewModelScope.launch {
+                delay(EMPTY_ROOMS_FALLBACK_MS)
+                _state.update { current ->
+                    if (current.isLoading && current.rooms.isEmpty()) {
+                        current.copy(isLoading = false)
+                    } else {
+                        current
+                    }
                 }
             }
-        }
     }
 
     fun pullToRefresh() {
@@ -149,17 +150,19 @@ class MessagesViewModel(
             return
         }
 
-        searchJob = viewModelScope.launch {
-            delay(300)
-            when (val result = apiService.searchMessageRooms(query)) {
-                is ApiResult.Success -> {
-                    _state.update { it.copy(searchMatchingRoomIds = result.data.roomIds.toSet()) }
-                }
-                is ApiResult.Error -> {
-                    _state.update { it.copy(searchMatchingRoomIds = null) }
+        searchJob =
+            viewModelScope.launch {
+                delay(300)
+                when (val result = apiService.searchMessageRooms(query)) {
+                    is ApiResult.Success -> {
+                        _state.update { it.copy(searchMatchingRoomIds = result.data.roomIds.toSet()) }
+                    }
+
+                    is ApiResult.Error -> {
+                        _state.update { it.copy(searchMatchingRoomIds = null) }
+                    }
                 }
             }
-        }
     }
 
     private fun observeConnectivity() {
@@ -267,7 +270,6 @@ class MessagesViewModel(
         }
     }
 
-
     private fun observeEventRoomAvatars() {
         viewModelScope.launch {
             eventRepository.observeEvents().collect { events ->
@@ -279,6 +281,7 @@ class MessagesViewModel(
             }
         }
     }
+
     private fun refreshProfilePictures() {
         viewModelScope.launch {
             matchProfileRepository.refreshProfiles()

@@ -49,14 +49,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
+import com.adamglin.phosphoricons.bold.CaretDown
+import com.adamglin.phosphoricons.bold.Copy
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.chat.matrix.api.MatrixReaction
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.core.ids.appUserIdFromMatrixUserId
@@ -80,16 +90,6 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
-import com.adamglin.phosphoricons.bold.CaretDown
-import com.adamglin.phosphoricons.bold.Copy
-import com.adamglin.phosphoricons.bold.PencilSimple
-import com.adamglin.phosphoricons.bold.Plus
-import com.adamglin.phosphoricons.bold.Trash
-import com.adamglin.phosphoricons.fill.PaperPlaneRight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -821,7 +821,11 @@ internal fun shouldGroupWithPrevious(
 
 internal fun formatDate(timestampMillis: Long): String {
     val zone = TimeZone.currentSystemDefault()
-    val now = Clock.System.now().toLocalDateTime(zone).date
+    val now =
+        Clock.System
+            .now()
+            .toLocalDateTime(zone)
+            .date
     val date = Instant.fromEpochMilliseconds(timestampMillis).toLocalDateTime(zone).date
     val daysDiff = now.toEpochDays() - date.toEpochDays()
 
