@@ -32,6 +32,7 @@ subprojects {
         parallel = true
         autoCorrect = false
         ignoreFailures = false
+        config.setFrom(rootProject.files("detekt.yml"))
         baseline = file("${project.projectDir}/detekt-baseline.xml")
     }
 
