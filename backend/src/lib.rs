@@ -4,5 +4,6 @@ mod app_support;
 pub mod db;
 pub mod error;
 pub mod jobs;
+pub(crate) mod metrics;
 pub mod search;
 pub mod security;

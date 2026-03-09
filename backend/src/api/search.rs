@@ -9,8 +9,9 @@ use axum::{
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use super::state::DataResponse;
 use crate::api::auth_or_respond;
+
+use super::state::DataResponse;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 type Result<T> = crate::error::AppResult<T>;

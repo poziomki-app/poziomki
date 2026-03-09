@@ -7,6 +7,8 @@ mod auth_service;
 #[path = "session.rs"]
 mod auth_session;
 
+use crate::api::auth_or_respond;
+
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use self::auth_service::{
     create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
