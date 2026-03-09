@@ -1,3 +1,10 @@
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -224,12 +231,9 @@ async fn persist_samples(m: &MetricsStore, batch: SampleBatch) {
         return;
     }
 
-    let conn = match crate::db::conn().await {
-        Ok(c) => c,
-        Err(_) => {
-            m.sample_failures_total.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
+    let Ok(conn) = crate::db::conn().await else {
+        m.sample_failures_total.fetch_add(1, Ordering::Relaxed);
+        return;
     };
 
     if let Err(e) = do_persist(&m.config.instance_id, batch, conn).await {
@@ -273,9 +277,10 @@ async fn do_persist(
         .iter()
         .flat_map(|e| {
             let id = id.clone();
-            let bucket_rows = (0..HISTOGRAM_BUCKETS)
-                .filter(|&i| e.snapshot.buckets[i] > 0)
-                .map(move |i| (i as i16, e.snapshot.buckets[i] as i64));
+            let bucket_rows = (0..HISTOGRAM_BUCKETS).filter_map(move |i| {
+                let &count = e.snapshot.buckets.get(i)?;
+                (count > 0).then_some((i as i16, count as i64))
+            });
 
             let overflow_row = if e.snapshot.overflow > 0 {
                 Some((OVERFLOW_BUCKET, e.snapshot.overflow as i64))

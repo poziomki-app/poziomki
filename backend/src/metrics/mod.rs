@@ -42,7 +42,7 @@ pub fn routes() -> axum::Router {
 
 /// Current time as a Unix epoch in seconds (u32).
 #[allow(clippy::cast_possible_truncation)]
-pub(crate) fn now_epoch() -> u32 {
+pub fn now_epoch() -> u32 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as u32)
