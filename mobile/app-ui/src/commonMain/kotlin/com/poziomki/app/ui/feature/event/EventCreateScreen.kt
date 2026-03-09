@@ -3,6 +3,8 @@ package com.poziomki.app.ui.feature.event
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,7 +94,7 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EventCreateScreen(
     onBack: () -> Unit,
@@ -420,6 +422,96 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            SectionLabel("tagi")
+            PoziomkiTextField(
+                value = state.tagQuery,
+                onValueChange = viewModel::updateTagQuery,
+                placeholder = "np. hackathon, jam session, planszówki",
+            )
+
+            if (state.isSearchingTags || state.isSuggestingTags) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "szukam tagów...",
+                    fontFamily = NunitoFamily,
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
+
+            val trimmedQuery = state.tagQuery.trim()
+            val canCreateTag =
+                trimmedQuery.length >= 2 &&
+                    state.selectedTags.none { it.name.equals(trimmedQuery, ignoreCase = true) } &&
+                    state.tagSearchResults.none { it.name.equals(trimmedQuery, ignoreCase = true) }
+
+            if (state.tagSearchResults.isNotEmpty() || canCreateTag || state.suggestedTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            if (state.suggestedTags.isNotEmpty()) {
+                Text(
+                    text = "sugerowane",
+                    fontFamily = NunitoFamily,
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.suggestedTags.forEach { tag ->
+                        EventTagChip(
+                            label = tag.name,
+                            onClick = { viewModel.addTag(tag) },
+                            onRemove = { viewModel.dismissSuggestedTag(tag) },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            if (state.tagSearchResults.isNotEmpty() || canCreateTag) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.tagSearchResults.forEach { tag ->
+                        EventTagChip(
+                            label = tag.name,
+                            onClick = { viewModel.addTag(tag) },
+                        )
+                    }
+                    if (canCreateTag) {
+                        EventTagChip(
+                            label = "utwórz \"$trimmedQuery\"",
+                            onClick = { viewModel.createAndAddTag(trimmedQuery) },
+                            highlighted = true,
+                        )
+                    }
+                }
+            }
+
+            if (state.selectedTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.selectedTags.forEach { tag ->
+                        EventTagChip(
+                            label = tag.name,
+                            onClick = {},
+                            onRemove = { viewModel.removeTag(tag) },
+                            selected = true,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Date and time row
             SectionLabel("start")
             Row(
@@ -729,4 +821,46 @@ private fun toIsoString(
     return "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${
         hour.toString().padStart(2, '0')
     }:${minute.toString().padStart(2, '0')}:00Z"
+}
+
+@Composable
+private fun EventTagChip(
+    label: String,
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)? = null,
+    selected: Boolean = false,
+    highlighted: Boolean = false,
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color =
+            when {
+                selected -> Primary.copy(alpha = 0.14f)
+                highlighted -> Primary.copy(alpha = 0.08f)
+                else -> SurfaceColor
+            },
+        border = BorderStroke(1.dp, if (selected || highlighted) Primary else Border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = label,
+                fontFamily = NunitoFamily,
+                fontSize = 14.sp,
+                color = if (selected || highlighted) Primary else TextPrimary,
+            )
+            onRemove?.let {
+                Icon(
+                    imageVector = PhosphorIcons.Bold.X,
+                    contentDescription = "Usuń tag",
+                    tint = if (selected || highlighted) Primary else TextMuted,
+                    modifier = Modifier.size(14.dp).clickable(onClick = it),
+                )
+            }
+        }
+    }
 }

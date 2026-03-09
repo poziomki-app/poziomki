@@ -71,7 +71,15 @@ class EventRepository(
     suspend fun fetchRecommendedEvents(): List<Event> =
         withContext(Dispatchers.IO) {
             when (val result = api.getMatchingEvents()) {
-                is ApiResult.Success -> result.data
+                is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.transaction {
+                        result.data.forEach { event ->
+                            eventMutationManager.upsertEvent(event, now)
+                        }
+                    }
+                    result.data
+                }
                 is ApiResult.Error -> emptyList()
             }
         }
@@ -159,6 +167,10 @@ class EventRepository(
     suspend fun attendEvent(id: String): ApiResult<Unit> = eventMutationManager.attendEvent(id)
 
     suspend fun leaveEvent(id: String): ApiResult<Unit> = eventMutationManager.leaveEvent(id)
+
+    suspend fun saveEvent(id: String): ApiResult<Unit> = eventMutationManager.saveEvent(id)
+
+    suspend fun unsaveEvent(id: String): ApiResult<Unit> = eventMutationManager.unsaveEvent(id)
 
     suspend fun deleteEvent(id: String): ApiResult<Unit> = eventMutationManager.deleteEvent(id)
 

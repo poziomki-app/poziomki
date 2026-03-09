@@ -6,15 +6,25 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::api::state::{MatchingTagResponse, TagScope};
+use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profile_tags::ProfileTag;
 use crate::db::models::profiles::Profile;
 use crate::db::models::tags::Tag;
 use crate::db::models::users::User;
-use crate::db::schema::{event_tags, events, profile_tags, profiles, tags, users};
+use crate::db::schema::{
+    event_interactions, event_tags, events, profile_tags, profiles, tags, users,
+};
 
 pub(super) struct MatchingRepository;
+
+pub(super) struct MatchingUserContext {
+    pub(super) profile: Option<Profile>,
+    pub(super) profile_tag_ids: HashSet<Uuid>,
+    pub(super) saved_event_ids: HashSet<Uuid>,
+    pub(super) joined_event_ids: HashSet<Uuid>,
+}
 
 impl MatchingRepository {
     async fn load_profile_tag_ids(
@@ -29,21 +39,46 @@ impl MatchingRepository {
         Ok(tag_links.iter().map(|link| link.tag_id).collect())
     }
 
+    async fn load_interaction_event_ids(
+        &self,
+        profile_id: Uuid,
+        kind: &str,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
+        let interactions = event_interactions::table
+            .filter(event_interactions::profile_id.eq(profile_id))
+            .filter(event_interactions::kind.eq(kind))
+            .load::<EventInteraction>(conn)
+            .await?;
+        Ok(interactions.into_iter().map(|row| row.event_id).collect())
+    }
+
     pub(super) async fn load_user_context(
         &self,
         user_id: i32,
         conn: &mut crate::db::DbConn,
-    ) -> std::result::Result<(Option<Profile>, HashSet<Uuid>), crate::error::AppError> {
-        let my_profile = profiles::table
+    ) -> std::result::Result<MatchingUserContext, crate::error::AppError> {
+        let profile = profiles::table
             .filter(profiles::user_id.eq(user_id))
             .first::<Profile>(conn)
             .await
             .optional()?;
-        let my_tag_ids = match &my_profile {
-            Some(profile) => self.load_profile_tag_ids(profile.id, conn).await?,
-            None => HashSet::new(),
+        let (profile_tag_ids, saved_event_ids, joined_event_ids) = match &profile {
+            Some(profile) => (
+                self.load_profile_tag_ids(profile.id, conn).await?,
+                self.load_interaction_event_ids(profile.id, "saved", conn)
+                    .await?,
+                self.load_interaction_event_ids(profile.id, "joined", conn)
+                    .await?,
+            ),
+            None => (HashSet::new(), HashSet::new(), HashSet::new()),
         };
-        Ok((my_profile, my_tag_ids))
+        Ok(MatchingUserContext {
+            profile,
+            profile_tag_ids,
+            saved_event_ids,
+            joined_event_ids,
+        })
     }
 
     pub(super) async fn load_candidate_profiles(
@@ -112,6 +147,7 @@ impl MatchingRepository {
                         id: tag.id.to_string(),
                         name: tag.name.clone(),
                         scope: scope_from_str(&tag.scope),
+                        parent_id: tag.parent_id.map(|id| id.to_string()),
                     });
             }
         }
@@ -177,6 +213,18 @@ impl MatchingRepository {
             .load::<User>(conn)
             .await
             .map_err(Into::into)
+    }
+
+    pub(super) async fn load_tag_parent_map(
+        &self,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<HashMap<Uuid, Option<Uuid>>, crate::error::AppError> {
+        Ok(tags::table
+            .load::<Tag>(conn)
+            .await?
+            .into_iter()
+            .map(|tag| (tag.id, tag.parent_id))
+            .collect())
     }
 }
 
