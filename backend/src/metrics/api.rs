@@ -1,3 +1,8 @@
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 use axum::{
     extract::Query,
     http::{HeaderMap, StatusCode},
@@ -7,7 +12,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 
 use super::collector::{
@@ -15,24 +19,26 @@ use super::collector::{
 };
 use super::sampler::SAMPLE_INTERVAL_SECS;
 use super::store::TimeSeries;
+use crate::api::env_non_empty;
 use crate::db::models::metrics_samples::{HistogramSample, ScalarSample};
 
 const DASHBOARD_HTML: &str = include_str!("dashboard.html");
 
-fn ops_status_token() -> Option<String> {
-    std::env::var("OPS_STATUS_TOKEN")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-}
-
 fn check_ops_token(headers: &HeaderMap) -> bool {
-    let Some(expected) = ops_status_token() else {
+    let Some(expected) = env_non_empty("OPS_STATUS_TOKEN") else {
         return false;
     };
     headers
         .get("x-ops-token")
         .and_then(|v| v.to_str().ok())
         .is_some_and(|actual| actual.as_bytes().ct_eq(expected.as_bytes()).into())
+}
+
+fn check_ops_token_value(token: &str) -> bool {
+    let Some(expected) = env_non_empty("OPS_STATUS_TOKEN") else {
+        return false;
+    };
+    token.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
 #[derive(Deserialize)]
@@ -78,6 +84,13 @@ struct MetricsMeta {
 struct MetricsResponse {
     meta: MetricsMeta,
     charts: Vec<ChartData>,
+}
+
+fn series_data_from_points(points: &[(u32, f32)]) -> SeriesData {
+    SeriesData {
+        timestamps: points.iter().map(|(ts, _)| *ts).collect(),
+        values: points.iter().map(|(_, v)| *v).collect(),
+    }
 }
 
 fn read_series(ts: &TimeSeries, from: u32, to: u32) -> SeriesData {
@@ -175,11 +188,9 @@ fn build_memory_charts(m: &MetricsStore, from: u32, now: u32) -> Vec<ChartData> 
 
 // ── DB query helpers ──────────────────────────────────────────────────
 
-async fn query_db(
-    range_secs: u32,
-) -> Option<(Vec<ScalarSample>, Vec<HistogramSample>)> {
-    use chrono::{Duration as ChronoDuration, Utc};
+async fn query_db(range_secs: u32) -> Option<(Vec<ScalarSample>, Vec<HistogramSample>)> {
     use crate::db::schema::{metrics_histogram_samples, metrics_scalar_samples};
+    use chrono::{Duration as ChronoDuration, Utc};
     use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
     use diesel_async::RunQueryDsl;
 
@@ -207,14 +218,12 @@ async fn query_db(
 
 /// Group scalar rows by (chart, series), summing values across instances at each timestamp.
 fn aggregate_scalar_rows(rows: &[ScalarSample]) -> HashMap<(i16, i16), Vec<(u32, f32)>> {
-    // First group by (chart, series, rounded_ts) to sum across instances
     let mut by_key: HashMap<(i16, i16, u32), f32> = HashMap::new();
     for r in rows {
         let ts_epoch = r.ts.timestamp() as u32;
         *by_key.entry((r.chart, r.series, ts_epoch)).or_default() += r.value;
     }
 
-    // Then collect into per-series timelines
     let mut result: HashMap<(i16, i16), Vec<(u32, f32)>> = HashMap::new();
     for ((chart, series, ts), value) in by_key {
         result.entry((chart, series)).or_default().push((ts, value));
@@ -225,19 +234,32 @@ fn aggregate_scalar_rows(rows: &[ScalarSample]) -> HashMap<(i16, i16), Vec<(u32,
     result
 }
 
-/// Merge histogram buckets across instances for the same (chart, series, bucket, ts).
+/// Merge histogram buckets across instances, keyed by (chart, series) → Vec<(ts, buckets)>.
 fn aggregate_histogram_rows(
     rows: &[HistogramSample],
-) -> HashMap<(i16, i16, u32), [u64; HISTOGRAM_BUCKETS]> {
-    let mut result: HashMap<(i16, i16, u32), [u64; HISTOGRAM_BUCKETS]> = HashMap::new();
+) -> HashMap<(i16, i16), Vec<(u32, [u64; HISTOGRAM_BUCKETS])>> {
+    // First merge buckets for each (chart, series, ts) tuple
+    let mut by_key: HashMap<(i16, i16, u32), [u64; HISTOGRAM_BUCKETS]> = HashMap::new();
     for r in rows {
         let ts_epoch = r.ts.timestamp() as u32;
-        let buckets = result
+        let buckets = by_key
             .entry((r.chart, r.series, ts_epoch))
             .or_insert([0u64; HISTOGRAM_BUCKETS]);
         if let Some(b) = buckets.get_mut(r.bucket as usize) {
             *b += r.count as u64;
         }
+    }
+
+    // Regroup into per-(chart, series) timelines
+    let mut result: HashMap<(i16, i16), Vec<(u32, [u64; HISTOGRAM_BUCKETS])>> = HashMap::new();
+    for ((chart, series, ts), buckets) in by_key {
+        result
+            .entry((chart, series))
+            .or_default()
+            .push((ts, buckets));
+    }
+    for v in result.values_mut() {
+        v.sort_by_key(|(ts, _)| *ts);
     }
     result
 }
@@ -252,10 +274,7 @@ fn series_from_aggregated(
     let data = scalars.get(&(chart, series)).unwrap_or(&empty);
     NamedSeries {
         name,
-        data: SeriesData {
-            timestamps: data.iter().map(|(ts, _)| *ts).collect(),
-            values: data.iter().map(|(_, v)| *v).collect(),
-        },
+        data: series_data_from_points(data),
     }
 }
 
@@ -268,28 +287,22 @@ fn series_as_rate(
 ) -> NamedSeries {
     let empty = Vec::new();
     let data = scalars.get(&(chart, series)).unwrap_or(&empty);
+    let points: Vec<(u32, f32)> = data
+        .iter()
+        .map(|(ts, v)| (*ts, v / SAMPLE_INTERVAL_SECS as f32))
+        .collect();
     NamedSeries {
         name,
-        data: SeriesData {
-            timestamps: data.iter().map(|(ts, _)| *ts).collect(),
-            values: data
-                .iter()
-                .map(|(_, v)| v / SAMPLE_INTERVAL_SECS as f32)
-                .collect(),
-        },
+        data: series_data_from_points(&points),
     }
 }
 
 /// Build a hit-rate% series from raw hits (series 0) and misses (series 1).
-fn series_hit_rate(
-    scalars: &HashMap<(i16, i16), Vec<(u32, f32)>>,
-    chart: i16,
-) -> NamedSeries {
+fn series_hit_rate(scalars: &HashMap<(i16, i16), Vec<(u32, f32)>>, chart: i16) -> NamedSeries {
     let empty = Vec::new();
     let hits = scalars.get(&(chart, 0)).unwrap_or(&empty);
     let misses = scalars.get(&(chart, 1)).unwrap_or(&empty);
 
-    // Merge by timestamp
     let mut by_ts: HashMap<u32, (f32, f32)> = HashMap::new();
     for (ts, v) in hits {
         by_ts.entry(*ts).or_default().0 += v;
@@ -302,7 +315,11 @@ fn series_hit_rate(
         .into_iter()
         .map(|(ts, (h, m))| {
             let total = h + m;
-            let rate = if total > 0.0 { (h / total) * 100.0 } else { 0.0 };
+            let rate = if total > 0.0 {
+                (h / total) * 100.0
+            } else {
+                0.0
+            };
             (ts, rate)
         })
         .collect();
@@ -310,24 +327,22 @@ fn series_hit_rate(
 
     NamedSeries {
         name: "hit%",
-        data: SeriesData {
-            timestamps: points.iter().map(|(ts, _)| *ts).collect(),
-            values: points.iter().map(|(_, v)| *v).collect(),
-        },
+        data: series_data_from_points(&points),
     }
 }
 
-/// Build a p95 series from aggregated histogram data.
+/// Build a p95 series from pre-grouped histogram data (direct key lookup, no scan).
 fn series_histogram_p95(
-    histograms: &HashMap<(i16, i16, u32), [u64; HISTOGRAM_BUCKETS]>,
+    histograms: &HashMap<(i16, i16), Vec<(u32, [u64; HISTOGRAM_BUCKETS])>>,
     chart: i16,
     series: i16,
     name: &'static str,
 ) -> NamedSeries {
-    let mut points: Vec<(u32, f32)> = histograms
+    let empty = Vec::new();
+    let data = histograms.get(&(chart, series)).unwrap_or(&empty);
+    let points: Vec<(u32, f32)> = data
         .iter()
-        .filter(|((c, s, _), _)| *c == chart && *s == series)
-        .map(|((_, _, ts), buckets)| {
+        .map(|(ts, buckets)| {
             let total: u64 = buckets.iter().sum();
             let snap = LatencyHistogramSnapshot {
                 buckets: *buckets,
@@ -337,14 +352,10 @@ fn series_histogram_p95(
             (*ts, p95_from_snapshot(&snap))
         })
         .collect();
-    points.sort_by_key(|(ts, _)| *ts);
 
     NamedSeries {
         name,
-        data: SeriesData {
-            timestamps: points.iter().map(|(ts, _)| *ts).collect(),
-            values: points.iter().map(|(_, v)| *v).collect(),
-        },
+        data: series_data_from_points(&points),
     }
 }
 
@@ -356,7 +367,6 @@ fn build_timescaledb_charts(
     let histograms = aggregate_histogram_rows(histogram_rows);
 
     vec![
-        // Chart 0: Request Rate (raw counts → /s rates)
         ChartData {
             label: "Request Rate",
             series: vec![
@@ -365,7 +375,6 @@ fn build_timescaledb_charts(
                 series_as_rate(&scalars, 0, 2, "5xx/s"),
             ],
         },
-        // Chart 1: p95 Latency from histogram buckets
         ChartData {
             label: "p95 Latency (ms)",
             series: vec![
@@ -378,7 +387,6 @@ fn build_timescaledb_charts(
                 series_histogram_p95(&histograms, 1, 6, "matrix"),
             ],
         },
-        // Chart 2: DB Pool (direct values)
         ChartData {
             label: "DB Pool",
             series: vec![
@@ -387,12 +395,10 @@ fn build_timescaledb_charts(
                 series_from_aggregated(&scalars, 2, 2, "waiting"),
             ],
         },
-        // Chart 3: DB Conn p95 from histogram
         ChartData {
             label: "DB Conn p95 (ms)",
             series: vec![series_histogram_p95(&histograms, 3, 0, "conn_acq")],
         },
-        // Chart 4: Outbox Queue (direct values)
         ChartData {
             label: "Outbox Queue",
             series: vec![
@@ -403,7 +409,6 @@ fn build_timescaledb_charts(
                 series_from_aggregated(&scalars, 4, 4, "failed"),
             ],
         },
-        // Chart 5: Auth Cache (derive hit% from raw hits/misses)
         ChartData {
             label: "Auth Cache",
             series: vec![
@@ -411,7 +416,6 @@ fn build_timescaledb_charts(
                 series_from_aggregated(&scalars, 5, 2, "entries"),
             ],
         },
-        // Chart 6: Matrix Delivery (raw counts)
         ChartData {
             label: "Matrix Delivery",
             series: vec![
@@ -423,7 +427,6 @@ fn build_timescaledb_charts(
                 series_from_aggregated(&scalars, 6, 5, "avatar_fail"),
             ],
         },
-        // Chart 7: SMTP Delivery (raw counts + histogram p95)
         ChartData {
             label: "SMTP Delivery",
             series: vec![
@@ -445,10 +448,7 @@ fn meta_for(m: &MetricsStore, source: &'static str, degraded: bool) -> MetricsMe
         source,
         degraded,
         sample_interval_seconds: SAMPLE_INTERVAL_SECS,
-        generated_at_epoch: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs() as u32)
-            .unwrap_or(0),
+        generated_at_epoch: super::now_epoch(),
         last_sample_epoch: last_epoch,
         sample_failures_total: failures,
     }
@@ -476,10 +476,7 @@ async fn metrics_handler(headers: HeaderMap, Query(query): Query<MetricsQuery>) 
     }
 
     // Fallback to in-memory ring buffers
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as u32)
-        .unwrap_or(0);
+    let now = super::now_epoch();
     let from = now.saturating_sub(range);
     let charts = build_memory_charts(m, from, now);
 
@@ -491,12 +488,12 @@ async fn metrics_handler(headers: HeaderMap, Query(query): Query<MetricsQuery>) 
 }
 
 async fn dashboard_handler(Query(query): Query<DashboardQuery>) -> Response {
-    let Some(expected) = ops_status_token() else {
+    if env_non_empty("OPS_STATUS_TOKEN").is_none() {
         return StatusCode::NOT_FOUND.into_response();
-    };
+    }
 
     match query.token.as_deref() {
-        Some(t) if t == expected => Html(DASHBOARD_HTML).into_response(),
+        Some(t) if check_ops_token_value(t) => Html(DASHBOARD_HTML).into_response(),
         _ => StatusCode::UNAUTHORIZED.into_response(),
     }
 }
@@ -512,17 +509,7 @@ mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
 
-    fn make_scalar(ts_epoch: i64, chart: i16, series: i16, value: f32) -> ScalarSample {
-        ScalarSample {
-            ts: Utc.timestamp_opt(ts_epoch, 0).unwrap(),
-            instance_id: "a".into(),
-            chart,
-            series,
-            value,
-        }
-    }
-
-    fn make_scalar_inst(
+    fn make_scalar(
         ts_epoch: i64,
         instance_id: &str,
         chart: i16,
@@ -541,22 +528,19 @@ mod tests {
     #[test]
     fn scalar_aggregation_across_instances() {
         let rows = vec![
-            make_scalar_inst(1000, "a", 0, 0, 10.0),
-            make_scalar_inst(1000, "b", 0, 0, 5.0),
-            make_scalar_inst(1010, "a", 0, 0, 20.0),
+            make_scalar(1000, "a", 0, 0, 10.0),
+            make_scalar(1000, "b", 0, 0, 5.0),
+            make_scalar(1010, "a", 0, 0, 20.0),
         ];
         let agg = aggregate_scalar_rows(&rows);
         let series = agg.get(&(0, 0)).unwrap();
         assert_eq!(series.len(), 2);
-        // ts=1000: 10+5=15
         assert_eq!(series[0], (1000, 15.0));
-        // ts=1010: 20
         assert_eq!(series[1], (1010, 20.0));
     }
 
     #[test]
     fn histogram_aggregation() {
-        use chrono::TimeZone;
         let rows = vec![
             HistogramSample {
                 ts: Utc.timestamp_opt(1000, 0).unwrap(),
@@ -584,7 +568,9 @@ mod tests {
             },
         ];
         let agg = aggregate_histogram_rows(&rows);
-        let buckets = agg.get(&(1, 0, 1000)).unwrap();
+        let timeline = agg.get(&(1, 0)).unwrap();
+        assert_eq!(timeline.len(), 1);
+        let (_, buckets) = &timeline[0];
         assert_eq!(buckets[0], 80); // 50+30
         assert_eq!(buckets[3], 5);
         assert_eq!(buckets[1], 0);
@@ -593,8 +579,8 @@ mod tests {
     #[test]
     fn derived_hit_rate() {
         let rows = vec![
-            make_scalar(1000, 5, 0, 80.0),  // hits
-            make_scalar(1000, 5, 1, 20.0),  // misses
+            make_scalar(1000, "a", 5, 0, 80.0), // hits
+            make_scalar(1000, "a", 5, 1, 20.0), // misses
         ];
         let agg = aggregate_scalar_rows(&rows);
         let series = series_hit_rate(&agg, 5);
@@ -605,8 +591,8 @@ mod tests {
     #[test]
     fn derived_hit_rate_zero_total() {
         let rows = vec![
-            make_scalar(1000, 5, 0, 0.0),
-            make_scalar(1000, 5, 1, 0.0),
+            make_scalar(1000, "a", 5, 0, 0.0),
+            make_scalar(1000, "a", 5, 1, 0.0),
         ];
         let agg = aggregate_scalar_rows(&rows);
         let series = series_hit_rate(&agg, 5);

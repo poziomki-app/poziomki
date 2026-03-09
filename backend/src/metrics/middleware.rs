@@ -4,18 +4,14 @@ use std::time::Instant;
 
 use super::collector::EndpointGroup;
 
-/// Axum middleware function for request tracking.
-///
-/// Use with `axum::middleware::from_fn(metrics_middleware)`.
 pub async fn metrics_middleware(req: Request<Body>, next: Next) -> Response {
-    let path = req.uri().path().to_owned();
+    let path = req.uri().path();
 
-    // Skip self-measurement for metrics endpoints
     if path.starts_with("/api/v1/metrics") {
         return next.run(req).await;
     }
 
-    let group = EndpointGroup::from_path(&path);
+    let group = EndpointGroup::from_path(path);
     let start = Instant::now();
 
     let response = next.run(req).await;

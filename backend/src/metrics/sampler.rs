@@ -1,5 +1,5 @@
 use std::sync::atomic::Ordering;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use chrono::Utc;
 use diesel_async::RunQueryDsl;
@@ -12,13 +12,6 @@ use crate::db::schema::{metrics_histogram_samples, metrics_scalar_samples};
 
 pub const SAMPLE_INTERVAL_SECS: u32 = 10;
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(SAMPLE_INTERVAL_SECS as u64);
-
-fn now_epoch() -> u32 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as u32)
-        .unwrap_or(0)
-}
 
 struct ScalarEntry {
     chart: i16,
@@ -76,7 +69,7 @@ pub fn spawn_sampler(store: &'static MetricsStore) {
 }
 
 async fn sample(m: &MetricsStore) {
-    let ts = now_epoch();
+    let ts = super::now_epoch();
     let mut batch = SampleBatch::new();
 
     sample_request_rates(m, ts, &mut batch);
@@ -113,7 +106,11 @@ fn sample_request_rates(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
 }
 
 fn sample_latencies(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
-    let pairs: [(i16, &super::collector::LatencyHistogram, &super::store::TimeSeries); 7] = [
+    let pairs: [(
+        i16,
+        &super::collector::LatencyHistogram,
+        &super::store::TimeSeries,
+    ); 7] = [
         (0, &m.latency_auth, &m.ts_p95_auth),
         (1, &m.latency_profiles, &m.ts_p95_profiles),
         (2, &m.latency_events, &m.ts_p95_events),
@@ -220,6 +217,13 @@ fn sample_smtp(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
 }
 
 async fn persist_samples(m: &MetricsStore, batch: SampleBatch) {
+    // Skip DB writes when everything is zero (idle server)
+    let all_zero = batch.scalars.iter().all(|e| e.value == 0.0)
+        && batch.histograms.iter().all(|e| e.snapshot.total == 0);
+    if all_zero {
+        return;
+    }
+
     let conn = match crate::db::conn().await {
         Ok(c) => c,
         Err(_) => {
@@ -234,12 +238,16 @@ async fn persist_samples(m: &MetricsStore, batch: SampleBatch) {
     }
 }
 
+/// Sentinel bucket index for overflow (>5s) samples.
+const OVERFLOW_BUCKET: i16 = HISTOGRAM_BUCKETS as i16;
+
 async fn do_persist(
     instance_id: &str,
     batch: SampleBatch,
     mut conn: crate::db::DbConn,
 ) -> Result<(), diesel::result::Error> {
     let now = Utc::now();
+    let id = instance_id.to_owned();
 
     if !batch.scalars.is_empty() {
         let rows: Vec<NewScalarSample> = batch
@@ -247,7 +255,7 @@ async fn do_persist(
             .iter()
             .map(|e| NewScalarSample {
                 ts: now,
-                instance_id: instance_id.to_owned(),
+                instance_id: id.clone(),
                 chart: e.chart,
                 series: e.series,
                 value: e.value,
@@ -264,15 +272,26 @@ async fn do_persist(
         .histograms
         .iter()
         .flat_map(|e| {
-            (0..HISTOGRAM_BUCKETS)
+            let id = id.clone();
+            let bucket_rows = (0..HISTOGRAM_BUCKETS)
                 .filter(|&i| e.snapshot.buckets[i] > 0)
-                .map(move |i| NewHistogramSample {
+                .map(move |i| (i as i16, e.snapshot.buckets[i] as i64));
+
+            let overflow_row = if e.snapshot.overflow > 0 {
+                Some((OVERFLOW_BUCKET, e.snapshot.overflow as i64))
+            } else {
+                None
+            };
+
+            bucket_rows
+                .chain(overflow_row)
+                .map(move |(bucket, count)| NewHistogramSample {
                     ts: now,
-                    instance_id: instance_id.to_owned(),
+                    instance_id: id.clone(),
                     chart: e.chart,
                     series: e.series,
-                    bucket: i as i16,
-                    count: e.snapshot.buckets[i] as i64,
+                    bucket,
+                    count,
                 })
         })
         .collect();
