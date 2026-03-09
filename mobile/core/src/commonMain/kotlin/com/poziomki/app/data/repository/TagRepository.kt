@@ -72,7 +72,10 @@ class TagRepository(
     ): List<Tag> =
         withContext(Dispatchers.IO) {
             when (val result = api.searchTags(scope, query)) {
-                is ApiResult.Success -> result.data
+                is ApiResult.Success -> {
+                    result.data
+                }
+
                 is ApiResult.Error -> {
                     // Fallback to local DB filtering
                     db.tagQueries

@@ -78,50 +78,54 @@ private fun RecommendedPersonItem(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(totalSize + 4.dp)
-            .clickable(onClick = onClick),
+        modifier =
+            Modifier
+                .width(totalSize + 4.dp)
+                .clickable(onClick = onClick),
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(totalSize)
-                .drawBehind {
-                    val stroke = Stroke(
-                        width = strokeWidth.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                    val arcOffset = strokeWidth.toPx() / 2f
-                    val arcSize = Size(
-                        size.width - strokeWidth.toPx(),
-                        size.height - strokeWidth.toPx(),
-                    )
-                    val topLeft = Offset(arcOffset, arcOffset)
+            modifier =
+                Modifier
+                    .size(totalSize)
+                    .drawBehind {
+                        val stroke =
+                            Stroke(
+                                width = strokeWidth.toPx(),
+                                cap = StrokeCap.Round,
+                            )
+                        val arcOffset = strokeWidth.toPx() / 2f
+                        val arcSize =
+                            Size(
+                                size.width - strokeWidth.toPx(),
+                                size.height - strokeWidth.toPx(),
+                            )
+                        val topLeft = Offset(arcOffset, arcOffset)
 
-                    // Background track
-                    drawArc(
-                        color = Border,
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = stroke,
-                    )
-
-                    // Foreground progress
-                    if (progress > 0f) {
+                        // Background track
                         drawArc(
-                            color = Primary,
+                            color = Border,
                             startAngle = -90f,
-                            sweepAngle = progress * 360f,
+                            sweepAngle = 360f,
                             useCenter = false,
                             topLeft = topLeft,
                             size = arcSize,
                             style = stroke,
                         )
-                    }
-                },
+
+                        // Foreground progress
+                        if (progress > 0f) {
+                            drawArc(
+                                color = Primary,
+                                startAngle = -90f,
+                                sweepAngle = progress * 360f,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = stroke,
+                            )
+                        }
+                    },
         ) {
             UserAvatar(
                 picture = profilePicture,

@@ -92,7 +92,11 @@ fun eventDateKey(startsAt: String): Int {
 fun dayLabel(startsAt: String): String {
     val tz = TimeZone.currentSystemDefault()
     val eventDate = Instant.parse(startsAt).toLocalDateTime(tz).date
-    val today = Clock.System.now().toLocalDateTime(tz).date
+    val today =
+        Clock.System
+            .now()
+            .toLocalDateTime(tz)
+            .date
     val daysDiff = eventDate.toEpochDays() - today.toEpochDays()
     return when (daysDiff) {
         0 -> "dzisiaj"

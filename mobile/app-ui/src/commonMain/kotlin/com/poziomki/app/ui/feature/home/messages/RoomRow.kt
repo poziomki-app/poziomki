@@ -22,6 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Check
+import com.adamglin.phosphoricons.bold.CheckCircle
+import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.ui.designsystem.components.UserAvatar
@@ -34,12 +40,6 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Check
-import com.adamglin.phosphoricons.bold.CheckCircle
-import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.WarningCircle
 
 @Composable
 fun RoomRow(
@@ -229,13 +229,23 @@ private fun latestRoomStatusIconSpec(
     readByCount: Int,
 ): RoomStatusIconSpec? =
     when {
-        sendStatus == MatrixEventSendStatus.Failed ->
+        sendStatus == MatrixEventSendStatus.Failed -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
-        sendStatus == MatrixEventSendStatus.Sending ->
+        }
+
+        sendStatus == MatrixEventSendStatus.Sending -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
-        readByCount > 0 ->
+        }
+
+        readByCount > 0 -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
-        sendStatus == MatrixEventSendStatus.Sent ->
+        }
+
+        sendStatus == MatrixEventSendStatus.Sent -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
-        else -> null
+        }
+
+        else -> {
+            null
+        }
     }

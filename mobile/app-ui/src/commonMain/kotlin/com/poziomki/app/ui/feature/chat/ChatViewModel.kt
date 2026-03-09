@@ -540,8 +540,11 @@ class ChatViewModel(
                         val summary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
                         val resolvedName =
                             when {
-                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                else ->
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> {
+                                    summary.displayName
+                                }
+
+                                else -> {
                                     resolvePreferredRoomDisplayName(
                                         roomId = room.roomId,
                                         summary = summary,
@@ -549,6 +552,7 @@ class ChatViewModel(
                                         currentName = current.roomDisplayName,
                                         fallbackDisplayName = fallbackDisplayName,
                                     )
+                                }
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
@@ -574,8 +578,11 @@ class ChatViewModel(
                     _uiState.update { current ->
                         val resolvedName =
                             when {
-                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                else ->
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> {
+                                    summary.displayName
+                                }
+
+                                else -> {
                                     resolvePreferredRoomDisplayName(
                                         roomId = room.roomId,
                                         summary = summary,
@@ -583,6 +590,7 @@ class ChatViewModel(
                                         currentName = current.roomDisplayName,
                                         fallbackDisplayName = fallbackDisplayName,
                                     )
+                                }
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
@@ -627,16 +635,17 @@ class ChatViewModel(
                                 }
                             }
                         }
-                        typingIndicatorTimeoutJob = viewModelScope.launch {
-                            delay(TYPING_INDICATOR_TIMEOUT_MS)
-                            _uiState.update { current ->
-                                current.copy(
-                                    typingUserIds = emptyList(),
-                                    typingDisplayNames = emptyList(),
-                                    typingAvatarUrls = emptyList(),
-                                )
+                        typingIndicatorTimeoutJob =
+                            viewModelScope.launch {
+                                delay(TYPING_INDICATOR_TIMEOUT_MS)
+                                _uiState.update { current ->
+                                    current.copy(
+                                        typingUserIds = emptyList(),
+                                        typingDisplayNames = emptyList(),
+                                        typingAvatarUrls = emptyList(),
+                                    )
+                                }
                             }
-                        }
                     }
                 }
             }

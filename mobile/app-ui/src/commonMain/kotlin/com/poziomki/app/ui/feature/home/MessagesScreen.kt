@@ -31,12 +31,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Bell
+import com.adamglin.phosphoricons.bold.PencilSimple
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
-import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -48,11 +51,8 @@ import com.poziomki.app.ui.feature.home.messages.filterMessagesRooms
 import com.poziomki.app.ui.feature.home.messages.resolveRoomDisplayName
 import com.poziomki.app.ui.feature.home.messages.resolveRoomProfilePicture
 import com.poziomki.app.ui.feature.home.messages.roomFilterTabs
+import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Bell
-import com.adamglin.phosphoricons.bold.PencilSimple
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,12 +67,13 @@ fun MessagesScreen(
     var selectedFilter by remember { mutableStateOf(MessagesRoomFilter.All) }
 
     val unreadTotal = state.rooms.sumOf { it.unreadCount }
-    val filteredRooms = state.rooms.filterMessagesRooms(
-        selectedFilter,
-        state.searchQuery,
-        state.eventRoomIds,
-        state.searchMatchingRoomIds,
-    )
+    val filteredRooms =
+        state.rooms.filterMessagesRooms(
+            selectedFilter,
+            state.searchQuery,
+            state.eventRoomIds,
+            state.searchMatchingRoomIds,
+        )
     val roomFilterTabs = roomFilterTabs()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -180,12 +181,13 @@ fun MessagesScreen(
             containerColor = Primary,
             contentColor = Color.White,
             shape = CircleShape,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = PoziomkiTheme.spacing.lg,
-                    bottom = LocalNavBarPadding.current + 24.dp,
-                ),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = PoziomkiTheme.spacing.lg,
+                        bottom = LocalNavBarPadding.current + 24.dp,
+                    ),
         ) {
             Icon(
                 PhosphorIcons.Bold.PencilSimple,

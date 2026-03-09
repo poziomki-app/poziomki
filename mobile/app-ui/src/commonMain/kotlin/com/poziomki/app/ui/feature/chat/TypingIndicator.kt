@@ -41,28 +41,31 @@ fun TypingIndicator(
     val dot1 by transition.animateFloat(
         initialValue = 0.3f,
         targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 600),
-            repeatMode = RepeatMode.Reverse,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 600),
+                repeatMode = RepeatMode.Reverse,
+            ),
         label = "dot1",
     )
     val dot2 by transition.animateFloat(
         initialValue = 0.3f,
         targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 600, delayMillis = 150),
-            repeatMode = RepeatMode.Reverse,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 600, delayMillis = 150),
+                repeatMode = RepeatMode.Reverse,
+            ),
         label = "dot2",
     )
     val dot3 by transition.animateFloat(
         initialValue = 0.3f,
         targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 600, delayMillis = 300),
-            repeatMode = RepeatMode.Reverse,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 600, delayMillis = 300),
+                repeatMode = RepeatMode.Reverse,
+            ),
         label = "dot3",
     )
 
@@ -102,9 +105,10 @@ fun TypingIndicator(
 @Composable
 private fun Dot(alpha: Float) {
     Box(
-        modifier = Modifier
-            .size(DotSize)
-            .alpha(alpha)
-            .background(color = TextSecondary, shape = CircleShape),
+        modifier =
+            Modifier
+                .size(DotSize)
+                .alpha(alpha)
+                .background(color = TextSecondary, shape = CircleShape),
     )
 }

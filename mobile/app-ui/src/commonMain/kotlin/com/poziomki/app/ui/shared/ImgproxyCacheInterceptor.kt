@@ -19,10 +19,12 @@ class ImgproxyCacheInterceptor : Interceptor {
         val data = chain.request.data
         val stableKey = if (data is String) extractStableKey(data) else null
         if (stableKey != null) {
-            val newRequest = chain.request.newBuilder()
-                .memoryCacheKey(stableKey)
-                .diskCacheKey(stableKey)
-                .build()
+            val newRequest =
+                chain.request
+                    .newBuilder()
+                    .memoryCacheKey(stableKey)
+                    .diskCacheKey(stableKey)
+                    .build()
             return chain.withRequest(newRequest).proceed()
         }
         return chain.proceed()

@@ -11,13 +11,13 @@ import com.poziomki.app.chat.cache.RoomTimelineCacheSnapshotData
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.matrix.api.JoinedRoom
 import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.chat.matrix.api.MatrixClientState
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
-import com.poziomki.app.chat.matrix.api.RoomTimelineCacheSnapshot
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
+import com.poziomki.app.chat.matrix.api.RoomTimelineCacheSnapshot
+import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.MatrixConfigData
@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -34,13 +35,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.matrix.rustcomponents.sdk.ClientBuilder
 import org.matrix.rustcomponents.sdk.CreateRoomParameters
-import org.matrix.rustcomponents.sdk.RequestConfig
-import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
+import org.matrix.rustcomponents.sdk.DateDividerMode
 import org.matrix.rustcomponents.sdk.HttpPusherData
 import org.matrix.rustcomponents.sdk.LatestEventValue
 import org.matrix.rustcomponents.sdk.Membership
@@ -48,6 +49,7 @@ import org.matrix.rustcomponents.sdk.MembershipState
 import org.matrix.rustcomponents.sdk.PushFormat
 import org.matrix.rustcomponents.sdk.PusherIdentifiers
 import org.matrix.rustcomponents.sdk.PusherKind
+import org.matrix.rustcomponents.sdk.RequestConfig
 import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.RoomHero
 import org.matrix.rustcomponents.sdk.RoomListDynamicEntriesController
@@ -58,17 +60,15 @@ import org.matrix.rustcomponents.sdk.RoomMember
 import org.matrix.rustcomponents.sdk.RoomPreset
 import org.matrix.rustcomponents.sdk.RoomVisibility
 import org.matrix.rustcomponents.sdk.SlidingSyncVersion
-import org.matrix.rustcomponents.sdk.TimelineItemContent
-import org.matrix.rustcomponents.sdk.DateDividerMode
+import org.matrix.rustcomponents.sdk.SqliteStoreBuilder
 import org.matrix.rustcomponents.sdk.Timeline
 import org.matrix.rustcomponents.sdk.TimelineConfiguration
 import org.matrix.rustcomponents.sdk.TimelineFilter
 import org.matrix.rustcomponents.sdk.TimelineFocus
+import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk.BackupDownloadStrategy
 import uniffi.matrix_sdk_ui.LatestEventValueLocalState
 import uniffi.matrix_sdk_ui.TimelineReadReceiptTracking
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 
@@ -142,6 +142,7 @@ class RustMatrixClient(
     private val openedRoomSummaryJobs = mutableMapOf<String, Job>()
     private val timelineBackfillJobs = mutableMapOf<String, Job>()
     private val timelinePreviewByRoomId = mutableMapOf<String, TimelinePreview>()
+
     init {
         loadCachedPreviews()
     }
@@ -212,13 +213,14 @@ class RustMatrixClient(
                         ClientBuilder()
                             .homeserverUrl(homeserver)
                             .sqliteStore(sqliteStore)
-                            .requestConfig(RequestConfig(
-                                retryLimit = 3u,
-                                timeout = 30_000u,
-                                maxConcurrentRequests = null,
-                                maxRetryTime = null,
-                            ))
-                            .autoEnableBackups(true)
+                            .requestConfig(
+                                RequestConfig(
+                                    retryLimit = 3u,
+                                    timeout = 30_000u,
+                                    maxConcurrentRequests = null,
+                                    maxRetryTime = null,
+                                ),
+                            ).autoEnableBackups(true)
                             .autoEnableCrossSigning(true)
                             .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
                             .build()
@@ -277,10 +279,12 @@ class RustMatrixClient(
                         ),
                     )
 
-                    val newSyncService = newClient.syncService()
-                        .withOfflineMode()
-                        .withSharePos(true)
-                        .finish()
+                    val newSyncService =
+                        newClient
+                            .syncService()
+                            .withOfflineMode()
+                            .withSharePos(true)
+                            .finish()
                     newSyncService.start()
 
                     // Enable send queues so outgoing messages are flushed to the homeserver.
@@ -317,13 +321,15 @@ class RustMatrixClient(
                     client = newClient
                     syncService = newSyncService
                     _state.value = MatrixClientState.Ready(newClient.userId(), homeserver, newClient.deviceId())
-                    saveCachedBootstrap(CachedBootstrap(
-                        homeserver = homeserver,
-                        accessToken = accessToken,
-                        refreshToken = refreshToken,
-                        userId = userId,
-                        deviceId = deviceId,
-                    ))
+                    saveCachedBootstrap(
+                        CachedBootstrap(
+                            homeserver = homeserver,
+                            accessToken = accessToken,
+                            refreshToken = refreshToken,
+                            userId = userId,
+                            deviceId = deviceId,
+                        ),
+                    )
                 }.onFailure { throwable ->
                     cleanupInternal()
                     if (!retried) {
@@ -418,8 +424,8 @@ class RustMatrixClient(
                         runCatching {
                             room.timelineWithConfiguration(createLiveTimelineConfiguration())
                         }.onFailure { throwable ->
-                                println("Matrix getJoinedRoom($roomId): timeline creation failed: ${throwable.message}")
-                            }.getOrNull()
+                            println("Matrix getJoinedRoom($roomId): timeline creation failed: ${throwable.message}")
+                        }.getOrNull()
                     if (liveTimeline != null) {
                         val cachedTimeline =
                             runCatching {
@@ -543,21 +549,30 @@ class RustMatrixClient(
                 val cachedDirectUserId =
                     synchronized(dmUserIdsByRoomId) { dmUserIdsByRoomId[info.id] }
                 val shouldResolveDirectPeer = info.isDirect || !cachedDirectUserId.isNullOrBlank()
-                val directPeer = if (shouldResolveDirectPeer) {
-                    runCatching { resolveDirectPeer(room, ownUserId) }.getOrNull()
-                } else null
-                val directHero = if (shouldResolveDirectPeer) {
-                    runCatching {
-                        pickDirectHeroCandidate(
-                            ownUserId = ownUserId,
-                            heroes = info.heroes + room.heroes(),
-                            preferredUserId = directPeer?.userId ?: cachedDirectUserId,
-                        )
-                    }.getOrNull()
-                } else null
-                val heroUserId = if (shouldResolveDirectPeer) {
-                    directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
-                } else null
+                val directPeer =
+                    if (shouldResolveDirectPeer) {
+                        runCatching { resolveDirectPeer(room, ownUserId) }.getOrNull()
+                    } else {
+                        null
+                    }
+                val directHero =
+                    if (shouldResolveDirectPeer) {
+                        runCatching {
+                            pickDirectHeroCandidate(
+                                ownUserId = ownUserId,
+                                heroes = info.heroes + room.heroes(),
+                                preferredUserId = directPeer?.userId ?: cachedDirectUserId,
+                            )
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+                val heroUserId =
+                    if (shouldResolveDirectPeer) {
+                        directPeer?.userId ?: directHero?.userId ?: cachedDirectUserId
+                    } else {
+                        null
+                    }
                 val effectiveIsDirect = info.isDirect
                 val normalizedDirectUserId = heroUserId?.let(::normalizeUserId)
 
@@ -595,35 +610,35 @@ class RustMatrixClient(
 
                 var mapped =
                     MatrixRoomSummary(
-                    roomId = info.id,
-                    displayName =
-                        if (effectiveIsDirect) {
-                            directPeer?.displayName
-                                ?: directHero?.displayName
-                                ?: info.displayName?.takeIf { !isMemberCountName(it) }
-                                ?: room.displayName()?.takeIf { !isMemberCountName(it) }
-                                ?: heroUserId?.matrixDisplayFallback()
-                                ?: info.displayName
-                                ?: room.displayName()
-                                ?: info.id
-                        } else {
-                            info.displayName
-                                ?: room.displayName()
-                                ?: info.id
-                        },
-                    avatarUrl = resolvedAvatarUrl,
-                    isDirect = effectiveIsDirect,
-                    directUserId = heroUserId,
-                    unreadCount =
-                        info.numUnreadNotifications
-                            .toLong()
-                            .coerceAtMost(Int.MAX_VALUE.toLong())
-                            .toInt(),
-                    latestMessage = latest?.previewText(),
-                    latestTimestampMillis = latest?.timestampMillis(),
-                    latestMessageIsMine = latest?.isMine(ownUserId) == true,
-                    latestMessageSendStatus = latest?.toRoomSendStatus(ownUserId),
-                )
+                        roomId = info.id,
+                        displayName =
+                            if (effectiveIsDirect) {
+                                directPeer?.displayName
+                                    ?: directHero?.displayName
+                                    ?: info.displayName?.takeIf { !isMemberCountName(it) }
+                                    ?: room.displayName()?.takeIf { !isMemberCountName(it) }
+                                    ?: heroUserId?.matrixDisplayFallback()
+                                    ?: info.displayName
+                                    ?: room.displayName()
+                                    ?: info.id
+                            } else {
+                                info.displayName
+                                    ?: room.displayName()
+                                    ?: info.id
+                            },
+                        avatarUrl = resolvedAvatarUrl,
+                        isDirect = effectiveIsDirect,
+                        directUserId = heroUserId,
+                        unreadCount =
+                            info.numUnreadNotifications
+                                .toLong()
+                                .coerceAtMost(Int.MAX_VALUE.toLong())
+                                .toInt(),
+                        latestMessage = latest?.previewText(),
+                        latestTimestampMillis = latest?.timestampMillis(),
+                        latestMessageIsMine = latest?.isMine(ownUserId) == true,
+                        latestMessageSendStatus = latest?.toRoomSendStatus(ownUserId),
+                    )
                 mapped = applyTimelinePreviewOverride(mapped)
                 mapped = applyExistingSummaryPreviewFallback(mapped, _rooms.value.firstOrNull { it.roomId == mapped.roomId })
                 rememberPreviewSummary(mapped)
@@ -757,19 +772,21 @@ class RustMatrixClient(
 
         return runCatching {
             val matrixDeviceId = loadOrCreateMatrixDeviceId(storeNamespace)
-            val newClient = ClientBuilder()
-                .homeserverUrl(cached.homeserver)
-                .sqliteStore(SqliteStoreBuilder(dataPath.absolutePath, cachePath.absolutePath))
-                .requestConfig(RequestConfig(
-                    retryLimit = 3u,
-                    timeout = 30_000u,
-                    maxConcurrentRequests = null,
-                    maxRetryTime = null,
-                ))
-                .autoEnableBackups(true)
-                .autoEnableCrossSigning(true)
-                .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
-                .build()
+            val newClient =
+                ClientBuilder()
+                    .homeserverUrl(cached.homeserver)
+                    .sqliteStore(SqliteStoreBuilder(dataPath.absolutePath, cachePath.absolutePath))
+                    .requestConfig(
+                        RequestConfig(
+                            retryLimit = 3u,
+                            timeout = 30_000u,
+                            maxConcurrentRequests = null,
+                            maxRetryTime = null,
+                        ),
+                    ).autoEnableBackups(true)
+                    .autoEnableCrossSigning(true)
+                    .backupDownloadStrategy(BackupDownloadStrategy.AFTER_DECRYPTION_FAILURE)
+                    .build()
 
             newClient.restoreSession(
                 org.matrix.rustcomponents.sdk.Session(
@@ -783,10 +800,12 @@ class RustMatrixClient(
                 ),
             )
 
-            val newSyncService = newClient.syncService()
-                .withOfflineMode()
-                .withSharePos(true)
-                .finish()
+            val newSyncService =
+                newClient
+                    .syncService()
+                    .withOfflineMode()
+                    .withSharePos(true)
+                    .finish()
             newSyncService.start()
 
             runCatching { newClient.enableAllSendQueues(true) }
@@ -908,35 +927,35 @@ class RustMatrixClient(
 
                         var mapped =
                             MatrixRoomSummary(
-                            roomId = info.id,
-                            displayName =
-                                if (effectiveIsDirect) {
-                                    directPeer?.displayName
-                                        ?: directHero?.displayName
-                                        ?: info.displayName?.takeIf { !isMemberCountName(it) }
-                                        ?: room.displayName()?.takeIf { !isMemberCountName(it) }
-                                        ?: heroUserId?.matrixDisplayFallback()
-                                        ?: info.displayName
-                                        ?: room.displayName()
-                                        ?: info.id
-                                } else {
-                                    info.displayName
-                                        ?: room.displayName()
-                                        ?: info.id
-                                },
-                            avatarUrl = resolvedAvatarUrl,
-                            isDirect = effectiveIsDirect,
-                            directUserId = heroUserId,
-                            unreadCount =
-                                info.numUnreadNotifications
-                                    .toLong()
-                                    .coerceAtMost(Int.MAX_VALUE.toLong())
-                                    .toInt(),
-                            latestMessage = latest.previewText(),
-                            latestTimestampMillis = latest.timestampMillis(),
-                            latestMessageIsMine = latest.isMine(ownUserId) == true,
-                            latestMessageSendStatus = latest.toRoomSendStatus(ownUserId),
-                        )
+                                roomId = info.id,
+                                displayName =
+                                    if (effectiveIsDirect) {
+                                        directPeer?.displayName
+                                            ?: directHero?.displayName
+                                            ?: info.displayName?.takeIf { !isMemberCountName(it) }
+                                            ?: room.displayName()?.takeIf { !isMemberCountName(it) }
+                                            ?: heroUserId?.matrixDisplayFallback()
+                                            ?: info.displayName
+                                            ?: room.displayName()
+                                            ?: info.id
+                                    } else {
+                                        info.displayName
+                                            ?: room.displayName()
+                                            ?: info.id
+                                    },
+                                avatarUrl = resolvedAvatarUrl,
+                                isDirect = effectiveIsDirect,
+                                directUserId = heroUserId,
+                                unreadCount =
+                                    info.numUnreadNotifications
+                                        .toLong()
+                                        .coerceAtMost(Int.MAX_VALUE.toLong())
+                                        .toInt(),
+                                latestMessage = latest.previewText(),
+                                latestTimestampMillis = latest.timestampMillis(),
+                                latestMessageIsMine = latest.isMine(ownUserId) == true,
+                                latestMessageSendStatus = latest.toRoomSendStatus(ownUserId),
+                            )
                         mapped = applyTimelinePreviewOverride(mapped)
                         mapped = applyExistingSummaryPreviewFallback(mapped, existingRoomsById[mapped.roomId])
                         rememberPreviewSummary(mapped)
@@ -968,10 +987,11 @@ class RustMatrixClient(
             // Eagerly open timelines for rooms where we sent the latest message but have
             // no read receipt data yet. Once the SDK hydrates the timeline,
             // observeOpenedRoomTimelineSummary will pick up readByCount and update the preview.
-            val roomsNeedingReadState = sortedRooms
-                .filter { it.latestMessageIsMine && it.latestMessageReadByCount == 0 }
-                .filter { openedRooms[it.roomId] == null }
-                .take(10)
+            val roomsNeedingReadState =
+                sortedRooms
+                    .filter { it.latestMessageIsMine && it.latestMessageReadByCount == 0 }
+                    .filter { openedRooms[it.roomId] == null }
+                    .take(10)
 
             for (summary in roomsNeedingReadState) {
                 scope.launch(Dispatchers.Default) {
@@ -1046,14 +1066,15 @@ class RustMatrixClient(
 
     private fun createLiveTimelineConfiguration(
         trackReadReceipts: TimelineReadReceiptTracking = TimelineReadReceiptTracking.ALL_EVENTS,
-    ): TimelineConfiguration = TimelineConfiguration(
-        focus = TimelineFocus.Live(hideThreadedEvents = false),
-        filter = TimelineFilter.All,
-        internalIdPrefix = null,
-        dateDividerMode = DateDividerMode.DAILY,
-        trackReadReceipts = trackReadReceipts,
-        reportUtds = false,
-    )
+    ): TimelineConfiguration =
+        TimelineConfiguration(
+            focus = TimelineFocus.Live(hideThreadedEvents = false),
+            filter = TimelineFilter.All,
+            internalIdPrefix = null,
+            dateDividerMode = DateDividerMode.DAILY,
+            trackReadReceipts = trackReadReceipts,
+            reportUtds = false,
+        )
 
     private suspend fun hydrateRoomTimelineCache(
         roomId: String,
@@ -1254,17 +1275,18 @@ class RustMatrixClient(
         )
     }
 
-    private fun hasMeaningfulPreview(message: String?): Boolean =
-        !message.isNullOrBlank() && !isStatusPreview(message)
+    private fun hasMeaningfulPreview(message: String?): Boolean = !message.isNullOrBlank() && !isStatusPreview(message)
 
     private fun isStatusPreview(message: String?): Boolean =
         when (message?.trim()) {
             null, "" -> true
+
             "Rozpoczęto rozmowę",
             "Zaproszenie",
             "Zaproszenie wysłane",
             "Wiadomość",
             -> true
+
             else -> false
         }
 
@@ -1283,19 +1305,20 @@ class RustMatrixClient(
                             readByCount = row.read_by_count.toInt(),
                         )
                     if (row.display_name != null) {
-                        cachedSummaries += MatrixRoomSummary(
-                            roomId = row.room_id,
-                            displayName = row.display_name,
-                            avatarUrl = row.avatar_url,
-                            isDirect = row.is_direct != 0L,
-                            directUserId = row.direct_user_id,
-                            unreadCount = row.unread_count.toInt(),
-                            latestMessage = row.message,
-                            latestTimestampMillis = row.timestamp_millis,
-                            latestMessageIsMine = row.is_mine != 0L,
-                            latestMessageSendStatus = row.send_status?.toSendStatus(),
-                            latestMessageReadByCount = row.read_by_count.toInt(),
-                        )
+                        cachedSummaries +=
+                            MatrixRoomSummary(
+                                roomId = row.room_id,
+                                displayName = row.display_name,
+                                avatarUrl = row.avatar_url,
+                                isDirect = row.is_direct != 0L,
+                                directUserId = row.direct_user_id,
+                                unreadCount = row.unread_count.toInt(),
+                                latestMessage = row.message,
+                                latestTimestampMillis = row.timestamp_millis,
+                                latestMessageIsMine = row.is_mine != 0L,
+                                latestMessageSendStatus = row.send_status?.toSendStatus(),
+                                latestMessageReadByCount = row.read_by_count.toInt(),
+                            )
                     }
                 }
             }
@@ -1581,6 +1604,7 @@ private fun LatestEventValue.isMine(ownUserId: String): Boolean? =
         -> null
 
         is LatestEventValue.Remote -> this.isOwn || this.sender.sameMatrixUser(ownUserId)
+
         is LatestEventValue.Local -> this.sender.sameMatrixUser(ownUserId)
     }
 
@@ -1588,7 +1612,9 @@ private fun LatestEventValue.toRoomSendStatus(ownUserId: String): MatrixEventSen
     when (this) {
         LatestEventValue.None,
         is LatestEventValue.RemoteInvite,
-        -> null
+        -> {
+            null
+        }
 
         is LatestEventValue.Remote -> {
             if (this.isOwn || this.sender.sameMatrixUser(ownUserId)) MatrixEventSendStatus.Sent else null
@@ -1608,13 +1634,29 @@ private fun TimelineItemContent.toPreviewText(): String? =
     when (this) {
         is TimelineItemContent.MsgLike -> {
             when (val kind = this.content.kind) {
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Message ->
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Message -> {
                     kind.content.body.takeIf { it.isNotBlank() }
-                org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> "Wiadomość usunięta"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> "Ankieta: ${kind.question}"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> kind.body
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> "Wiadomość zaszyfrowana"
-                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> "Nieobsługiwana wiadomość"
+                }
+
+                org.matrix.rustcomponents.sdk.MsgLikeKind.Redacted -> {
+                    "Wiadomość usunięta"
+                }
+
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Poll -> {
+                    "Ankieta: ${kind.question}"
+                }
+
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Sticker -> {
+                    kind.body
+                }
+
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.UnableToDecrypt -> {
+                    "Wiadomość zaszyfrowana"
+                }
+
+                is org.matrix.rustcomponents.sdk.MsgLikeKind.Other -> {
+                    "Nieobsługiwana wiadomość"
+                }
             }
         }
 
