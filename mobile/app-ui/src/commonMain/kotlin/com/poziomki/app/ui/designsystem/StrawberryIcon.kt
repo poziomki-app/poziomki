@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package com.poziomki.app.ui.designsystem
 
 import androidx.compose.ui.graphics.Color
