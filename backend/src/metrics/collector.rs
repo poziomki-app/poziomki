@@ -21,6 +21,11 @@ pub struct LatencyHistogramSnapshot {
 }
 
 /// Compute approximate p95 latency in milliseconds from a histogram snapshot.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 pub fn p95_from_snapshot(snap: &LatencyHistogramSnapshot) -> f32 {
     if snap.total == 0 {
         return 0.0;
@@ -58,6 +63,7 @@ impl LatencyHistogram {
     }
 
     /// Record a duration sample.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn record(&self, duration: std::time::Duration) {
         let micros = duration.as_micros().min(u128::from(u64::MAX)) as u64;
         self.count.fetch_add(1, Ordering::Relaxed);
@@ -83,7 +89,9 @@ impl LatencyHistogram {
         let overflow = self.overflow.swap(0, Ordering::Relaxed);
         let mut buckets = [0u64; HISTOGRAM_BUCKETS];
         for (i, bucket) in self.buckets.iter().enumerate() {
-            buckets[i] = bucket.swap(0, Ordering::Relaxed);
+            if let Some(slot) = buckets.get_mut(i) {
+                *slot = bucket.swap(0, Ordering::Relaxed);
+            }
         }
         LatencyHistogramSnapshot {
             buckets,
@@ -133,15 +141,6 @@ impl CounterPair {
 
     pub fn inc_failure(&self) {
         self.failure.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Record a success or failure based on a `Result`.
-    pub fn record_result<T, E>(&self, result: &Result<T, E>) {
-        if result.is_ok() {
-            self.inc_success();
-        } else {
-            self.inc_failure();
-        }
     }
 }
 

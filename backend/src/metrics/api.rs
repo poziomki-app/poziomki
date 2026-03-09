@@ -1,8 +1,11 @@
-#[allow(
+#![allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::type_complexity
 )]
+
 use axum::{
     extract::Query,
     http::{HeaderMap, StatusCode},
@@ -505,6 +508,7 @@ pub fn routes() -> Router {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
