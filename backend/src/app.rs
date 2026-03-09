@@ -120,8 +120,17 @@ pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
         .merge(crate::metrics::routes())
 }
 
+fn metrics_instance_id() -> String {
+    std::env::var("METRICS_INSTANCE_ID")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| hostname::get().ok()?.into_string().ok())
+        .unwrap_or_else(|| format!("pid-{}", std::process::id()))
+}
+
 fn init_metrics() {
     crate::metrics::init(crate::metrics::MetricsConfig {
+        instance_id: metrics_instance_id(),
         pool_status: Box::new(crate::db::pool_status),
         auth_cache_size: Box::new(crate::api::auth_cache_len),
         outbox_snapshot: Box::new(|| {
@@ -137,6 +146,20 @@ fn init_metrics() {
             })
         }),
     });
+}
+
+fn init_test_metrics() {
+    crate::metrics::init(crate::metrics::MetricsConfig {
+        instance_id: "test".into(),
+        pool_status: Box::new(|| None),
+        auth_cache_size: Box::new(|| 0),
+        outbox_snapshot: Box::new(|| Box::pin(async { None })),
+    });
+}
+
+pub fn build_metrics_test_router() -> axum::Router {
+    init_test_metrics();
+    crate::metrics::routes()
 }
 
 pub async fn run_api_server() -> crate::error::AppResult<()> {
