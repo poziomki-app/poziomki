@@ -35,6 +35,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MapPinLine
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
 import com.poziomki.app.ui.designsystem.components.EmptyView
@@ -64,9 +67,6 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.MapPinLine
 
 private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
 private const val DEFAULT_ZOOM = 12.0
@@ -127,13 +127,15 @@ internal fun NearbyEventsContent(
     val effectiveLat = userLat ?: DEFAULT_LAT
     val effectiveLng = userLng ?: DEFAULT_LNG
 
-    val selectedEvent = remember(selectedEventId, events) {
-        events.find { it.id == selectedEventId }
-    }
+    val selectedEvent =
+        remember(selectedEventId, events) {
+            events.find { it.id == selectedEventId }
+        }
 
-    val geoEvents = remember(events) {
-        events.filter { it.latitude != null && it.longitude != null }
-    }
+    val geoEvents =
+        remember(events) {
+            events.filter { it.latitude != null && it.longitude != null }
+        }
 
     val geocoding = koinInject<GeocodingService>()
     var geocodedLocation by remember { mutableStateOf<String?>(null) }
@@ -151,18 +153,21 @@ internal fun NearbyEventsContent(
     Column(modifier = Modifier.fillMaxSize()) {
         // Map container
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(MAP_HEIGHT_DP.dp)
-                .clip(RoundedCornerShape(20.dp)),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(MAP_HEIGHT_DP.dp)
+                    .clip(RoundedCornerShape(20.dp)),
         ) {
-            val cameraState = rememberCameraState(
-                firstPosition = CameraPosition(
-                    target = Position(latitude = effectiveLat, longitude = effectiveLng),
-                    zoom = DEFAULT_ZOOM,
-                ),
-            )
+            val cameraState =
+                rememberCameraState(
+                    firstPosition =
+                        CameraPosition(
+                            target = Position(latitude = effectiveLat, longitude = effectiveLng),
+                            zoom = DEFAULT_ZOOM,
+                        ),
+                )
 
             LaunchedEffect(userLat, userLng) {
                 if (userLat != null && userLng != null) {
@@ -175,31 +180,38 @@ internal fun NearbyEventsContent(
                 }
             }
 
-            val unselectedGeoJson = remember(geoEvents, selectedEventId) {
-                multiPointGeoJson(geoEvents.filter { it.id != selectedEventId })
-            }
+            val unselectedGeoJson =
+                remember(geoEvents, selectedEventId) {
+                    multiPointGeoJson(geoEvents.filter { it.id != selectedEventId })
+                }
 
             MaplibreMap(
                 modifier = Modifier.fillMaxSize(),
                 baseStyle = BaseStyle.Uri(MAP_STYLE),
                 cameraState = cameraState,
-                options = MapOptions(
-                    ornamentOptions = OrnamentOptions(
-                        isLogoEnabled = false,
-                        isCompassEnabled = false,
-                        isScaleBarEnabled = false,
-                        isAttributionEnabled = false,
+                options =
+                    MapOptions(
+                        ornamentOptions =
+                            OrnamentOptions(
+                                isLogoEnabled = false,
+                                isCompassEnabled = false,
+                                isScaleBarEnabled = false,
+                                isAttributionEnabled = false,
+                            ),
                     ),
-                ),
                 onMapClick = { position, _ ->
-                    val nearest = geoEvents.minByOrNull {
-                        distanceDeg(position.latitude, position.longitude, it.latitude!!, it.longitude!!)
-                    }
+                    val nearest =
+                        geoEvents.minByOrNull {
+                            distanceDeg(position.latitude, position.longitude, it.latitude!!, it.longitude!!)
+                        }
                     if (nearest != null) {
-                        val dist = distanceDeg(
-                            position.latitude, position.longitude,
-                            nearest.latitude!!, nearest.longitude!!,
-                        )
+                        val dist =
+                            distanceDeg(
+                                position.latitude,
+                                position.longitude,
+                                nearest.latitude!!,
+                                nearest.longitude!!,
+                            )
                         if (dist < TAP_THRESHOLD_DEG * TAP_THRESHOLD_DEG) {
                             onEventSelected(nearest.id)
                         }
@@ -223,9 +235,10 @@ internal fun NearbyEventsContent(
                 // Selected dot
                 val selEvent = geoEvents.find { it.id == selectedEventId }
                 if (selEvent != null) {
-                    val selectedSource = rememberGeoJsonSource(
-                        data = pointGeoJson(selEvent.latitude!!, selEvent.longitude!!),
-                    )
+                    val selectedSource =
+                        rememberGeoJsonSource(
+                            data = pointGeoJson(selEvent.latitude!!, selEvent.longitude!!),
+                        )
                     CircleLayer(
                         id = "selected-event",
                         source = selectedSource,
@@ -236,17 +249,17 @@ internal fun NearbyEventsContent(
                     )
                 }
             }
-
         }
 
         // Event info panel
         if (selectedEvent != null) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(Background)
-                    .clickable { onEventClick(selectedEvent.id) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                        .background(Background)
+                        .clickable { onEventClick(selectedEvent.id) },
             ) {
                 selectedEvent.coverImage?.let { cover ->
                     AsyncImage(
@@ -256,22 +269,24 @@ internal fun NearbyEventsContent(
                         contentScale = ContentScale.Crop,
                     )
                     Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to Background.copy(alpha = 0.97f),
-                                    1.0f to Background.copy(alpha = 0.88f),
+                        modifier =
+                            Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.0f to Background.copy(alpha = 0.97f),
+                                        1.0f to Background.copy(alpha = 0.88f),
+                                    ),
                                 ),
-                            ),
                     )
                 }
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .padding(bottom = LocalNavBarPadding.current),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(bottom = LocalNavBarPadding.current),
                 ) {
                     Text(
                         text = selectedEvent.title,
@@ -293,9 +308,10 @@ internal fun NearbyEventsContent(
                         color = TextSecondary,
                     )
 
-                    val displayLocation = selectedEvent.location
-                        ?.takeIf { !looksLikeCoordinates(it) }
-                        ?: geocodedLocation
+                    val displayLocation =
+                        selectedEvent.location
+                            ?.takeIf { !looksLikeCoordinates(it) }
+                            ?: geocodedLocation
                     if (displayLocation != null) {
                         Text(
                             text = displayLocation,
@@ -332,12 +348,13 @@ internal fun NearbyEventsContent(
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Text(
-                                text = pluralizePolish(
-                                    selectedEvent.attendeesCount,
-                                    "osoba",
-                                    "osoby",
-                                    "osób",
-                                ),
+                                text =
+                                    pluralizePolish(
+                                        selectedEvent.attendeesCount,
+                                        "osoba",
+                                        "osoby",
+                                        "osób",
+                                    ),
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -349,16 +366,18 @@ internal fun NearbyEventsContent(
             }
         } else {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                val hint = if (geoEvents.isEmpty()) {
-                    "brak wydarzeń w pobliżu"
-                } else {
-                    "wybierz wydarzenie na mapie"
-                }
+                val hint =
+                    if (geoEvents.isEmpty()) {
+                        "brak wydarzeń w pobliżu"
+                    } else {
+                        "wybierz wydarzenie na mapie"
+                    }
                 Text(
                     text = hint,
                     fontFamily = NunitoFamily,
@@ -370,27 +389,35 @@ internal fun NearbyEventsContent(
     }
 }
 
-private fun pointGeoJson(lat: Double, lng: Double): GeoJsonData =
+private fun pointGeoJson(
+    lat: Double,
+    lng: Double,
+): GeoJsonData =
     GeoJsonData.JsonString(
         """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[$lng,$lat]},"properties":{}}]}""",
     )
 
 private fun multiPointGeoJson(events: List<Event>): GeoJsonData {
-    val features = events
-        .filter { it.latitude != null && it.longitude != null }
-        .joinToString(",") { event ->
-            """{"type":"Feature","geometry":{"type":"Point","coordinates":[${event.longitude},${event.latitude}]},"properties":{"id":"${event.id}"}}"""
-        }
+    val features =
+        events
+            .filter { it.latitude != null && it.longitude != null }
+            .joinToString(",") { event ->
+                """{"type":"Feature","geometry":{"type":"Point","coordinates":[${event.longitude},${event.latitude}]},"properties":{"id":"${event.id}"}}"""
+            }
     return GeoJsonData.JsonString(
         """{"type":"FeatureCollection","features":[$features]}""",
     )
 }
 
-private fun distanceDeg(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+private fun distanceDeg(
+    lat1: Double,
+    lng1: Double,
+    lat2: Double,
+    lng2: Double,
+): Double {
     val dLat = lat1 - lat2
     val dLng = lng1 - lng2
     return dLat * dLat + dLng * dLng
 }
 
-private fun looksLikeCoordinates(s: String): Boolean =
-    s.matches(Regex("""^-?\d+[.,]\d+\s*,\s*-?\d+[.,]\d+$"""))
+private fun looksLikeCoordinates(s: String): Boolean = s.matches(Regex("""^-?\d+[.,]\d+\s*,\s*-?\d+[.,]\d+$"""))
