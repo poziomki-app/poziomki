@@ -809,8 +809,7 @@ async fn events_flow_matches_phase_3_contract() {
         let suggestions_payload: serde_json::Value = suggestions_response.json();
         assert!(suggestions_payload["data"]
             .as_array()
-            .map(|rows| !rows.is_empty())
-            .unwrap_or(false));
+            .is_some_and(|rows| !rows.is_empty()));
 
         let interested_token = sign_up_and_verify(
             &request,

@@ -100,7 +100,9 @@ where
             };
 
             let entry = affinity.entry(node_id).or_insert(0.0);
-            *entry = (*entry + source_weight * ancestor_weight).clamp(0.0, 1.0);
+            *entry = source_weight
+                .mul_add(ancestor_weight, *entry)
+                .clamp(0.0, 1.0);
 
             current = tag_parent_map.get(&node_id).copied().flatten();
             depth += 1;
@@ -169,9 +171,9 @@ pub(super) fn score_event(
             }
             _ => 0.0,
         };
-        content_score * 0.65 + history_score * 0.20 + geo_bonus
+        content_score.mul_add(0.65, history_score * 0.20) + geo_bonus
     } else {
-        content_score * 0.65 + history_score * 0.20
+        content_score.mul_add(0.65, history_score * 0.20)
     }
 }
 

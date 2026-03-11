@@ -32,7 +32,6 @@ use super::{
     },
     ErrorSpec,
 };
-use crate::api::auth_or_respond;
 use crate::db::models::sessions::Session;
 use crate::db::schema::sessions;
 use crate::jobs::enqueue_otp_email;

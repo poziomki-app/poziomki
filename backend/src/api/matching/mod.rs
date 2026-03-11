@@ -22,7 +22,6 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::state::{DataResponse, MatchingQuery};
-use crate::api::auth_or_respond;
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
 use matching_assembler::build_recommendations_response;
