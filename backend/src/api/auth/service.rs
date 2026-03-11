@@ -3,17 +3,18 @@ mod auth_otp_email;
 pub(super) use auth_otp_email::send_otp_email;
 
 use axum::response::Response;
-use axum::{Json, http::HeaderMap, response::IntoResponse};
+use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use super::super::{
-    ErrorSpec, error_response,
+    error_response,
     state::{
-        DataResponse, SignUpBody, create_session_db, normalize_email, session_model_to_view,
-        upsert_otp, user_model_to_view, validate_signup_payload, verify_otp_db,
+        create_session_db, normalize_email, session_model_to_view, upsert_otp, user_model_to_view,
+        validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
     },
+    ErrorSpec,
 };
 use crate::db::models::users::{NewUser, User, UserChangeset};
 use crate::db::schema::users;

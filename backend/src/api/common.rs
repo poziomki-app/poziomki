@@ -1,7 +1,7 @@
 use axum::{
-    Json,
     http::HeaderMap,
     response::{IntoResponse, Response},
+    Json,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -63,8 +63,7 @@ pub fn error_response(
 }
 
 pub fn parse_uuid(id: &str, label: &str) -> std::result::Result<Uuid, crate::error::AppError> {
-    Uuid::parse_str(id)
-        .map_err(|_| crate::error::AppError::Message(format!("Invalid {label} ID")))
+    Uuid::parse_str(id).map_err(|_| crate::error::AppError::Message(format!("Invalid {label} ID")))
 }
 
 pub fn parse_uuid_response(

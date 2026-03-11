@@ -8,8 +8,8 @@ use axum::{extract::State, http::HeaderMap, Json};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use crate::api::auth_or_respond;
 use super::{chat_bootstrap_error, matrix_service, MatrixSessionRequest};
+use crate::api::auth_or_respond;
 use crate::db::models::profiles::Profile;
 use crate::db::schema::profiles;
 
