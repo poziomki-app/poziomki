@@ -42,6 +42,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowsOut
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.User
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
@@ -60,11 +65,6 @@ import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.rememberMultiImagePicker
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowsOut
-import com.adamglin.phosphoricons.bold.PencilSimple
-import com.adamglin.phosphoricons.bold.User
 
 private const val BIO_MAX_LENGTH = 300
 private const val TAG_PREVIEW_LIMIT = 2

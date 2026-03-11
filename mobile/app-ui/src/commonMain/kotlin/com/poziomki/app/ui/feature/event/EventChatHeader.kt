@@ -33,6 +33,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.MapPin
+import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -42,14 +50,6 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.formatEventDateFull
 import com.poziomki.app.ui.shared.pluralizePolish
 import com.poziomki.app.ui.shared.resolveImageUrl
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.ArrowLeft
-import com.adamglin.phosphoricons.bold.DotsThreeVertical
-import com.adamglin.phosphoricons.fill.CalendarDots
-import com.adamglin.phosphoricons.fill.MapPin
-import com.adamglin.phosphoricons.fill.UsersThree
 
 @Composable
 @Suppress("LongMethod", "LongParameterList")

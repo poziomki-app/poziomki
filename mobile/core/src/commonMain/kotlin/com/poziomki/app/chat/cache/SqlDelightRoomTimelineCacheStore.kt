@@ -166,7 +166,7 @@ private sealed interface CachedTimelineItem {
     companion object {
         fun fromDomain(item: MatrixTimelineItem): CachedTimelineItem =
             when (item) {
-                is MatrixTimelineItem.Event ->
+                is MatrixTimelineItem.Event -> {
                     Event(
                         eventOrTransactionId = item.eventOrTransactionId,
                         eventId = item.eventId,
@@ -183,12 +183,19 @@ private sealed interface CachedTimelineItem {
                         readByCount = item.readByCount,
                         canReply = item.canReply,
                     )
+                }
 
-                is MatrixTimelineItem.DateDivider ->
+                is MatrixTimelineItem.DateDivider -> {
                     DateDivider(timestampMillis = item.timestampMillis)
+                }
 
-                MatrixTimelineItem.ReadMarker -> ReadMarker
-                MatrixTimelineItem.TimelineStart -> TimelineStart
+                MatrixTimelineItem.ReadMarker -> {
+                    ReadMarker
+                }
+
+                MatrixTimelineItem.TimelineStart -> {
+                    TimelineStart
+                }
             }
     }
 }

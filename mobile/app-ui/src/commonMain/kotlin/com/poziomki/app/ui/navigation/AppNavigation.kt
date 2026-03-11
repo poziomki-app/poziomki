@@ -19,13 +19,16 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,9 +37,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,12 +55,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.bold.GearSix
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.ChatCircle
+import com.adamglin.phosphoricons.fill.UsersFour
+import com.adamglin.phosphoricons.fill.UsersThree
+import com.adamglin.phosphoricons.regular.CalendarDots
+import com.adamglin.phosphoricons.regular.ChatCircle
+import com.adamglin.phosphoricons.regular.UsersFour
+import com.adamglin.phosphoricons.regular.UsersThree
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.data.repository.ChatRoomRepository
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.IconButton
-import androidx.compose.runtime.collectAsState
-import coil3.compose.AsyncImage
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -83,21 +98,6 @@ import com.poziomki.app.ui.feature.profile.ProfileViewScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.bold.GearSix
-import com.adamglin.phosphoricons.fill.CalendarDots
-import com.adamglin.phosphoricons.fill.ChatCircle
-import com.adamglin.phosphoricons.fill.UsersFour
-import com.adamglin.phosphoricons.fill.UsersThree
-import com.adamglin.phosphoricons.regular.CalendarDots
-import com.adamglin.phosphoricons.regular.ChatCircle
-import com.adamglin.phosphoricons.regular.UsersFour
-import com.adamglin.phosphoricons.regular.UsersThree
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 
 data class BottomNavItem(
     val label: String,
@@ -148,12 +148,16 @@ fun AppNavigation(
         navigationScope.launch {
             val roomId =
                 when {
-                    chatTargetId.startsWith("!") -> chatTargetId
-                    else ->
+                    chatTargetId.startsWith("!") -> {
+                        chatTargetId
+                    }
+
+                    else -> {
                         matrixClient.createDM(chatTargetId).getOrElse { error ->
                             println("Failed to create DM with $chatTargetId: ${error.message}")
                             return@launch
                         }
+                    }
                 }
 
             navController.navigate(Route.Chat(roomId))
@@ -420,119 +424,119 @@ fun MainScreen(
         contentWindowInsets = WindowInsets(0),
     ) { _ ->
         CompositionLocalProvider(LocalNavBarPadding provides (navBarHeight + bottomInsets)) {
-        Column(modifier = Modifier.fillMaxSize().padding(top = safeTop)) {
-            OfflineBanner()
-            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
-                NavHost(
-                    navController = tabNavController,
-                    startDestination = Route.Explore,
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None },
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    composable<Route.Explore> {
-                        ExploreScreen(
-                            onNavigateToProfile = onNavigateToProfileView,
-                            onNavigateToEventDetail = onNavigateToEventDetail,
-                            profileAvatarAction = profileAvatarAction,
-                        )
+            Column(modifier = Modifier.fillMaxSize().padding(top = safeTop)) {
+                OfflineBanner()
+                Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                    NavHost(
+                        navController = tabNavController,
+                        startDestination = Route.Explore,
+                        enterTransition = { EnterTransition.None },
+                        exitTransition = { ExitTransition.None },
+                        popEnterTransition = { EnterTransition.None },
+                        popExitTransition = { ExitTransition.None },
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        composable<Route.Explore> {
+                            ExploreScreen(
+                                onNavigateToProfile = onNavigateToProfileView,
+                                onNavigateToEventDetail = onNavigateToEventDetail,
+                                profileAvatarAction = profileAvatarAction,
+                            )
+                        }
+                        composable<Route.Events> {
+                            EventsScreen(
+                                onNavigateToEventDetail = onNavigateToEventDetail,
+                                onNavigateToEventCreate = onNavigateToEventCreate,
+                                profileAvatarAction = profileAvatarAction,
+                            )
+                        }
+                        composable<Route.Messages> {
+                            MessagesScreen(
+                                onNavigateToChat = onNavigateToChat,
+                                onNavigateToNewChat = onNavigateToNewChat,
+                                onNavigateToProfile = onNavigateToProfileView,
+                                profileAvatarAction = profileAvatarAction,
+                            )
+                        }
+                        composable<Route.ProfileTab> {
+                            ProfileScreen(
+                                onNavigateToEdit = onNavigateToProfileEdit,
+                                onNavigateToPrivacy = onNavigateToPrivacy,
+                                onNavigateToProfileView = onNavigateToProfileView,
+                                onSignOut = onSignOut,
+                            )
+                        }
+                        composable<Route.Groups> {
+                            GroupsScreen(
+                                profileAvatarAction = profileAvatarAction,
+                            )
+                        }
                     }
-                    composable<Route.Events> {
-                        EventsScreen(
-                            onNavigateToEventDetail = onNavigateToEventDetail,
-                            onNavigateToEventCreate = onNavigateToEventCreate,
-                            profileAvatarAction = profileAvatarAction,
-                        )
-                    }
-                    composable<Route.Messages> {
-                        MessagesScreen(
-                            onNavigateToChat = onNavigateToChat,
-                            onNavigateToNewChat = onNavigateToNewChat,
-                            onNavigateToProfile = onNavigateToProfileView,
-                            profileAvatarAction = profileAvatarAction,
-                        )
-                    }
-                    composable<Route.ProfileTab> {
-                        ProfileScreen(
-                            onNavigateToEdit = onNavigateToProfileEdit,
-                            onNavigateToPrivacy = onNavigateToPrivacy,
-                            onNavigateToProfileView = onNavigateToProfileView,
-                            onSignOut = onSignOut,
-                        )
-                    }
-                    composable<Route.Groups> {
-                        GroupsScreen(
-                            profileAvatarAction = profileAvatarAction,
-                        )
-                    }
-                }
 
-                // Bottom navbar
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(Color.Black),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Row(
+                    // Bottom navbar
+                    Box(
                         modifier =
                             Modifier
+                                .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .padding(
-                                    start = 8.dp,
-                                    top = 12.dp,
-                                    end = 8.dp,
-                                    bottom = 4.dp + bottomInsets,
-                                ),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically,
+                                .background(Color.Black),
+                        contentAlignment = Alignment.BottomCenter,
                     ) {
-                        val haptic = LocalHapticFeedback.current
-                        bottomNavItems.forEach { item ->
-                            val selected = currentDestination?.hasRoute(item.route::class) == true
-                            val tint = if (selected) Color.White else Color(0xFFB3B3B3)
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                        ) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            tabNavController.navigate(item.route) {
-                                                popUpTo(tabNavController.graph.findStartDestination().id) {
-                                                    saveState = true
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = 8.dp,
+                                        top = 12.dp,
+                                        end = 8.dp,
+                                        bottom = 4.dp + bottomInsets,
+                                    ),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val haptic = LocalHapticFeedback.current
+                            bottomNavItems.forEach { item ->
+                                val selected = currentDestination?.hasRoute(item.route::class) == true
+                                val tint = if (selected) Color.White else Color(0xFFB3B3B3)
+                                Column(
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                            ) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                tabNavController.navigate(item.route) {
+                                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
                                                 }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Icon(
-                                    if (selected) item.selectedIcon else item.icon,
-                                    contentDescription = item.label,
-                                    modifier = Modifier.size(26.dp),
-                                    tint = tint,
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = item.label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = tint,
-                                )
+                                            },
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Icon(
+                                        if (selected) item.selectedIcon else item.icon,
+                                        contentDescription = item.label,
+                                        modifier = Modifier.size(26.dp),
+                                        tint = tint,
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = item.label,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = tint,
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
         }
     }
 }

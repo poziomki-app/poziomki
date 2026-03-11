@@ -103,8 +103,7 @@ class ApiService(
         return client.get("/api/v1/tags?scope=$scope&search=$encoded")
     }
 
-    suspend fun createTag(request: CreateTagRequest): ApiResult<Tag> =
-        client.post("/api/v1/tags", request)
+    suspend fun createTag(request: CreateTagRequest): ApiResult<Tag> = client.post("/api/v1/tags", request)
 
     // Degrees
 

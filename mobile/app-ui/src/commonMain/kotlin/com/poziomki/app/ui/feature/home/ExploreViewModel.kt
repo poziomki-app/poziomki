@@ -49,18 +49,23 @@ class ExploreViewModel(
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
                 val current = _state.value.profiles
-                _state.value = _state.value.copy(
-                    profiles = if (profilesVisuallyEqual(current, profiles)) current else profiles,
-                    isLoading = if (profiles.isNotEmpty()) false else _state.value.isLoading,
-                )
+                _state.value =
+                    _state.value.copy(
+                        profiles = if (profilesVisuallyEqual(current, profiles)) current else profiles,
+                        isLoading = if (profiles.isNotEmpty()) false else _state.value.isLoading,
+                    )
             }
         }
     }
 
-    private fun profilesVisuallyEqual(a: List<MatchProfile>, b: List<MatchProfile>): Boolean {
+    private fun profilesVisuallyEqual(
+        a: List<MatchProfile>,
+        b: List<MatchProfile>,
+    ): Boolean {
         if (a.size != b.size) return false
         return a.indices.all { i ->
-            val x = a[i]; val y = b[i]
+            val x = a[i]
+            val y = b[i]
             x.id == y.id && x.name == y.name &&
                 x.profilePicture == y.profilePicture &&
                 x.program == y.program &&

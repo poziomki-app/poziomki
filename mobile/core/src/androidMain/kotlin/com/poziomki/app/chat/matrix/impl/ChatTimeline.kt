@@ -7,10 +7,10 @@
 package com.poziomki.app.chat.matrix.impl
 
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
+import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixReaction
 import com.poziomki.app.chat.matrix.api.MatrixReactionSender
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
 import com.poziomki.app.chat.matrix.api.Timeline
@@ -18,8 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.matrix.rustcomponents.sdk.EditedContent
 import org.matrix.rustcomponents.sdk.EmbeddedEventDetails
@@ -76,9 +76,10 @@ class ChatTimeline(
     private var hasPendingDiffs = false
     private val initialItemsSnapshot = initialItems.toList()
     private val initialItemsSize = initialItemsSnapshot.size
-    private val initialItemsIds: Set<String> = initialItemsSnapshot
-        .filterIsInstance<MatrixTimelineItem.Event>()
-        .mapTo(HashSet()) { it.eventOrTransactionId }
+    private val initialItemsIds: Set<String> =
+        initialItemsSnapshot
+            .filterIsInstance<MatrixTimelineItem.Event>()
+            .mapTo(HashSet()) { it.eventOrTransactionId }
     private var startupGuardEnabled = initialItemsSize > 0
     private var startupGuardDeadlineMillis =
         if (startupGuardEnabled) {
@@ -224,11 +225,12 @@ class ChatTimeline(
     }
 
     private fun resolveUnfilledReplyDetails(items: List<MatrixTimelineItem>): List<MatrixTimelineItem> {
-        val hasUnresolved = items.any { item ->
-            item is MatrixTimelineItem.Event &&
-                item.inReplyTo != null &&
-                (item.inReplyTo.body == null || item.inReplyTo.senderDisplayName == null)
-        }
+        val hasUnresolved =
+            items.any { item ->
+                item is MatrixTimelineItem.Event &&
+                    item.inReplyTo != null &&
+                    (item.inReplyTo.body == null || item.inReplyTo.senderDisplayName == null)
+            }
         if (!hasUnresolved) return items
 
         val eventsById = HashMap<String, MatrixTimelineItem.Event>()
@@ -244,12 +246,14 @@ class ChatTimeline(
             if (reply.body != null && reply.senderDisplayName != null) return@map item
             val referenced = eventsById[reply.eventId] ?: return@map item
             item.copy(
-                inReplyTo = reply.copy(
-                    body = reply.body ?: referenced.body,
-                    senderDisplayName = reply.senderDisplayName
-                        ?: referenced.senderDisplayName
-                        ?: referenced.senderId,
-                ),
+                inReplyTo =
+                    reply.copy(
+                        body = reply.body ?: referenced.body,
+                        senderDisplayName =
+                            reply.senderDisplayName
+                                ?: referenced.senderDisplayName
+                                ?: referenced.senderId,
+                    ),
             )
         }
     }
@@ -261,9 +265,10 @@ class ChatTimeline(
             return liveSnapshot
         }
         if (liveSnapshot.isEmpty()) return initialItemsSnapshot
-        val newEvents = liveSnapshot.filter { item ->
-            item is MatrixTimelineItem.Event && item.eventOrTransactionId !in initialItemsIds
-        }
+        val newEvents =
+            liveSnapshot.filter { item ->
+                item is MatrixTimelineItem.Event && item.eventOrTransactionId !in initialItemsIds
+            }
         if (newEvents.isNotEmpty()) return initialItemsSnapshot + newEvents
         if (System.currentTimeMillis() < startupGuardDeadlineMillis) return initialItemsSnapshot
         startupGuardEnabled = false
@@ -629,11 +634,12 @@ private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem
         reactions = reactions,
         isEditable = event.isEditable,
         sendStatus = event.localSendState.toUiSendStatus(eventId != null),
-        readByCount = event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) }.also { count ->
-            if (event.isOwn && count > 0) {
-                println("ReadReceipt: event=${rawId} readBy=${event.readReceipts.keys}")
-            }
-        },
+        readByCount =
+            event.readReceipts.keys.count { userId -> !userId.sameMatrixUser(ownUserId) }.also { count ->
+                if (event.isOwn && count > 0) {
+                    println("ReadReceipt: event=$rawId readBy=${event.readReceipts.keys}")
+                }
+            },
         canReply = event.canBeRepliedTo,
     )
 }

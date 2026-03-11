@@ -47,6 +47,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.ArrowSquareOut
+import com.adamglin.phosphoricons.bold.BookmarkSimple
+import com.adamglin.phosphoricons.bold.CaretDown
+import com.adamglin.phosphoricons.bold.CaretUp
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
@@ -56,11 +66,11 @@ import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -75,16 +85,6 @@ import com.poziomki.app.ui.shared.rememberLocationPermissionLauncher
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.ArrowSquareOut
-import com.adamglin.phosphoricons.bold.BookmarkSimple
-import com.adamglin.phosphoricons.bold.CaretDown
-import com.adamglin.phosphoricons.bold.CaretUp
-import com.adamglin.phosphoricons.bold.PencilSimple
-import com.adamglin.phosphoricons.fill.CalendarDots
-import com.adamglin.phosphoricons.fill.MapPin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,9 +96,10 @@ fun EventsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
-    val requestLocationPermission = rememberLocationPermissionLauncher { granted ->
-        if (granted) viewModel.retryNearby()
-    }
+    val requestLocationPermission =
+        rememberLocationPermissionLauncher { granted ->
+            if (granted) viewModel.retryNearby()
+        }
 
     val timeFilterTabs =
         listOf(
@@ -133,11 +134,15 @@ fun EventsScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 state.activeFilter == TimeFilter.NEARBY -> {
-                    val nearbyDisplayEvents = remember(state.nearbyEvents, state.allEvents) {
-                        val nearbyGeo = state.nearbyEvents.filter { it.latitude != null && it.longitude != null }
-                        if (nearbyGeo.isNotEmpty()) state.nearbyEvents
-                        else state.allEvents.filter { it.latitude != null && it.longitude != null }
-                    }
+                    val nearbyDisplayEvents =
+                        remember(state.nearbyEvents, state.allEvents) {
+                            val nearbyGeo = state.nearbyEvents.filter { it.latitude != null && it.longitude != null }
+                            if (nearbyGeo.isNotEmpty()) {
+                                state.nearbyEvents
+                            } else {
+                                state.allEvents.filter { it.latitude != null && it.longitude != null }
+                            }
+                        }
                     PullToRefreshBox(
                         isRefreshing = state.isRefreshing,
                         onRefresh = { viewModel.pullToRefresh() },
@@ -207,12 +212,13 @@ fun EventsScreen(
                 containerColor = Primary,
                 contentColor = Color.White,
                 shape = CircleShape,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = PoziomkiTheme.spacing.lg,
-                        bottom = LocalNavBarPadding.current + 24.dp,
-                    ),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = PoziomkiTheme.spacing.lg,
+                            bottom = LocalNavBarPadding.current + 24.dp,
+                        ),
             ) {
                 Icon(
                     PhosphorIcons.Bold.PencilSimple,
@@ -413,11 +419,12 @@ private fun WeekEventsContent(
         return
     }
 
-    val grouped = remember(events) {
-        events
-            .groupBy { eventDateKey(it.startsAt) }
-            .toSortedMap()
-    }
+    val grouped =
+        remember(events) {
+            events
+                .groupBy { eventDateKey(it.startsAt) }
+                .toSortedMap()
+        }
     val collapsedDays = remember { mutableStateMapOf<Int, Boolean>() }
 
     LazyColumn(
