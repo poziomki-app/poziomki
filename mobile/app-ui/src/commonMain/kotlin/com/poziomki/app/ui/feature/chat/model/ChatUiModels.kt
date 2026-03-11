@@ -31,6 +31,8 @@ data class ChatUiState(
     val isAwayFromLatest: Boolean = false,
     val unreadBelowCount: Int = 0,
     val typingUserIds: List<String> = emptyList(),
+    val typingDisplayNames: List<String> = emptyList(),
+    val typingAvatarUrls: List<String?> = emptyList(),
     val messageDraft: String = "",
     val composerMode: ComposerMode = ComposerMode.NewMessage,
     val isLoading: Boolean = false,

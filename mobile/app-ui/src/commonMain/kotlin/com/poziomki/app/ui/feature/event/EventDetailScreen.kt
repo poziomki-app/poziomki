@@ -40,6 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.EnvelopeSimple
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.PoziomkiSnackbar
 import com.poziomki.app.ui.designsystem.components.SnackbarType
@@ -48,10 +52,6 @@ import com.poziomki.app.ui.shared.isImageUrl
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowLeft
-import com.adamglin.phosphoricons.bold.EnvelopeSimple
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

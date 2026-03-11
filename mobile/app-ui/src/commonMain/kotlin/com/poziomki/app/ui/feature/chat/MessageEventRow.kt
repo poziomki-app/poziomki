@@ -34,17 +34,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
+import com.adamglin.phosphoricons.bold.Check
+import com.adamglin.phosphoricons.bold.CheckCircle
+import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
+import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
+import com.poziomki.app.ui.designsystem.theme.ChatBubble
+import com.poziomki.app.ui.designsystem.theme.ChatNameColors
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -53,14 +61,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import com.poziomki.app.ui.designsystem.theme.ChatNameColors
-import com.poziomki.app.ui.designsystem.theme.ChatBubble
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
-import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.WarningCircle
 
 private val AvatarSize = 28.dp
 private val AvatarSpacing = 6.dp
@@ -201,7 +202,11 @@ internal fun MessageEventRow(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
                                     event.reactions.forEach { reaction ->
-                                        val reactionCount = reaction.senders.map { it.senderId }.distinct().size
+                                        val reactionCount =
+                                            reaction.senders
+                                                .map { it.senderId }
+                                                .distinct()
+                                                .size
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceColor,
@@ -264,8 +269,9 @@ internal fun MessageEventRow(
                                     shape = bubbleShape,
                                     modifier =
                                         Modifier
-                                            .widthIn(max = if (showSenderMeta) maxBubbleWidth - AvatarSize - AvatarSpacing else maxBubbleWidth)
-                                            .combinedClickable(
+                                            .widthIn(
+                                                max = if (showSenderMeta) maxBubbleWidth - AvatarSize - AvatarSpacing else maxBubbleWidth,
+                                            ).combinedClickable(
                                                 onClick = {},
                                                 onLongClick = onActionsLongPress,
                                             ),
@@ -285,7 +291,11 @@ internal fun MessageEventRow(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
                                         event.reactions.forEach { reaction ->
-                                            val reactionCount = reaction.senders.map { it.senderId }.distinct().size
+                                            val reactionCount =
+                                                reaction.senders
+                                                    .map { it.senderId }
+                                                    .distinct()
+                                                    .size
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceColor,
@@ -390,20 +400,20 @@ private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
         }
 
         event.readByCount > 0 -> {
-            Text(
-                text = "✓✓",
-                color = Primary,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
+            Icon(
+                imageVector = PhosphorIcons.Bold.CheckCircle,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(14.dp),
             )
         }
 
         else -> {
-            Text(
-                text = "✓",
-                color = TextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
+            Icon(
+                imageVector = PhosphorIcons.Bold.Check,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(14.dp),
             )
         }
     }

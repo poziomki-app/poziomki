@@ -30,6 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.Error
@@ -43,11 +48,6 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Plus
-import com.adamglin.phosphoricons.bold.Trash
-import com.adamglin.phosphoricons.bold.X
 
 internal val EMOJI_AVATARS =
     listOf(

@@ -33,15 +33,30 @@ class AuthViewModel(
 
     private var cooldownJob: Job? = null
 
-    private fun localizeAuthError(code: String, message: String): String =
+    private fun localizeAuthError(
+        code: String,
+        message: String,
+    ): String =
         when {
-            code == "CONFLICT" -> "Masz ju\u017c konto \u2014 zaloguj si\u0119"
-            code == "UNAUTHORIZED" || message.contains("Authentication failed", ignoreCase = true) ->
+            code == "CONFLICT" -> {
+                "Masz ju\u017c konto \u2014 zaloguj si\u0119"
+            }
+
+            code == "UNAUTHORIZED" || message.contains("Authentication failed", ignoreCase = true) -> {
                 "Nieprawid\u0142owy email lub has\u0142o"
-            code == "VALIDATION_ERROR" && message.contains("verification code", ignoreCase = true) ->
+            }
+
+            code == "VALIDATION_ERROR" && message.contains("verification code", ignoreCase = true) -> {
                 "Nieprawid\u0142owy kod weryfikacyjny"
-            code == "NETWORK_ERROR" -> "Brak po\u0142\u0105czenia z internetem"
-            else -> message
+            }
+
+            code == "NETWORK_ERROR" -> {
+                "Brak po\u0142\u0105czenia z internetem"
+            }
+
+            else -> {
+                message
+            }
         }
 
     fun signIn(
@@ -82,9 +97,10 @@ class AuthViewModel(
                                         _uiState.value = AuthUiState()
                                         onSuccess()
                                     } else {
-                                        _uiState.value = AuthUiState(
-                                            error = localizeAuthError(profileResult.code, profileResult.message),
-                                        )
+                                        _uiState.value =
+                                            AuthUiState(
+                                                error = localizeAuthError(profileResult.code, profileResult.message),
+                                            )
                                     }
                                 }
                             }
@@ -99,9 +115,10 @@ class AuthViewModel(
                         _uiState.value = AuthUiState()
                         onNeedsVerification(email)
                     } else {
-                        _uiState.value = AuthUiState(
-                            error = localizeAuthError(result.code, result.message),
-                        )
+                        _uiState.value =
+                            AuthUiState(
+                                error = localizeAuthError(result.code, result.message),
+                            )
                     }
                 }
             }
@@ -138,9 +155,10 @@ class AuthViewModel(
                         _uiState.value = AuthUiState()
                         onUserExists(email)
                     } else {
-                        _uiState.value = AuthUiState(
-                            error = localizeAuthError(result.code, result.message),
-                        )
+                        _uiState.value =
+                            AuthUiState(
+                                error = localizeAuthError(result.code, result.message),
+                            )
                     }
                 }
             }
@@ -172,10 +190,11 @@ class AuthViewModel(
                 }
 
                 is ApiResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = localizeAuthError(result.code, result.message),
-                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            error = localizeAuthError(result.code, result.message),
+                        )
                 }
             }
         }
@@ -194,6 +213,7 @@ class AuthViewModel(
                         _uiState.value = _uiState.value.copy(otpResent = false)
                     }
                 }
+
                 is ApiResult.Error -> { /* silently fail — user can retry */ }
             }
             // Start 30s cooldown
@@ -203,13 +223,14 @@ class AuthViewModel(
 
     private fun startResendCooldown() {
         cooldownJob?.cancel()
-        cooldownJob = viewModelScope.launch {
-            for (seconds in RESEND_COOLDOWN_SECONDS downTo 1) {
-                _uiState.value = _uiState.value.copy(resendCooldownSeconds = seconds)
-                delay(1_000)
+        cooldownJob =
+            viewModelScope.launch {
+                for (seconds in RESEND_COOLDOWN_SECONDS downTo 1) {
+                    _uiState.value = _uiState.value.copy(resendCooldownSeconds = seconds)
+                    delay(1_000)
+                }
+                _uiState.value = _uiState.value.copy(resendCooldownSeconds = 0)
             }
-            _uiState.value = _uiState.value.copy(resendCooldownSeconds = 0)
-        }
     }
 
     fun clearError() {

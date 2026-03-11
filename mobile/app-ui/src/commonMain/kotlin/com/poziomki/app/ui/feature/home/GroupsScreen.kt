@@ -10,13 +10,12 @@ import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 
 @Composable
-fun GroupsScreen(
-    profileAvatarAction: @Composable () -> Unit = {},
-) {
+fun GroupsScreen(profileAvatarAction: @Composable () -> Unit = {}) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ScreenHeader(title = "grupy") {
             profileAvatarAction()

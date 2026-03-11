@@ -37,6 +37,7 @@ class ChatViewModel(
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
         const val TYPING_STOP_IDLE_MS = 5_000L
+        const val TYPING_INDICATOR_TIMEOUT_MS = 8_000L
     }
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -57,6 +58,7 @@ class ChatViewModel(
     private var typingState = false
     private var typingStartJob: Job? = null
     private var typingStopJob: Job? = null
+    private var typingIndicatorTimeoutJob: Job? = null
     private var lastVisibleTimelineIndex: Int? = null
     private var totalTimelineItemCount: Int = 0
     private var latestRoomSummaries: List<MatrixRoomSummary> = emptyList()
@@ -374,6 +376,7 @@ class ChatViewModel(
         bindJob?.cancel()
         pendingRoomRetryJob?.cancel()
         clearTypingTimers()
+        typingIndicatorTimeoutJob?.cancel()
         focusedTimeline?.close()
         focusedTimeline = null
         timelineJobs.forEach { it.cancel() }
@@ -520,6 +523,8 @@ class ChatViewModel(
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
                 typingUserIds = emptyList(),
+                typingDisplayNames = emptyList(),
+                typingAvatarUrls = emptyList(),
                 messageDraft = restoredDraft,
                 composerMode = ComposerMode.NewMessage,
                 isLoading = cachedTimeline?.items.isNullOrEmpty(),
@@ -535,8 +540,11 @@ class ChatViewModel(
                         val summary = latestRoomSummaries.firstOrNull { it.roomId == room.roomId }
                         val resolvedName =
                             when {
-                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                else ->
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> {
+                                    summary.displayName
+                                }
+
+                                else -> {
                                     resolvePreferredRoomDisplayName(
                                         roomId = room.roomId,
                                         summary = summary,
@@ -544,6 +552,7 @@ class ChatViewModel(
                                         currentName = current.roomDisplayName,
                                         fallbackDisplayName = fallbackDisplayName,
                                     )
+                                }
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
@@ -569,8 +578,11 @@ class ChatViewModel(
                     _uiState.update { current ->
                         val resolvedName =
                             when {
-                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> summary.displayName
-                                else ->
+                                summary?.isDirect == true && !summary.displayName.isNullOrBlank() -> {
+                                    summary.displayName
+                                }
+
+                                else -> {
                                     resolvePreferredRoomDisplayName(
                                         roomId = room.roomId,
                                         summary = summary,
@@ -578,6 +590,7 @@ class ChatViewModel(
                                         currentName = current.roomDisplayName,
                                         fallbackDisplayName = fallbackDisplayName,
                                     )
+                                }
                             }
                         current.copy(
                             roomDisplayName = resolvedName,
@@ -596,9 +609,43 @@ class ChatViewModel(
 
         roomJobs +=
             viewModelScope.launch {
-                room.typingUserIds.collectLatest { typingUsers ->
+                room.typingUserIds.collect { typingUsers ->
+                    typingIndicatorTimeoutJob?.cancel()
+                    // Update immediately with IDs, then resolve names/avatars
                     _uiState.update { current ->
-                        current.copy(typingUserIds = typingUsers)
+                        current.copy(
+                            typingUserIds = typingUsers,
+                            typingDisplayNames = typingUsers,
+                            typingAvatarUrls = typingUsers.map { null },
+                        )
+                    }
+                    if (typingUsers.isNotEmpty()) {
+                        // Resolve display names and avatars in background
+                        viewModelScope.launch {
+                            val names = typingUsers.map { room.getMemberDisplayName(it) ?: it }
+                            val avatars = typingUsers.map { room.getMemberAvatarUrl(it) }
+                            _uiState.update { current ->
+                                if (current.typingUserIds == typingUsers) {
+                                    current.copy(
+                                        typingDisplayNames = names,
+                                        typingAvatarUrls = avatars,
+                                    )
+                                } else {
+                                    current
+                                }
+                            }
+                        }
+                        typingIndicatorTimeoutJob =
+                            viewModelScope.launch {
+                                delay(TYPING_INDICATOR_TIMEOUT_MS)
+                                _uiState.update { current ->
+                                    current.copy(
+                                        typingUserIds = emptyList(),
+                                        typingDisplayNames = emptyList(),
+                                        typingAvatarUrls = emptyList(),
+                                    )
+                                }
+                            }
                     }
                 }
             }

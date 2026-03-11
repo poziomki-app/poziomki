@@ -64,6 +64,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Image
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.SlidersHorizontal
+import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
@@ -87,14 +95,6 @@ import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Image
-import com.adamglin.phosphoricons.bold.MagnifyingGlass
-import com.adamglin.phosphoricons.bold.PencilSimple
-import com.adamglin.phosphoricons.bold.Plus
-import com.adamglin.phosphoricons.bold.SlidersHorizontal
-import com.adamglin.phosphoricons.bold.X
 
 @Composable
 fun ProfileEditScreen(
@@ -489,12 +489,14 @@ private fun TagSection(
     isCreatingTag: Boolean = false,
 ) {
     val nunito = NunitoFamily
-    val filtered = searchResults.filter { tag ->
-        selectedTags.none { it.id == tag.id }
-    }
+    val filtered =
+        searchResults.filter { tag ->
+            selectedTags.none { it.id == tag.id }
+        }
     val trimmedQuery = query.trim()
-    val hasExactMatch = searchResults.any { it.name.equals(trimmedQuery, ignoreCase = true) } ||
-        selectedTags.any { it.name.equals(trimmedQuery, ignoreCase = true) }
+    val hasExactMatch =
+        searchResults.any { it.name.equals(trimmedQuery, ignoreCase = true) } ||
+            selectedTags.any { it.name.equals(trimmedQuery, ignoreCase = true) }
 
     SectionLabel(label)
 

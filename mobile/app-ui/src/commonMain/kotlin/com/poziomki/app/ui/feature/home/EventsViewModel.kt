@@ -54,20 +54,25 @@ class EventsViewModel(
                         _state.value = _state.value.copy(isLoading = false)
                     }
                 } else {
-                    _state.value = _state.value.copy(
-                        allEvents = events,
-                        isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            allEvents = events,
+                            isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
+                        )
                     filterEvents()
                 }
             }
         }
     }
 
-    private fun eventsVisuallyEqual(a: List<Event>, b: List<Event>): Boolean {
+    private fun eventsVisuallyEqual(
+        a: List<Event>,
+        b: List<Event>,
+    ): Boolean {
         if (a.size != b.size) return false
         return a.indices.all { i ->
-            val x = a[i]; val y = b[i]
+            val x = a[i]
+            val y = b[i]
             x.id == y.id && x.title == y.title &&
                 x.coverImage == y.coverImage &&
                 x.startsAt == y.startsAt &&
@@ -136,11 +141,13 @@ class EventsViewModel(
         if (filter == TimeFilter.NEARBY) {
             // Seed nearbyEvents from allEvents so the map shows dots while API loads
             if (_state.value.nearbyEvents.isEmpty() && _state.value.allEvents.isNotEmpty()) {
-                _state.value = _state.value.copy(
-                    nearbyEvents = _state.value.allEvents.filter {
-                        it.latitude != null && it.longitude != null
-                    },
-                )
+                _state.value =
+                    _state.value.copy(
+                        nearbyEvents =
+                            _state.value.allEvents.filter {
+                                it.latitude != null && it.longitude != null
+                            },
+                    )
             }
             if (_state.value.userLat == null) {
                 fetchNearbyIfPermitted()
@@ -175,13 +182,15 @@ class EventsViewModel(
             when (val result = apiService.getMatchingEvents(lat = lat, lng = lng, radiusM = radiusM)) {
                 is ApiResult.Success -> {
                     val nearby = result.data
-                    val closest = nearby
-                        .filter { it.latitude != null && it.longitude != null }
-                        .minByOrNull { distanceDeg(lat, lng, it.latitude!!, it.longitude!!) }
-                    _state.value = _state.value.copy(
-                        nearbyEvents = nearby,
-                        selectedNearbyEventId = closest?.id ?: _state.value.selectedNearbyEventId,
-                    )
+                    val closest =
+                        nearby
+                            .filter { it.latitude != null && it.longitude != null }
+                            .minByOrNull { distanceDeg(lat, lng, it.latitude!!, it.longitude!!) }
+                    _state.value =
+                        _state.value.copy(
+                            nearbyEvents = nearby,
+                            selectedNearbyEventId = closest?.id ?: _state.value.selectedNearbyEventId,
+                        )
                     filterEvents()
                 }
 
@@ -190,7 +199,12 @@ class EventsViewModel(
         }
     }
 
-    private fun distanceDeg(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+    private fun distanceDeg(
+        lat1: Double,
+        lng1: Double,
+        lat2: Double,
+        lng2: Double,
+    ): Double {
         val dLat = lat1 - lat2
         val dLng = lng1 - lng2
         return dLat * dLat + dLng * dLng

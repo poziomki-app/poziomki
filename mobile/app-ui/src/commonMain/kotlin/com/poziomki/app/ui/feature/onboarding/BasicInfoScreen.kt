@@ -28,6 +28,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
@@ -38,9 +41,6 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.X
 
 @Composable
 fun BasicInfoScreen(

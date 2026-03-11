@@ -22,6 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Check
+import com.adamglin.phosphoricons.bold.CheckCircle
+import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
 import com.poziomki.app.ui.designsystem.components.UserAvatar
@@ -34,10 +40,6 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.WarningCircle
 
 @Composable
 fun RoomRow(
@@ -138,21 +140,12 @@ fun RoomRow(
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (statusIcon != null) {
-                    if (statusIcon.symbol != null) {
-                        Text(
-                            text = statusIcon.symbol,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusIcon.tint,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    } else if (statusIcon.icon != null) {
-                        Icon(
-                            imageVector = statusIcon.icon,
-                            contentDescription = null,
-                            tint = statusIcon.tint,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
+                    Icon(
+                        imageVector = statusIcon.icon,
+                        contentDescription = null,
+                        tint = statusIcon.tint,
+                        modifier = Modifier.size(14.dp),
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(
@@ -226,8 +219,7 @@ private fun monthShort(monthNumber: Int): String =
     }
 
 private data class RoomStatusIconSpec(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    val symbol: String? = null,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val tint: androidx.compose.ui.graphics.Color,
 )
 
@@ -237,13 +229,23 @@ private fun latestRoomStatusIconSpec(
     readByCount: Int,
 ): RoomStatusIconSpec? =
     when {
-        sendStatus == MatrixEventSendStatus.Failed ->
+        sendStatus == MatrixEventSendStatus.Failed -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
-        sendStatus == MatrixEventSendStatus.Sending ->
+        }
+
+        sendStatus == MatrixEventSendStatus.Sending -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
-        readByCount > 0 ->
-            RoomStatusIconSpec(symbol = "✓✓", tint = Primary)
-        sendStatus == MatrixEventSendStatus.Sent ->
-            RoomStatusIconSpec(symbol = "✓", tint = TextSecondary)
-        else -> null
+        }
+
+        readByCount > 0 -> {
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
+        }
+
+        sendStatus == MatrixEventSendStatus.Sent -> {
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
+        }
+
+        else -> {
+            null
+        }
     }

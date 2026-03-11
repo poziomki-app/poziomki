@@ -50,6 +50,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MapPin
+import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.LocationPickerSheet
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
@@ -86,11 +91,6 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.MapPin
-import com.adamglin.phosphoricons.bold.Plus
-import com.adamglin.phosphoricons.bold.X
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
