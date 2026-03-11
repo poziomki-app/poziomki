@@ -84,7 +84,7 @@
     <ID>LongMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
     <ID>LongMethod:EventCreateViewModel.kt$EventCreateViewModel$private fun setupDebouncedSearch()</ID>
     <ID>LongMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, )</ID>
+    <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, onToggleSaved: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun EventRow( event: Event, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun WeekEventsContent( events: List&lt;Event&gt;, onEventClick: (String) -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventsScreen( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: EventsViewModel = koinViewModel(), )</ID>
