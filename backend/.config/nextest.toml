@@ -1,0 +1,6 @@
+[test-groups.integration]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = "test(requests::)"
+test-group = "integration"

@@ -924,19 +924,19 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
 
         let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
         diesel::sql_query(
-            r"
-            CREATE OR REPLACE FUNCTION test_fail_uploads_insert() RETURNS trigger AS $$
-            BEGIN
-              RAISE EXCEPTION 'forced uploads insert failure';
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
-            CREATE TRIGGER trg_test_fail_uploads_insert
-            BEFORE INSERT ON uploads
-            FOR EACH ROW
-            EXECUTE FUNCTION test_fail_uploads_insert();
-            ",
+            r"CREATE OR REPLACE FUNCTION test_fail_uploads_insert() RETURNS trigger AS $$
+            BEGIN RAISE EXCEPTION 'forced uploads insert failure'; END; $$ LANGUAGE plpgsql",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("create insert-fail function");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop old insert-fail trigger");
+        diesel::sql_query(
+            r"CREATE TRIGGER trg_test_fail_uploads_insert
+            BEFORE INSERT ON uploads FOR EACH ROW EXECUTE FUNCTION test_fail_uploads_insert()",
         )
         .execute(&mut conn)
         .await
@@ -956,15 +956,14 @@ async fn upload_returns_error_when_upload_row_insert_fails() {
             .multipart(form)
             .await;
 
-        diesel::sql_query(
-            r"
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads;
-            DROP FUNCTION IF EXISTS test_fail_uploads_insert();
-            ",
-        )
-        .execute(&mut conn)
-        .await
-        .expect("drop insert-fail trigger");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_insert ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop insert-fail trigger");
+        diesel::sql_query("DROP FUNCTION IF EXISTS test_fail_uploads_insert()")
+            .execute(&mut conn)
+            .await
+            .expect("drop insert-fail function");
 
         assert_eq!(upload.status_code(), 500);
     })
@@ -987,19 +986,19 @@ async fn delete_returns_error_when_upload_row_update_fails() {
 
         let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
         diesel::sql_query(
-            r"
-            CREATE OR REPLACE FUNCTION test_fail_uploads_update() RETURNS trigger AS $$
-            BEGIN
-              RAISE EXCEPTION 'forced uploads update failure';
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
-            CREATE TRIGGER trg_test_fail_uploads_update
-            BEFORE UPDATE ON uploads
-            FOR EACH ROW
-            EXECUTE FUNCTION test_fail_uploads_update();
-            ",
+            r"CREATE OR REPLACE FUNCTION test_fail_uploads_update() RETURNS trigger AS $$
+            BEGIN RAISE EXCEPTION 'forced uploads update failure'; END; $$ LANGUAGE plpgsql",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("create update-fail function");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop old update-fail trigger");
+        diesel::sql_query(
+            r"CREATE TRIGGER trg_test_fail_uploads_update
+            BEFORE UPDATE ON uploads FOR EACH ROW EXECUTE FUNCTION test_fail_uploads_update()",
         )
         .execute(&mut conn)
         .await
@@ -1010,15 +1009,14 @@ async fn delete_returns_error_when_upload_row_update_fails() {
             .add_header(auth_key, auth_value)
             .await;
 
-        diesel::sql_query(
-            r"
-            DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads;
-            DROP FUNCTION IF EXISTS test_fail_uploads_update();
-            ",
-        )
-        .execute(&mut conn)
-        .await
-        .expect("drop update-fail trigger");
+        diesel::sql_query("DROP TRIGGER IF EXISTS trg_test_fail_uploads_update ON uploads")
+            .execute(&mut conn)
+            .await
+            .expect("drop update-fail trigger");
+        diesel::sql_query("DROP FUNCTION IF EXISTS test_fail_uploads_update()")
+            .execute(&mut conn)
+            .await
+            .expect("drop update-fail function");
 
         assert_eq!(delete.status_code(), 500);
     })
