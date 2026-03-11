@@ -1,11 +1,11 @@
 package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +46,7 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.EnvelopeSimple
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.PoziomkiSnackbar
@@ -55,11 +56,6 @@ import com.poziomki.app.ui.shared.isImageUrl
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowLeft
-import com.adamglin.phosphoricons.bold.BookmarkSimple
-import com.adamglin.phosphoricons.bold.EnvelopeSimple
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
