@@ -9,8 +9,8 @@ use axum::{
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::api::auth_or_respond;
 use super::state::DataResponse;
+use crate::api::auth_or_respond;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 type Result<T> = crate::error::AppResult<T>;
@@ -113,9 +113,7 @@ pub(super) async fn search_messages(
     if q.is_empty() {
         return Ok(with_private_cache_header(
             Json(DataResponse {
-                data: MessageSearchResults {
-                    room_ids: vec![],
-                },
+                data: MessageSearchResults { room_ids: vec![] },
             })
             .into_response(),
         ));

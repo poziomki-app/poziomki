@@ -21,17 +21,16 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use crate::api::auth_or_respond;
 use super::{
     error_response,
     state::{
         extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
-        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view,
-        DataResponse, ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse,
-        VerifyOtpBody,
+        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view, DataResponse,
+        ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
     },
     ErrorSpec,
 };
+use crate::api::auth_or_respond;
 use crate::db::models::sessions::Session;
 use crate::db::schema::sessions;
 use crate::jobs::enqueue_otp_email;

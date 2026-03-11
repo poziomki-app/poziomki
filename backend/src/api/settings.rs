@@ -8,8 +8,8 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::api::auth_or_respond;
 use super::state::DataResponse;
+use crate::api::auth_or_respond;
 use crate::db::models::user_settings::{NewUserSetting, UserSetting, UserSettingChangeset};
 use crate::db::schema::user_settings;
 
