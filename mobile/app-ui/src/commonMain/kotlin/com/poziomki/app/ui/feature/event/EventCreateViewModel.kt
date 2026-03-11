@@ -64,10 +64,11 @@ class EventCreateViewModel(
                 .distinctUntilChanged()
                 .collect { query ->
                     if (query.length < 2) {
-                        _state.value = _state.value.copy(
-                            tagSearchResults = emptyList(),
-                            isSearchingTags = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                tagSearchResults = emptyList(),
+                                isSearchingTags = false,
+                            )
                         return@collect
                     }
 
@@ -94,10 +95,11 @@ class EventCreateViewModel(
                 .distinctUntilChanged()
                 .collect { combined ->
                     if (combined.length < 3) {
-                        _state.value = _state.value.copy(
-                            suggestedTags = emptyList(),
-                            isSuggestingTags = false,
-                        )
+                        _state.value =
+                            _state.value.copy(
+                                suggestedTags = emptyList(),
+                                isSuggestingTags = false,
+                            )
                         return@collect
                     }
 
@@ -105,11 +107,12 @@ class EventCreateViewModel(
                     val current = _state.value
                     val suggestions =
                         when (
-                            val result = apiService.suggestTags(
-                                scope = "event",
-                                title = current.title,
-                                description = current.description.ifBlank { null },
-                            )
+                            val result =
+                                apiService.suggestTags(
+                                    scope = "event",
+                                    title = current.title,
+                                    description = current.description.ifBlank { null },
+                                )
                         ) {
                             is ApiResult.Success -> result.data.map { it.tag }
                             is ApiResult.Error -> emptyList()
@@ -200,7 +203,13 @@ class EventCreateViewModel(
             val trimmed = name.trim()
             if (trimmed.isEmpty()) return@launch
             _state.value = _state.value.copy(isCreatingTag = true)
-            when (val result = apiService.createTag(com.poziomki.app.network.CreateTagRequest(trimmed, "event"))) {
+            when (
+                val result =
+                    apiService.createTag(
+                        com.poziomki.app.network
+                            .CreateTagRequest(trimmed, "event"),
+                    )
+            ) {
                 is ApiResult.Success -> {
                     addTag(result.data)
                 }
@@ -209,9 +218,10 @@ class EventCreateViewModel(
                     if (result.code == "CONFLICT") {
                         when (val searchResult = apiService.searchTags("event", trimmed)) {
                             is ApiResult.Success -> {
-                                searchResult.data.firstOrNull {
-                                    it.name.equals(trimmed, ignoreCase = true)
-                                }?.let(::addTag)
+                                searchResult.data
+                                    .firstOrNull {
+                                        it.name.equals(trimmed, ignoreCase = true)
+                                    }?.let(::addTag)
                             }
 
                             is ApiResult.Error -> {
@@ -303,7 +313,10 @@ class EventCreateViewModel(
                         tagIds = s.selectedTags.map { it.id },
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
-                    is ApiResult.Success -> onSaved()
+                    is ApiResult.Success -> {
+                        onSaved()
+                    }
+
                     is ApiResult.Error -> {
                         _state.value =
                             _state.value.copy(
@@ -326,7 +339,10 @@ class EventCreateViewModel(
                         tagIds = s.selectedTags.map { it.id },
                     )
                 when (eventRepository.createEvent(request)) {
-                    is ApiResult.Success -> onSaved()
+                    is ApiResult.Success -> {
+                        onSaved()
+                    }
+
                     is ApiResult.Error -> {
                         _state.value =
                             _state.value.copy(

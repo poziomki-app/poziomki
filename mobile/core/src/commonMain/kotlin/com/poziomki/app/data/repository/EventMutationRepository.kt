@@ -423,7 +423,10 @@ internal class EventMutationRepository(
 
     private fun loadTagsByIds(tagIds: List<String>): List<Tag> =
         tagIds.mapNotNull { tagId ->
-            db.tagQueries.selectById(tagId).executeAsOneOrNull()?.toApiModel()
+            db.tagQueries
+                .selectById(tagId)
+                .executeAsOneOrNull()
+                ?.toApiModel()
         }
 
     private fun buildOptimisticEvent(

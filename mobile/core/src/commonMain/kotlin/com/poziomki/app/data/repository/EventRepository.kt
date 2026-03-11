@@ -86,14 +86,21 @@ class EventRepository(
                     }
                     result.data
                 }
-                is ApiResult.Error -> emptyList()
+
+                is ApiResult.Error -> {
+                    emptyList()
+                }
             }
         }
 
     suspend fun refreshEvents(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
             if (!forceRefresh) {
-                val cachedAt = db.cacheStateQueries.selectByKey(EVENTS_LIST_CACHE_KEY).executeAsOneOrNull()?.cached_at
+                val cachedAt =
+                    db.cacheStateQueries
+                        .selectByKey(EVENTS_LIST_CACHE_KEY)
+                        .executeAsOneOrNull()
+                        ?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
             }
             when (val result = api.getEvents()) {
