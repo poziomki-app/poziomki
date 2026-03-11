@@ -7,9 +7,9 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 
-use crate::api::auth_or_respond;
 use super::super::state::{DataResponse, DeleteAccountBody, SuccessResponse};
 use super::auth_service::unauthorized_error;
+use crate::api::auth_or_respond;
 type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;

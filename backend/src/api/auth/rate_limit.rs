@@ -4,7 +4,7 @@ use diesel::deserialize::QueryableByName;
 use diesel::sql_types::Integer;
 use diesel_async::RunQueryDsl;
 
-use super::{ErrorSpec, error_response};
+use super::{error_response, ErrorSpec};
 
 const AUTH_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const AUTH_SIGN_UP_MAX_ATTEMPTS: u32 = 12;

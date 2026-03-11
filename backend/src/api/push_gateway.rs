@@ -2,10 +2,10 @@ use std::{collections::HashSet, time::Duration};
 
 use axum::response::Response;
 use axum::{
-    Json,
     extract::Query,
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;

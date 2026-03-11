@@ -28,19 +28,19 @@ type Result<T> = crate::error::AppResult<T>;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{
-    Json,
     extract::{Multipart, Path, State},
-    http::{HeaderMap, HeaderValue, header},
+    http::{header, HeaderMap, HeaderValue},
+    Json,
 };
 use chrono::Utc;
 use uuid::Uuid;
 
 use super::state::{
-    DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
-    SuccessResponse, UploadResponse, UploadStatusResponse, create_upload_filename,
-    validate_filename,
+    create_upload_filename, validate_filename, DataResponse, DirectUploadCompleteBody,
+    DirectUploadPresignBody, DirectUploadPresignResponse, SuccessResponse, UploadResponse,
+    UploadStatusResponse,
 };
-use super::{ErrorSpec, error_response};
+use super::{error_response, ErrorSpec};
 use crate::db::models::uploads::{NewUpload, UploadChangeset};
 use crate::jobs::enqueue_upload_variants_generation;
 use uploads_auth_service::{
