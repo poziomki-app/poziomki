@@ -10,6 +10,15 @@
 
 a social app for university students, connecting people by shared interests and encouraging spending more time together through local events
 
+## operations
+
+the backend metrics dashboard lives at `/api/v1/metrics/` and the JSON API at `/api/v1/metrics`
+
+- set `OPS_STATUS_TOKEN` to enable both routes
+- the JSON API expects the token in the `x-ops-token` header
+- the dashboard expects the token in the `token` query parameter
+- TimescaleDB is optional; when metrics samples cannot be loaded from the database, the backend falls back to in-memory series and marks the response as degraded
+
 ## license
 
 this project is available under AGPLv3 license

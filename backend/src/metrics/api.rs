@@ -603,4 +603,67 @@ mod tests {
         assert_eq!(series.data.values.len(), 1);
         assert!((series.data.values[0] - 0.0).abs() < 0.01);
     }
+
+    #[test]
+    fn timescaledb_charts_preserve_expected_series_shapes() {
+        let scalar_rows = vec![
+            make_scalar(1000, "a", 0, 0, SAMPLE_INTERVAL_SECS as f32 * 2.0),
+            make_scalar(1000, "b", 0, 0, SAMPLE_INTERVAL_SECS as f32),
+            make_scalar(1000, "a", 5, 0, 3.0),
+            make_scalar(1000, "a", 5, 1, 1.0),
+            make_scalar(1000, "a", 5, 2, 7.0),
+        ];
+        let histogram_rows = vec![HistogramSample {
+            ts: Utc.timestamp_opt(1000, 0).unwrap(),
+            instance_id: "a".into(),
+            chart: 1,
+            series: 0,
+            bucket: 3,
+            count: 10,
+        }];
+
+        let charts = build_timescaledb_charts(&scalar_rows, &histogram_rows);
+
+        let request_rate = charts
+            .iter()
+            .find(|chart| chart.label == "Request Rate")
+            .unwrap();
+        let req_series = request_rate
+            .series
+            .iter()
+            .find(|series| series.name == "req/s")
+            .unwrap();
+        assert_eq!(req_series.data.timestamps, vec![1000]);
+        assert!((req_series.data.values[0] - 3.0).abs() < 0.01);
+
+        let auth_cache = charts
+            .iter()
+            .find(|chart| chart.label == "Auth Cache")
+            .unwrap();
+        let hit_rate = auth_cache
+            .series
+            .iter()
+            .find(|series| series.name == "hit%")
+            .unwrap();
+        let entries = auth_cache
+            .series
+            .iter()
+            .find(|series| series.name == "entries")
+            .unwrap();
+        assert!((hit_rate.data.values[0] - 75.0).abs() < 0.01);
+        assert_eq!(entries.data.values, vec![7.0]);
+
+        let latency = charts
+            .iter()
+            .find(|chart| chart.label == "p95 Latency (ms)")
+            .unwrap();
+        let auth_latency = latency
+            .series
+            .iter()
+            .find(|series| series.name == "auth")
+            .unwrap();
+        assert_eq!(auth_latency.data.timestamps, vec![1000]);
+        assert_eq!(auth_latency.data.values.len(), 1);
+        assert!(auth_latency.data.values[0] >= 0.0);
+    }
 }
