@@ -113,7 +113,11 @@ fn sample_request_rates(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
 }
 
 fn sample_latencies(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
-    let pairs: [(i16, &super::collector::LatencyHistogram, &super::store::TimeSeries); 7] = [
+    let pairs: [(
+        i16,
+        &super::collector::LatencyHistogram,
+        &super::store::TimeSeries,
+    ); 7] = [
         (0, &m.latency_auth, &m.ts_p95_auth),
         (1, &m.latency_profiles, &m.ts_p95_profiles),
         (2, &m.latency_events, &m.ts_p95_events),
@@ -220,12 +224,9 @@ fn sample_smtp(m: &MetricsStore, ts: u32, batch: &mut SampleBatch) {
 }
 
 async fn persist_samples(m: &MetricsStore, batch: SampleBatch) {
-    let conn = match crate::db::conn().await {
-        Ok(c) => c,
-        Err(_) => {
-            m.sample_failures_total.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
+    let Ok(conn) = crate::db::conn().await else {
+        m.sample_failures_total.fetch_add(1, Ordering::Relaxed);
+        return;
     };
 
     if let Err(e) = do_persist(&m.config.instance_id, batch, conn).await {
@@ -265,14 +266,18 @@ async fn do_persist(
         .iter()
         .flat_map(|e| {
             (0..HISTOGRAM_BUCKETS)
-                .filter(|&i| e.snapshot.buckets[i] > 0)
-                .map(move |i| NewHistogramSample {
-                    ts: now,
-                    instance_id: instance_id.to_owned(),
-                    chart: e.chart,
-                    series: e.series,
-                    bucket: i as i16,
-                    count: e.snapshot.buckets[i] as i64,
+                .filter(|&i| e.snapshot.buckets.get(i).is_some_and(|&c| c > 0))
+                .filter_map(move |i| {
+                    let bucket = i16::try_from(i).ok()?;
+                    let count = i64::try_from(*e.snapshot.buckets.get(i)?).ok()?;
+                    Some(NewHistogramSample {
+                        ts: now,
+                        instance_id: instance_id.to_owned(),
+                        chart: e.chart,
+                        series: e.series,
+                        bucket,
+                        count,
+                    })
                 })
         })
         .collect();

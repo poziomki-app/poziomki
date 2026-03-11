@@ -175,11 +175,9 @@ fn build_memory_charts(m: &MetricsStore, from: u32, now: u32) -> Vec<ChartData> 
 
 // ── DB query helpers ──────────────────────────────────────────────────
 
-async fn query_db(
-    range_secs: u32,
-) -> Option<(Vec<ScalarSample>, Vec<HistogramSample>)> {
-    use chrono::{Duration as ChronoDuration, Utc};
+async fn query_db(range_secs: u32) -> Option<(Vec<ScalarSample>, Vec<HistogramSample>)> {
     use crate::db::schema::{metrics_histogram_samples, metrics_scalar_samples};
+    use chrono::{Duration as ChronoDuration, Utc};
     use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
     use diesel_async::RunQueryDsl;
 
@@ -281,10 +279,7 @@ fn series_as_rate(
 }
 
 /// Build a hit-rate% series from raw hits (series 0) and misses (series 1).
-fn series_hit_rate(
-    scalars: &HashMap<(i16, i16), Vec<(u32, f32)>>,
-    chart: i16,
-) -> NamedSeries {
+fn series_hit_rate(scalars: &HashMap<(i16, i16), Vec<(u32, f32)>>, chart: i16) -> NamedSeries {
     let empty = Vec::new();
     let hits = scalars.get(&(chart, 0)).unwrap_or(&empty);
     let misses = scalars.get(&(chart, 1)).unwrap_or(&empty);
@@ -302,7 +297,11 @@ fn series_hit_rate(
         .into_iter()
         .map(|(ts, (h, m))| {
             let total = h + m;
-            let rate = if total > 0.0 { (h / total) * 100.0 } else { 0.0 };
+            let rate = if total > 0.0 {
+                (h / total) * 100.0
+            } else {
+                0.0
+            };
             (ts, rate)
         })
         .collect();
@@ -539,6 +538,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn scalar_aggregation_across_instances() {
         let rows = vec![
             make_scalar_inst(1000, "a", 0, 0, 10.0),
@@ -549,9 +549,9 @@ mod tests {
         let series = agg.get(&(0, 0)).unwrap();
         assert_eq!(series.len(), 2);
         // ts=1000: 10+5=15
-        assert_eq!(series[0], (1000, 15.0));
+        assert_eq!(series.first(), Some(&(1000, 15.0)));
         // ts=1010: 20
-        assert_eq!(series[1], (1010, 20.0));
+        assert_eq!(series.get(1), Some(&(1010, 20.0)));
     }
 
     #[test]
@@ -584,33 +584,33 @@ mod tests {
             },
         ];
         let agg = aggregate_histogram_rows(&rows);
+        #[allow(clippy::unwrap_used)]
         let buckets = agg.get(&(1, 0, 1000)).unwrap();
-        assert_eq!(buckets[0], 80); // 50+30
-        assert_eq!(buckets[3], 5);
-        assert_eq!(buckets[1], 0);
+        assert_eq!(buckets.first(), Some(&80)); // 50+30
+        assert_eq!(buckets.get(3), Some(&5));
+        assert_eq!(buckets.get(1), Some(&0));
     }
 
     #[test]
     fn derived_hit_rate() {
         let rows = vec![
-            make_scalar(1000, 5, 0, 80.0),  // hits
-            make_scalar(1000, 5, 1, 20.0),  // misses
+            make_scalar(1000, 5, 0, 80.0), // hits
+            make_scalar(1000, 5, 1, 20.0), // misses
         ];
         let agg = aggregate_scalar_rows(&rows);
         let series = series_hit_rate(&agg, 5);
         assert_eq!(series.data.values.len(), 1);
-        assert!((series.data.values[0] - 80.0).abs() < 0.01);
+        let val = series.data.values.first().copied().unwrap_or(f32::NAN);
+        assert!((val - 80.0).abs() < 0.01);
     }
 
     #[test]
     fn derived_hit_rate_zero_total() {
-        let rows = vec![
-            make_scalar(1000, 5, 0, 0.0),
-            make_scalar(1000, 5, 1, 0.0),
-        ];
+        let rows = vec![make_scalar(1000, 5, 0, 0.0), make_scalar(1000, 5, 1, 0.0)];
         let agg = aggregate_scalar_rows(&rows);
         let series = series_hit_rate(&agg, 5);
         assert_eq!(series.data.values.len(), 1);
-        assert!((series.data.values[0] - 0.0).abs() < 0.01);
+        let val = series.data.values.first().copied().unwrap_or(f32::NAN);
+        assert!((val - 0.0).abs() < 0.01);
     }
 }

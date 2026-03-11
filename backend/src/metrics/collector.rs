@@ -83,7 +83,9 @@ impl LatencyHistogram {
         let overflow = self.overflow.swap(0, Ordering::Relaxed);
         let mut buckets = [0u64; HISTOGRAM_BUCKETS];
         for (i, bucket) in self.buckets.iter().enumerate() {
-            buckets[i] = bucket.swap(0, Ordering::Relaxed);
+            if let Some(slot) = buckets.get_mut(i) {
+                *slot = bucket.swap(0, Ordering::Relaxed);
+            }
         }
         LatencyHistogramSnapshot {
             buckets,
