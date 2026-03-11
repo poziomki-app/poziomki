@@ -31,7 +31,9 @@
     <ID>Indentation:EventChatHeader.kt$ </ID>
     <ID>Indentation:EventChatStateViews.kt$ </ID>
     <ID>Indentation:EventCreateScreen.kt$ </ID>
+    <ID>Indentation:EventCreateViewModel.kt$EventCreateViewModel$ </ID>
     <ID>Indentation:EventDetailScreen.kt$ </ID>
+    <ID>Indentation:EventDetailViewModel.kt$EventDetailViewModel$ </ID>
     <ID>Indentation:EventsScreen.kt$ </ID>
     <ID>Indentation:EventsViewModel.kt$EventsViewModel$ </ID>
     <ID>Indentation:ExploreScreen.kt$ </ID>
@@ -80,6 +82,7 @@
     <ID>LongMethod:ChatViewModel.kt$ChatViewModel$private suspend fun bindRoom( roomId: String, fallbackDisplayName: String?, fallbackDirectUserId: String?, )</ID>
     <ID>LongMethod:EventChatScreen.kt$@Composable fun EventChatScreen( onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, eventDetailViewModel: EventDetailViewModel = koinViewModel(), chatViewModel: ChatViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
+    <ID>LongMethod:EventCreateViewModel.kt$EventCreateViewModel$private fun setupDebouncedSearch()</ID>
     <ID>LongMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun EventRow( event: Event, onClick: () -&gt; Unit, )</ID>
@@ -140,6 +143,7 @@
     <ID>MaximumLineLength:EventChatScreen.kt$ </ID>
     <ID>MaximumLineLength:EventCreateScreen.kt$ </ID>
     <ID>MaximumLineLength:EventCreateViewModel.kt$EventCreateViewModel$ </ID>
+    <ID>MaximumLineLength:EventsViewModel.kt$EventsViewModel$ </ID>
     <ID>MaximumLineLength:ExploreScreen.kt$ </ID>
     <ID>MaximumLineLength:ImagePicker.android.kt$actual</ID>
     <ID>MaximumLineLength:LocationPickerSheet.kt$ </ID>
