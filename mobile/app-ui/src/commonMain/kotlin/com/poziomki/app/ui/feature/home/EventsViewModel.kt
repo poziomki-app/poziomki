@@ -161,9 +161,11 @@ class EventsViewModel(
                 }
 
                 is ApiResult.Error -> {
-                    val msg =
-                        if (event.isSaved) "Nie udało się usunąć zapisu"
-                        else "Nie udało się zapisać wydarzenia"
+                    val msg = if (event.isSaved) {
+                        "Nie udało się usunąć zapisu"
+                    } else {
+                        "Nie udało się zapisać wydarzenia"
+                    }
                     _state.value = _state.value.copy(refreshError = msg)
                 }
             }
