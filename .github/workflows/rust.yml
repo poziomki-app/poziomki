@@ -47,4 +47,75 @@ jobs:
 
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo test --all-targets
+
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      - run: cargo nextest run --all-targets
+
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+      - run: cargo audit
+
+  deny:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: poziomki
+          POSTGRES_PASSWORD: poziomki
+          POSTGRES_DB: poziomki_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U poziomki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Install tarpaulin
+        uses: taiki-e/install-action@cargo-tarpaulin
+
+      - run: cargo tarpaulin --out xml --skip-clean
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/cobertura.xml
+          fail_ci_if_error: false
