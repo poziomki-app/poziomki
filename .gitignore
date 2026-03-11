@@ -56,6 +56,10 @@ result-*
 !docs/**/*.md
 !.github/**/*.md
 
+# Local-only directories
+/deploy/
+/org/
+
 # OS
 .DS_Store
 Thumbs.db
