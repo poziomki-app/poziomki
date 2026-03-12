@@ -18,6 +18,7 @@ pub struct Event {
     pub conversation_id: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub max_attendees: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -36,6 +37,7 @@ pub struct NewEvent {
     pub conversation_id: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub max_attendees: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -52,5 +54,6 @@ pub struct EventChangeset {
     pub conversation_id: Option<Option<String>>,
     pub latitude: Option<Option<f64>>,
     pub longitude: Option<Option<f64>>,
+    pub max_attendees: Option<Option<i32>>,
     pub updated_at: Option<DateTime<Utc>>,
 }
