@@ -10,14 +10,15 @@ use axum::{
     Json,
 };
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Text};
+use diesel::sql_types::{BigInt, Double, Nullable, Text};
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::{
     error_response,
     state::{
-        CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse, TagScope, TagsQuery,
+        CreateTagBody, DataResponse, DegreeResponse, DegreesQuery, TagResponse, TagScope,
+        TagSuggestionResponse, TagSuggestionsBody, TagsQuery,
     },
     ErrorSpec,
 };
@@ -39,6 +40,14 @@ fn bounded_limit(limit: Option<u8>) -> i64 {
     i64::from(limit.unwrap_or(20).clamp(1, 100))
 }
 
+fn build_or_tsquery(search: &str) -> String {
+    search
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|token| token.chars().count() >= 2)
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 fn str_to_scope(s: &str) -> TagScope {
     match s {
         "activity" => TagScope::Activity,
@@ -54,6 +63,7 @@ fn tag_model_to_response(tag: &Tag) -> TagResponse {
         scope: str_to_scope(&tag.scope),
         category: tag.category.clone(),
         emoji: tag.emoji.clone(),
+        parent_id: tag.parent_id.map(|id| id.to_string()),
         onboarding_order: tag.onboarding_order.clone(),
     }
 }
@@ -81,13 +91,12 @@ pub(super) async fn tags_search(
             .collect::<Vec<_>>()
     } else {
         // Use tsvector + ILIKE fallback for ranked search
-        use diesel::sql_types::Nullable;
         let pattern = format!("%{search}%");
         let scope_filter = query.scope.map(scope_to_str);
 
         let rows = diesel::sql_query(
             r"
-            SELECT t.id, t.name, t.scope, t.category, t.emoji
+            SELECT t.id, t.name, t.scope, t.category, t.emoji, t.parent_id
             FROM tags t
             WHERE
                 ($3 IS NULL OR t.scope = $3)
@@ -115,6 +124,7 @@ pub(super) async fn tags_search(
                 scope: str_to_scope(&row.scope),
                 category: row.category,
                 emoji: row.emoji,
+                parent_id: row.parent_id.map(|id| id.to_string()),
                 onboarding_order: None,
             })
             .collect::<Vec<_>>()
@@ -146,6 +156,14 @@ async fn validate_and_insert_tag(
     }
 
     let scope_str = scope_to_str(payload.scope);
+    let parent_id = if let Some(raw_parent_id) = payload.parent_id.as_deref() {
+        Some(
+            crate::api::parse_uuid_response(raw_parent_id, "parent tag", headers)
+                .map_err(|response| *response)?,
+        )
+    } else {
+        None
+    };
 
     let mut conn = crate::db::conn().await.map_err(|e| {
         tracing::error!(error = %e, "database error checking existing tag");
@@ -191,6 +209,38 @@ async fn validate_and_insert_tag(
         ));
     }
 
+    if let Some(parent_uuid) = parent_id {
+        let parent_exists = tags::table
+            .filter(tags::id.eq(parent_uuid))
+            .select(tags::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .optional()
+            .map_err(|e| {
+                tracing::error!(error = %e, "database error checking tag parent");
+                error_response(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    headers,
+                    ErrorSpec {
+                        error: "Internal server error".to_string(),
+                        code: "INTERNAL_ERROR",
+                        details: None,
+                    },
+                )
+            })?;
+        if parent_exists.is_none() {
+            return Err(error_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                headers,
+                ErrorSpec {
+                    error: "Parent tag not found".to_string(),
+                    code: "BAD_REQUEST",
+                    details: None,
+                },
+            ));
+        }
+    }
+
     let now = chrono::Utc::now();
     let new_tag = NewTag {
         id: Uuid::new_v4(),
@@ -198,7 +248,7 @@ async fn validate_and_insert_tag(
         scope: scope_str.to_string(),
         category: payload.category,
         emoji: payload.emoji,
-        parent_id: None,
+        parent_id,
         onboarding_order: None,
         created_at: now,
         updated_at: now,
@@ -238,6 +288,79 @@ pub(super) async fn tags_create(
     }
 }
 
+pub(super) async fn tags_suggestions(
+    State(_ctx): State<AppContext>,
+    Json(payload): Json<TagSuggestionsBody>,
+) -> Result<Response> {
+    let scope = scope_to_str(payload.scope);
+    let mut search = payload.title.trim().to_lowercase();
+    if let Some(description) = payload.description {
+        let trimmed = description.trim();
+        if !trimmed.is_empty() {
+            if !search.is_empty() {
+                search.push(' ');
+            }
+            search.push_str(trimmed);
+        }
+    }
+    search.truncate(search.floor_char_boundary(200));
+
+    if search.len() < 3 {
+        return Ok(Json(DataResponse {
+            data: Vec::<TagSuggestionResponse>::new(),
+        })
+        .into_response());
+    }
+
+    let pattern = format!("%{search}%");
+    let tsquery = build_or_tsquery(&search);
+    let mut conn = crate::db::conn().await?;
+    let rows = diesel::sql_query(
+        r"
+        SELECT
+            t.id,
+            t.name,
+            t.scope,
+            t.category,
+            t.emoji,
+            t.parent_id,
+            ts_rank_cd(t.search_vector, to_tsquery('simple', $1))::double precision AS score
+        FROM tags t
+        WHERE
+            t.scope = $2
+            AND (
+                ($1 != '' AND t.search_vector @@ to_tsquery('simple', $1))
+                OR LOWER(t.name) LIKE $3
+            )
+        ORDER BY score DESC, t.name ASC
+        LIMIT 5
+        ",
+    )
+    .bind::<Text, _>(&tsquery)
+    .bind::<Text, _>(scope)
+    .bind::<Text, _>(&pattern)
+    .load::<TagSuggestionRow>(&mut conn)
+    .await?;
+
+    let data = rows
+        .into_iter()
+        .map(|row| TagSuggestionResponse {
+            tag: TagResponse {
+                id: row.id.to_string(),
+                name: row.name,
+                scope: str_to_scope(&row.scope),
+                category: row.category,
+                emoji: row.emoji,
+                parent_id: row.parent_id.map(|id| id.to_string()),
+                onboarding_order: None,
+            },
+            score: row.score,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(DataResponse { data }).into_response())
+}
+
 pub(super) async fn degrees_search(
     State(_ctx): State<AppContext>,
     Query(query): Query<DegreesQuery>,
@@ -270,4 +393,22 @@ pub(super) async fn degrees_search(
         .headers_mut()
         .insert(axum::http::header::CACHE_CONTROL, PUBLIC_CACHE_MEDIUM);
     Ok(response)
+}
+
+#[derive(QueryableByName)]
+struct TagSuggestionRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    id: Uuid,
+    #[diesel(sql_type = Text)]
+    name: String,
+    #[diesel(sql_type = Text)]
+    scope: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    category: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    emoji: Option<String>,
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    parent_id: Option<Uuid>,
+    #[diesel(sql_type = Double)]
+    score: f64,
 }

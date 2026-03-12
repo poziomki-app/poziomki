@@ -246,7 +246,8 @@ async fn search_tags_postgres(
             t.name,
             t.scope,
             t.category,
-            t.emoji
+            t.emoji,
+            t.parent_id
         FROM tags t
         WHERE
             t.search_vector @@ websearch_to_tsquery('simple', $1)
@@ -430,4 +431,6 @@ pub struct TagSearchRow {
     pub category: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     pub emoji: Option<String>,
+    #[diesel(sql_type = Nullable<DieselUuid>)]
+    pub parent_id: Option<uuid::Uuid>,
 }

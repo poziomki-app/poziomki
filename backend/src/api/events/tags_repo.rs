@@ -1,6 +1,6 @@
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
@@ -10,15 +10,23 @@ use crate::db::schema::{event_attendees, event_tags, tags};
 
 pub(in crate::api) async fn find_or_create_event_tag(name: String) -> Option<Uuid> {
     let mut conn = crate::db::conn().await.ok()?;
+    find_or_create_event_tag_with_conn(&mut conn, name)
+        .await
+        .ok()
+}
 
-    if let Ok(Some(tag)) = tags::table
+pub(in crate::api) async fn find_or_create_event_tag_with_conn(
+    conn: &mut AsyncPgConnection,
+    name: String,
+) -> std::result::Result<Uuid, crate::error::AppError> {
+    if let Some(tag) = tags::table
         .filter(tags::scope.eq("event"))
         .filter(tags::name.eq(&name))
-        .first::<Tag>(&mut conn)
+        .first::<Tag>(conn)
         .await
-        .optional()
+        .optional()?
     {
-        return Some(tag.id);
+        return Ok(tag.id);
     }
 
     let new_id = Uuid::new_v4();
@@ -36,20 +44,35 @@ pub(in crate::api) async fn find_or_create_event_tag(name: String) -> Option<Uui
     };
     diesel::insert_into(tags::table)
         .values(&new_tag)
-        .execute(&mut conn)
-        .await
-        .ok()
-        .map(|_| new_id)
+        .execute(conn)
+        .await?;
+    Ok(new_id)
 }
 
-pub(in crate::api) async fn sync_event_tags(
+pub(in crate::api) async fn load_existing_event_tag_ids(
+    conn: &mut AsyncPgConnection,
+    tag_ids: &[Uuid],
+) -> std::result::Result<Vec<Uuid>, crate::error::AppError> {
+    if tag_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    tags::table
+        .filter(tags::scope.eq("event"))
+        .filter(tags::id.eq_any(tag_ids))
+        .select(tags::id)
+        .load::<Uuid>(conn)
+        .await
+        .map_err(Into::into)
+}
+
+pub(in crate::api) async fn sync_event_tags_with_conn(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
     tag_ids: &[Uuid],
 ) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     diesel::delete(event_tags::table.filter(event_tags::event_id.eq(event_id)))
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     let new_tags: Vec<EventTag> = tag_ids
@@ -63,7 +86,7 @@ pub(in crate::api) async fn sync_event_tags(
     if !new_tags.is_empty() {
         diesel::insert_into(event_tags::table)
             .values(&new_tags)
-            .execute(&mut conn)
+            .execute(conn)
             .await?;
     }
 
@@ -76,23 +99,25 @@ pub(in crate::api) async fn upsert_attendee(
     status: &str,
 ) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
+    upsert_attendee_with_conn(&mut conn, event_uuid, profile_id, status).await
+}
 
-    diesel::delete(
-        event_attendees::table
-            .filter(event_attendees::event_id.eq(event_uuid))
-            .filter(event_attendees::profile_id.eq(profile_id)),
-    )
-    .execute(&mut conn)
-    .await?;
-
-    let attendee = EventAttendee {
-        event_id: event_uuid,
-        profile_id,
-        status: status.to_string(),
-    };
+pub(in crate::api) async fn upsert_attendee_with_conn(
+    conn: &mut AsyncPgConnection,
+    event_uuid: Uuid,
+    profile_id: Uuid,
+    status: &str,
+) -> std::result::Result<(), crate::error::AppError> {
     diesel::insert_into(event_attendees::table)
-        .values(&attendee)
-        .execute(&mut conn)
+        .values(EventAttendee {
+            event_id: event_uuid,
+            profile_id,
+            status: status.to_string(),
+        })
+        .on_conflict((event_attendees::event_id, event_attendees::profile_id))
+        .do_update()
+        .set(event_attendees::status.eq(status))
+        .execute(conn)
         .await?;
 
     Ok(())

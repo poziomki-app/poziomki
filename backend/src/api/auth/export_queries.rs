@@ -3,6 +3,7 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profile_tags::ProfileTag;
@@ -10,6 +11,7 @@ use crate::db::models::sessions::Session;
 use crate::db::models::tags::Tag;
 use crate::db::models::uploads::Upload;
 use crate::db::models::user_settings::UserSetting;
+use crate::db::schema::event_interactions;
 use crate::db::schema::{
     event_attendees, event_tags, events, profile_tags, sessions, tags, uploads, user_settings,
 };
@@ -43,6 +45,7 @@ pub(super) async fn load_user_tags(
                 "scope": t.scope,
                 "category": t.category,
                 "emoji": t.emoji,
+                "parentId": t.parent_id.map(|id| id.to_string()),
             })
         })
         .collect())
@@ -101,6 +104,7 @@ async fn load_tags_for_event(
             serde_json::json!({
                 "id": t.id.to_string(),
                 "name": t.name,
+                "parentId": t.parent_id.map(|id| id.to_string()),
             })
         })
         .collect())
@@ -210,4 +214,42 @@ pub(super) async fn load_user_settings(
             "privacyDiscoverable": s.privacy_discoverable,
         })
     }))
+}
+
+pub(super) async fn load_event_interactions(
+    profile_id: Uuid,
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+
+    let interaction_rows = event_interactions::table
+        .filter(event_interactions::profile_id.eq(profile_id))
+        .load::<EventInteraction>(&mut conn)
+        .await?;
+
+    let event_ids: Vec<Uuid> = interaction_rows.iter().map(|row| row.event_id).collect();
+    let event_rows = if event_ids.is_empty() {
+        vec![]
+    } else {
+        events::table
+            .filter(events::id.eq_any(&event_ids))
+            .load::<Event>(&mut conn)
+            .await?
+    };
+
+    Ok(interaction_rows
+        .iter()
+        .map(|row| {
+            let title = event_rows
+                .iter()
+                .find(|event| event.id == row.event_id)
+                .map(|event| event.title.clone());
+            serde_json::json!({
+                "eventId": row.event_id.to_string(),
+                "title": title,
+                "kind": row.kind,
+                "createdAt": row.created_at.to_rfc3339(),
+                "updatedAt": row.updated_at.to_rfc3339(),
+            })
+        })
+        .collect())
 }

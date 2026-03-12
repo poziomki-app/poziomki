@@ -112,6 +112,7 @@ impl MatchingRepository {
                         id: tag.id.to_string(),
                         name: tag.name.clone(),
                         scope: scope_from_str(&tag.scope),
+                        parent_id: tag.parent_id.map(|id| id.to_string()),
                     });
             }
         }
