@@ -46,7 +46,6 @@ fn build_create_model(
         user_id: user.id,
         name: payload.name.trim().to_string(),
         bio: payload.bio.clone(),
-        age: payload.age.map(i16::from),
         profile_picture,
         images: images_json,
         program: payload.program.clone(),
@@ -108,7 +107,7 @@ pub(in crate::api) async fn profile_create(
         fire_avatar_sync(user.pid, inserted.profile_picture.clone(), "profile create");
     }
 
-    let data = full_profile_response(&inserted, &user.pid).await?;
+    let data = full_profile_response(&inserted, &user.pid, Some(user.id)).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
 }
 
@@ -150,7 +149,7 @@ pub(in crate::api) async fn profile_update(
         fire_avatar_sync(user.pid, updated.profile_picture.clone(), "profile update");
     }
 
-    let data = full_profile_response(&updated, &user.pid).await?;
+    let data = full_profile_response(&updated, &user.pid, Some(user.id)).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 

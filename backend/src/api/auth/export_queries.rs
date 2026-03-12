@@ -209,7 +209,6 @@ pub(super) async fn load_user_settings(
             "theme": s.theme,
             "language": s.language,
             "notificationsEnabled": s.notifications_enabled,
-            "privacyShowAge": s.privacy_show_age,
             "privacyShowProgram": s.privacy_show_program,
             "privacyDiscoverable": s.privacy_discoverable,
         })

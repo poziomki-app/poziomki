@@ -14,7 +14,7 @@ use crate::db::models::profiles::Profile;
 use crate::db::models::tags::Tag;
 use crate::db::models::users::User;
 use crate::db::schema::{
-    event_interactions, event_tags, events, profile_tags, profiles, tags, users,
+    event_interactions, event_tags, events, profile_tags, profiles, tags, user_settings, users,
 };
 
 pub(super) struct MatchingRepository;
@@ -114,9 +114,16 @@ impl MatchingRepository {
         conn: &mut crate::db::DbConn,
     ) -> std::result::Result<Vec<Profile>, crate::error::AppError> {
         profiles::table
+            .left_join(user_settings::table.on(user_settings::user_id.eq(profiles::user_id)))
             .filter(profiles::user_id.ne(user_id))
+            .filter(
+                user_settings::privacy_discoverable
+                    .eq(true)
+                    .or(user_settings::privacy_discoverable.is_null()),
+            )
             .order(profiles::created_at.desc())
             .limit(limit)
+            .select(profiles::all_columns)
             .load::<Profile>(conn)
             .await
             .map_err(Into::into)

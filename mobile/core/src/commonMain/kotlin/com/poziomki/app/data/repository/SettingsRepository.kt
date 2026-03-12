@@ -38,7 +38,6 @@ class SettingsRepository(
                     theme = "system",
                     language = "system",
                     notifications_enabled = 1L,
-                    privacy_show_age = 1L,
                     privacy_show_program = 1L,
                     privacy_discoverable = 1L,
                     cached_at = Clock.System.now().toEpochMilliseconds(),
@@ -59,7 +58,6 @@ class SettingsRepository(
                 theme = theme,
                 language = current.language,
                 notifications_enabled = current.notifications_enabled,
-                privacy_show_age = current.privacy_show_age,
                 privacy_show_program = current.privacy_show_program,
                 privacy_discoverable = current.privacy_discoverable,
                 cached_at = current.cached_at,
@@ -80,7 +78,6 @@ class SettingsRepository(
                 theme = current.theme,
                 language = language,
                 notifications_enabled = current.notifications_enabled,
-                privacy_show_age = current.privacy_show_age,
                 privacy_show_program = current.privacy_show_program,
                 privacy_discoverable = current.privacy_discoverable,
                 cached_at = current.cached_at,
@@ -101,7 +98,6 @@ class SettingsRepository(
                 theme = current.theme,
                 language = current.language,
                 notifications_enabled = if (enabled) 1L else 0L,
-                privacy_show_age = current.privacy_show_age,
                 privacy_show_program = current.privacy_show_program,
                 privacy_discoverable = current.privacy_discoverable,
                 cached_at = current.cached_at,
@@ -113,7 +109,6 @@ class SettingsRepository(
 
     suspend fun updatePrivacy(
         userId: String,
-        showAge: Boolean? = null,
         showProgram: Boolean? = null,
         discoverable: Boolean? = null,
     ) {
@@ -124,7 +119,6 @@ class SettingsRepository(
                 theme = current.theme,
                 language = current.language,
                 notifications_enabled = current.notifications_enabled,
-                privacy_show_age = showAge?.let { if (it) 1L else 0L } ?: current.privacy_show_age,
                 privacy_show_program = showProgram?.let { if (it) 1L else 0L } ?: current.privacy_show_program,
                 privacy_discoverable = discoverable?.let { if (it) 1L else 0L } ?: current.privacy_discoverable,
                 cached_at = current.cached_at,
@@ -135,7 +129,6 @@ class SettingsRepository(
                 userId,
                 json.encodeToString(
                     UpdateSettingsRequest(
-                        privacyShowAge = showAge,
                         privacyShowProgram = showProgram,
                         privacyDiscoverable = discoverable,
                     ),
