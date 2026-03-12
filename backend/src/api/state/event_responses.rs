@@ -38,6 +38,7 @@ pub(in crate::api) struct EventResponse {
 
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::api) struct AttendeeFullInfo {
+    #[serde(rename = "profileId")]
     pub(in crate::api) id: String,
     #[serde(rename = "userId")]
     pub(in crate::api) user_id: String,
@@ -45,4 +46,6 @@ pub(in crate::api) struct AttendeeFullInfo {
     #[serde(rename = "profilePicture")]
     pub(in crate::api) profile_picture: Option<String>,
     pub(in crate::api) status: AttendeeStatus,
+    #[serde(rename = "isCreator")]
+    pub(in crate::api) is_creator: bool,
 }

@@ -76,6 +76,7 @@ fun EventAttendee.toDbParams(eventId: String): List<Any?> =
         name,
         profilePicture,
         status,
+        if (isCreator) 1L else 0L,
     )
 
 fun com.poziomki.app.db.Event_attendee.toApiModel(): EventAttendee =
@@ -85,4 +86,5 @@ fun com.poziomki.app.db.Event_attendee.toApiModel(): EventAttendee =
         name = name,
         profilePicture = profile_picture,
         status = status,
+        isCreator = is_creator != 0L,
     )
