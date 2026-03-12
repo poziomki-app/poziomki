@@ -14,8 +14,8 @@
     <ID>CyclomaticComplexMethod:ChatContent.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChatContent( state: ChatUiState, timelineListState: LazyListState, onDraftChanged: (String) -&gt; Unit, onSendMessage: () -&gt; Unit, onSendImageAttachment: (ByteArray) -&gt; Unit, onSendFileAttachment: (PickedFile) -&gt; Unit, onToggleReaction: (String, String) -&gt; Unit, onMarkAsRead: () -&gt; Unit, onViewportChanged: (Int?) -&gt; Unit, onJumpToLatest: () -&gt; Unit, onStartReply: (MatrixTimelineItem.Event) -&gt; Unit, onStartEdit: (MatrixTimelineItem.Event) -&gt; Unit, onCancelComposerMode: () -&gt; Unit, onRedactEvent: (String) -&gt; Unit, onClearError: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, resolveDisplayNames: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, resolveAvatarUrls: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, showSenderMeta: Boolean = !state.isDirectRoom, modifier: Modifier = Modifier, avatarOverrides: Map&lt;String, String&gt; = emptyMap(), avatarOverridesByName: Map&lt;String, String&gt; = emptyMap(), headerContent: (@Composable () -&gt; Unit)? = null, )</ID>
     <ID>CyclomaticComplexMethod:ChatViewModel.kt$ChatViewModel$private suspend fun bindRoom( roomId: String, fallbackDisplayName: String?, fallbackDirectUserId: String?, )</ID>
     <ID>CyclomaticComplexMethod:EventChatScreen.kt$@Composable fun EventChatScreen( onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, eventDetailViewModel: EventDetailViewModel = koinViewModel(), chatViewModel: ChatViewModel = koinViewModel(), )</ID>
-    <ID>CyclomaticComplexMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
-    <ID>CyclomaticComplexMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
+    <ID>CyclomaticComplexMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
+    <ID>CyclomaticComplexMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
     <ID>CyclomaticComplexMethod:ExploreScreen.kt$@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class) @Composable fun ExploreScreen( onNavigateToProfile: (String) -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit = {}, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: ExploreViewModel = koinViewModel(), )</ID>
     <ID>CyclomaticComplexMethod:MessageEventRow.kt$@Composable internal fun MessageEventRow( event: MatrixTimelineItem.Event, groupedWithPrevious: Boolean, showSenderMeta: Boolean, onToggleReaction: (String) -&gt; Unit, onReactionsClick: () -&gt; Unit, onFocusOnReply: () -&gt; Unit, onSenderClick: () -&gt; Unit, onActionsLongPress: () -&gt; Unit, onSwipeReply: () -&gt; Unit, compactTimestamp: Boolean = false, avatarOverride: String? = null, )</ID>
     <ID>CyclomaticComplexMethod:NearbyEventsContent.kt$@Composable internal fun NearbyEventsContent( events: List&lt;Event&gt;, selectedEventId: String?, userLat: Double?, userLng: Double?, isPermissionDenied: Boolean, isLocationUnavailable: Boolean, onEventSelected: (String) -&gt; Unit, onEventClick: (String) -&gt; Unit, onRequestPermission: () -&gt; Unit = {}, )</ID>
@@ -31,7 +31,9 @@
     <ID>Indentation:EventChatHeader.kt$ </ID>
     <ID>Indentation:EventChatStateViews.kt$ </ID>
     <ID>Indentation:EventCreateScreen.kt$ </ID>
+    <ID>Indentation:EventCreateViewModel.kt$EventCreateViewModel$ </ID>
     <ID>Indentation:EventDetailScreen.kt$ </ID>
+    <ID>Indentation:EventDetailViewModel.kt$EventDetailViewModel$ </ID>
     <ID>Indentation:EventsScreen.kt$ </ID>
     <ID>Indentation:EventsViewModel.kt$EventsViewModel$ </ID>
     <ID>Indentation:ExploreScreen.kt$ </ID>
@@ -79,12 +81,13 @@
     <ID>LongMethod:ChatContent.kt$@Suppress("DEPRECATION") @OptIn(ExperimentalMaterial3Api::class) @Composable private fun ReactionBreakdownSheet( reactions: List&lt;MatrixReaction&gt;, senderDisplayNames: Map&lt;String, String&gt;, senderAvatarUrls: Map&lt;String, String&gt;, avatarOverrides: Map&lt;String, String&gt;, avatarOverridesByName: Map&lt;String, String&gt;, onDismiss: () -&gt; Unit, )</ID>
     <ID>LongMethod:ChatViewModel.kt$ChatViewModel$private suspend fun bindRoom( roomId: String, fallbackDisplayName: String?, fallbackDirectUserId: String?, )</ID>
     <ID>LongMethod:EventChatScreen.kt$@Composable fun EventChatScreen( onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, eventDetailViewModel: EventDetailViewModel = koinViewModel(), chatViewModel: ChatViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
-    <ID>LongMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, )</ID>
+    <ID>LongMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
+    <ID>LongMethod:EventCreateViewModel.kt$EventCreateViewModel$private fun setupDebouncedSearch()</ID>
+    <ID>LongMethod:EventDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventDetailScreen( onBack: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: EventDetailViewModel = koinViewModel(), )</ID>
+    <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, onToggleSaved: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun EventRow( event: Event, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun WeekEventsContent( events: List&lt;Event&gt;, onEventClick: (String) -&gt; Unit, )</ID>
-    <ID>LongMethod:EventsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventsScreen( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: EventsViewModel = koinViewModel(), )</ID>
+    <ID>LongMethod:EventsScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun EventsScreen( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: EventsViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ExploreScreen.kt$@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class) @Composable fun ExploreScreen( onNavigateToProfile: (String) -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit = {}, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: ExploreViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:LocationPickerSheet.kt$@Composable fun LocationPickerSheet( onDismiss: () -&gt; Unit, onLocationSelected: (name: String, lat: Double, lng: Double) -&gt; Unit, initialLocation: String = "", initialLat: Double? = null, initialLng: Double? = null, )</ID>
     <ID>LongMethod:LoginScreen.kt$@Composable fun LoginScreen( onNavigateToRegister: () -&gt; Unit, onLoginSuccess: () -&gt; Unit, onNeedsVerification: (String) -&gt; Unit, onNeedsOnboarding: () -&gt; Unit, prefillEmail: String? = null, viewModel: AuthViewModel = koinViewModel(), )</ID>
@@ -140,6 +143,7 @@
     <ID>MaximumLineLength:EventChatScreen.kt$ </ID>
     <ID>MaximumLineLength:EventCreateScreen.kt$ </ID>
     <ID>MaximumLineLength:EventCreateViewModel.kt$EventCreateViewModel$ </ID>
+    <ID>MaximumLineLength:EventsViewModel.kt$EventsViewModel$ </ID>
     <ID>MaximumLineLength:ExploreScreen.kt$ </ID>
     <ID>MaximumLineLength:ImagePicker.android.kt$actual</ID>
     <ID>MaximumLineLength:LocationPickerSheet.kt$ </ID>

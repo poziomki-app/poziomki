@@ -26,6 +26,7 @@
     <ID>CyclomaticComplexMethod:ChatTimeline.kt$private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem?</ID>
     <ID>CyclomaticComplexMethod:ChatTimeline.kt$private fun timelineContentToText(content: TimelineItemContent): String</ID>
     <ID>CyclomaticComplexMethod:ProfileRepository.kt$ProfileRepository$suspend fun updateProfile( id: String, request: UpdateProfileRequest, ): ApiResult&lt;Profile&gt;</ID>
+    <ID>CyclomaticComplexMethod:EventMutationRepository.kt$EventMutationRepository$suspend fun updateEvent( id: String, request: UpdateEventRequest, ): ApiResult&lt;Event&gt;</ID>
     <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun ensureStarted(): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun getJoinedRoom(roomId: String): JoinedRoom?</ID>
     <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$private suspend fun publishOpenedRoomSummary(room: Room)</ID>
@@ -33,11 +34,13 @@
     <ID>Indentation:ChatTimeline.kt$ </ID>
     <ID>Indentation:ChatTimeline.kt$ChatTimeline$ </ID>
     <ID>Indentation:EventMapper.kt$ </ID>
+    <ID>Indentation:EventMutationRepository.kt$EventMutationRepository$ </ID>
     <ID>Indentation:JoinedRustRoom.kt$JoinedRustRoom$ </ID>
     <ID>Indentation:ProfileRepository.kt$ProfileRepository$ </ID>
     <ID>Indentation:RustMatrixClient.kt$RustMatrixClient$ </ID>
     <ID>Indentation:SyncEngine.kt$SyncEngine$ </ID>
     <ID>LargeClass:RustMatrixClient.kt$RustMatrixClient : MatrixClient</ID>
+    <ID>LongMethod:EventMutationRepository.kt$EventMutationRepository$suspend fun createEvent(request: CreateEventRequest): ApiResult&lt;Event&gt;</ID>
     <ID>LongMethod:ChatTimeline.kt$private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem?</ID>
     <ID>LongMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun getJoinedRoom(roomId: String): JoinedRoom?</ID>
     <ID>LongMethod:RustMatrixClient.kt$RustMatrixClient$private suspend fun publishOpenedRoomSummary(room: Room)</ID>
@@ -58,6 +61,7 @@
     <ID>TooGenericExceptionCaught:ApiClient.kt$ApiClient$e: Exception</ID>
     <ID>TooManyFunctions:ApiService.kt$ApiService</ID>
     <ID>TooManyFunctions:ChatTimeline.kt$ChatTimeline : Timeline</ID>
+    <ID>TooManyFunctions:EventMutationRepository.kt$EventMutationRepository</ID>
     <ID>TooManyFunctions:EventRepository.kt$EventRepository</ID>
     <ID>TooManyFunctions:MatrixClient.kt$MatrixClient</ID>
     <ID>TooManyFunctions:NoopMatrixClient.kt$NoopMatrixClient : MatrixClient</ID>
