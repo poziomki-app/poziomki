@@ -41,6 +41,7 @@ class CacheManager(
                 db.userSettingsQueries.deleteAll()
                 db.roomPreviewQueries.deleteAll()
                 db.roomTimelineCacheQueries.deleteAll()
+                db.cacheStateQueries.deleteAll()
             }
         }
     }

@@ -274,6 +274,7 @@ class ProfileRepository(
                     scope = tag.scope,
                     category = tag.category,
                     emoji = tag.emoji,
+                    parent_id = tag.parentId,
                 )
                 db.profileTagQueries.insertTag(profileId, tag.id)
             }

@@ -9,6 +9,7 @@ fun Tag.toDbParams(): List<Any?> =
         scope,
         category,
         emoji,
+        parentId,
     )
 
 fun com.poziomki.app.db.Tag.toApiModel(): Tag =
@@ -18,4 +19,5 @@ fun com.poziomki.app.db.Tag.toApiModel(): Tag =
         scope = scope,
         category = category,
         emoji = emoji,
+        parentId = parent_id,
     )
