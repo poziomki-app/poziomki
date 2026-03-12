@@ -100,9 +100,7 @@ where
             };
 
             let entry = affinity.entry(node_id).or_insert(0.0);
-            *entry = source_weight
-                .mul_add(ancestor_weight, *entry)
-                .clamp(0.0, 1.0);
+            *entry = source_weight.mul_add(ancestor_weight, *entry);
 
             current = tag_parent_map.get(&node_id).copied().flatten();
             depth += 1;

@@ -189,14 +189,14 @@ fun EventDetailScreen(
                                             onClick = { showLeaveDialog = true },
                                             modifier = Modifier.weight(1f),
                                         ) {
-                                            Text("Leave")
+                                            Text("Opuść")
                                         }
                                     } else {
                                         Button(
                                             onClick = { viewModel.attendEvent() },
                                             modifier = Modifier.weight(1f),
                                         ) {
-                                            Text("Attend")
+                                            Text("Dołącz")
                                         }
                                     }
                                 }
@@ -236,7 +236,7 @@ fun EventDetailScreen(
                                 if (state.attendees.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
                                     Text(
-                                        text = "Attendees (${state.attendees.size})",
+                                        text = "Uczestnicy (${state.attendees.size})",
                                         style = MaterialTheme.typography.titleMedium,
                                     )
                                     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
