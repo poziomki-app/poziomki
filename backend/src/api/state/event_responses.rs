@@ -30,6 +30,10 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) tags: Vec<EventTagResponse>,
     #[serde(rename = "isAttending")]
     pub(in crate::api) is_attending: bool,
+    #[serde(rename = "isPending")]
+    pub(in crate::api) is_pending: bool,
+    #[serde(rename = "requiresApproval")]
+    pub(in crate::api) requires_approval: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -50,6 +50,7 @@ diesel::table! {
         longitude -> Nullable<Float8>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        requires_approval -> Bool,
     }
 }
 

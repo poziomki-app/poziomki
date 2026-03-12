@@ -168,6 +168,8 @@ data class Event(
     val createdAt: String? = null,
     val attendeesCount: Int = 0,
     val isAttending: Boolean = false,
+    val isPending: Boolean = false,
+    val requiresApproval: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val conversationId: String? = null,
@@ -184,6 +186,7 @@ data class CreateEventRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val tagIds: List<String> = emptyList(),
+    val requiresApproval: Boolean? = null,
 )
 
 @Serializable
@@ -196,6 +199,7 @@ data class UpdateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val requiresApproval: Boolean? = null,
 )
 
 @Serializable

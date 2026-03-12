@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
@@ -13,6 +14,7 @@ import com.poziomki.app.ui.navigation.Route
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 data class EventDetailState(
@@ -21,6 +23,7 @@ data class EventDetailState(
     val isLoading: Boolean = false,
     val isOpeningChat: Boolean = false,
     val isUpdatingAttendance: Boolean = false,
+    val isCreator: Boolean = false,
     val error: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
@@ -29,6 +32,7 @@ data class EventDetailState(
 class EventDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val eventRepository: EventRepository,
+    private val profileRepository: ProfileRepository,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Route.EventDetail>()
     private val eventId = route.id
@@ -45,7 +49,9 @@ class EventDetailViewModel(
     private fun observeEvent() {
         viewModelScope.launch {
             eventRepository.observeEvent(eventId).collect { event ->
-                _state.value = _state.value.copy(event = event, isLoading = false)
+                val ownProfileId = profileRepository.observeOwnProfile().firstOrNull()?.id
+                val isCreator = event?.creatorId != null && event.creatorId == ownProfileId
+                _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
             }
         }
     }
@@ -109,6 +115,41 @@ class EventDetailViewModel(
                 }
             }
             _state.value = _state.value.copy(isUpdatingAttendance = false)
+        }
+    }
+
+    fun approveAttendee(profileId: String) {
+        viewModelScope.launch {
+            when (eventRepository.approveAttendee(eventId, profileId)) {
+                is ApiResult.Success -> {
+                    eventRepository.refreshAttendees(eventId)
+                    eventRepository.refreshEvent(eventId, forceRefresh = true)
+                }
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 zaakceptowa\u0107 uczestnika",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
+        }
+    }
+
+    fun rejectAttendee(profileId: String) {
+        viewModelScope.launch {
+            when (eventRepository.rejectAttendee(eventId, profileId)) {
+                is ApiResult.Success -> {
+                    eventRepository.refreshAttendees(eventId)
+                }
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie uda\u0142o si\u0119 odrzuci\u0107 uczestnika",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
         }
     }
 

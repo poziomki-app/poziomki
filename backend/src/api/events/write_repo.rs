@@ -52,3 +52,18 @@ pub(in crate::api) async fn delete_event_attendee(
     .await?;
     Ok(())
 }
+
+pub(in crate::api) async fn find_attendee_status(
+    event_id: Uuid,
+    profile_id: Uuid,
+) -> std::result::Result<Option<String>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let status = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::profile_id.eq(profile_id))
+        .select(event_attendees::status)
+        .first::<String>(&mut conn)
+        .await
+        .optional()?;
+    Ok(status)
+}

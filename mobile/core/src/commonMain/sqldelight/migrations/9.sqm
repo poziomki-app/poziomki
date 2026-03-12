@@ -1,0 +1,56 @@
+-- Drop age from profile and matched_profile tables, drop privacy_show_age from user_settings
+-- SQLDelight requires recreating tables for column removal
+
+CREATE TABLE profile_new (
+    id TEXT NOT NULL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    bio TEXT,
+    profile_picture TEXT,
+    thumbhash TEXT,
+    images_json TEXT,
+    program TEXT,
+    gradient_start TEXT,
+    gradient_end TEXT,
+    is_own INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT,
+    updated_at TEXT,
+    cached_at INTEGER NOT NULL DEFAULT 0,
+    is_dirty INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO profile_new SELECT id, user_id, name, bio, profile_picture, thumbhash, images_json, program, gradient_start, gradient_end, is_own, created_at, updated_at, cached_at, is_dirty FROM profile;
+DROP TABLE profile;
+ALTER TABLE profile_new RENAME TO profile;
+
+CREATE TABLE matched_profile_new (
+    id TEXT NOT NULL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    bio TEXT,
+    profile_picture TEXT,
+    thumbhash TEXT,
+    images_json TEXT,
+    program TEXT,
+    gradient_start TEXT,
+    gradient_end TEXT,
+    tags_json TEXT,
+    score REAL NOT NULL DEFAULT 0.0,
+    cached_at INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO matched_profile_new SELECT id, user_id, name, bio, profile_picture, thumbhash, images_json, program, gradient_start, gradient_end, tags_json, score, cached_at FROM matched_profile;
+DROP TABLE matched_profile;
+ALTER TABLE matched_profile_new RENAME TO matched_profile;
+
+CREATE TABLE user_settings_new (
+    user_id TEXT NOT NULL PRIMARY KEY,
+    theme TEXT NOT NULL DEFAULT 'system',
+    language TEXT NOT NULL DEFAULT 'system',
+    notifications_enabled INTEGER NOT NULL DEFAULT 1,
+    privacy_show_program INTEGER NOT NULL DEFAULT 1,
+    privacy_discoverable INTEGER NOT NULL DEFAULT 1,
+    cached_at INTEGER NOT NULL DEFAULT 0,
+    is_dirty INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO user_settings_new SELECT user_id, theme, language, notifications_enabled, privacy_show_program, privacy_discoverable, cached_at, is_dirty FROM user_settings;
+DROP TABLE user_settings;
+ALTER TABLE user_settings_new RENAME TO user_settings;

@@ -508,6 +508,29 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            // Requires approval toggle
+            SectionLabel("wymagaj akceptacji")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "nowi uczestnicy muszą zostać zaakceptowani",
+                    fontFamily = NunitoFamily,
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.Switch(
+                    checked = state.requiresApproval,
+                    onCheckedChange = viewModel::updateRequiresApproval,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Help text
             Text(
                 text = "Po utworzeniu możesz zaprosić ludzi, udostępniając link do czatu wydarzenia.",
