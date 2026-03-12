@@ -9,7 +9,7 @@ use super::events_tags_repo::{
     sync_event_tags_with_conn,
 };
 
-const MAX_EVENT_TAGS: usize = 50;
+const MAX_EVENT_TAGS: usize = 15;
 
 pub(in crate::api) async fn resolve_event_tag_ids(
     headers: &HeaderMap,
@@ -56,7 +56,11 @@ pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
     }
 
     let mut resolved = Vec::new();
-    for raw in tag_names.unwrap_or_default().into_iter().take(MAX_EVENT_TAGS) {
+    for raw in tag_names
+        .unwrap_or_default()
+        .into_iter()
+        .take(MAX_EVENT_TAGS)
+    {
         let trimmed = raw.trim().to_string();
         if trimmed.is_empty() {
             continue;
