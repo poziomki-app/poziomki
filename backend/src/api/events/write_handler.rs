@@ -125,7 +125,7 @@ pub(in crate::api) async fn event_create(
                 if !tag_ids.is_empty() {
                     sync_event_tags_with_conn(conn, event_id, &tag_ids).await?;
                 }
-                upsert_attendee_with_conn(conn, event_id, profile_id, "going").await?;
+                upsert_attendee_with_conn(conn, event_id, profile_id, ATTENDEE_GOING).await?;
                 upsert_event_interaction_with_conn(
                     conn,
                     profile_id,
@@ -234,14 +234,18 @@ async fn load_event_with_profile(
     Ok((event, event_uuid, profile))
 }
 
+const ATTENDEE_GOING: &str = "going";
+const ATTENDEE_INTERESTED: &str = "interested";
+const ATTENDEE_INVITED: &str = "invited";
+
 fn resolve_attend_status(payload: Option<Json<AttendEventBody>>) -> &'static str {
     match payload
         .and_then(|Json(body)| body.status)
         .unwrap_or(AttendeeStatus::Going)
     {
-        AttendeeStatus::Going => "going",
-        AttendeeStatus::Interested => "interested",
-        AttendeeStatus::Invited => "invited",
+        AttendeeStatus::Going => ATTENDEE_GOING,
+        AttendeeStatus::Interested => ATTENDEE_INTERESTED,
+        AttendeeStatus::Invited => ATTENDEE_INVITED,
     }
 }
 
@@ -259,7 +263,7 @@ pub(in crate::api) async fn event_attend(
     let status_str = resolve_attend_status(payload);
 
     upsert_attendee(event_uuid, profile.id, status_str).await?;
-    if status_str == "going" {
+    if status_str == ATTENDEE_GOING {
         upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
     } else {
         delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
