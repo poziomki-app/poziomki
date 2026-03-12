@@ -150,9 +150,9 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) {
     };
     let mailer = build_smtp_mailer(&settings, tls_params);
 
-    let result = mailer.send(email).await;
-    match result {
-        Ok(_response) => tracing::info!("OTP email sent to {to}"),
-        Err(error) => tracing::error!("Failed to send OTP email to {to}: {error}"),
+    if let Err(error) = mailer.send(email).await {
+        tracing::error!("Failed to send OTP email to {to}: {error}");
+    } else {
+        tracing::info!("OTP email sent to {to}");
     }
 }

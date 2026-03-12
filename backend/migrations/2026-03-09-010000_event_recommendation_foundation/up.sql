@@ -19,6 +19,7 @@ CREATE INDEX idx_event_interactions_event_id ON event_interactions (event_id);
 INSERT INTO event_interactions (profile_id, event_id, kind)
 SELECT ea.profile_id, ea.event_id, 'joined'
 FROM event_attendees ea
+WHERE ea.status = 'going'
 ON CONFLICT (profile_id, event_id, kind) DO NOTHING;
 
 INSERT INTO tags (id, name, scope, category, parent_id) VALUES

@@ -319,6 +319,7 @@ pub(in crate::api) async fn event_leave(
     };
 
     events_write_repo::delete_event_attendee(event_uuid, profile.id).await?;
+    delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
 
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, true).await {
         tracing::warn!(

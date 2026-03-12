@@ -41,16 +41,11 @@ fn bounded_limit(limit: Option<u8>) -> i64 {
 }
 
 fn build_or_tsquery(search: &str) -> String {
-    let tokens = search
+    search
         .split(|c: char| !c.is_alphanumeric())
         .filter(|token| token.chars().count() >= 2)
-        .collect::<Vec<_>>();
-
-    if tokens.is_empty() {
-        search.to_string()
-    } else {
-        tokens.join(" | ")
-    }
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 fn str_to_scope(s: &str) -> TagScope {
@@ -334,7 +329,7 @@ pub(super) async fn tags_suggestions(
         WHERE
             t.scope = $2
             AND (
-                t.search_vector @@ to_tsquery('simple', $1)
+                ($1 != '' AND t.search_vector @@ to_tsquery('simple', $1))
                 OR LOWER(t.name) LIKE $3
             )
         ORDER BY score DESC, t.name ASC

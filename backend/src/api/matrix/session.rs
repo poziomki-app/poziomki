@@ -2,7 +2,6 @@ use std::time::Duration;
 
 type Result<T> = crate::error::AppResult<T>;
 
-use crate::api::auth_or_respond;
 use crate::app::AppContext;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, Json};
@@ -10,6 +9,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use super::{chat_bootstrap_error, matrix_service, MatrixSessionRequest};
+use crate::api::auth_or_respond;
 use crate::db::models::profiles::Profile;
 use crate::db::schema::profiles;
 
@@ -114,8 +114,7 @@ async fn do_create_session(
     }
 
     if let Some(pic_filename) = req.profile_picture_filename {
-        let avatar_result = sync_matrix_avatar(&client, &matrix_auth.user_id, pic_filename).await;
-        if let Err(error) = avatar_result {
+        if let Err(error) = sync_matrix_avatar(&client, &matrix_auth.user_id, pic_filename).await {
             tracing::warn!(error = %error, "failed to set matrix avatar");
         }
     }
@@ -143,8 +142,7 @@ pub(super) async fn sync_profile_avatar_best_effort(
     profile_picture_filename: Option<&str>,
 ) {
     if let Some(pic_filename) = profile_picture_filename {
-        let result = try_sync_profile_avatar(user_pid, pic_filename).await;
-        if let Err(error) = result {
+        if let Err(error) = try_sync_profile_avatar(user_pid, pic_filename).await {
             tracing::warn!(%error, "failed to sync matrix avatar after profile update");
         }
     }
