@@ -25,6 +25,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) creator: ProfilePreview,
     #[serde(rename = "attendeesCount")]
     pub(in crate::api) attendees_count: usize,
+    #[serde(rename = "maxAttendees")]
+    pub(in crate::api) max_attendees: Option<i32>,
     #[serde(rename = "attendeesPreview")]
     pub(in crate::api) attendees_preview: Vec<ProfilePreview>,
     pub(in crate::api) tags: Vec<EventTagResponse>,

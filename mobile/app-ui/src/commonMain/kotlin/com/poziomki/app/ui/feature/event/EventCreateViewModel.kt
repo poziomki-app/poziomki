@@ -20,6 +20,8 @@ data class EventCreateState(
     val location: String = "",
     val startsAt: String = "",
     val endsAt: String = "",
+    val attendeeLimit: String = "",
+    val attendeeLimitError: String? = null,
     val coverImageUrl: String? = null,
     val coverImageBytes: ByteArray? = null,
     val isUploadingCover: Boolean = false,
@@ -72,6 +74,18 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(endsAt = endsAt)
     }
 
+    fun updateAttendeeLimit(attendeeLimit: String) {
+        val normalized = attendeeLimit.filter(Char::isDigit).take(5)
+        val error =
+            when {
+                normalized.isBlank() -> null
+                normalized.toIntOrNull() == null -> "Podaj poprawny limit"
+                normalized.toInt() <= 0 -> "Limit musi być większy od 0"
+                else -> null
+            }
+        _state.value = _state.value.copy(attendeeLimit = normalized, attendeeLimitError = error)
+    }
+
     fun uploadCoverImage(bytes: ByteArray) {
         _state.value = _state.value.copy(coverImageBytes = bytes, isUploadingCover = true)
         viewModelScope.launch {
@@ -111,6 +125,8 @@ class EventCreateViewModel(
                         description = event.description ?: "",
                         location = event.location ?: "",
                         startsAt = event.startsAt,
+                        endsAt = event.endsAt ?: "",
+                        attendeeLimit = event.maxAttendees?.toString().orEmpty(),
                         coverImageUrl = event.coverImage,
                         latitude = event.latitude,
                         longitude = event.longitude,
@@ -126,6 +142,19 @@ class EventCreateViewModel(
     fun saveEvent(onSaved: () -> Unit) {
         val s = _state.value
         if (s.title.isBlank() || s.startsAt.isBlank()) return
+        val maxAttendees =
+            when {
+                s.attendeeLimit.isBlank() -> null
+                s.attendeeLimit.toIntOrNull() == null -> {
+                    _state.value = s.copy(attendeeLimitError = "Podaj poprawny limit")
+                    return
+                }
+                s.attendeeLimit.toInt() <= 0 -> {
+                    _state.value = s.copy(attendeeLimitError = "Limit musi być większy od 0")
+                    return
+                }
+                else -> s.attendeeLimit.toInt()
+            }
 
         viewModelScope.launch {
             _state.value = s.copy(isLoading = true, error = null)
@@ -141,6 +170,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        maxAttendees = maxAttendees,
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
                     is ApiResult.Success -> {
@@ -162,6 +192,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        maxAttendees = maxAttendees,
                     )
                 when (eventRepository.createEvent(request)) {
                     is ApiResult.Success -> {

@@ -2,6 +2,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
+use crate::db::models::event_attendees::EventAttendee;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
 use crate::db::schema::{event_attendees, events};
 
@@ -51,4 +52,31 @@ pub(in crate::api) async fn delete_event_attendee(
     .execute(&mut conn)
     .await?;
     Ok(())
+}
+
+pub(in crate::api) async fn count_going_attendees(
+    event_id: Uuid,
+) -> std::result::Result<i64, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let count = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::status.eq("going"))
+        .count()
+        .get_result::<i64>(&mut conn)
+        .await?;
+    Ok(count)
+}
+
+pub(in crate::api) async fn load_attendee(
+    event_id: Uuid,
+    profile_id: Uuid,
+) -> std::result::Result<Option<EventAttendee>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let attendee = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::profile_id.eq(profile_id))
+        .first::<EventAttendee>(&mut conn)
+        .await
+        .optional()?;
+    Ok(attendee)
 }

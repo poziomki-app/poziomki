@@ -167,6 +167,7 @@ data class Event(
     val creatorId: String? = null,
     val createdAt: String? = null,
     val attendeesCount: Int = 0,
+    val maxAttendees: Int? = null,
     val isAttending: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
@@ -183,6 +184,7 @@ data class CreateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val maxAttendees: Int? = null,
     val tagIds: List<String> = emptyList(),
 )
 
@@ -196,6 +198,7 @@ data class UpdateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val maxAttendees: Int? = null,
 )
 
 @Serializable

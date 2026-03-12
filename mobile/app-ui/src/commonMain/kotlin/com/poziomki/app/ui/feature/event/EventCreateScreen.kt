@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -420,6 +422,17 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            SectionLabel("limit uczestników (opcjonalnie)")
+            PoziomkiTextField(
+                value = state.attendeeLimit,
+                onValueChange = viewModel::updateAttendeeLimit,
+                placeholder = "np. 50",
+                error = state.attendeeLimitError,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Date and time row
             SectionLabel("start")
             Row(
@@ -538,7 +551,7 @@ fun EventCreateScreen(
                 text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
                 onClick = { viewModel.saveEvent(onCreated) },
                 variant = ButtonVariant.PRIMARY,
-                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank(),
+                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank() && state.attendeeLimitError == null,
                 loading = state.isLoading,
             )
 

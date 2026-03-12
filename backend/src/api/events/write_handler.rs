@@ -19,7 +19,10 @@ use crate::db::models::events::{Event, NewEvent};
 use crate::db::models::profiles::Profile;
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
-use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
+use super::events_service::{
+    forbidden, load_event, parse_create_dates, require_auth_profile, validate_max_attendees,
+    validation_error,
+};
 use super::events_tags_repo::{sync_event_tags, upsert_attendee};
 use super::events_tags_service::{maybe_sync_tags, resolve_event_tag_ids};
 use super::events_view::{build_event_response, created_event_response};
@@ -39,6 +42,8 @@ async fn event_create_validate(
 ) -> std::result::Result<ValidatedCreate, Box<Response>> {
     let (profile, _user_pid) = require_auth_profile(headers).await?;
     let (title, starts_at, ends_at) = parse_create_dates(headers, payload)?;
+    validate_max_attendees(payload.max_attendees)
+        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
     Ok(ValidatedCreate {
         profile,
         title,
@@ -62,6 +67,7 @@ fn build_create_event(validated: &ValidatedCreate, payload: &CreateEventBody) ->
         conversation_id: None,
         latitude: payload.latitude,
         longitude: payload.longitude,
+        max_attendees: payload.max_attendees,
         created_at: now,
         updated_at: now,
     };
@@ -183,6 +189,18 @@ pub(in crate::api) async fn event_attend(
     };
 
     let status_str = resolve_attend_status(payload);
+    let existing_attendee = events_write_repo::load_attendee(event_uuid, profile.id).await?;
+    let already_going = existing_attendee
+        .as_ref()
+        .is_some_and(|attendee| attendee.status == "going");
+    if status_str == "going" && !already_going {
+        if let Some(max_attendees) = event.max_attendees {
+            let current_going = events_write_repo::count_going_attendees(event_uuid).await?;
+            if current_going >= i64::from(max_attendees) {
+                return Ok(validation_error(&headers, "Event is full"));
+            }
+        }
+    }
 
     upsert_attendee(event_uuid, profile.id, status_str).await?;
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
