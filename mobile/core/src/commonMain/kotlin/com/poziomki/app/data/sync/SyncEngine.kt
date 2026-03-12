@@ -91,6 +91,14 @@ class SyncEngine(
                         processLeaveEvent(op)
                     }
 
+                    OperationType.SAVE_EVENT -> {
+                        processSaveEvent(op)
+                    }
+
+                    OperationType.UNSAVE_EVENT -> {
+                        processUnsaveEvent(op)
+                    }
+
                     OperationType.UPDATE_PROFILE -> {
                         processUpdateProfile(op)
                     }
@@ -257,6 +265,34 @@ class SyncEngine(
     private suspend fun processLeaveEvent(op: Pending_operation): Boolean {
         val entityId = op.entity_id ?: return true
         return when (api.leaveEvent(entityId)) {
+            is ApiResult.Success -> {
+                pendingOps.complete(op.id)
+                true
+            }
+
+            is ApiResult.Error -> {
+                false
+            }
+        }
+    }
+
+    private suspend fun processSaveEvent(op: Pending_operation): Boolean {
+        val entityId = op.entity_id ?: return true
+        return when (api.saveEvent(entityId)) {
+            is ApiResult.Success -> {
+                pendingOps.complete(op.id)
+                true
+            }
+
+            is ApiResult.Error -> {
+                false
+            }
+        }
+    }
+
+    private suspend fun processUnsaveEvent(op: Pending_operation): Boolean {
+        val entityId = op.entity_id ?: return true
+        return when (api.unsaveEvent(entityId)) {
             is ApiResult.Success -> {
                 pendingOps.complete(op.id)
                 true
