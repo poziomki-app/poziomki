@@ -8,6 +8,7 @@ import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.CreateEventRequest
 import com.poziomki.app.network.Event
+import com.poziomki.app.network.Tag
 import com.poziomki.app.network.UpdateEventRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,26 +38,33 @@ internal class EventMutationRepository(
     suspend fun createEvent(request: CreateEventRequest): ApiResult<Event> =
         withContext(Dispatchers.IO) {
             val tempId = "local_${Clock.System.now().toEpochMilliseconds()}"
+            val optimisticTags = loadTagsByIds(request.tagIds)
             val tempEvent =
                 Event(
                     id = tempId,
                     title = request.title,
                     description = request.description,
+                    coverImage = request.coverImage,
                     location = request.location,
                     latitude = request.latitude,
                     longitude = request.longitude,
                     startsAt = request.startsAt,
                     endsAt = request.endsAt,
+                    tags = optimisticTags,
                 )
             val now = Clock.System.now().toEpochMilliseconds()
-            upsertEvent(tempEvent, now, isDirty = true)
+            upsertEvent(tempEvent, now, isDirty = true, inListFeed = true)
 
             if (connectivityMonitor.isOnline.value) {
                 val onlineResult = withTimeoutOrNull(CREATE_EVENT_ONLINE_TIMEOUT_MS) { api.createEvent(request) }
                 when (onlineResult) {
                     is ApiResult.Success -> {
                         db.eventQueries.deleteById(tempId)
-                        upsertEvent(onlineResult.data, Clock.System.now().toEpochMilliseconds())
+                        upsertEvent(
+                            onlineResult.data,
+                            Clock.System.now().toEpochMilliseconds(),
+                            inListFeed = true,
+                        )
                         ApiResult.Success(onlineResult.data)
                     }
 
@@ -99,13 +107,18 @@ internal class EventMutationRepository(
     ): ApiResult<Event> =
         withContext(Dispatchers.IO) {
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
-            val cachedEvent = current?.toApiModel()
+            val optimisticEvent = current?.let { buildOptimisticEvent(it, request) }
             if (current != null) {
+                val optimisticTagsJson =
+                    request.tagIds
+                        ?.let(::loadTagsByIds)
+                        ?.let(json::encodeToString)
+                        ?: current.tags_json
                 db.eventQueries.upsert(
                     id = id,
                     title = request.title ?: current.title,
                     description = request.description ?: current.description,
-                    cover_image = current.cover_image,
+                    cover_image = request.coverImage ?: current.cover_image,
                     location = request.location ?: current.location,
                     latitude = request.latitude ?: current.latitude,
                     longitude = request.longitude ?: current.longitude,
@@ -116,10 +129,14 @@ internal class EventMutationRepository(
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
                     is_attending = current.is_attending,
+                    is_saved = current.is_saved,
                     attendees_preview_json = current.attendees_preview_json,
+                    tags_json = optimisticTagsJson,
                     created_at = current.created_at,
                     conversation_id = current.conversation_id,
+                    score = current.score,
                     cached_at = current.cached_at,
+                    in_list_feed = current.in_list_feed,
                     is_dirty = 1L,
                 )
             }
@@ -130,10 +147,10 @@ internal class EventMutationRepository(
                     entityId = id,
                     payload = json.encodeToString(request),
                 )
-                cachedEvent?.let { ApiResult.Success(it) }
+                optimisticEvent?.let { ApiResult.Success(it) }
                     ?: ApiResult.Error("Offline and no cached data", "OFFLINE", 0)
             } else {
-                updateEventOnline(id, request, cachedEvent)
+                updateEventOnline(id, request, optimisticEvent)
             }
         }
 
@@ -245,17 +262,65 @@ internal class EventMutationRepository(
             }
         }
 
+    suspend fun saveEvent(id: String): ApiResult<Unit> = toggleSaved(id, saved = true)
+
+    suspend fun unsaveEvent(id: String): ApiResult<Unit> = toggleSaved(id, saved = false)
+
+    private suspend fun toggleSaved(
+        id: String,
+        saved: Boolean,
+    ): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val previousSaved =
+                db.eventQueries
+                    .selectById(id)
+                    .executeAsOneOrNull()
+                    ?.is_saved ?: 0L
+            db.eventQueries.updateSaved(is_saved = if (saved) 1L else 0L, id = id)
+
+            if (connectivityMonitor.isOnline.value) {
+                val result = if (saved) api.saveEvent(id) else api.unsaveEvent(id)
+                when (result) {
+                    is ApiResult.Success -> {
+                        upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                        ApiResult.Success(Unit)
+                    }
+
+                    is ApiResult.Error -> {
+                        db.eventQueries.updateSaved(is_saved = previousSaved, id = id)
+                        if (shouldRetry(result.status)) {
+                            pendingOps.enqueue(
+                                if (saved) "save_event" else "unsave_event",
+                                id,
+                                "{}",
+                            )
+                            ApiResult.Success(Unit)
+                        } else {
+                            result
+                        }
+                    }
+                }
+            } else {
+                pendingOps.enqueue(if (saved) "save_event" else "unsave_event", id, "{}")
+                ApiResult.Success(Unit)
+            }
+        }
+
     fun upsertEvent(
         event: Event,
         cachedAt: Long,
         isDirty: Boolean = false,
+        inListFeed: Boolean? = null,
     ) {
-        val existingConversationId =
-            db.eventQueries
-                .selectById(event.id)
-                .executeAsOneOrNull()
-                ?.conversation_id
+        val existing = db.eventQueries.selectById(event.id).executeAsOneOrNull()
+        val existingConversationId = existing?.conversation_id
         val conversationId = event.conversationId ?: existingConversationId
+        val effectiveInListFeed =
+            when (inListFeed) {
+                true -> 1L
+                false -> if (existing?.in_list_feed == 1L) 1L else 0L
+                null -> existing?.in_list_feed ?: 1L
+            }
 
         db.eventQueries.upsert(
             id = event.id,
@@ -272,10 +337,14 @@ internal class EventMutationRepository(
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
             is_attending = if (event.isAttending) 1L else 0L,
+            is_saved = if (event.isSaved) 1L else 0L,
             attendees_preview_json = json.encodeToString(event.attendeesPreview),
+            tags_json = json.encodeToString(event.tags),
             created_at = event.createdAt,
             conversation_id = conversationId,
+            score = event.score,
             cached_at = cachedAt,
+            in_list_feed = effectiveInListFeed,
             is_dirty = if (isDirty) 1L else 0L,
         )
     }
@@ -289,7 +358,7 @@ internal class EventMutationRepository(
     private suspend fun updateEventOnline(
         id: String,
         request: UpdateEventRequest,
-        cachedEvent: Event?,
+        optimisticEvent: Event?,
     ): ApiResult<Event> =
         when (val result = api.updateEvent(id, request)) {
             is ApiResult.Success -> {
@@ -304,9 +373,36 @@ internal class EventMutationRepository(
                     entityId = id,
                     payload = json.encodeToString(request),
                 )
-                cachedEvent?.let { ApiResult.Success(it) } ?: result
+                optimisticEvent?.let { ApiResult.Success(it) } ?: result
             }
         }
+
+    private fun loadTagsByIds(tagIds: List<String>): List<Tag> =
+        tagIds.mapNotNull { tagId ->
+            db.tagQueries
+                .selectById(tagId)
+                .executeAsOneOrNull()
+                ?.toApiModel()
+        }
+
+    private fun buildOptimisticEvent(
+        current: com.poziomki.app.db.Event,
+        request: UpdateEventRequest,
+    ): Event {
+        val cached = current.toApiModel()
+        val optimisticTags = request.tagIds?.let(::loadTagsByIds) ?: cached.tags
+        return cached.copy(
+            title = request.title ?: cached.title,
+            description = request.description ?: cached.description,
+            coverImage = request.coverImage ?: cached.coverImage,
+            location = request.location ?: cached.location,
+            latitude = request.latitude ?: cached.latitude,
+            longitude = request.longitude ?: cached.longitude,
+            startsAt = request.startsAt ?: cached.startsAt,
+            endsAt = request.endsAt ?: cached.endsAt,
+            tags = optimisticTags,
+        )
+    }
 
     private fun restoreAttendance(
         id: String,
@@ -336,10 +432,14 @@ internal class EventMutationRepository(
             creator_profile_picture = event.creator_profile_picture,
             attendees_count = event.attendees_count,
             is_attending = event.is_attending,
+            is_saved = event.is_saved,
             attendees_preview_json = event.attendees_preview_json,
+            tags_json = event.tags_json,
             created_at = event.created_at,
             conversation_id = event.conversation_id,
+            score = event.score,
             cached_at = event.cached_at,
+            in_list_feed = event.in_list_feed,
             is_dirty = event.is_dirty,
         )
     }

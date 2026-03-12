@@ -3,7 +3,8 @@ CREATE TABLE tag (
     name TEXT NOT NULL,
     scope TEXT NOT NULL,
     category TEXT,
-    emoji TEXT
+    emoji TEXT,
+    parent_id TEXT
 );
 
 selectAll:
@@ -21,8 +22,8 @@ FROM tag
 WHERE id = ?;
 
 upsert:
-INSERT OR REPLACE INTO tag(id, name, scope, category, emoji)
-VALUES (?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO tag(id, name, scope, category, emoji, parent_id)
+VALUES (?, ?, ?, ?, ?, ?);
 
 deleteAll:
 DELETE FROM tag;
