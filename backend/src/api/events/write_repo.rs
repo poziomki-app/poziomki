@@ -38,6 +38,19 @@ pub(in crate::api) async fn delete_event(
     Ok(())
 }
 
+pub(in crate::api) async fn count_going_attendees(
+    event_id: Uuid,
+) -> std::result::Result<i64, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let count: i64 = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::status.eq("going"))
+        .count()
+        .get_result(&mut conn)
+        .await?;
+    Ok(count)
+}
+
 pub(in crate::api) async fn delete_event_attendee(
     event_id: Uuid,
     profile_id: Uuid,

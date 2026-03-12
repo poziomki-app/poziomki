@@ -20,6 +20,7 @@ pub struct Event {
     pub longitude: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub max_attendees: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]
@@ -38,6 +39,7 @@ pub struct NewEvent {
     pub longitude: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub max_attendees: Option<i32>,
 }
 
 #[derive(Debug, AsChangeset, Default)]
@@ -53,4 +55,5 @@ pub struct EventChangeset {
     pub latitude: Option<Option<f64>>,
     pub longitude: Option<Option<f64>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub max_attendees: Option<Option<i32>>,
 }

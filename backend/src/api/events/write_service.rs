@@ -8,7 +8,7 @@ use crate::db::models::profiles::Profile;
 
 use super::events_service::{
     self, forbidden, load_event, require_auth_profile, validate_event_description,
-    validate_event_location,
+    validate_event_location, validate_max_attendees,
 };
 
 type EventDates = (chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>);
@@ -37,6 +37,7 @@ fn validate_event_basic_fields(
     validate_event_description(payload.description.as_ref().and_then(|d| d.as_ref()))
         .map_err(val_err)?;
     validate_event_location(payload.location.as_ref().and_then(|l| l.as_ref())).map_err(val_err)?;
+    validate_max_attendees(payload.max_attendees.flatten()).map_err(val_err)?;
 
     Ok(())
 }
@@ -98,6 +99,9 @@ fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> Event
     }
     if let Some(lng) = &payload.longitude {
         changeset.longitude = Some(*lng);
+    }
+    if let Some(max) = &payload.max_attendees {
+        changeset.max_attendees = Some(*max);
     }
 
     let (new_starts, new_ends) = dates;

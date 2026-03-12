@@ -40,6 +40,8 @@ pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::api) tag_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::api) max_attendees: Option<i32>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -66,6 +68,8 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::api) tag_ids: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub(in crate::api) max_attendees: Option<Option<i32>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

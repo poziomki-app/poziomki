@@ -31,6 +31,7 @@ fun Event.toDbParams(): List<Any?> =
         0L,
         latitude,
         longitude,
+        maxAttendees?.toLong(),
     )
 
 fun com.poziomki.app.db.Event.toApiModel(): Event =
@@ -58,6 +59,7 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
             },
         attendeesPreview = parseAttendeesPreview(attendees_preview_json),
         conversationId = conversation_id,
+        maxAttendees = max_attendees?.toInt(),
     )
 
 private fun parseAttendeesPreview(jsonStr: String?): List<EventAttendeePreview> =

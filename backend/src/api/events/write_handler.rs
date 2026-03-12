@@ -19,7 +19,9 @@ use crate::db::models::events::{Event, NewEvent};
 use crate::db::models::profiles::Profile;
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
-use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
+use super::events_service::{
+    forbidden, load_event, parse_create_dates, require_auth_profile, validation_error,
+};
 use super::events_tags_repo::{sync_event_tags, upsert_attendee};
 use super::events_tags_service::{maybe_sync_tags, resolve_event_tag_ids};
 use super::events_view::{build_event_response, created_event_response};
@@ -64,6 +66,7 @@ fn build_create_event(validated: &ValidatedCreate, payload: &CreateEventBody) ->
         longitude: payload.longitude,
         created_at: now,
         updated_at: now,
+        max_attendees: payload.max_attendees,
     };
     (model, event_id)
 }
@@ -183,6 +186,15 @@ pub(in crate::api) async fn event_attend(
     };
 
     let status_str = resolve_attend_status(payload);
+
+    if status_str == "going" {
+        if let Some(max) = event.max_attendees {
+            let going = events_write_repo::count_going_attendees(event_uuid).await?;
+            if going >= i64::from(max) {
+                return Ok(validation_error(&headers, "Event is full"));
+            }
+        }
+    }
 
     upsert_attendee(event_uuid, profile.id, status_str).await?;
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
