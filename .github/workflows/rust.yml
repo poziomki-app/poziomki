@@ -4,12 +4,54 @@ on:
   pull_request:
     paths: [backend/**]
 
+concurrency:
+  group: rust-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 env:
   DATABASE_URL: postgres://poziomki:poziomki@localhost:5432/poziomki_test
   JWT_SECRET: ci-test-secret
+  GARAGE_S3_ENDPOINT: http://localhost:3900
+  GARAGE_S3_BUCKET: test-uploads
+  GARAGE_S3_ACCESS_KEY: GK000000000000000000000000
+  GARAGE_S3_SECRET_KEY: "0000000000000000000000000000000000000000000000000000000000000001"
+  GARAGE_S3_REGION: garage
 
 jobs:
-  check:
+  fmt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -38,13 +80,46 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
 
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Start Garage
+        working-directory: .
+        run: |
+          cat > /tmp/garage-ci.toml <<'TOML'
+          metadata_dir = "/var/lib/garage/meta"
+          data_dir = "/var/lib/garage/data"
+          db_engine = "sqlite"
+          replication_factor = 1
+          rpc_bind_addr = "[::]:3901"
+          rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+          [s3_api]
+          s3_region = "garage"
+          api_bind_addr = "[::]:3900"
+          [admin]
+          api_bind_addr = "[::]:3903"
+          admin_token = "ci"
+          TOML
+
+          docker run -d --name garage \
+            -e GARAGE_ALLOW_WORLD_READABLE_SECRETS=true \
+            -p 3900:3900 -p 3901:3901 -p 3903:3903 \
+            -v /tmp/garage-ci.toml:/etc/garage.toml:ro \
+            dxflrs/garage:v1.3.1
+
+          for i in $(seq 1 30); do
+            docker exec garage /garage status >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          NODE_ID=$(docker exec garage /garage status 2>/dev/null | grep -oP '^[0-9a-f]+')
+          docker exec garage /garage layout assign -z dc1 -c 1G "$NODE_ID"
+          docker exec garage /garage layout apply --version 1
+
+          docker exec garage /garage key import --yes -n ci-key GK000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000001
+          docker exec garage /garage bucket create test-uploads
+          docker exec garage /garage bucket allow --read --write --owner test-uploads --key ci-key
+
       - run: cargo test --all-targets
