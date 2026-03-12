@@ -29,6 +29,7 @@ pub(in crate::api) async fn find_or_create_event_tag(name: String) -> Option<Uui
         scope: "event".to_string(),
         category: None,
         emoji: None,
+        parent_id: None,
         onboarding_order: None,
         created_at: now,
         updated_at: now,
