@@ -150,17 +150,7 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) {
     };
     let mailer = build_smtp_mailer(&settings, tls_params);
 
-    let start = std::time::Instant::now();
     let result = mailer.send(email).await;
-    if let Some(m) = crate::metrics::metrics() {
-        m.latency_smtp.record(start.elapsed());
-        if result.is_ok() {
-            m.smtp_otp.inc_success();
-        } else {
-            m.smtp_otp.inc_failure();
-        }
-    }
-
     match result {
         Ok(_response) => tracing::info!("OTP email sent to {to}"),
         Err(error) => tracing::error!("Failed to send OTP email to {to}: {error}"),

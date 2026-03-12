@@ -26,15 +26,6 @@ pub(super) async fn upsert_event_interaction_with_conn(
 ) -> std::result::Result<(), crate::error::AppError> {
     let now = Utc::now();
 
-    diesel::delete(
-        event_interactions::table
-            .filter(event_interactions::profile_id.eq(profile_id))
-            .filter(event_interactions::event_id.eq(event_id))
-            .filter(event_interactions::kind.eq(kind)),
-    )
-    .execute(conn)
-    .await?;
-
     diesel::insert_into(event_interactions::table)
         .values(EventInteraction {
             profile_id,
@@ -43,6 +34,13 @@ pub(super) async fn upsert_event_interaction_with_conn(
             created_at: now,
             updated_at: now,
         })
+        .on_conflict((
+            event_interactions::profile_id,
+            event_interactions::event_id,
+            event_interactions::kind,
+        ))
+        .do_update()
+        .set(event_interactions::updated_at.eq(now))
         .execute(conn)
         .await?;
 

@@ -108,21 +108,15 @@ pub(in crate::api) async fn upsert_attendee_with_conn(
     profile_id: Uuid,
     status: &str,
 ) -> std::result::Result<(), crate::error::AppError> {
-    diesel::delete(
-        event_attendees::table
-            .filter(event_attendees::event_id.eq(event_uuid))
-            .filter(event_attendees::profile_id.eq(profile_id)),
-    )
-    .execute(conn)
-    .await?;
-
-    let attendee = EventAttendee {
-        event_id: event_uuid,
-        profile_id,
-        status: status.to_string(),
-    };
     diesel::insert_into(event_attendees::table)
-        .values(&attendee)
+        .values(EventAttendee {
+            event_id: event_uuid,
+            profile_id,
+            status: status.to_string(),
+        })
+        .on_conflict((event_attendees::event_id, event_attendees::profile_id))
+        .do_update()
+        .set(event_attendees::status.eq(status))
         .execute(conn)
         .await?;
 

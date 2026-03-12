@@ -263,90 +263,44 @@ internal class EventMutationRepository(
         }
 
     suspend fun saveEvent(id: String): ApiResult<Unit> =
-        withContext(Dispatchers.IO) {
-            val current = db.eventQueries.selectById(id).executeAsOneOrNull()
-            if (current != null && current.is_saved == 0L) {
-                db.eventQueries.upsert(
-                    id = current.id,
-                    title = current.title,
-                    description = current.description,
-                    cover_image = current.cover_image,
-                    location = current.location,
-                    latitude = current.latitude,
-                    longitude = current.longitude,
-                    starts_at = current.starts_at,
-                    ends_at = current.ends_at,
-                    creator_id = current.creator_id,
-                    creator_name = current.creator_name,
-                    creator_profile_picture = current.creator_profile_picture,
-                    attendees_count = current.attendees_count,
-                    is_attending = current.is_attending,
-                    is_saved = 1L,
-                    attendees_preview_json = current.attendees_preview_json,
-                    tags_json = current.tags_json,
-                    created_at = current.created_at,
-                    conversation_id = current.conversation_id,
-                    score = current.score,
-                    cached_at = current.cached_at,
-                    in_list_feed = current.in_list_feed,
-                    is_dirty = current.is_dirty,
-                )
-            }
-
-            when (val result = api.saveEvent(id)) {
-                is ApiResult.Success -> {
-                    upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
-                    ApiResult.Success(Unit)
-                }
-
-                is ApiResult.Error -> {
-                    current?.let(::restoreEvent)
-                    result
-                }
-            }
-        }
+        toggleSaved(id, saved = true)
 
     suspend fun unsaveEvent(id: String): ApiResult<Unit> =
+        toggleSaved(id, saved = false)
+
+    private suspend fun toggleSaved(
+        id: String,
+        saved: Boolean,
+    ): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
-            val current = db.eventQueries.selectById(id).executeAsOneOrNull()
-            if (current != null && current.is_saved != 0L) {
-                db.eventQueries.upsert(
-                    id = current.id,
-                    title = current.title,
-                    description = current.description,
-                    cover_image = current.cover_image,
-                    location = current.location,
-                    latitude = current.latitude,
-                    longitude = current.longitude,
-                    starts_at = current.starts_at,
-                    ends_at = current.ends_at,
-                    creator_id = current.creator_id,
-                    creator_name = current.creator_name,
-                    creator_profile_picture = current.creator_profile_picture,
-                    attendees_count = current.attendees_count,
-                    is_attending = current.is_attending,
-                    is_saved = 0L,
-                    attendees_preview_json = current.attendees_preview_json,
-                    tags_json = current.tags_json,
-                    created_at = current.created_at,
-                    conversation_id = current.conversation_id,
-                    score = current.score,
-                    cached_at = current.cached_at,
-                    in_list_feed = current.in_list_feed,
-                    is_dirty = current.is_dirty,
-                )
-            }
+            val previousSaved = db.eventQueries.selectById(id).executeAsOneOrNull()?.is_saved ?: 0L
+            db.eventQueries.updateSaved(is_saved = if (saved) 1L else 0L, id = id)
 
-            when (val result = api.unsaveEvent(id)) {
-                is ApiResult.Success -> {
-                    upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
-                    ApiResult.Success(Unit)
-                }
+            if (connectivityMonitor.isOnline.value) {
+                val result = if (saved) api.saveEvent(id) else api.unsaveEvent(id)
+                when (result) {
+                    is ApiResult.Success -> {
+                        upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
+                        ApiResult.Success(Unit)
+                    }
 
-                is ApiResult.Error -> {
-                    current?.let(::restoreEvent)
-                    result
+                    is ApiResult.Error -> {
+                        db.eventQueries.updateSaved(is_saved = previousSaved, id = id)
+                        if (shouldRetry(result.status)) {
+                            pendingOps.enqueue(
+                                if (saved) "save_event" else "unsave_event",
+                                id,
+                                "{}",
+                            )
+                            ApiResult.Success(Unit)
+                        } else {
+                            result
+                        }
+                    }
                 }
+            } else {
+                pendingOps.enqueue(if (saved) "save_event" else "unsave_event", id, "{}")
+                ApiResult.Success(Unit)
             }
         }
 
