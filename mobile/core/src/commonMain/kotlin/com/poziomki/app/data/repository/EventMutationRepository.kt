@@ -262,11 +262,9 @@ internal class EventMutationRepository(
             }
         }
 
-    suspend fun saveEvent(id: String): ApiResult<Unit> =
-        toggleSaved(id, saved = true)
+    suspend fun saveEvent(id: String): ApiResult<Unit> = toggleSaved(id, saved = true)
 
-    suspend fun unsaveEvent(id: String): ApiResult<Unit> =
-        toggleSaved(id, saved = false)
+    suspend fun unsaveEvent(id: String): ApiResult<Unit> = toggleSaved(id, saved = false)
 
     private suspend fun toggleSaved(
         id: String,
