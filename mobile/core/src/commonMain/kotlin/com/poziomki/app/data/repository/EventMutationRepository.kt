@@ -271,7 +271,11 @@ internal class EventMutationRepository(
         saved: Boolean,
     ): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
-            val previousSaved = db.eventQueries.selectById(id).executeAsOneOrNull()?.is_saved ?: 0L
+            val previousSaved =
+                db.eventQueries
+                    .selectById(id)
+                    .executeAsOneOrNull()
+                    ?.is_saved ?: 0L
             db.eventQueries.updateSaved(is_saved = if (saved) 1L else 0L, id = id)
 
             if (connectivityMonitor.isOnline.value) {

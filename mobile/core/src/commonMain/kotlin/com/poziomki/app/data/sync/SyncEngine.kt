@@ -80,14 +80,38 @@ class SyncEngine(
 
     private suspend fun executeOperation(op: Pending_operation): Boolean =
         when (op.type) {
-            OperationType.CREATE_EVENT -> processCreateEvent(op)
-            OperationType.UPDATE_EVENT -> processUpdateEvent(op)
-            OperationType.DELETE_EVENT -> processDeleteEvent(op)
-            OperationType.ATTEND_EVENT -> processAttendEvent(op)
-            OperationType.LEAVE_EVENT -> processLeaveEvent(op)
-            OperationType.SAVE_EVENT -> processSaveEvent(op)
-            OperationType.UNSAVE_EVENT -> processUnsaveEvent(op)
-            OperationType.UPDATE_PROFILE -> processUpdateProfile(op)
+            OperationType.CREATE_EVENT -> {
+                processCreateEvent(op)
+            }
+
+            OperationType.UPDATE_EVENT -> {
+                processUpdateEvent(op)
+            }
+
+            OperationType.DELETE_EVENT -> {
+                processDeleteEvent(op)
+            }
+
+            OperationType.ATTEND_EVENT -> {
+                processAttendEvent(op)
+            }
+
+            OperationType.LEAVE_EVENT -> {
+                processLeaveEvent(op)
+            }
+
+            OperationType.SAVE_EVENT -> {
+                processSaveEvent(op)
+            }
+
+            OperationType.UNSAVE_EVENT -> {
+                processUnsaveEvent(op)
+            }
+
+            OperationType.UPDATE_PROFILE -> {
+                processUpdateProfile(op)
+            }
+
             OperationType.UPDATE_SETTINGS -> {
                 pendingOps.complete(op.id)
                 true
@@ -133,9 +157,12 @@ class SyncEngine(
             is_saved = if (event.isSaved) 1L else 0L,
             attendees_preview_json =
                 json.encodeToString(
-                    kotlinx.serialization.builtins.ListSerializer(
-                        com.poziomki.app.network.EventAttendeePreview.serializer(),
-                    ),
+                    kotlinx.serialization.builtins
+                        .ListSerializer(
+                            com.poziomki.app.network
+                                .EventAttendeePreview
+                                .serializer(),
+                        ),
                     event.attendeesPreview,
                 ),
             tags_json = json.encodeToString(event.tags),
@@ -160,7 +187,9 @@ class SyncEngine(
                 true
             }
 
-            is ApiResult.Error -> false
+            is ApiResult.Error -> {
+                false
+            }
         }
     }
 
@@ -174,7 +203,9 @@ class SyncEngine(
                 true
             }
 
-            is ApiResult.Error -> false
+            is ApiResult.Error -> {
+                false
+            }
         }
     }
 
