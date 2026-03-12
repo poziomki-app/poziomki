@@ -147,25 +147,27 @@ class EventsViewModel(
                 }
             when (result) {
                 is ApiResult.Success -> {
-                    _state.value = _state.value.copy(
-                        recommendedEvents =
-                            _state.value.recommendedEvents.map { recommendedEvent ->
-                                if (recommendedEvent.id == event.id) {
-                                    recommendedEvent.copy(isSaved = updatedSaved)
-                                } else {
-                                    recommendedEvent
-                                }
-                            },
-                    )
+                    _state.value =
+                        _state.value.copy(
+                            recommendedEvents =
+                                _state.value.recommendedEvents.map { recommendedEvent ->
+                                    if (recommendedEvent.id == event.id) {
+                                        recommendedEvent.copy(isSaved = updatedSaved)
+                                    } else {
+                                        recommendedEvent
+                                    }
+                                },
+                        )
                     filterEvents()
                 }
 
                 is ApiResult.Error -> {
-                    val msg = if (event.isSaved) {
-                        "Nie udało się usunąć zapisu"
-                    } else {
-                        "Nie udało się zapisać wydarzenia"
-                    }
+                    val msg =
+                        if (event.isSaved) {
+                            "Nie udało się usunąć zapisu"
+                        } else {
+                            "Nie udało się zapisać wydarzenia"
+                        }
                     _state.value = _state.value.copy(refreshError = msg)
                 }
             }
