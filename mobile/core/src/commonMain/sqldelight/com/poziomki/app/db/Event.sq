@@ -48,6 +48,11 @@ UPDATE event
 SET is_attending = ?, attendees_count = ?, is_dirty = 1
 WHERE id = ?;
 
+updateSaved:
+UPDATE event
+SET is_saved = ?, is_dirty = 1
+WHERE id = ?;
+
 deleteById:
 DELETE FROM event
 WHERE id = ?;

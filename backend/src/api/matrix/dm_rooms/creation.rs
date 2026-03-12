@@ -24,29 +24,22 @@ pub(super) async fn create_dm_room(
         matrix_service::matrix_user_id_from_pid(&other_user_pid, &server_name);
     let invites = vec![target_matrix_user_id];
 
-    let result = bootstrap
+    bootstrap
         .client()
         .create_private_room(None, &invites, true)
-        .await;
-    if let Some(m) = crate::metrics::metrics() {
-        if result.is_ok() {
-            m.matrix_room_create.inc_success();
-        } else {
-            m.matrix_room_create.inc_failure();
-        }
-    }
-    result.map_err(|error| {
-        tracing::warn!(
-            status_code = error.status_code,
-            errcode = error.errcode,
-            message = error.message,
-            "failed to create Matrix DM room"
-        );
-        super::super::chat_bootstrap_error(
-            axum::http::StatusCode::BAD_GATEWAY,
-            headers,
-            "Messaging service is temporarily unavailable",
-            "CHAT_UNAVAILABLE",
-        )
-    })
+        .await
+        .map_err(|error| {
+            tracing::warn!(
+                status_code = error.status_code,
+                errcode = error.errcode,
+                message = error.message,
+                "failed to create Matrix DM room"
+            );
+            super::super::chat_bootstrap_error(
+                axum::http::StatusCode::BAD_GATEWAY,
+                headers,
+                "Messaging service is temporarily unavailable",
+                "CHAT_UNAVAILABLE",
+            )
+        })
 }

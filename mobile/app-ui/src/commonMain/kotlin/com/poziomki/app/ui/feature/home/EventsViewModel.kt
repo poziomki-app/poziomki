@@ -78,7 +78,8 @@ class EventsViewModel(
                 x.startsAt == y.startsAt &&
                 x.location == y.location &&
                 x.attendeesCount == y.attendeesCount &&
-                x.isAttending == y.isAttending
+                x.isAttending == y.isAttending &&
+                x.isSaved == y.isSaved
         }
     }
 
@@ -138,38 +139,20 @@ class EventsViewModel(
 
     fun toggleSaved(event: Event) {
         viewModelScope.launch {
-            val updatedSaved = !event.isSaved
             val result =
                 if (event.isSaved) {
                     eventRepository.unsaveEvent(event.id)
                 } else {
                     eventRepository.saveEvent(event.id)
                 }
-            when (result) {
-                is ApiResult.Success -> {
-                    _state.value =
-                        _state.value.copy(
-                            recommendedEvents =
-                                _state.value.recommendedEvents.map { recommendedEvent ->
-                                    if (recommendedEvent.id == event.id) {
-                                        recommendedEvent.copy(isSaved = updatedSaved)
-                                    } else {
-                                        recommendedEvent
-                                    }
-                                },
-                        )
-                    filterEvents()
-                }
-
-                is ApiResult.Error -> {
-                    val msg =
-                        if (event.isSaved) {
-                            "Nie udało się usunąć zapisu"
-                        } else {
-                            "Nie udało się zapisać wydarzenia"
-                        }
-                    _state.value = _state.value.copy(refreshError = msg)
-                }
+            if (result is ApiResult.Error) {
+                val msg =
+                    if (event.isSaved) {
+                        "Nie udało się usunąć zapisu"
+                    } else {
+                        "Nie udało się zapisać wydarzenia"
+                    }
+                _state.value = _state.value.copy(refreshError = msg)
             }
         }
     }

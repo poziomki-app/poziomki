@@ -141,21 +141,26 @@ pub(super) async fn events_recommendations(
 
     let saved_event_ids: Vec<Uuid> = user_ctx.saved_event_ids.iter().copied().collect();
     let joined_event_ids: Vec<Uuid> = user_ctx.joined_event_ids.iter().copied().collect();
-    let saved_event_tags = repo
-        .batch_load_event_tag_ids(&saved_event_ids, &mut conn)
-        .await?;
-    let joined_event_tags = repo
-        .batch_load_event_tag_ids(&joined_event_ids, &mut conn)
+    let mut all_history_ids = saved_event_ids.clone();
+    all_history_ids.extend(&joined_event_ids);
+    let all_history_tags = repo
+        .batch_load_event_tag_ids(&all_history_ids, &mut conn)
         .await?;
     let history_affinity = build_affinity_map(
-        saved_event_tags
-            .values()
-            .flat_map(|tag_ids| tag_ids.iter().copied().map(|tag_id| (tag_id, 1.0)))
-            .chain(
-                joined_event_tags
-                    .values()
-                    .flat_map(|tag_ids| tag_ids.iter().copied().map(|tag_id| (tag_id, 0.5))),
-            ),
+        saved_event_ids
+            .iter()
+            .flat_map(|id| {
+                all_history_tags
+                    .get(id)
+                    .into_iter()
+                    .flat_map(|tags| tags.iter().copied().map(|tag_id| (tag_id, 1.0)))
+            })
+            .chain(joined_event_ids.iter().flat_map(|id| {
+                all_history_tags
+                    .get(id)
+                    .into_iter()
+                    .flat_map(|tags| tags.iter().copied().map(|tag_id| (tag_id, 0.5)))
+            })),
         &tag_parent_map,
     );
 
@@ -192,14 +197,16 @@ pub(super) async fn events_recommendations(
     let base =
         super::events::build_event_responses_with_conn(&top_models, &my_profile_id, &mut conn)
             .await?;
-    let score_by_event: HashMap<String, f64> = top
+    let score_by_event: HashMap<Uuid, f64> = top
         .iter()
-        .map(|(score, event)| (event.id.to_string(), *score))
+        .map(|(score, event)| (event.id, *score))
         .collect();
     let data = base
         .into_iter()
         .map(|mut event| {
-            event.score = score_by_event.get(&event.id).copied();
+            event.score = Uuid::parse_str(&event.id)
+                .ok()
+                .and_then(|uuid| score_by_event.get(&uuid).copied());
             event
         })
         .collect::<Vec<_>>();
