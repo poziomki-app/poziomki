@@ -63,11 +63,9 @@ import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.bold.GearSix
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.ChatCircle
-import com.adamglin.phosphoricons.fill.UsersFour
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.adamglin.phosphoricons.regular.CalendarDots
 import com.adamglin.phosphoricons.regular.ChatCircle
-import com.adamglin.phosphoricons.regular.UsersFour
 import com.adamglin.phosphoricons.regular.UsersThree
 import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.data.repository.ChatRoomRepository
@@ -85,7 +83,6 @@ import com.poziomki.app.ui.feature.event.EventChatScreen
 import com.poziomki.app.ui.feature.event.EventCreateScreen
 import com.poziomki.app.ui.feature.home.EventsScreen
 import com.poziomki.app.ui.feature.home.ExploreScreen
-import com.poziomki.app.ui.feature.home.GroupsScreen
 import com.poziomki.app.ui.feature.home.MessagesScreen
 import com.poziomki.app.ui.feature.home.ProfileScreen
 import com.poziomki.app.ui.feature.home.ProfileViewModel
@@ -118,7 +115,6 @@ val bottomNavItems =
             PhosphorIcons.Fill.ChatCircle,
             Route.Messages,
         ),
-        BottomNavItem("Grupy", PhosphorIcons.Regular.UsersFour, PhosphorIcons.Fill.UsersFour, Route.Groups),
     )
 
 @Composable
@@ -464,11 +460,6 @@ fun MainScreen(
                                 onNavigateToPrivacy = onNavigateToPrivacy,
                                 onNavigateToProfileView = onNavigateToProfileView,
                                 onSignOut = onSignOut,
-                            )
-                        }
-                        composable<Route.Groups> {
-                            GroupsScreen(
-                                profileAvatarAction = profileAvatarAction,
                             )
                         }
                     }

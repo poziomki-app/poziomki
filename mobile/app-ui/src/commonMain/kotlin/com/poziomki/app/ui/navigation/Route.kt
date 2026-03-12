@@ -36,8 +36,6 @@ sealed interface Route {
 
     @Serializable data object ProfileTab : Route
 
-    @Serializable data object Groups : Route
-
     // Detail screens
     @Serializable data class EventDetail(
         val id: String,
