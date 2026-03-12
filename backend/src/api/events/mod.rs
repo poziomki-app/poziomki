@@ -1,3 +1,5 @@
+#[path = "interactions_repo.rs"]
+mod events_interactions_repo;
 #[path = "repo.rs"]
 mod events_repo;
 #[path = "service.rs"]
@@ -34,7 +36,7 @@ use events_view::attendee_info;
 
 pub(super) use events_view::{build_event_response, build_event_responses_with_conn};
 pub(super) use events_write_handler::{
-    event_attend, event_create, event_delete, event_leave, event_update,
+    event_attend, event_create, event_delete, event_leave, event_save, event_unsave, event_update,
 };
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
