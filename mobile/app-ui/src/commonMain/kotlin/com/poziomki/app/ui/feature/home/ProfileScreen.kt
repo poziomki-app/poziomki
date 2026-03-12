@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.CaretRight
-import com.adamglin.phosphoricons.bold.GearSix
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
 import com.adamglin.phosphoricons.bold.SignOut
@@ -123,12 +122,6 @@ fun ProfileScreen(
                                         icon = PhosphorIcons.Bold.Shield,
                                         label = "prywatność",
                                         onClick = onNavigateToPrivacy,
-                                    )
-                                    HorizontalDivider(color = Border, thickness = 1.dp)
-                                    SettingsMenuItem(
-                                        icon = PhosphorIcons.Bold.GearSix,
-                                        label = "ustawienia aplikacji",
-                                        onClick = {},
                                     )
                                 }
 
