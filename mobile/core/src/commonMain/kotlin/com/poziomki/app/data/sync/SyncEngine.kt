@@ -68,68 +68,47 @@ class SyncEngine(
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun processOperation(op: Pending_operation) {
-        try {
-            val success =
-                when (op.type) {
-                    OperationType.CREATE_EVENT -> {
-                        processCreateEvent(op)
-                    }
-
-                    OperationType.UPDATE_EVENT -> {
-                        processUpdateEvent(op)
-                    }
-
-                    OperationType.DELETE_EVENT -> {
-                        processDeleteEvent(op)
-                    }
-
-                    OperationType.ATTEND_EVENT -> {
-                        processAttendEvent(op)
-                    }
-
-                    OperationType.LEAVE_EVENT -> {
-                        processLeaveEvent(op)
-                    }
-
-                    OperationType.SAVE_EVENT -> {
-                        processSaveEvent(op)
-                    }
-
-                    OperationType.UNSAVE_EVENT -> {
-                        processUnsaveEvent(op)
-                    }
-
-                    OperationType.UPDATE_PROFILE -> {
-                        processUpdateProfile(op)
-                    }
-
-                    OperationType.UPDATE_SETTINGS -> {
-                        // Settings sync — requires backend endpoint
-                        pendingOps.complete(op.id)
-                        true
-                    }
-
-                    else -> {
-                        pendingOps.complete(op.id)
-                        true
-                    }
-                }
-
-            if (!success && op.retry_count < MAX_RETRIES) {
-                pendingOps.fail(op.id)
-                pendingOps.resetForRetry(op.id)
-                val delayIndex = minOf(op.retry_count.toInt(), BACKOFF_DELAYS.size - 1)
-                delay(BACKOFF_DELAYS[delayIndex])
-            } else if (!success) {
-                pendingOps.fail(op.id)
+        val success =
+            try {
+                executeOperation(op)
+            } catch (_: Exception) {
+                false
             }
-        } catch (_: Exception) {
-            if (op.retry_count < MAX_RETRIES) {
-                pendingOps.fail(op.id)
-                pendingOps.resetForRetry(op.id)
-            } else {
-                pendingOps.fail(op.id)
+        handleRetry(success, op)
+    }
+
+    private suspend fun executeOperation(op: Pending_operation): Boolean =
+        when (op.type) {
+            OperationType.CREATE_EVENT -> processCreateEvent(op)
+            OperationType.UPDATE_EVENT -> processUpdateEvent(op)
+            OperationType.DELETE_EVENT -> processDeleteEvent(op)
+            OperationType.ATTEND_EVENT -> processAttendEvent(op)
+            OperationType.LEAVE_EVENT -> processLeaveEvent(op)
+            OperationType.SAVE_EVENT -> processSaveEvent(op)
+            OperationType.UNSAVE_EVENT -> processUnsaveEvent(op)
+            OperationType.UPDATE_PROFILE -> processUpdateProfile(op)
+            OperationType.UPDATE_SETTINGS -> {
+                pendingOps.complete(op.id)
+                true
             }
+
+            else -> {
+                pendingOps.complete(op.id)
+                true
+            }
+        }
+
+    private suspend fun handleRetry(
+        success: Boolean,
+        op: Pending_operation,
+    ) {
+        if (!success && op.retry_count < MAX_RETRIES) {
+            pendingOps.fail(op.id)
+            pendingOps.resetForRetry(op.id)
+            val delayIndex = minOf(op.retry_count.toInt(), BACKOFF_DELAYS.size - 1)
+            delay(BACKOFF_DELAYS[delayIndex])
+        } else if (!success) {
+            pendingOps.fail(op.id)
         }
     }
 

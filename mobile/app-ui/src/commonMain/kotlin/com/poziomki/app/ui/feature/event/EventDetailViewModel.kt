@@ -61,7 +61,7 @@ class EventDetailViewModel(
 
     private fun refreshData() {
         viewModelScope.launch {
-            _state.value = EventDetailState(isLoading = true)
+            _state.value = _state.value.copy(isLoading = true)
             eventRepository.refreshEvent(eventId)
             eventRepository.refreshAttendees(eventId)
         }
