@@ -7,6 +7,7 @@ import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.CreateEventRequest
+import com.poziomki.app.network.Event
 import com.poziomki.app.network.UpdateEventRequest
 import com.poziomki.app.network.UpdateProfileRequest
 import kotlinx.coroutines.CoroutineScope
@@ -112,55 +113,54 @@ class SyncEngine(
         }
     }
 
+    private fun upsertServerEvent(event: Event) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        db.eventQueries.upsert(
+            id = event.id,
+            title = event.title,
+            description = event.description,
+            cover_image = event.coverImage,
+            location = event.location,
+            latitude = event.latitude,
+            longitude = event.longitude,
+            starts_at = event.startsAt,
+            ends_at = event.endsAt,
+            creator_id = event.creatorId,
+            creator_name = event.creator?.name,
+            creator_profile_picture = event.creator?.profilePicture,
+            attendees_count = event.attendeesCount.toLong(),
+            is_attending = if (event.isAttending) 1L else 0L,
+            is_saved = if (event.isSaved) 1L else 0L,
+            attendees_preview_json =
+                json.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(
+                        com.poziomki.app.network.EventAttendeePreview.serializer(),
+                    ),
+                    event.attendeesPreview,
+                ),
+            tags_json = json.encodeToString(event.tags),
+            created_at = event.createdAt,
+            conversation_id = event.conversationId,
+            score = event.score,
+            cached_at = now,
+            in_list_feed = 1L,
+            is_dirty = 0L,
+        )
+    }
+
     private suspend fun processCreateEvent(op: Pending_operation): Boolean {
         val request = json.decodeFromString<CreateEventRequest>(op.payload_json)
         return when (val result = api.createEvent(request)) {
             is ApiResult.Success -> {
-                val serverEvent = result.data
                 val localId = op.entity_id ?: return true
-                // Replace temp local ID with server ID
-                val now = Clock.System.now().toEpochMilliseconds()
-                db.eventQueries.upsert(
-                    id = serverEvent.id,
-                    title = serverEvent.title,
-                    description = serverEvent.description,
-                    cover_image = serverEvent.coverImage,
-                    location = serverEvent.location,
-                    latitude = serverEvent.latitude,
-                    longitude = serverEvent.longitude,
-                    starts_at = serverEvent.startsAt,
-                    ends_at = serverEvent.endsAt,
-                    creator_id = serverEvent.creatorId,
-                    creator_name = serverEvent.creator?.name,
-                    creator_profile_picture = serverEvent.creator?.profilePicture,
-                    attendees_count = serverEvent.attendeesCount.toLong(),
-                    is_attending = if (serverEvent.isAttending) 1L else 0L,
-                    is_saved = if (serverEvent.isSaved) 1L else 0L,
-                    attendees_preview_json =
-                        json.encodeToString(
-                            kotlinx.serialization.builtins.ListSerializer(
-                                com.poziomki.app.network.EventAttendeePreview
-                                    .serializer(),
-                            ),
-                            serverEvent.attendeesPreview,
-                        ),
-                    tags_json = json.encodeToString(serverEvent.tags),
-                    created_at = serverEvent.createdAt,
-                    conversation_id = serverEvent.conversationId,
-                    score = serverEvent.score,
-                    cached_at = now,
-                    in_list_feed = 1L,
-                    is_dirty = 0L,
-                )
+                upsertServerEvent(result.data)
                 db.eventQueries.deleteById(localId)
-                pendingOps.updateEntityId(localId, serverEvent.id)
+                pendingOps.updateEntityId(localId, result.data.id)
                 pendingOps.complete(op.id)
                 true
             }
 
-            is ApiResult.Error -> {
-                false
-            }
+            is ApiResult.Error -> false
         }
     }
 
@@ -169,47 +169,12 @@ class SyncEngine(
         val request = json.decodeFromString<UpdateEventRequest>(op.payload_json)
         return when (val result = api.updateEvent(entityId, request)) {
             is ApiResult.Success -> {
-                val now = Clock.System.now().toEpochMilliseconds()
-                val event = result.data
-                db.eventQueries.upsert(
-                    id = event.id,
-                    title = event.title,
-                    description = event.description,
-                    cover_image = event.coverImage,
-                    location = event.location,
-                    latitude = event.latitude,
-                    longitude = event.longitude,
-                    starts_at = event.startsAt,
-                    ends_at = event.endsAt,
-                    creator_id = event.creatorId,
-                    creator_name = event.creator?.name,
-                    creator_profile_picture = event.creator?.profilePicture,
-                    attendees_count = event.attendeesCount.toLong(),
-                    is_attending = if (event.isAttending) 1L else 0L,
-                    is_saved = if (event.isSaved) 1L else 0L,
-                    attendees_preview_json =
-                        json.encodeToString(
-                            kotlinx.serialization.builtins.ListSerializer(
-                                com.poziomki.app.network.EventAttendeePreview
-                                    .serializer(),
-                            ),
-                            event.attendeesPreview,
-                        ),
-                    tags_json = json.encodeToString(event.tags),
-                    created_at = event.createdAt,
-                    conversation_id = event.conversationId,
-                    score = event.score,
-                    cached_at = now,
-                    in_list_feed = 1L,
-                    is_dirty = 0L,
-                )
+                upsertServerEvent(result.data)
                 pendingOps.complete(op.id)
                 true
             }
 
-            is ApiResult.Error -> {
-                false
-            }
+            is ApiResult.Error -> false
         }
     }
 

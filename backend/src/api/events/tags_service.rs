@@ -9,17 +9,27 @@ use super::events_tags_repo::{
     sync_event_tags_with_conn,
 };
 
+const MAX_EVENT_TAGS: usize = 50;
+
 pub(in crate::api) async fn resolve_event_tag_ids(
     headers: &HeaderMap,
     tag_names: Option<Vec<String>>,
     tag_ids: Option<Vec<String>>,
 ) -> std::result::Result<Vec<Uuid>, HandlerError> {
     if let Some(ids) = tag_ids {
+        if ids.len() > MAX_EVENT_TAGS {
+            return Err(Box::new(validation_error(headers, "Too many tags")));
+        }
         return validate_event_tag_ids(headers, ids).await;
     }
 
+    let names = tag_names.unwrap_or_default();
+    if names.len() > MAX_EVENT_TAGS {
+        return Err(Box::new(validation_error(headers, "Too many tags")));
+    }
+
     let mut resolved = Vec::new();
-    for raw in tag_names.unwrap_or_default() {
+    for raw in names {
         let trimmed = raw.trim().to_string();
         if trimmed.is_empty() {
             continue;
@@ -39,13 +49,14 @@ pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
     tag_ids: Option<Vec<Uuid>>,
 ) -> std::result::Result<Vec<Uuid>, crate::error::AppError> {
     if let Some(mut ids) = tag_ids {
+        ids.truncate(MAX_EVENT_TAGS);
         ids.sort_unstable();
         ids.dedup();
         return Ok(ids);
     }
 
     let mut resolved = Vec::new();
-    for raw in tag_names.unwrap_or_default() {
+    for raw in tag_names.unwrap_or_default().into_iter().take(MAX_EVENT_TAGS) {
         let trimmed = raw.trim().to_string();
         if trimmed.is_empty() {
             continue;
