@@ -160,6 +160,8 @@ class SyncEngine(
                     conversation_id = serverEvent.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    requires_approval = if (serverEvent.requiresApproval) 1L else 0L,
+                    is_pending = if (serverEvent.isPending) 1L else 0L,
                 )
                 db.eventQueries.deleteById(localId)
                 pendingOps.updateEntityId(localId, serverEvent.id)
@@ -207,6 +209,8 @@ class SyncEngine(
                     conversation_id = event.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    requires_approval = if (event.requiresApproval) 1L else 0L,
+                    is_pending = if (event.isPending) 1L else 0L,
                 )
                 pendingOps.complete(op.id)
                 true

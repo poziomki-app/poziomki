@@ -25,6 +25,7 @@ data class EventCreateState(
     val isUploadingCover: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val requiresApproval: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val eventId: String? = null,
@@ -72,6 +73,10 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(endsAt = endsAt)
     }
 
+    fun updateRequiresApproval(value: Boolean) {
+        _state.value = _state.value.copy(requiresApproval = value)
+    }
+
     fun uploadCoverImage(bytes: ByteArray) {
         _state.value = _state.value.copy(coverImageBytes = bytes, isUploadingCover = true)
         viewModelScope.launch {
@@ -114,6 +119,7 @@ class EventCreateViewModel(
                         coverImageUrl = event.coverImage,
                         latitude = event.latitude,
                         longitude = event.longitude,
+                        requiresApproval = event.requiresApproval,
                         isLoading = false,
                         eventId = eventId,
                     )
@@ -141,6 +147,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        requiresApproval = s.requiresApproval,
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
                     is ApiResult.Success -> {
@@ -162,6 +169,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        requiresApproval = if (s.requiresApproval) true else null,
                     )
                 when (eventRepository.createEvent(request)) {
                     is ApiResult.Success -> {
