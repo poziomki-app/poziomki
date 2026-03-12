@@ -1,5 +1,5 @@
 use diesel::deserialize::QueryableByName;
-use diesel::sql_types::{Array, BigInt, Float8, Nullable, SmallInt, Text, Uuid as DieselUuid};
+use diesel::sql_types::{Array, BigInt, Float8, Nullable, Text, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,6 @@ pub struct ProfileDocument {
     pub id: String,
     pub name: String,
     pub bio: Option<String>,
-    pub age: Option<i16>,
     pub program: Option<String>,
     pub profile_picture: Option<String>,
     pub tags: Vec<String>,
@@ -105,28 +104,32 @@ async fn search_profiles_postgres(
             p.id,
             p.name,
             p.bio,
-            p.age,
-            p.program,
+            CASE WHEN COALESCE(us.privacy_show_program, true) THEN p.program ELSE NULL END AS program,
             p.profile_picture,
             COALESCE(
                 ARRAY_REMOVE(ARRAY_AGG(DISTINCT t_agg.name), NULL),
                 ARRAY[]::text[]
             ) AS tags
         FROM profiles p
+        LEFT JOIN user_settings us ON us.user_id = p.user_id
         LEFT JOIN profile_tags pt_agg ON pt_agg.profile_id = p.id
         LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
-            p.search_vector @@ websearch_to_tsquery('simple', $1)
-            OR LOWER(p.name) LIKE $2
-            OR EXISTS (
-                SELECT 1
-                FROM profile_tags pt
-                JOIN tags t ON t.id = pt.tag_id
-                WHERE pt.profile_id = p.id
-                  AND LOWER(t.name) LIKE $2
+            COALESCE(us.privacy_discoverable, true) = true
+            AND (
+                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                OR LOWER(p.name) LIKE $2
+                OR EXISTS (
+                    SELECT 1
+                    FROM profile_tags pt
+                    JOIN tags t ON t.id = pt.tag_id
+                    WHERE pt.profile_id = p.id
+                      AND LOWER(t.name) LIKE $2
+                )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.age, p.program, p.profile_picture, p.updated_at, p.search_vector
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector,
+            us.privacy_show_program, us.privacy_discoverable
         ORDER BY
             ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
             p.updated_at DESC
@@ -145,7 +148,6 @@ async fn search_profiles_postgres(
             id: row.id.to_string(),
             name: row.name,
             bio: row.bio,
-            age: row.age,
             program: row.program,
             profile_picture: row.profile_picture,
             tags: row.tags,
@@ -390,8 +392,6 @@ struct ProfileSearchRow {
     name: String,
     #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
-    #[diesel(sql_type = Nullable<SmallInt>)]
-    age: Option<i16>,
     #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]

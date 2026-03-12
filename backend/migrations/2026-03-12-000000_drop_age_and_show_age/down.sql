@@ -1,0 +1,2 @@
+ALTER TABLE profiles ADD COLUMN age SMALLINT;
+ALTER TABLE user_settings ADD COLUMN privacy_show_age BOOLEAN NOT NULL DEFAULT true;

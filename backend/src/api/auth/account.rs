@@ -78,7 +78,6 @@ pub(in crate::api) async fn export_data(
             "userId": user.pid.to_string(),
             "name": p.name,
             "bio": p.bio,
-            "age": p.age,
             "profilePicture": p.profile_picture,
             "images": p.images,
             "program": p.program,
