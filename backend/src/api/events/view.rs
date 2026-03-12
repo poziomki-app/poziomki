@@ -86,6 +86,7 @@ fn build_from_context(
         tags: event_tags,
         is_attending,
         conversation_id: event.conversation_id.clone(),
+        max_attendees: event.max_attendees,
         score: None,
     }
 }

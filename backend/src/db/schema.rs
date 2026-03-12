@@ -50,6 +50,7 @@ diesel::table! {
         longitude -> Nullable<Float8>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        max_attendees -> Nullable<Int4>,
     }
 }
 
@@ -106,7 +107,6 @@ diesel::table! {
         user_id -> Int4,
         name -> Varchar,
         bio -> Nullable<Text>,
-        age -> Nullable<Int2>,
         profile_picture -> Nullable<Varchar>,
         images -> Nullable<Jsonb>,
         program -> Nullable<Varchar>,
@@ -166,7 +166,6 @@ diesel::table! {
         theme -> Varchar,
         language -> Varchar,
         notifications_enabled -> Bool,
-        privacy_show_age -> Bool,
         privacy_show_program -> Bool,
         privacy_discoverable -> Bool,
         created_at -> Timestamptz,

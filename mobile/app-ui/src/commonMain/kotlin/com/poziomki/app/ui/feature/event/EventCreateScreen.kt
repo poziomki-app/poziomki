@@ -508,6 +508,16 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            // Attendee limit
+            SectionLabel("limit uczestników (opcjonalnie)")
+            PoziomkiTextField(
+                value = state.attendeeLimit,
+                onValueChange = viewModel::updateAttendeeLimit,
+                placeholder = "np. 20",
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Help text
             Text(
                 text = "Po utworzeniu możesz zaprosić ludzi, udostępniając link do czatu wydarzenia.",

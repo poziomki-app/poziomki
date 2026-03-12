@@ -160,6 +160,7 @@ class SyncEngine(
                     conversation_id = serverEvent.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    max_attendees = serverEvent.maxAttendees?.toLong(),
                 )
                 db.eventQueries.deleteById(localId)
                 pendingOps.updateEntityId(localId, serverEvent.id)
@@ -207,6 +208,7 @@ class SyncEngine(
                     conversation_id = event.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    max_attendees = event.maxAttendees?.toLong(),
                 )
                 pendingOps.complete(op.id)
                 true

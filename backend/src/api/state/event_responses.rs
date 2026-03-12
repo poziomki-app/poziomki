@@ -32,6 +32,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) is_attending: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
+    #[serde(rename = "maxAttendees", skip_serializing_if = "Option::is_none")]
+    pub(in crate::api) max_attendees: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::api) score: Option<f64>,
 }

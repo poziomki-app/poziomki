@@ -150,6 +150,16 @@ pub(in crate::api) fn validate_event_location(
     }
 }
 
+pub(in crate::api) fn validate_max_attendees(
+    value: Option<i32>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|v| v <= 0) {
+        Err("Max attendees must be greater than 0")
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_event_title(value: &str) -> std::result::Result<String, &'static str> {
     let normalized = value.trim();
     let length = normalized.chars().count();
@@ -209,6 +219,8 @@ pub(in crate::api) fn parse_create_dates(
     validate_event_description(payload.description.as_ref())
         .map_err(|msg| Box::new(validation_error(headers, msg)))?;
     validate_event_location(payload.location.as_ref())
+        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
+    validate_max_attendees(payload.max_attendees)
         .map_err(|msg| Box::new(validation_error(headers, msg)))?;
 
     let starts_at = parse_required_timestamp(headers, &payload.starts_at)?;

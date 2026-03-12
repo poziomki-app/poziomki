@@ -88,7 +88,6 @@ data class Profile(
     val userId: String,
     val name: String,
     val bio: String? = null,
-    val age: Int? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -105,7 +104,6 @@ data class ProfileWithTags(
     val userId: String,
     val name: String,
     val bio: String? = null,
-    val age: Int? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -118,7 +116,6 @@ data class ProfileWithTags(
 @Serializable
 data class CreateProfileRequest(
     val name: String,
-    val age: Int? = null,
     val bio: String? = null,
     val program: String? = null,
     val tagIds: List<String> = emptyList(),
@@ -128,7 +125,6 @@ data class CreateProfileRequest(
 data class UpdateProfileRequest(
     val name: String? = null,
     val bio: String? = null,
-    val age: Int? = null,
     val program: String? = null,
     val profilePicture: String? = null,
     val images: List<String>? = null,
@@ -171,6 +167,7 @@ data class Event(
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val conversationId: String? = null,
+    val maxAttendees: Int? = null,
 )
 
 @Serializable
@@ -184,6 +181,7 @@ data class CreateEventRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val tagIds: List<String> = emptyList(),
+    val maxAttendees: Int? = null,
 )
 
 @Serializable
@@ -196,6 +194,7 @@ data class UpdateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val maxAttendees: Int? = null,
 )
 
 @Serializable
@@ -255,7 +254,6 @@ data class MatchProfile(
     val userId: String = "",
     val name: String,
     val bio: String? = null,
-    val age: Int? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -341,7 +339,6 @@ data class SearchProfile(
     val id: String,
     val name: String,
     val bio: String? = null,
-    val age: Int? = null,
     val program: String? = null,
     @SerialName("profile_picture")
     val profilePicture: String? = null,
@@ -407,8 +404,6 @@ data class UpdateSettingsRequest(
     val language: String? = null,
     @SerialName("notifications_enabled")
     val notificationsEnabled: Boolean? = null,
-    @SerialName("privacy_show_age")
-    val privacyShowAge: Boolean? = null,
     @SerialName("privacy_show_program")
     val privacyShowProgram: Boolean? = null,
     @SerialName("privacy_discoverable")

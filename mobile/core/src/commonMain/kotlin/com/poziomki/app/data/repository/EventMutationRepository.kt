@@ -121,6 +121,7 @@ internal class EventMutationRepository(
                     conversation_id = current.conversation_id,
                     cached_at = current.cached_at,
                     is_dirty = 1L,
+                    max_attendees = request.maxAttendees?.toLong() ?: current.max_attendees,
                 )
             }
 
@@ -277,6 +278,7 @@ internal class EventMutationRepository(
             conversation_id = conversationId,
             cached_at = cachedAt,
             is_dirty = if (isDirty) 1L else 0L,
+            max_attendees = event.maxAttendees?.toLong(),
         )
     }
 
@@ -341,6 +343,7 @@ internal class EventMutationRepository(
             conversation_id = event.conversation_id,
             cached_at = event.cached_at,
             is_dirty = event.is_dirty,
+            max_attendees = event.max_attendees,
         )
     }
 }

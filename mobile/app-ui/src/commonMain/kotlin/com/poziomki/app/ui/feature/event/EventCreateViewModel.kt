@@ -25,6 +25,7 @@ data class EventCreateState(
     val isUploadingCover: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val attendeeLimit: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
     val eventId: String? = null,
@@ -72,6 +73,10 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(endsAt = endsAt)
     }
 
+    fun updateAttendeeLimit(value: String) {
+        _state.value = _state.value.copy(attendeeLimit = value.filter { it.isDigit() })
+    }
+
     fun uploadCoverImage(bytes: ByteArray) {
         _state.value = _state.value.copy(coverImageBytes = bytes, isUploadingCover = true)
         viewModelScope.launch {
@@ -114,6 +119,7 @@ class EventCreateViewModel(
                         coverImageUrl = event.coverImage,
                         latitude = event.latitude,
                         longitude = event.longitude,
+                        attendeeLimit = event.maxAttendees?.toString() ?: "",
                         isLoading = false,
                         eventId = eventId,
                     )
@@ -126,6 +132,8 @@ class EventCreateViewModel(
     fun saveEvent(onSaved: () -> Unit) {
         val s = _state.value
         if (s.title.isBlank() || s.startsAt.isBlank()) return
+
+        val maxAttendees = s.attendeeLimit.toIntOrNull()
 
         viewModelScope.launch {
             _state.value = s.copy(isLoading = true, error = null)
@@ -141,6 +149,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        maxAttendees = maxAttendees,
                     )
                 when (eventRepository.updateEvent(eventId, request)) {
                     is ApiResult.Success -> {
@@ -162,6 +171,7 @@ class EventCreateViewModel(
                         endsAt = s.endsAt.ifBlank { null },
                         latitude = s.latitude,
                         longitude = s.longitude,
+                        maxAttendees = maxAttendees,
                     )
                 when (eventRepository.createEvent(request)) {
                     is ApiResult.Success -> {
