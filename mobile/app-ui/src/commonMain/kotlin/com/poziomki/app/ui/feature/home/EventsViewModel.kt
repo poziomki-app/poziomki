@@ -78,7 +78,8 @@ class EventsViewModel(
                 x.startsAt == y.startsAt &&
                 x.location == y.location &&
                 x.attendeesCount == y.attendeesCount &&
-                x.isAttending == y.isAttending
+                x.isAttending == y.isAttending &&
+                x.isSaved == y.isSaved
         }
     }
 
@@ -134,6 +135,26 @@ class EventsViewModel(
     fun setSearchQuery(query: String) {
         _state.value = _state.value.copy(searchQuery = query)
         filterEvents()
+    }
+
+    fun toggleSaved(event: Event) {
+        viewModelScope.launch {
+            val result =
+                if (event.isSaved) {
+                    eventRepository.unsaveEvent(event.id)
+                } else {
+                    eventRepository.saveEvent(event.id)
+                }
+            if (result is ApiResult.Error) {
+                val msg =
+                    if (event.isSaved) {
+                        "Nie udało się usunąć zapisu"
+                    } else {
+                        "Nie udało się zapisać wydarzenia"
+                    }
+                _state.value = _state.value.copy(refreshError = msg)
+            }
+        }
     }
 
     fun setTimeFilter(filter: TimeFilter) {
@@ -214,7 +235,7 @@ class EventsViewModel(
         val current = _state.value
         val source =
             when (current.activeFilter) {
-                TimeFilter.ALL -> current.recommendedEvents.ifEmpty { current.allEvents }
+                TimeFilter.ALL -> recommendedDisplayEvents(current.recommendedEvents, current.allEvents)
                 TimeFilter.NEARBY -> current.nearbyEvents
                 else -> current.allEvents
             }
@@ -231,4 +252,16 @@ class EventsViewModel(
             }
         _state.value = current.copy(events = filtered)
     }
+
+    private fun recommendedDisplayEvents(
+        recommended: List<Event>,
+        cached: List<Event>,
+    ): List<Event> =
+        if (recommended.isEmpty()) {
+            cached
+        } else {
+            recommended.map { recommendedEvent ->
+                cached.firstOrNull { it.id == recommendedEvent.id } ?: recommendedEvent
+            }
+        }
 }

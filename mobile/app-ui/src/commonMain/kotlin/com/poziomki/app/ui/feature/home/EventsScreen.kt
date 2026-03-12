@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -86,7 +88,7 @@ import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EventsScreen(
     onNavigateToEventDetail: (String) -> Unit,
@@ -119,8 +121,8 @@ fun EventsScreen(
         }
 
         PoziomkiSearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
+            query = state.searchQuery,
+            onQueryChange = viewModel::setSearchQuery,
             placeholder = "szukaj wydarzeń...",
         )
 
@@ -197,6 +199,7 @@ fun EventsScreen(
                                         EventCard(
                                             event = event,
                                             onClick = { onNavigateToEventDetail(event.id) },
+                                            onToggleSaved = { viewModel.toggleSaved(event) },
                                         )
                                     }
                                 }
@@ -253,6 +256,7 @@ private const val COVER_ASPECT_H = 9f
 private fun EventCard(
     event: Event,
     onClick: () -> Unit,
+    onToggleSaved: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
 
@@ -308,12 +312,17 @@ private fun EventCard(
                             .background(Overlay),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        PhosphorIcons.Bold.BookmarkSimple,
-                        contentDescription = "Zapisz",
-                        modifier = Modifier.size(22.dp),
-                        tint = TextPrimary,
-                    )
+                    IconButton(
+                        onClick = onToggleSaved,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            PhosphorIcons.Bold.BookmarkSimple,
+                            contentDescription = "Zapisz",
+                            modifier = Modifier.size(22.dp),
+                            tint = if (event.isSaved) Primary else TextPrimary,
+                        )
+                    }
                 }
             }
 
@@ -375,6 +384,34 @@ private fun EventCard(
                         fontSize = 15.sp,
                         color = TextMuted,
                     )
+                }
+
+                if (event.tags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        event.tags.take(3).forEach { tag ->
+                            Surface(
+                                shape = CircleShape,
+                                color = Background,
+                                border = BorderStroke(1.dp, Border),
+                            ) {
+                                Text(
+                                    text = tag.name,
+                                    fontFamily = NunitoFamily,
+                                    fontSize = 12.sp,
+                                    color = TextSecondary,
+                                    modifier =
+                                        Modifier.padding(
+                                            horizontal = 10.dp,
+                                            vertical = 5.dp,
+                                        ),
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))

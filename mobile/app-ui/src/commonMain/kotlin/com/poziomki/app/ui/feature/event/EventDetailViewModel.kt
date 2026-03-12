@@ -21,6 +21,7 @@ data class EventDetailState(
     val isLoading: Boolean = false,
     val isOpeningChat: Boolean = false,
     val isUpdatingAttendance: Boolean = false,
+    val isUpdatingSaved: Boolean = false,
     val error: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
@@ -60,7 +61,7 @@ class EventDetailViewModel(
 
     private fun refreshData() {
         viewModelScope.launch {
-            _state.value = EventDetailState(isLoading = true)
+            _state.value = _state.value.copy(isLoading = true)
             eventRepository.refreshEvent(eventId)
             eventRepository.refreshAttendees(eventId)
         }
@@ -109,6 +110,34 @@ class EventDetailViewModel(
                 }
             }
             _state.value = _state.value.copy(isUpdatingAttendance = false)
+        }
+    }
+
+    fun toggleSaved() {
+        val currentEvent = _state.value.event ?: return
+        if (_state.value.isUpdatingSaved) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isUpdatingSaved = true)
+            val result =
+                if (currentEvent.isSaved) {
+                    eventRepository.unsaveEvent(eventId)
+                } else {
+                    eventRepository.saveEvent(eventId)
+                }
+            if (result is ApiResult.Error) {
+                _state.value =
+                    _state.value.copy(
+                        snackbarMessage =
+                            if (currentEvent.isSaved) {
+                                "nie udało się usunąć zapisu"
+                            } else {
+                                "nie udało się zapisać wydarzenia"
+                            },
+                        snackbarType = SnackbarType.ERROR,
+                    )
+            }
+            _state.value = _state.value.copy(isUpdatingSaved = false)
         }
     }
 
