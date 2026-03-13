@@ -438,3 +438,12 @@ data class UpdateSettingsRequest(
     val privacyShowProgram: Boolean? = null,
     val privacyDiscoverable: Boolean? = null,
 )
+
+@Serializable
+data class UserSettingsResponse(
+    val theme: String,
+    val language: String,
+    val notificationsEnabled: Boolean,
+    val privacyShowProgram: Boolean,
+    val privacyDiscoverable: Boolean,
+)

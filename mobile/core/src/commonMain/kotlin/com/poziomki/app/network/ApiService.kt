@@ -178,7 +178,7 @@ class ApiService(
 
     // Settings
 
-    suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UpdateSettingsRequest> =
+    suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> =
         client.patch("/api/v1/settings", request)
 
     // Matrix bootstrap
