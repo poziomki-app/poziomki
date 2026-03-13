@@ -174,7 +174,12 @@ pub(in crate::api) async fn event_update(
     let disabling_approval =
         current_event.requires_approval && changeset.requires_approval == Some(false);
 
-    let pre_update_max_attendees = current_event.max_attendees;
+    // Use the more restrictive of old / new cap so approval cannot
+    // exceed what the organizer intended with this update.
+    let effective_max = match changeset.max_attendees.flatten() {
+        Some(new_max) => Some(new_max.min(current_event.max_attendees.unwrap_or(new_max))),
+        None => current_event.max_attendees,
+    };
     let mut conn = crate::db::conn().await?;
     let mut attempts = 0;
     let (updated, auto_approved) = loop {
@@ -207,7 +212,7 @@ pub(in crate::api) async fn event_update(
                         events_write_repo::auto_approve_pending_with_conn(
                             conn,
                             event_uuid,
-                            pre_update_max_attendees,
+                            effective_max,
                         )
                         .await?
                     } else {
