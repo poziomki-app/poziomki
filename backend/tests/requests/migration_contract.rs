@@ -50,7 +50,7 @@ async fn create_user_with_profile(
     let profile = request
         .post("/api/v1/profiles")
         .add_header(auth_key.clone(), auth_value.clone())
-        .json(&serde_json::json!({ "name": name, "age": 26 }))
+        .json(&serde_json::json!({ "name": name }))
         .await;
     assert_eq!(profile.status_code(), 201);
 
@@ -276,7 +276,6 @@ async fn matrix_event_room_returns_existing_mapping_for_attendee() {
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
             .json(&serde_json::json!({
                 "name": "Owner",
-                "age": 24,
             }))
             .await;
         assert_eq!(profile_response.status_code(), 201);
@@ -486,7 +485,7 @@ async fn matrix_event_room_access_tracks_attendance() {
         let owner_profile = request
             .post("/api/v1/profiles")
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
-            .json(&serde_json::json!({ "name": "Owner", "age": 24 }))
+            .json(&serde_json::json!({ "name": "Owner" }))
             .await;
         assert_eq!(owner_profile.status_code(), 201);
 
@@ -494,7 +493,7 @@ async fn matrix_event_room_access_tracks_attendance() {
         let attendee_profile = request
             .post("/api/v1/profiles")
             .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
-            .json(&serde_json::json!({ "name": "Attendee", "age": 23 }))
+            .json(&serde_json::json!({ "name": "Attendee" }))
             .await;
         assert_eq!(attendee_profile.status_code(), 201);
 
@@ -576,7 +575,6 @@ async fn events_flow_matches_phase_3_contract() {
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
             .json(&serde_json::json!({
                 "name": "Owner",
-                "age": 21,
             }))
             .await;
         assert_eq!(profile_response.status_code(), 201);
@@ -679,7 +677,6 @@ async fn events_flow_matches_phase_3_contract() {
             .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
             .json(&serde_json::json!({
                 "name": "Attendee",
-                "age": 22,
             }))
             .await;
         assert_eq!(attendee_profile_response.status_code(), 201);
@@ -719,13 +716,13 @@ async fn matching_and_uploads_endpoints_available() {
         let profile_a = request
             .post("/api/v1/profiles")
             .add_header(auth_key_a.clone(), auth_value_a.clone())
-            .json(&serde_json::json!({ "name": "Alice", "age": 21 }))
+            .json(&serde_json::json!({ "name": "Alice" }))
             .await;
         assert_eq!(profile_a.status_code(), 201);
         let profile_b = request
             .post("/api/v1/profiles")
             .add_header(auth_key_b.clone(), auth_value_b.clone())
-            .json(&serde_json::json!({ "name": "Bob", "age": 22 }))
+            .json(&serde_json::json!({ "name": "Bob" }))
             .await;
         assert_eq!(profile_b.status_code(), 201);
 

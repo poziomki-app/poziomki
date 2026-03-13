@@ -40,7 +40,6 @@ fn build_profile_recommendation(
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
-        age: profile.age.and_then(|a| u8::try_from(a).ok()),
         profile_picture,
         thumbhash,
         program: profile.program.clone(),

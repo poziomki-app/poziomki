@@ -5,8 +5,6 @@ use serde::Deserialize;
 pub(in crate::api) struct CreateProfileBody {
     pub(in crate::api) name: String,
     #[serde(default)]
-    pub(in crate::api) age: Option<u8>,
-    #[serde(default)]
     pub(in crate::api) bio: Option<String>,
     #[serde(default)]
     pub(in crate::api) program: Option<String>,
@@ -29,8 +27,6 @@ pub(in crate::api) struct CreateProfileBody {
 pub(in crate::api) struct UpdateProfileBody {
     #[serde(default)]
     pub(in crate::api) name: Option<String>,
-    #[serde(default)]
-    pub(in crate::api) age: Option<u8>,
     #[serde(default)]
     pub(in crate::api) bio: Option<String>,
     #[serde(default)]

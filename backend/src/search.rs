@@ -1,5 +1,5 @@
 use diesel::deserialize::QueryableByName;
-use diesel::sql_types::{Array, BigInt, Float8, Nullable, SmallInt, Text, Uuid as DieselUuid};
+use diesel::sql_types::{Array, BigInt, Float8, Nullable, Text, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,6 @@ pub struct ProfileDocument {
     pub id: String,
     pub name: String,
     pub bio: Option<String>,
-    pub age: Option<i16>,
     pub program: Option<String>,
     pub profile_picture: Option<String>,
     pub tags: Vec<String>,
@@ -103,7 +102,6 @@ async fn search_profiles_postgres(
             p.id,
             p.name,
             p.bio,
-            p.age,
             p.program,
             p.profile_picture,
             COALESCE(
@@ -124,7 +122,7 @@ async fn search_profiles_postgres(
                   AND LOWER(t.name) LIKE $2
             )
         GROUP BY
-            p.id, p.name, p.bio, p.age, p.program, p.profile_picture, p.updated_at, p.search_vector
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector
         ORDER BY
             ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
             p.updated_at DESC
@@ -143,7 +141,6 @@ async fn search_profiles_postgres(
             id: row.id.to_string(),
             name: row.name,
             bio: row.bio,
-            age: row.age,
             program: row.program,
             profile_picture: row.profile_picture,
             tags: row.tags,
@@ -386,8 +383,6 @@ struct ProfileSearchRow {
     name: String,
     #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
-    #[diesel(sql_type = Nullable<SmallInt>)]
-    age: Option<i16>,
     #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]

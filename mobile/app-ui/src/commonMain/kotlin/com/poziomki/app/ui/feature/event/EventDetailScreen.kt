@@ -145,8 +145,9 @@ fun EventDetailScreen(
                                             Text("Leave")
                                         }
                                     } else {
-                                        val isFull = event.maxAttendees != null &&
-                                            event.attendeesCount >= event.maxAttendees
+                                        val isFull =
+                                            event.maxAttendees != null &&
+                                                event.attendeesCount >= event.maxAttendees
                                         Button(
                                             onClick = { viewModel.attendEvent() },
                                             modifier = Modifier.weight(1f),
@@ -191,11 +192,12 @@ fun EventDetailScreen(
                                 // Attendees
                                 if (state.attendees.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-                                    val attendeesLabel = if (event.maxAttendees != null) {
-                                        "Uczestnicy (${state.attendees.size} / ${event.maxAttendees})"
-                                    } else {
-                                        "Uczestnicy (${state.attendees.size})"
-                                    }
+                                    val attendeesLabel =
+                                        if (event.maxAttendees != null) {
+                                            "Uczestnicy (${state.attendees.size} / ${event.maxAttendees})"
+                                        } else {
+                                            "Uczestnicy (${state.attendees.size})"
+                                        }
                                     Text(
                                         text = attendeesLabel,
                                         style = MaterialTheme.typography.titleMedium,
