@@ -189,7 +189,7 @@ class EventCreateViewModel(
                 endsAt = s.endsAt.ifBlank { null },
                 latitude = s.latitude,
                 longitude = s.longitude,
-                maxAttendees = maxAttendees,
+                maxAttendees = UpdateEventRequest.maxAttendeesValue(maxAttendees),
             )
         when (eventRepository.updateEvent(eventId, request)) {
             is ApiResult.Success -> onSaved()
