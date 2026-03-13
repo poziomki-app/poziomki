@@ -8,6 +8,27 @@ use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
 use crate::db::schema::{event_attendees, event_interactions, events};
 
+pub(in crate::api) const MAX_SERIALIZATION_RETRIES: usize = 3;
+
+const fn is_serialization_failure(err: &diesel::result::Error) -> bool {
+    matches!(
+        err,
+        diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::SerializationFailure,
+            _
+        )
+    )
+}
+
+pub(in crate::api) fn is_serialization_failure_app(err: &crate::error::AppError) -> bool {
+    match err {
+        crate::error::AppError::Any(boxed) => boxed
+            .downcast_ref::<diesel::result::Error>()
+            .is_some_and(is_serialization_failure),
+        _ => false,
+    }
+}
+
 pub(in crate::api) enum UpsertOutcome {
     Accepted,
     Full,
@@ -32,74 +53,85 @@ pub(in crate::api) async fn check_capacity_and_upsert(
     let require_status = require_status.map(String::from);
     let mut conn = crate::db::conn().await?;
 
-    conn.build_transaction()
-        .serializable()
-        .run(|conn| {
-            let status = status.clone();
-            let require_status = require_status.clone();
-            Box::pin(async move {
-                // Precondition: verify attendee has required status (inside txn)
-                if let Some(required) = &require_status {
-                    let current = event_attendees::table
-                        .filter(event_attendees::event_id.eq(event_id))
-                        .filter(event_attendees::profile_id.eq(profile_id))
-                        .select(event_attendees::status)
-                        .first::<String>(conn)
-                        .await
-                        .optional()?;
-                    if current.as_deref() != Some(required.as_str()) {
-                        return Ok::<UpsertOutcome, diesel::result::Error>(
-                            UpsertOutcome::StatusMismatch,
-                        );
-                    }
-                }
-
-                // Capacity gate: only enforce when switching to "going"
-                if status == "going" && !already_going {
-                    if let Some(max) = max_attendees {
-                        let current_going = event_attendees::table
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        let result = conn
+            .build_transaction()
+            .serializable()
+            .run(|conn| {
+                let status = status.clone();
+                let require_status = require_status.clone();
+                Box::pin(async move {
+                    // Precondition: verify attendee has required status (inside txn)
+                    if let Some(required) = &require_status {
+                        let current = event_attendees::table
                             .filter(event_attendees::event_id.eq(event_id))
-                            .filter(event_attendees::status.eq("going"))
-                            .count()
-                            .get_result::<i64>(conn)
-                            .await?;
-                        if current_going >= i64::from(max) {
-                            return Ok(UpsertOutcome::Full);
+                            .filter(event_attendees::profile_id.eq(profile_id))
+                            .select(event_attendees::status)
+                            .first::<String>(conn)
+                            .await
+                            .optional()?;
+                        if current.as_deref() != Some(required.as_str()) {
+                            return Ok::<UpsertOutcome, diesel::result::Error>(
+                                UpsertOutcome::StatusMismatch,
+                            );
                         }
                     }
-                }
 
-                // Upsert attendee: delete-then-insert
-                diesel::delete(
-                    event_attendees::table
-                        .filter(event_attendees::event_id.eq(event_id))
-                        .filter(event_attendees::profile_id.eq(profile_id)),
-                )
-                .execute(conn)
-                .await?;
+                    // Capacity gate: only enforce when switching to "going"
+                    if status == "going" && !already_going {
+                        if let Some(max) = max_attendees {
+                            let current_going = event_attendees::table
+                                .filter(event_attendees::event_id.eq(event_id))
+                                .filter(event_attendees::status.eq("going"))
+                                .count()
+                                .get_result::<i64>(conn)
+                                .await?;
+                            if current_going >= i64::from(max) {
+                                return Ok(UpsertOutcome::Full);
+                            }
+                        }
+                    }
 
-                let attendee = EventAttendee {
-                    event_id,
-                    profile_id,
-                    status: status.clone(),
-                };
-                diesel::insert_into(event_attendees::table)
-                    .values(&attendee)
+                    // Upsert attendee: delete-then-insert
+                    diesel::delete(
+                        event_attendees::table
+                            .filter(event_attendees::event_id.eq(event_id))
+                            .filter(event_attendees::profile_id.eq(profile_id)),
+                    )
                     .execute(conn)
                     .await?;
 
-                // Track "joined" interaction atomically with the attendee change
-                if status == "going" {
-                    upsert_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
-                } else {
-                    delete_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
-                }
+                    let attendee = EventAttendee {
+                        event_id,
+                        profile_id,
+                        status: status.clone(),
+                    };
+                    diesel::insert_into(event_attendees::table)
+                        .values(&attendee)
+                        .execute(conn)
+                        .await?;
 
-                Ok(UpsertOutcome::Accepted)
+                    // Track "joined" interaction atomically with the attendee change
+                    if status == "going" {
+                        upsert_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
+                    } else {
+                        delete_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
+                    }
+
+                    Ok(UpsertOutcome::Accepted)
+                })
             })
-        })
-        .await
-        .map_err(Into::into)
+            .await;
+        match result {
+            Ok(val) => return Ok(val),
+            Err(ref e) if attempts < MAX_SERIALIZATION_RETRIES && is_serialization_failure(e) => {
+                tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
 }
 
 pub(in crate::api) async fn insert_event_with_conn(

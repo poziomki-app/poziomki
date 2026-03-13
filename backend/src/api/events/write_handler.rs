@@ -174,45 +174,62 @@ pub(in crate::api) async fn event_update(
     let disabling_approval =
         current_event.requires_approval && changeset.requires_approval == Some(false);
 
+    let pre_update_max_attendees = current_event.max_attendees;
     let mut conn = crate::db::conn().await?;
-    let (updated, auto_approved) = conn
-        .build_transaction()
-        .serializable()
-        .run(|conn| {
-            let changeset = crate::db::models::events::EventChangeset {
-                title: changeset.title.clone(),
-                description: changeset.description.clone(),
-                cover_image: changeset.cover_image.clone(),
-                location: changeset.location.clone(),
-                starts_at: changeset.starts_at,
-                ends_at: changeset.ends_at,
-                conversation_id: changeset.conversation_id.clone(),
-                latitude: changeset.latitude,
-                longitude: changeset.longitude,
-                max_attendees: changeset.max_attendees,
-                updated_at: changeset.updated_at,
-                requires_approval: changeset.requires_approval,
-            };
-            let tag_names = tag_names.clone();
-            let validated_tag_ids = validated_tag_ids.clone();
-            Box::pin(async move {
-                let updated =
-                    events_write_repo::update_event_with_conn(conn, event_uuid, &changeset).await?;
-                let auto_approved = if disabling_approval {
-                    events_write_repo::auto_approve_pending_with_conn(
-                        conn,
-                        event_uuid,
-                        updated.max_attendees,
-                    )
-                    .await?
-                } else {
-                    vec![]
+    let mut attempts = 0;
+    let (updated, auto_approved) = loop {
+        attempts += 1;
+        let result = conn
+            .build_transaction()
+            .serializable()
+            .run(|conn| {
+                let changeset = crate::db::models::events::EventChangeset {
+                    title: changeset.title.clone(),
+                    description: changeset.description.clone(),
+                    cover_image: changeset.cover_image.clone(),
+                    location: changeset.location.clone(),
+                    starts_at: changeset.starts_at,
+                    ends_at: changeset.ends_at,
+                    conversation_id: changeset.conversation_id.clone(),
+                    latitude: changeset.latitude,
+                    longitude: changeset.longitude,
+                    max_attendees: changeset.max_attendees,
+                    updated_at: changeset.updated_at,
+                    requires_approval: changeset.requires_approval,
                 };
-                maybe_sync_tags_with_conn(conn, event_uuid, tag_names, validated_tag_ids).await?;
-                Ok::<(Event, Vec<Uuid>), crate::error::AppError>((updated, auto_approved))
+                let tag_names = tag_names.clone();
+                let validated_tag_ids = validated_tag_ids.clone();
+                Box::pin(async move {
+                    let updated =
+                        events_write_repo::update_event_with_conn(conn, event_uuid, &changeset)
+                            .await?;
+                    let auto_approved = if disabling_approval {
+                        events_write_repo::auto_approve_pending_with_conn(
+                            conn,
+                            event_uuid,
+                            pre_update_max_attendees,
+                        )
+                        .await?
+                    } else {
+                        vec![]
+                    };
+                    maybe_sync_tags_with_conn(conn, event_uuid, tag_names, validated_tag_ids)
+                        .await?;
+                    Ok::<(Event, Vec<Uuid>), crate::error::AppError>((updated, auto_approved))
+                })
             })
-        })
-        .await?;
+            .await;
+        match result {
+            Ok(val) => break val,
+            Err(ref e)
+                if attempts < events_write_repo::MAX_SERIALIZATION_RETRIES
+                    && events_write_repo::is_serialization_failure_app(e) =>
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    };
 
     for pid in &auto_approved {
         if let Err(error) = enqueue_matrix_event_membership_sync(&updated.id, pid, false).await {
