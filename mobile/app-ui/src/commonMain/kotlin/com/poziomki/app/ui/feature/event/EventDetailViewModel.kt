@@ -48,12 +48,12 @@ class EventDetailViewModel(
 
     private fun observeEvent() {
         viewModelScope.launch {
-            eventRepository.observeEvent(eventId)
+            eventRepository
+                .observeEvent(eventId)
                 .combine(profileRepository.observeOwnProfile()) { event, profile ->
                     val isCreator = event?.creatorId != null && event.creatorId == profile?.id
                     _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
-                }
-                .collect {}
+                }.collect {}
         }
     }
 
