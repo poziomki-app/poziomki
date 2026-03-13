@@ -1,5 +1,5 @@
 use diesel::deserialize::QueryableByName;
-use diesel::sql_types::{Array, BigInt, Float8, Nullable, SmallInt, Text, Uuid as DieselUuid};
+use diesel::sql_types::{Array, BigInt, Float8, Nullable, Text, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,6 @@ pub struct ProfileDocument {
     pub id: String,
     pub name: String,
     pub bio: Option<String>,
-    pub age: Option<i16>,
     pub program: Option<String>,
     pub profile_picture: Option<String>,
     pub tags: Vec<String>,
@@ -65,6 +64,7 @@ pub async fn search_all(
     query: &str,
     limit: usize,
     geo: Option<&GeoSearchParams>,
+    viewer_user_id: i32,
 ) -> crate::error::AppResult<SearchResults> {
     let normalized_query = query.trim().to_ascii_lowercase();
 
@@ -79,9 +79,9 @@ pub async fn search_all(
     let pattern = format!("%{normalized_query}%");
     let limit_i64 = i64::try_from(limit).unwrap_or(50);
 
-    let profiles_fut = search_profiles_postgres(&normalized_query, &pattern, limit_i64);
-    let events_fut = search_events_postgres(&normalized_query, &pattern, limit_i64, geo);
-    let tags_fut = search_tags_postgres(&normalized_query, &pattern, limit_i64);
+    let profiles_fut = search_profiles(&normalized_query, &pattern, limit_i64, viewer_user_id);
+    let events_fut = search_events(&normalized_query, &pattern, limit_i64, geo);
+    let tags_fut = search_tags(&normalized_query, &pattern, limit_i64);
 
     let (profiles, events, tags) = tokio::try_join!(profiles_fut, events_fut, tags_fut)?;
 
@@ -92,10 +92,11 @@ pub async fn search_all(
     })
 }
 
-async fn search_profiles_postgres(
+async fn search_profiles(
     query: &str,
     pattern: &str,
     limit_i64: i64,
+    viewer_user_id: i32,
 ) -> crate::error::AppResult<Vec<ProfileDocument>> {
     let mut conn = crate::db::conn().await?;
 
@@ -105,28 +106,41 @@ async fn search_profiles_postgres(
             p.id,
             p.name,
             p.bio,
-            p.age,
-            p.program,
+            CASE
+                WHEN p.user_id = $4 THEN p.program
+                WHEN COALESCE(us.privacy_show_program, true) THEN p.program
+                ELSE NULL
+            END AS program,
             p.profile_picture,
             COALESCE(
                 ARRAY_REMOVE(ARRAY_AGG(DISTINCT t_agg.name), NULL),
                 ARRAY[]::text[]
             ) AS tags
         FROM profiles p
+        LEFT JOIN user_settings us ON us.user_id = p.user_id
         LEFT JOIN profile_tags pt_agg ON pt_agg.profile_id = p.id
         LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
-            p.search_vector @@ websearch_to_tsquery('simple', $1)
-            OR LOWER(p.name) LIKE $2
-            OR EXISTS (
-                SELECT 1
-                FROM profile_tags pt
-                JOIN tags t ON t.id = pt.tag_id
-                WHERE pt.profile_id = p.id
-                  AND LOWER(t.name) LIKE $2
+            (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
+            AND (
+                to_tsvector('simple', COALESCE(p.name, '')) @@ websearch_to_tsquery('simple', $1)
+                OR to_tsvector('simple', COALESCE(p.bio, '')) @@ websearch_to_tsquery('simple', $1)
+                OR (
+                    (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
+                    AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
+                )
+                OR LOWER(p.name) LIKE $2
+                OR EXISTS (
+                    SELECT 1
+                    FROM profile_tags pt
+                    JOIN tags t ON t.id = pt.tag_id
+                    WHERE pt.profile_id = p.id
+                      AND LOWER(t.name) LIKE $2
+                )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.age, p.program, p.profile_picture, p.updated_at, p.search_vector
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector,
+            us.privacy_show_program, us.privacy_discoverable
         ORDER BY
             ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
             p.updated_at DESC
@@ -136,6 +150,7 @@ async fn search_profiles_postgres(
     .bind::<Text, _>(query)
     .bind::<Text, _>(pattern)
     .bind::<BigInt, _>(limit_i64)
+    .bind::<diesel::sql_types::Integer, _>(viewer_user_id)
     .load::<ProfileSearchRow>(&mut conn)
     .await?;
 
@@ -145,7 +160,6 @@ async fn search_profiles_postgres(
             id: row.id.to_string(),
             name: row.name,
             bio: row.bio,
-            age: row.age,
             program: row.program,
             profile_picture: row.profile_picture,
             tags: row.tags,
@@ -153,7 +167,7 @@ async fn search_profiles_postgres(
         .collect())
 }
 
-async fn search_events_postgres(
+async fn search_events(
     query: &str,
     pattern: &str,
     limit_i64: i64,
@@ -234,7 +248,7 @@ fn event_row_to_doc(row: EventSearchRow) -> EventDocument {
     }
 }
 
-async fn search_tags_postgres(
+async fn search_tags(
     query: &str,
     pattern: &str,
     limit_i64: i64,
@@ -390,8 +404,6 @@ struct ProfileSearchRow {
     name: String,
     #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
-    #[diesel(sql_type = Nullable<SmallInt>)]
-    age: Option<i16>,
     #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]

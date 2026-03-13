@@ -140,7 +140,7 @@ pub(super) async fn search(
     headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> Result<Response> {
-    let (_session, _user) = auth_or_respond!(headers);
+    let (_session, user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(10).clamp(1, 50));
     let q = query.q.trim().to_string();
@@ -151,7 +151,7 @@ pub(super) async fn search(
 
     let geo = build_geo_params(&query);
 
-    let mut results = crate::search::search_all(&q, limit, geo.as_ref())
+    let mut results = crate::search::search_all(&q, limit, geo.as_ref(), user.id)
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");

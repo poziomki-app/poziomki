@@ -176,6 +176,11 @@ class ApiService(
         return client.get(sb.toString())
     }
 
+    // Settings
+
+    suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> =
+        client.patch("/api/v1/settings", request)
+
     // Matrix bootstrap
 
     suspend fun getMatrixConfig(): ApiResult<MatrixConfigData> = client.get("/api/v1/matrix/config")

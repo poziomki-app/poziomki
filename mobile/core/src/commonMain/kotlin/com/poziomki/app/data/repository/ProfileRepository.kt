@@ -133,7 +133,6 @@ class ProfileRepository(
             userId = userId,
             name = name,
             bio = bio,
-            age = age,
             profilePicture = profilePicture,
             thumbhash = thumbhash,
             images = images,
@@ -155,7 +154,6 @@ class ProfileRepository(
                     user_id = current.user_id,
                     name = request.name ?: current.name,
                     bio = request.bio ?: current.bio,
-                    age = request.age?.toLong() ?: current.age,
                     profile_picture = request.profilePicture ?: current.profile_picture,
                     thumbhash = current.thumbhash,
                     images_json =
@@ -244,7 +242,6 @@ class ProfileRepository(
                 user_id = profile.userId,
                 name = profile.name,
                 bio = profile.bio,
-                age = profile.age?.toLong(),
                 profile_picture = profile.profilePicture,
                 thumbhash = profile.thumbhash,
                 images_json = json.encodeToString(profile.images),
