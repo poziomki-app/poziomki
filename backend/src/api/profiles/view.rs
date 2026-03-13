@@ -36,7 +36,7 @@ async fn resolve_program(
     }
     let show = {
         let Ok(mut conn) = crate::db::conn().await else {
-            return program;
+            return None;
         };
         user_settings::table
             .filter(user_settings::user_id.eq(profile_user_id))
