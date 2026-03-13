@@ -193,16 +193,18 @@ pub(in crate::api) async fn event_attend(
     let already_going = existing_attendee
         .as_ref()
         .is_some_and(|attendee| attendee.status == "going");
-    if status_str == "going" && !already_going {
-        if let Some(max_attendees) = event.max_attendees {
-            let current_going = events_write_repo::count_going_attendees(event_uuid).await?;
-            if current_going >= i64::from(max_attendees) {
-                return Ok(validation_error(&headers, "Event is full"));
-            }
-        }
-    }
 
-    upsert_attendee(event_uuid, profile.id, status_str).await?;
+    let accepted = events_write_repo::check_capacity_and_upsert(
+        event_uuid,
+        profile.id,
+        status_str,
+        event.max_attendees,
+        already_going,
+    )
+    .await?;
+    if !accepted {
+        return Ok(validation_error(&headers, "Event is full"));
+    }
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
         tracing::warn!(
             %error,
