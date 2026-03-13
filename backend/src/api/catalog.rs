@@ -301,7 +301,7 @@ pub(super) async fn tags_suggestions(
             if !search.is_empty() {
                 search.push(' ');
             }
-            search.push_str(trimmed);
+            search.push_str(&trimmed.to_lowercase());
         }
     }
     search.truncate(search.floor_char_boundary(200));
