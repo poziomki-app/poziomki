@@ -34,6 +34,7 @@ use super::state::{DataResponse, EventsQuery};
 use events_service::{not_found_event, require_auth_profile};
 use events_view::attendee_info;
 
+pub(super) use events_interactions_repo::EVENT_INTERACTION_SAVED;
 pub(super) use events_view::{build_event_response, build_event_responses_with_conn};
 pub(super) use events_write_handler::{
     event_attend, event_create, event_delete, event_leave, event_save, event_unsave, event_update,

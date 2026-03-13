@@ -38,14 +38,6 @@ pub(in crate::api) async fn delete_event(
     Ok(())
 }
 
-pub(in crate::api) async fn delete_event_attendee(
-    event_id: Uuid,
-    profile_id: Uuid,
-) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    delete_event_attendee_with_conn(&mut conn, event_id, profile_id).await
-}
-
 pub(in crate::api) async fn delete_event_attendee_with_conn(
     conn: &mut AsyncPgConnection,
     event_id: Uuid,
