@@ -434,10 +434,7 @@ data class GeocodingResult(
 data class UpdateSettingsRequest(
     val theme: String? = null,
     val language: String? = null,
-    @SerialName("notifications_enabled")
     val notificationsEnabled: Boolean? = null,
-    @SerialName("privacy_show_program")
     val privacyShowProgram: Boolean? = null,
-    @SerialName("privacy_discoverable")
     val privacyDiscoverable: Boolean? = null,
 )

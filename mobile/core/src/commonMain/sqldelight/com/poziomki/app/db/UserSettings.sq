@@ -21,10 +21,5 @@ INSERT OR REPLACE INTO user_settings(
     cached_at, is_dirty
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
-updateField:
-UPDATE user_settings
-SET is_dirty = 1
-WHERE user_id = ?;
-
 deleteAll:
 DELETE FROM user_settings;
