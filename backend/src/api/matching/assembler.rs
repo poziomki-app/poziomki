@@ -44,7 +44,7 @@ fn build_profile_recommendation(
         .privacy_map
         .get(&profile.user_id)
         .copied()
-        .unwrap_or(false);
+        .unwrap_or(true);
     let program = if show_program {
         profile.program.clone()
     } else {

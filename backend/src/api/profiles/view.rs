@@ -34,7 +34,8 @@ async fn load_show_program(profile_user_id: i32) -> bool {
         .filter(user_settings::user_id.eq(profile_user_id))
         .first::<UserSetting>(&mut conn)
         .await
-        .map(|s| s.privacy_show_program)
+        .optional()
+        .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
         .unwrap_or(false)
 }
 
