@@ -44,6 +44,8 @@ pub struct TagDocument {
     pub scope: String,
     pub category: Option<String>,
     pub emoji: Option<String>,
+    #[serde(rename = "parentId")]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +274,7 @@ async fn search_tags_postgres(
             scope: tag.scope,
             category: tag.category,
             emoji: tag.emoji,
+            parent_id: tag.parent_id.map(|id| id.to_string()),
         })
         .collect())
 }
