@@ -139,6 +139,7 @@ class SyncEngine(
 
     private fun upsertServerEvent(event: Event) {
         val now = Clock.System.now().toEpochMilliseconds()
+        val existing = db.eventQueries.selectById(event.id).executeAsOneOrNull()
         db.eventQueries.upsert(
             id = event.id,
             title = event.title,
@@ -170,7 +171,7 @@ class SyncEngine(
             conversation_id = event.conversationId,
             score = event.score,
             cached_at = now,
-            in_list_feed = 1L,
+            in_list_feed = existing?.in_list_feed ?: 1L,
             is_dirty = 0L,
         )
     }
@@ -256,6 +257,7 @@ class SyncEngine(
         return when (api.saveEvent(entityId)) {
             is ApiResult.Success -> {
                 pendingOps.complete(op.id)
+                db.eventQueries.clearDirty(entityId)
                 true
             }
 
@@ -270,6 +272,7 @@ class SyncEngine(
         return when (api.unsaveEvent(entityId)) {
             is ApiResult.Success -> {
                 pendingOps.complete(op.id)
+                db.eventQueries.clearDirty(entityId)
                 true
             }
 

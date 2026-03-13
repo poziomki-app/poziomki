@@ -270,7 +270,6 @@ internal class EventMutationRepository(
                     }
 
                     is ApiResult.Error -> {
-                        db.eventQueries.updateSaved(is_saved = previousSaved, id = id)
                         if (shouldRetry(result.status)) {
                             pendingOps.enqueue(
                                 if (saved) "save_event" else "unsave_event",
@@ -279,6 +278,7 @@ internal class EventMutationRepository(
                             )
                             ApiResult.Success(Unit)
                         } else {
+                            db.eventQueries.updateSaved(is_saved = previousSaved, id = id)
                             result
                         }
                     }
