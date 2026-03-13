@@ -53,8 +53,7 @@ pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), Str
 async fn dispatch_otp_email(payload_json: &str) -> std::result::Result<(), String> {
     let payload: OtpEmailJobPayload =
         serde_json::from_str(payload_json).map_err(|e| format!("invalid otp payload: {e}"))?;
-    crate::api::deliver_otp_email_job(&payload.to, &payload.code).await;
-    Ok(())
+    crate::api::deliver_otp_email_job(&payload.to, &payload.code).await
 }
 
 async fn dispatch_matrix_avatar_sync(payload_json: &str) -> std::result::Result<(), String> {

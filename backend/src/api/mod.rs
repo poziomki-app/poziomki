@@ -226,8 +226,8 @@ pub fn router() -> Router<AppContext> {
         )
 }
 
-pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
-    auth::deliver_otp_email_job(to, code).await;
+pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {
+    auth::deliver_otp_email_job(to, code).await
 }
 
 pub(crate) async fn deliver_matrix_profile_avatar_sync_job(

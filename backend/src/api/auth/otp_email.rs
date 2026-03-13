@@ -1,6 +1,6 @@
 use lettre::{
     message::{header, Mailbox, MultiPart},
-    transport::smtp::{authentication::Credentials, client::TlsParameters},
+    transport::smtp::client::TlsParameters,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 
@@ -19,33 +19,34 @@ fn otp_email_html(code: &str) -> String {
     )
 }
 
-struct SmtpSettings {
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
+struct MailSettings {
     from: String,
-    tls_name: String,
+    dkim_domain: String,
+    dkim_selector: String,
+    dkim_private_key_pem: String,
 }
 
-fn smtp_settings() -> SmtpSettings {
-    let host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".into());
-    let port = std::env::var("SMTP_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(587);
-    let user = std::env::var("SMTP_USER").unwrap_or_default();
-    let password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
+fn mail_settings() -> MailSettings {
     let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
-    let tls_name = std::env::var("SMTP_TLS_NAME").unwrap_or_else(|_| host.clone());
-    SmtpSettings {
-        host,
-        port,
-        user,
-        password,
+    let dkim_domain = std::env::var("DKIM_DOMAIN").unwrap_or_else(|_| "poziomki.app".into());
+    let dkim_selector = std::env::var("DKIM_SELECTOR").unwrap_or_else(|_| "mail".into());
+    let dkim_private_key_pem = load_dkim_key();
+    MailSettings {
         from,
-        tls_name,
+        dkim_domain,
+        dkim_selector,
+        dkim_private_key_pem,
     }
+}
+
+fn load_dkim_key() -> String {
+    if let Ok(path) = std::env::var("DKIM_PRIVATE_KEY_PATH") {
+        return std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            tracing::error!(path, "failed to read DKIM key file: {e}");
+            String::new()
+        });
+    }
+    std::env::var("DKIM_PRIVATE_KEY").unwrap_or_default()
 }
 
 fn parse_from_mailbox(from: &str) -> Option<Mailbox> {
@@ -108,51 +109,118 @@ fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str, to: &str) -
     }
 }
 
-fn smtp_tls_params(tls_name: &str) -> Option<TlsParameters> {
-    match TlsParameters::new(tls_name.to_string()) {
-        Ok(params) => Some(params),
-        Err(error) => {
-            tracing::error!("Failed to create TLS parameters for {tls_name}: {error}");
-            None
-        }
-    }
+fn recipient_domain(to: &str) -> Option<&str> {
+    to.rsplit_once('@').map(|(_, domain)| domain)
 }
 
-fn build_smtp_mailer(
-    settings: &SmtpSettings,
-    tls_params: TlsParameters,
-) -> AsyncSmtpTransport<Tokio1Executor> {
-    let creds = Credentials::new(settings.user.clone(), settings.password.clone());
-    AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&settings.host)
-        .port(settings.port)
-        .tls(lettre::transport::smtp::client::Tls::Required(tls_params))
-        .credentials(creds)
-        .build()
+async fn resolve_mx(domain: &str) -> Result<String, String> {
+    let resolver = hickory_resolver::Resolver::builder_tokio()
+        .map_err(|e| format!("DNS resolver init: {e}"))?
+        .build();
+
+    let mx_response = resolver
+        .mx_lookup(domain)
+        .await
+        .map_err(|e| format!("MX lookup failed for {domain}: {e}"))?;
+
+    let mut records: Vec<_> = mx_response.iter().collect();
+    records.sort_by_key(|mx| mx.preference());
+
+    records
+        .first()
+        .filter(|mx| mx.exchange().to_ascii() != ".")
+        .map(|mx| {
+            let mut host = mx.exchange().to_ascii();
+            if host.ends_with('.') {
+                host.pop();
+            }
+            host
+        })
+        .ok_or_else(|| format!("No MX records for {domain}"))
 }
 
-fn prepare_otp_delivery(to: &str, code: &str) -> Option<(Message, SmtpSettings, TlsParameters)> {
-    let settings = smtp_settings();
-    let from_mbox = parse_from_mailbox(&settings.from)?;
-    let to_mbox = parse_recipient_mailbox(to)?;
-    let email = build_otp_email(from_mbox, to_mbox, code, to)?;
-    let tls_params = smtp_tls_params(&settings.tls_name)?;
-    Some((email, settings, tls_params))
-}
+fn parse_dkim_private_key(
+    pem: &str,
+) -> Result<mail_auth::common::crypto::RsaKey<mail_auth::common::crypto::Sha256>, String> {
+    use base64::Engine;
+    use mail_auth::common::crypto::{RsaKey, Sha256};
 
-pub(in crate::api) async fn send_otp_email(to: &str, code: &str) {
-    if !super::env_truthy("SMTP_ENABLE") {
-        tracing::debug!("SMTP disabled, skipping OTP email to {to}");
-        return;
-    }
+    let is_pkcs1 = pem.contains("RSA PRIVATE KEY");
+    let b64: String = pem
+        .lines()
+        .filter(|l| !l.starts_with("-----"))
+        .collect::<Vec<_>>()
+        .join("");
+    let der = base64::engine::general_purpose::STANDARD
+        .decode(&b64)
+        .map_err(|e| format!("PEM base64 decode: {e}"))?;
 
-    let Some((email, settings, tls_params)) = prepare_otp_delivery(to, code) else {
-        return;
-    };
-    let mailer = build_smtp_mailer(&settings, tls_params);
-
-    if let Err(error) = mailer.send(email).await {
-        tracing::error!("Failed to send OTP email to {to}: {error}");
+    let key_der = if is_pkcs1 {
+        rustls_pki_types::PrivateKeyDer::Pkcs1(der.into())
     } else {
-        tracing::info!("OTP email sent to {to}");
+        rustls_pki_types::PrivateKeyDer::Pkcs8(der.into())
+    };
+
+    RsaKey::<Sha256>::from_key_der(key_der).map_err(|e| format!("DKIM key parse: {e}"))
+}
+
+fn dkim_sign(raw_message: &[u8], settings: &MailSettings) -> Result<Vec<u8>, String> {
+    use mail_auth::common::headers::HeaderWriter;
+
+    if settings.dkim_private_key_pem.is_empty() {
+        tracing::warn!("No DKIM key configured, sending unsigned");
+        return Ok(raw_message.to_vec());
     }
+
+    let pk = parse_dkim_private_key(&settings.dkim_private_key_pem)?;
+
+    let signature = mail_auth::dkim::DkimSigner::from_key(pk)
+        .domain(&settings.dkim_domain)
+        .selector(&settings.dkim_selector)
+        .headers(["From", "To", "Subject", "Date", "Message-ID"])
+        .sign(raw_message)
+        .map_err(|e| format!("DKIM signing failed: {e}"))?;
+
+    let dkim_header = signature.to_header();
+    let mut signed = Vec::with_capacity(dkim_header.len() + raw_message.len());
+    signed.extend_from_slice(dkim_header.as_bytes());
+    signed.extend_from_slice(raw_message);
+    Ok(signed)
+}
+
+pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), String> {
+    if !super::env_truthy("SMTP_ENABLE") {
+        tracing::debug!("Mail disabled, skipping OTP email to {to}");
+        return Ok(());
+    }
+
+    let settings = mail_settings();
+    let from_mbox = parse_from_mailbox(&settings.from).ok_or("Invalid SMTP_FROM address")?;
+    let to_mbox =
+        parse_recipient_mailbox(to).ok_or_else(|| format!("Invalid recipient address: {to}"))?;
+    let email = build_otp_email(from_mbox, to_mbox, code, to).ok_or("Failed to build OTP email")?;
+
+    let envelope = email.envelope().clone();
+    let raw = email.formatted();
+    let signed = dkim_sign(&raw, &settings)?;
+
+    let domain = recipient_domain(to).ok_or_else(|| format!("Cannot extract domain from {to}"))?;
+    let mx_host = resolve_mx(domain).await?;
+
+    let tls_params = TlsParameters::new(mx_host.clone())
+        .map_err(|e| format!("TLS params for {mx_host}: {e}"))?;
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&mx_host)
+        .port(25)
+        .tls(lettre::transport::smtp::client::Tls::Opportunistic(
+            tls_params,
+        ))
+        .build();
+
+    mailer
+        .send_raw(&envelope, &signed)
+        .await
+        .map_err(|e| format!("SMTP delivery to {mx_host} failed: {e}"))?;
+
+    tracing::info!("OTP email delivered to {to} via {mx_host}");
+    Ok(())
 }
