@@ -72,6 +72,7 @@ fn build_from_context(
         .unwrap_or_else(|| unknown_preview(event.creator_id));
 
     let event_tags = ctx.tags.get(&event.id).cloned().unwrap_or_default();
+    let is_saved = ctx.saved_event_ids.contains(&event.id);
 
     EventResponse {
         id: event.id.to_string(),
@@ -91,6 +92,7 @@ fn build_from_context(
         attendees_preview,
         tags: event_tags,
         is_attending,
+        is_saved,
         is_pending,
         requires_approval: event.requires_approval,
         conversation_id: event.conversation_id.clone(),
@@ -111,7 +113,7 @@ pub(in crate::api) async fn build_event_responses_with_conn(
     profile_id: &Uuid,
     conn: &mut crate::db::DbConn,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
-    let batch_ctx = load_event_batch_context(event_models, conn).await?;
+    let batch_ctx = load_event_batch_context(event_models, *profile_id, conn).await?;
     let mut responses: Vec<EventResponse> = event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))

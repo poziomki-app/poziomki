@@ -45,6 +45,7 @@ pub(in crate::api) async fn load_profile_tags(
             scope: scope_from_str(&t.scope),
             category: t.category.clone(),
             emoji: t.emoji.clone(),
+            parent_id: t.parent_id.map(|id| id.to_string()),
             onboarding_order: t.onboarding_order.clone(),
         })
         .collect())

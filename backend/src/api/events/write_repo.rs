@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
@@ -64,25 +64,25 @@ pub(in crate::api) async fn check_capacity_and_upsert(
         .map_err(Into::into)
 }
 
-pub(in crate::api) async fn insert_event(
+pub(in crate::api) async fn insert_event_with_conn(
+    conn: &mut AsyncPgConnection,
     new_event: &NewEvent,
 ) -> std::result::Result<Event, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let inserted = diesel::insert_into(events::table)
         .values(new_event)
-        .get_result::<Event>(&mut conn)
+        .get_result::<Event>(conn)
         .await?;
     Ok(inserted)
 }
 
-pub(in crate::api) async fn update_event(
+pub(in crate::api) async fn update_event_with_conn(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
     changeset: &EventChangeset,
 ) -> std::result::Result<Event, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let updated = diesel::update(events::table.find(event_id))
         .set(changeset)
-        .get_result::<Event>(&mut conn)
+        .get_result::<Event>(conn)
         .await?;
     Ok(updated)
 }
@@ -92,6 +92,32 @@ pub(in crate::api) async fn delete_event(
 ) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
     diesel::delete(events::table.find(event_id))
+        .execute(&mut conn)
+        .await?;
+    Ok(())
+}
+
+pub(in crate::api) async fn upsert_attendee(
+    event_id: Uuid,
+    profile_id: Uuid,
+    status: &str,
+) -> std::result::Result<(), crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    diesel::delete(
+        event_attendees::table
+            .filter(event_attendees::event_id.eq(event_id))
+            .filter(event_attendees::profile_id.eq(profile_id)),
+    )
+    .execute(&mut conn)
+    .await?;
+
+    let attendee = EventAttendee {
+        event_id,
+        profile_id,
+        status: status.to_string(),
+    };
+    diesel::insert_into(event_attendees::table)
+        .values(&attendee)
         .execute(&mut conn)
         .await?;
     Ok(())
@@ -108,6 +134,21 @@ pub(in crate::api) async fn delete_event_attendee(
             .filter(event_attendees::profile_id.eq(profile_id)),
     )
     .execute(&mut conn)
+    .await?;
+    Ok(())
+}
+
+pub(in crate::api) async fn delete_event_attendee_with_conn(
+    conn: &mut AsyncPgConnection,
+    event_id: Uuid,
+    profile_id: Uuid,
+) -> std::result::Result<(), crate::error::AppError> {
+    diesel::delete(
+        event_attendees::table
+            .filter(event_attendees::event_id.eq(event_id))
+            .filter(event_attendees::profile_id.eq(profile_id)),
+    )
+    .execute(conn)
     .await?;
     Ok(())
 }

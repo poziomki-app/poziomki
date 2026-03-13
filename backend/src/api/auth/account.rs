@@ -7,9 +7,10 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 
+use crate::api::auth_or_respond;
+
 use super::super::state::{DataResponse, DeleteAccountBody, SuccessResponse};
 use super::auth_service::unauthorized_error;
-use crate::api::auth_or_respond;
 type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;
@@ -86,7 +87,7 @@ pub(in crate::api) async fn export_data(
         })
     });
 
-    let (tags, created_events, attended_events, user_uploads) =
+    let (tags, created_events, attended_events, event_interactions, user_uploads) =
         load_profile_data(profile_id).await?;
 
     let user_sessions = auth_export_queries::load_user_sessions(user.id).await?;
@@ -104,6 +105,7 @@ pub(in crate::api) async fn export_data(
         "tags": tags,
         "events": created_events,
         "eventsAttended": attended_events,
+        "eventInteractions": event_interactions,
         "uploads": user_uploads,
         "sessions": user_sessions,
         "settings": settings,
@@ -123,17 +125,19 @@ async fn load_profile_data(
         Vec<serde_json::Value>,
         Vec<serde_json::Value>,
         Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
     ),
     crate::error::AppError,
 > {
     let Some(pid) = profile_id else {
-        return Ok((vec![], vec![], vec![], vec![]));
+        return Ok((vec![], vec![], vec![], vec![], vec![]));
     };
 
     let tags = auth_export_queries::load_user_tags(pid).await?;
     let created = auth_export_queries::load_created_events(pid).await?;
     let attended = auth_export_queries::load_attended_events(pid).await?;
+    let interactions = auth_export_queries::load_event_interactions(pid).await?;
     let uploads = auth_export_queries::load_user_uploads(pid).await?;
 
-    Ok((tags, created, attended, uploads))
+    Ok((tags, created, attended, interactions, uploads))
 }
