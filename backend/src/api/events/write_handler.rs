@@ -176,9 +176,10 @@ pub(in crate::api) async fn event_update(
 
     // Use the more restrictive of old / new cap so approval cannot
     // exceed what the organizer intended with this update.
-    let effective_max = match changeset.max_attendees.flatten() {
-        Some(new_max) => Some(new_max.min(current_event.max_attendees.unwrap_or(new_max))),
+    let effective_max = match changeset.max_attendees {
         None => current_event.max_attendees,
+        Some(None) => None,
+        Some(Some(new_max)) => Some(new_max.min(current_event.max_attendees.unwrap_or(new_max))),
     };
     let mut conn = crate::db::conn().await?;
     let mut attempts = 0;
