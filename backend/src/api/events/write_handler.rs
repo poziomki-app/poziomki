@@ -174,9 +174,6 @@ pub(in crate::api) async fn event_update(
     let disabling_approval =
         current_event.requires_approval && changeset.requires_approval == Some(false);
 
-    let effective_max = changeset
-        .max_attendees
-        .unwrap_or(current_event.max_attendees);
     let mut conn = crate::db::conn().await?;
     let mut attempts = 0;
     let (updated, auto_approved) = loop {
@@ -209,7 +206,7 @@ pub(in crate::api) async fn event_update(
                         events_write_repo::auto_approve_pending_with_conn(
                             conn,
                             event_uuid,
-                            effective_max,
+                            updated.max_attendees,
                         )
                         .await?
                     } else {
@@ -348,8 +345,10 @@ pub(in crate::api) async fn event_attend(
         events_write_repo::UpsertOutcome::Full => {
             return Ok(validation_error(&headers, "Event is full"));
         }
-        events_write_repo::UpsertOutcome::Accepted
-        | events_write_repo::UpsertOutcome::StatusMismatch => {}
+        events_write_repo::UpsertOutcome::Accepted => {}
+        events_write_repo::UpsertOutcome::StatusMismatch => {
+            debug_assert!(false, "StatusMismatch returned with require_status = None");
+        }
     }
 
     if effective_status != "pending" {

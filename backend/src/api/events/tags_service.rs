@@ -53,7 +53,10 @@ pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
         ids.sort_unstable();
         ids.dedup();
         if !ids.is_empty() {
-            let matched = load_existing_event_tag_ids(conn, &ids).await?;
+            let matched: std::collections::HashSet<Uuid> = load_existing_event_tag_ids(conn, &ids)
+                .await?
+                .into_iter()
+                .collect();
             if matched.len() != ids.len() {
                 return Err(crate::error::AppError::Validation(
                     "All tagIds must reference existing event tags".to_string(),
@@ -114,9 +117,11 @@ async fn validate_event_tag_ids(
     let mut conn = crate::db::conn()
         .await
         .map_err(|e| Box::new(crate::error::AppError::from(e).into_response()))?;
-    let matched = load_existing_event_tag_ids(&mut conn, &parsed)
+    let matched: std::collections::HashSet<Uuid> = load_existing_event_tag_ids(&mut conn, &parsed)
         .await
-        .map_err(|e| Box::new(e.into_response()))?;
+        .map_err(|e| Box::new(e.into_response()))?
+        .into_iter()
+        .collect();
 
     if matched.len() != parsed.len() {
         return Err(Box::new(validation_error(
