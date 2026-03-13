@@ -145,9 +145,8 @@ fun EventDetailScreen(
                                             Text("Leave")
                                         }
                                     } else {
-                                        val isFull =
-                                            event.maxAttendees != null &&
-                                                event.attendeesCount >= event.maxAttendees
+                                        val max = event.maxAttendees
+                                        val isFull = max != null && event.attendeesCount >= max
                                         Button(
                                             onClick = { viewModel.attendEvent() },
                                             modifier = Modifier.weight(1f),
