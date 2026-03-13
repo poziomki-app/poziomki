@@ -34,7 +34,8 @@ use events_view::attendee_info;
 
 pub(super) use events_view::{build_event_response, build_event_responses_with_conn};
 pub(super) use events_write_handler::{
-    event_attend, event_create, event_delete, event_leave, event_update,
+    event_approve_attendee, event_attend, event_create, event_delete, event_leave,
+    event_reject_attendee, event_update,
 };
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
@@ -120,10 +121,10 @@ pub(super) async fn event_attendees(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    if !events_repo::event_exists(event_uuid).await? {
+    let Some(event) = events_repo::find_event(event_uuid).await? else {
         return Ok(not_found_event(&headers, &id));
-    }
+    };
 
-    let data = attendee_info(event_uuid).await?;
+    let data = attendee_info(event_uuid, event.creator_id).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

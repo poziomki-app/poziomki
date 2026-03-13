@@ -147,6 +147,7 @@ class SyncEngine(
                     creator_name = serverEvent.creator?.name,
                     creator_profile_picture = serverEvent.creator?.profilePicture,
                     attendees_count = serverEvent.attendeesCount.toLong(),
+                    max_attendees = serverEvent.maxAttendees?.toLong(),
                     is_attending = if (serverEvent.isAttending) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
@@ -160,6 +161,8 @@ class SyncEngine(
                     conversation_id = serverEvent.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    requires_approval = if (serverEvent.requiresApproval) 1L else 0L,
+                    is_pending = if (serverEvent.isPending) 1L else 0L,
                 )
                 db.eventQueries.deleteById(localId)
                 pendingOps.updateEntityId(localId, serverEvent.id)
@@ -194,6 +197,7 @@ class SyncEngine(
                     creator_name = event.creator?.name,
                     creator_profile_picture = event.creator?.profilePicture,
                     attendees_count = event.attendeesCount.toLong(),
+                    max_attendees = event.maxAttendees?.toLong(),
                     is_attending = if (event.isAttending) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
@@ -207,6 +211,8 @@ class SyncEngine(
                     conversation_id = event.conversationId,
                     cached_at = now,
                     is_dirty = 0L,
+                    requires_approval = if (event.requiresApproval) 1L else 0L,
+                    is_pending = if (event.isPending) 1L else 0L,
                 )
                 pendingOps.complete(op.id)
                 true
