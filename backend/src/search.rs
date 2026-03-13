@@ -344,6 +344,7 @@ async fn search_dm_room_ids(
         SELECT dmr.room_id
         FROM profiles p
         JOIN users u ON u.id = p.user_id
+        LEFT JOIN user_settings us ON us.user_id = p.user_id
         JOIN matrix_dm_rooms dmr
           ON (dmr.user_low_pid = p.id AND dmr.user_high_pid = $3)
           OR (dmr.user_high_pid = p.id AND dmr.user_low_pid = $3)
@@ -351,6 +352,10 @@ async fn search_dm_room_ids(
             p.id != $3
             AND (
                 p.public_search_vector @@ websearch_to_tsquery('simple', $1)
+                OR (
+                    COALESCE(us.privacy_show_program, true) = true
+                    AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
+                )
                 OR LOWER(p.name) LIKE $2
             )
         ORDER BY
