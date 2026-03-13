@@ -173,7 +173,12 @@ class EventCreateViewModel(
         }
     }
 
-    private suspend fun submitUpdate(s: EventCreateState, eventId: String, maxAttendees: Int?, onSaved: () -> Unit) {
+    private suspend fun submitUpdate(
+        s: EventCreateState,
+        eventId: String,
+        maxAttendees: Int?,
+        onSaved: () -> Unit,
+    ) {
         val request =
             UpdateEventRequest(
                 title = s.title,
@@ -192,7 +197,11 @@ class EventCreateViewModel(
         }
     }
 
-    private suspend fun submitCreate(s: EventCreateState, maxAttendees: Int?, onSaved: () -> Unit) {
+    private suspend fun submitCreate(
+        s: EventCreateState,
+        maxAttendees: Int?,
+        onSaved: () -> Unit,
+    ) {
         val request =
             CreateEventRequest(
                 title = s.title,
