@@ -28,14 +28,14 @@ async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
 
 async fn load_show_program(profile_user_id: i32) -> bool {
     let Ok(mut conn) = crate::db::conn().await else {
-        return true;
+        return false;
     };
     user_settings::table
         .filter(user_settings::user_id.eq(profile_user_id))
         .first::<UserSetting>(&mut conn)
         .await
-        .ok()
-        .is_none_or(|s| s.privacy_show_program)
+        .map(|s| s.privacy_show_program)
+        .unwrap_or(false)
 }
 
 fn maybe_hide_program(

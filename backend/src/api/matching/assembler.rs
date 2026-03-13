@@ -44,7 +44,7 @@ fn build_profile_recommendation(
         .privacy_map
         .get(&profile.user_id)
         .copied()
-        .unwrap_or(true);
+        .unwrap_or(false);
     let program = if show_program {
         profile.program.clone()
     } else {
@@ -70,19 +70,18 @@ fn build_profile_recommendation(
 async fn batch_load_show_program(
     user_ids: &[i32],
     conn: &mut crate::db::DbConn,
-) -> HashMap<i32, bool> {
+) -> crate::error::AppResult<HashMap<i32, bool>> {
     if user_ids.is_empty() {
-        return HashMap::new();
+        return Ok(HashMap::new());
     }
     let settings: Vec<UserSetting> = user_settings::table
         .filter(user_settings::user_id.eq_any(user_ids))
         .load(conn)
-        .await
-        .unwrap_or_default();
-    settings
+        .await?;
+    Ok(settings
         .into_iter()
         .map(|s| (s.user_id, s.privacy_show_program))
-        .collect()
+        .collect())
 }
 
 pub(super) async fn build_recommendations_response(
@@ -96,7 +95,7 @@ pub(super) async fn build_recommendations_response(
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
     let top_tags = repo.batch_load_profile_tags(&top_ids, conn).await?;
 
-    let privacy_map = batch_load_show_program(&user_ids, conn).await;
+    let privacy_map = batch_load_show_program(&user_ids, conn).await?;
 
     let pic_filenames: Vec<String> = top
         .iter()
