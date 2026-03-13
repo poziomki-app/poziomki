@@ -7,11 +7,12 @@ use uuid::Uuid;
 use super::status_from_str;
 use crate::api::state::{EventTagResponse, ProfilePreview, TagScope};
 use crate::db::models::event_attendees::EventAttendee;
+use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
 use crate::db::models::tags::Tag;
-use crate::db::schema::{event_attendees, event_tags, profiles, tags};
+use crate::db::schema::{event_attendees, event_interactions, event_tags, profiles, tags};
 
 #[derive(Clone)]
 pub(super) struct AttendeeRow {
@@ -23,6 +24,7 @@ pub(super) struct EventBatchContext {
     pub(super) creators: HashMap<Uuid, ProfilePreview>,
     pub(super) attendees: HashMap<Uuid, Vec<AttendeeRow>>,
     pub(super) tags: HashMap<Uuid, Vec<EventTagResponse>>,
+    pub(super) saved_event_ids: HashSet<Uuid>,
 }
 
 fn scope_from_str(s: &str) -> TagScope {
@@ -173,6 +175,7 @@ async fn load_event_tag_map(
                     id: tag.id.to_string(),
                     name: tag.name.clone(),
                     scope: scope_from_str(&tag.scope),
+                    parent_id: tag.parent_id.map(|id| id.to_string()),
                 });
         }
     }
@@ -180,8 +183,28 @@ async fn load_event_tag_map(
     Ok(tags_by_event)
 }
 
+async fn load_saved_event_ids(
+    event_ids: &[Uuid],
+    profile_id: Uuid,
+    conn: &mut crate::db::DbConn,
+) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
+    if event_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let rows = event_interactions::table
+        .filter(event_interactions::profile_id.eq(profile_id))
+        .filter(event_interactions::event_id.eq_any(event_ids))
+        .filter(event_interactions::kind.eq(crate::api::events::EVENT_INTERACTION_SAVED))
+        .load::<EventInteraction>(conn)
+        .await?;
+
+    Ok(rows.into_iter().map(|row| row.event_id).collect())
+}
+
 pub(super) async fn load_event_batch_context(
     event_models: &[Event],
+    profile_id: Uuid,
     conn: &mut crate::db::DbConn,
 ) -> std::result::Result<EventBatchContext, crate::error::AppError> {
     if event_models.is_empty() {
@@ -189,6 +212,7 @@ pub(super) async fn load_event_batch_context(
             creators: HashMap::new(),
             attendees: HashMap::new(),
             tags: HashMap::new(),
+            saved_event_ids: HashSet::new(),
         });
     }
 
@@ -196,10 +220,12 @@ pub(super) async fn load_event_batch_context(
     let creators = load_creator_previews(event_models, conn).await?;
     let attendees = load_event_attendee_map(&event_ids, conn).await?;
     let tags = load_event_tag_map(&event_ids, conn).await?;
+    let saved_event_ids = load_saved_event_ids(&event_ids, profile_id, conn).await?;
 
     Ok(EventBatchContext {
         creators,
         attendees,
         tags,
+        saved_event_ids,
     })
 }

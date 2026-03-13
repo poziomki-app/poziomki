@@ -6,6 +6,7 @@ const TRUNCATE_ORDER: &[&str] = &[
     "auth_rate_limits",
     "matrix_dm_rooms",
     "event_attendees",
+    "event_interactions",
     "event_tags",
     "profile_tags",
     "events",

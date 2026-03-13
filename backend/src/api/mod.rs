@@ -26,7 +26,6 @@ pub(crate) use common::{
     auth_or_respond, env_non_empty, error_response, extract_filename, parse_uuid,
     parse_uuid_response, resolve_image_url, resolve_image_urls, resolve_thumbhashes, ErrorSpec,
 };
-
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
 }
@@ -62,9 +61,13 @@ fn degrees_routes() -> Router<AppContext> {
 }
 
 fn tags_routes() -> Router<AppContext> {
-    Router::new()
+    let cached = Router::new()
         .route("/", get(catalog::tags_search).post(catalog::tags_create))
-        .layer(cache_layer("public, max-age=1800"))
+        .layer(cache_layer("public, max-age=1800"));
+
+    Router::new()
+        .route("/suggestions", post(catalog::tags_suggestions))
+        .merge(cached)
 }
 
 fn events_routes() -> Router<AppContext> {
@@ -77,6 +80,8 @@ fn events_routes() -> Router<AppContext> {
         .route("/{id}/attendees", get(events::event_attendees))
         .route("/{id}/attend", post(events::event_attend))
         .route("/{id}/attend", delete(events::event_leave))
+        .route("/{id}/save", post(events::event_save))
+        .route("/{id}/save", delete(events::event_unsave))
         .route(
             "/{id}/attendees/{profile_id}/approve",
             post(events::event_approve_attendee),

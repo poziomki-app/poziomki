@@ -32,6 +32,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) tags: Vec<EventTagResponse>,
     #[serde(rename = "isAttending")]
     pub(in crate::api) is_attending: bool,
+    #[serde(rename = "isSaved")]
+    pub(in crate::api) is_saved: bool,
     #[serde(rename = "isPending")]
     pub(in crate::api) is_pending: bool,
     #[serde(rename = "requiresApproval")]
