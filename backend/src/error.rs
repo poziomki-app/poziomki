@@ -24,7 +24,7 @@ impl IntoResponse for AppError {
         if let Self::Validation(msg) = &self {
             return (
                 axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-                axum::Json(serde_json::json!({ "message": msg })),
+                axum::Json(serde_json::json!({ "error": msg, "code": "VALIDATION_ERROR" })),
             )
                 .into_response();
         }

@@ -279,6 +279,7 @@ fn resolve_attend_status(payload: Option<Json<AttendEventBody>>) -> &'static str
         .and_then(|Json(body)| body.status)
         .unwrap_or(AttendeeStatus::Going)
     {
+        // Clients cannot self-assign pending; the approval gate below handles downgrade
         AttendeeStatus::Going | AttendeeStatus::Pending => ATTENDEE_GOING,
         AttendeeStatus::Interested => ATTENDEE_INTERESTED,
         AttendeeStatus::Invited => ATTENDEE_INVITED,

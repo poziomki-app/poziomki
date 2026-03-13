@@ -185,6 +185,8 @@ pub(in crate::api) async fn load_attendee(
 
 /// Auto-approve pending attendees for an event, respecting `max_attendees`.
 /// Must be called inside a serializable transaction to prevent capacity races.
+/// Promotion order is deterministic (by UUID) but not FIFO — the table has no
+/// `created_at` column, so arrival-time ordering is unavailable.
 /// Returns the profile IDs that were promoted so the caller can enqueue
 /// Matrix membership syncs.
 pub(in crate::api) async fn auto_approve_pending_with_conn(
