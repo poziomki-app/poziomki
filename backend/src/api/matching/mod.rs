@@ -51,7 +51,7 @@ pub(super) async fn profiles_recommendations(
     let limit = query.limit.unwrap_or(10).clamp(1, 50) as usize;
 
     let mut conn = crate::db::conn().await?;
-    let user_ctx = repo.load_user_context(user.id, &mut conn).await?;
+    let user_ctx = repo.load_profile_context(user.id, &mut conn).await?;
 
     // Fetch candidate profiles (more than limit so we can score and rank)
     let candidates = repo
@@ -143,6 +143,8 @@ pub(super) async fn events_recommendations(
     let joined_event_ids: Vec<Uuid> = user_ctx.joined_event_ids.iter().copied().collect();
     let mut all_history_ids = saved_event_ids.clone();
     all_history_ids.extend(&joined_event_ids);
+    all_history_ids.sort_unstable();
+    all_history_ids.dedup();
     let all_history_tags = repo
         .batch_load_event_tag_ids(&all_history_ids, &mut conn)
         .await?;
