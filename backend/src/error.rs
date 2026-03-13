@@ -7,6 +7,8 @@ pub enum AppError {
     #[error("{0}")]
     Message(String),
     #[error("{0}")]
+    Validation(String),
+    #[error("{0}")]
     Any(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -19,6 +21,13 @@ impl AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        if let Self::Validation(msg) = &self {
+            return (
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                axum::Json(serde_json::json!({ "message": msg })),
+            )
+                .into_response();
+        }
         tracing::error!(error = %self, "internal application error");
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,

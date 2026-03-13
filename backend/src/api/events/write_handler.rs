@@ -155,10 +155,11 @@ pub(in crate::api) async fn event_update(
     Path(id): Path<String>,
     Json(payload): Json<UpdateEventBody>,
 ) -> Result<Response> {
-    let (changeset, event_uuid, profile) = match event_update_inner(&headers, &id, &payload).await {
-        Ok(data) => data,
-        Err(response) => return Ok(*response),
-    };
+    let (changeset, event_uuid, profile, current_event) =
+        match event_update_inner(&headers, &id, &payload).await {
+            Ok(data) => data,
+            Err(response) => return Ok(*response),
+        };
 
     let tag_names = payload.tags.clone();
     let validated_tag_ids = if payload.tag_ids.is_some() {
@@ -170,9 +171,14 @@ pub(in crate::api) async fn event_update(
         None
     };
 
+    let disabling_approval =
+        current_event.requires_approval && changeset.requires_approval == Some(false);
+
     let mut conn = crate::db::conn().await?;
-    let updated = conn
-        .transaction(|conn| {
+    let (updated, auto_approved) = conn
+        .build_transaction()
+        .serializable()
+        .run(|conn| {
             let changeset = crate::db::models::events::EventChangeset {
                 title: changeset.title.clone(),
                 description: changeset.description.clone(),
@@ -192,11 +198,32 @@ pub(in crate::api) async fn event_update(
             Box::pin(async move {
                 let updated =
                     events_write_repo::update_event_with_conn(conn, event_uuid, &changeset).await?;
+                let auto_approved = if disabling_approval {
+                    events_write_repo::auto_approve_pending_with_conn(
+                        conn,
+                        event_uuid,
+                        updated.max_attendees,
+                    )
+                    .await?
+                } else {
+                    vec![]
+                };
                 maybe_sync_tags_with_conn(conn, event_uuid, tag_names, validated_tag_ids).await?;
-                Ok::<Event, crate::error::AppError>(updated)
+                Ok::<(Event, Vec<Uuid>), crate::error::AppError>((updated, auto_approved))
             })
         })
         .await?;
+
+    for pid in &auto_approved {
+        if let Err(error) = enqueue_matrix_event_membership_sync(&updated.id, pid, false).await {
+            tracing::warn!(
+                %error,
+                event_id = %updated.id,
+                profile_id = %pid,
+                "failed to enqueue matrix membership sync for auto-approved attendee"
+            );
+        }
+    }
 
     let data = build_event_response(&updated, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
@@ -252,10 +279,9 @@ fn resolve_attend_status(payload: Option<Json<AttendEventBody>>) -> &'static str
         .and_then(|Json(body)| body.status)
         .unwrap_or(AttendeeStatus::Going)
     {
-        AttendeeStatus::Going => ATTENDEE_GOING,
+        AttendeeStatus::Going | AttendeeStatus::Pending => ATTENDEE_GOING,
         AttendeeStatus::Interested => ATTENDEE_INTERESTED,
         AttendeeStatus::Invited => ATTENDEE_INVITED,
-        AttendeeStatus::Pending => "pending",
     }
 }
 
@@ -289,15 +315,16 @@ pub(in crate::api) async fn event_attend(
             status_str
         };
 
-    let accepted = events_write_repo::check_capacity_and_upsert(
+    let outcome = events_write_repo::check_capacity_and_upsert(
         event_uuid,
         profile.id,
         effective_status,
         event.max_attendees,
         already_going,
+        None,
     )
     .await?;
-    if !accepted {
+    if outcome == events_write_repo::UpsertOutcome::Full {
         return Ok(validation_error(&headers, "Event is full"));
     }
 
@@ -359,16 +386,27 @@ pub(in crate::api) async fn event_approve_attendee(
     let target_profile_id = Uuid::parse_str(&profile_id_str)
         .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
-    let existing = events_write_repo::find_attendee_status(event_uuid, target_profile_id).await?;
-    if existing.as_deref() != Some("pending") {
-        return Ok(super::events_service::validation_error(
-            &headers,
-            "Attendee is not pending approval",
-        ));
+    let outcome = events_write_repo::check_capacity_and_upsert(
+        event_uuid,
+        target_profile_id,
+        "going",
+        event.max_attendees,
+        false,
+        Some("pending"),
+    )
+    .await?;
+    match outcome {
+        events_write_repo::UpsertOutcome::Full => {
+            return Ok(validation_error(&headers, "Event is full"));
+        }
+        events_write_repo::UpsertOutcome::StatusMismatch => {
+            return Ok(super::events_service::validation_error(
+                &headers,
+                "Attendee is not pending approval",
+            ));
+        }
+        events_write_repo::UpsertOutcome::Accepted => {}
     }
-
-    // upsert_attendee records the "joined" interaction inside the same transaction
-    events_write_repo::upsert_attendee(event_uuid, target_profile_id, "going").await?;
 
     if let Err(error) =
         enqueue_matrix_event_membership_sync(&event.id, &target_profile_id, false).await
@@ -409,15 +447,13 @@ pub(in crate::api) async fn event_reject_attendee(
     let target_profile_id = Uuid::parse_str(&profile_id_str)
         .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
-    let existing = events_write_repo::find_attendee_status(event_uuid, target_profile_id).await?;
-    if existing.as_deref() != Some("pending") {
+    let deleted = events_write_repo::delete_pending_attendee(event_uuid, target_profile_id).await?;
+    if !deleted {
         return Ok(super::events_service::validation_error(
             &headers,
             "Attendee is not pending approval",
         ));
     }
-
-    events_write_repo::delete_event_attendee(event_uuid, target_profile_id).await?;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },

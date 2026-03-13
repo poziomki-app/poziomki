@@ -52,6 +52,14 @@ pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
         ids.truncate(MAX_EVENT_TAGS);
         ids.sort_unstable();
         ids.dedup();
+        if !ids.is_empty() {
+            let matched = load_existing_event_tag_ids(conn, &ids).await?;
+            if matched.len() != ids.len() {
+                return Err(crate::error::AppError::Validation(
+                    "All tagIds must reference existing event tags".to_string(),
+                ));
+            }
+        }
         return Ok(ids);
     }
 
