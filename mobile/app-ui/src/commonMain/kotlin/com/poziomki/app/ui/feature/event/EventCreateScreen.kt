@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -420,6 +422,17 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            SectionLabel("limit uczestników (opcjonalnie)")
+            PoziomkiTextField(
+                value = state.attendeeLimit,
+                onValueChange = viewModel::updateAttendeeLimit,
+                placeholder = "np. 50",
+                error = state.attendeeLimitError,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Date and time row
             SectionLabel("start")
             Row(
@@ -508,6 +521,29 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            // Requires approval toggle
+            SectionLabel("wymagaj akceptacji")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "nowi uczestnicy muszą zostać zaakceptowani",
+                    fontFamily = NunitoFamily,
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.Switch(
+                    checked = state.requiresApproval,
+                    onCheckedChange = viewModel::updateRequiresApproval,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Help text
             Text(
                 text = "Po utworzeniu możesz zaprosić ludzi, udostępniając link do czatu wydarzenia.",
@@ -538,7 +574,7 @@ fun EventCreateScreen(
                 text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
                 onClick = { viewModel.saveEvent(onCreated) },
                 variant = ButtonVariant.PRIMARY,
-                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank(),
+                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank() && state.attendeeLimitError == null,
                 loading = state.isLoading,
             )
 

@@ -14,6 +14,7 @@ pub(in crate::api) enum AttendeeStatus {
     Going,
     Interested,
     Invited,
+    Pending,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, PartialEq)]

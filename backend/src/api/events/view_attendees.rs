@@ -28,6 +28,7 @@ fn build_attendee_info(
     row: &AttendeeRow,
     user_models: &[User],
     url_map: &HashMap<String, String>,
+    creator_id: Uuid,
 ) -> AttendeeFullInfo {
     let user_pid = user_models
         .iter()
@@ -45,11 +46,13 @@ fn build_attendee_info(
         name: row.profile.name.clone(),
         profile_picture,
         status: row.status,
+        is_creator: row.profile.id == creator_id,
     }
 }
 
 pub(in crate::api) async fn attendee_info(
     event_id: Uuid,
+    creator_id: Uuid,
 ) -> std::result::Result<Vec<AttendeeFullInfo>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
     let rows = load_attendee_rows(event_id, &mut conn).await?;
@@ -61,8 +64,14 @@ pub(in crate::api) async fn attendee_info(
         .collect();
     let url_map = resolve_image_map(filenames).await;
 
-    Ok(rows
+    let mut list: Vec<AttendeeFullInfo> = rows
         .iter()
-        .map(|row| build_attendee_info(row, &user_models, &url_map))
-        .collect())
+        .map(|row| build_attendee_info(row, &user_models, &url_map, creator_id))
+        .collect();
+    list.sort_by(|a, b| {
+        b.is_creator
+            .cmp(&a.is_creator)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    Ok(list)
 }

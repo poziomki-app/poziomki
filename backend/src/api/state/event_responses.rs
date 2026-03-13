@@ -25,6 +25,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) creator: ProfilePreview,
     #[serde(rename = "attendeesCount")]
     pub(in crate::api) attendees_count: usize,
+    #[serde(rename = "maxAttendees")]
+    pub(in crate::api) max_attendees: Option<i32>,
     #[serde(rename = "attendeesPreview")]
     pub(in crate::api) attendees_preview: Vec<ProfilePreview>,
     pub(in crate::api) tags: Vec<EventTagResponse>,
@@ -32,6 +34,10 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) is_attending: bool,
     #[serde(rename = "isSaved")]
     pub(in crate::api) is_saved: bool,
+    #[serde(rename = "isPending")]
+    pub(in crate::api) is_pending: bool,
+    #[serde(rename = "requiresApproval")]
+    pub(in crate::api) requires_approval: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -40,6 +46,7 @@ pub(in crate::api) struct EventResponse {
 
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::api) struct AttendeeFullInfo {
+    #[serde(rename = "profileId")]
     pub(in crate::api) id: String,
     #[serde(rename = "userId")]
     pub(in crate::api) user_id: String,
@@ -47,4 +54,6 @@ pub(in crate::api) struct AttendeeFullInfo {
     #[serde(rename = "profilePicture")]
     pub(in crate::api) profile_picture: Option<String>,
     pub(in crate::api) status: AttendeeStatus,
+    #[serde(rename = "isCreator")]
+    pub(in crate::api) is_creator: bool,
 }
