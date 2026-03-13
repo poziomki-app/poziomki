@@ -18,6 +18,7 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+@Suppress("TooManyFunctions")
 internal class EventMutationRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
@@ -55,52 +56,32 @@ internal class EventMutationRepository(
             val now = Clock.System.now().toEpochMilliseconds()
             upsertEvent(tempEvent, now, isDirty = true, inListFeed = true)
 
-            if (connectivityMonitor.isOnline.value) {
-                val onlineResult = withTimeoutOrNull(CREATE_EVENT_ONLINE_TIMEOUT_MS) { api.createEvent(request) }
-                when (onlineResult) {
-                    is ApiResult.Success -> {
+            if (!connectivityMonitor.isOnline.value) {
+                return@withContext enqueueCreate(tempId, request, tempEvent)
+            }
+
+            val onlineResult = withTimeoutOrNull(CREATE_EVENT_ONLINE_TIMEOUT_MS) { api.createEvent(request) }
+            when (onlineResult) {
+                is ApiResult.Success -> {
+                    db.eventQueries.deleteById(tempId)
+                    upsertEvent(onlineResult.data, Clock.System.now().toEpochMilliseconds(), inListFeed = true)
+                    ApiResult.Success(onlineResult.data)
+                }
+
+                is ApiResult.Error -> {
+                    if (shouldRetry(onlineResult.status)) {
+                        enqueueCreate(tempId, request, tempEvent)
+                    } else {
                         db.eventQueries.deleteById(tempId)
-                        upsertEvent(
-                            onlineResult.data,
-                            Clock.System.now().toEpochMilliseconds(),
-                            inListFeed = true,
-                        )
-                        ApiResult.Success(onlineResult.data)
-                    }
-
-                    is ApiResult.Error -> {
-                        if (shouldRetry(onlineResult.status)) {
-                            pendingOps.enqueue(
-                                type = "create_event",
-                                entityId = tempId,
-                                payload = json.encodeToString(request),
-                            )
-                            ApiResult.Success(tempEvent)
-                        } else {
-                            db.eventQueries.deleteById(tempId)
-                            onlineResult
-                        }
-                    }
-
-                    null -> {
-                        pendingOps.enqueue(
-                            type = "create_event",
-                            entityId = tempId,
-                            payload = json.encodeToString(request),
-                        )
-                        ApiResult.Success(tempEvent)
+                        onlineResult
                     }
                 }
-            } else {
-                pendingOps.enqueue(
-                    type = "create_event",
-                    entityId = tempId,
-                    payload = json.encodeToString(request),
-                )
-                ApiResult.Success(tempEvent)
+
+                null -> enqueueCreate(tempId, request, tempEvent)
             }
         }
 
+    @Suppress("CyclomaticComplexMethod")
     suspend fun updateEvent(
         id: String,
         request: UpdateEventRequest,
@@ -354,6 +335,15 @@ internal class EventMutationRepository(
             statusCode == REQUEST_TIMEOUT_STATUS_CODE ||
             statusCode == TOO_MANY_REQUESTS_STATUS_CODE ||
             statusCode >= SERVER_ERROR_MIN_STATUS_CODE
+
+    private suspend fun enqueueCreate(
+        tempId: String,
+        request: CreateEventRequest,
+        tempEvent: Event,
+    ): ApiResult.Success<Event> {
+        pendingOps.enqueue(type = "create_event", entityId = tempId, payload = json.encodeToString(request))
+        return ApiResult.Success(tempEvent)
+    }
 
     private suspend fun updateEventOnline(
         id: String,
