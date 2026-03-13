@@ -123,8 +123,7 @@ async fn search_profiles(
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
             AND (
-                to_tsvector('simple', COALESCE(p.name, '')) @@ websearch_to_tsquery('simple', $1)
-                OR to_tsvector('simple', COALESCE(p.bio, '')) @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR (
                     (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
                     AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
@@ -139,10 +138,17 @@ async fn search_profiles(
                 )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector,
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC,
             p.updated_at DESC
         LIMIT $3
         ",
@@ -338,17 +344,30 @@ async fn search_dm_room_ids(
         SELECT dmr.room_id
         FROM profiles p
         JOIN users u ON u.id = p.user_id
+        LEFT JOIN user_settings us ON us.user_id = p.user_id
         JOIN matrix_dm_rooms dmr
           ON (dmr.user_low_pid = p.id AND dmr.user_high_pid = $3)
           OR (dmr.user_high_pid = p.id AND dmr.user_low_pid = $3)
         WHERE
             p.id != $3
             AND (
-                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
+                OR (
+                    COALESCE(us.privacy_show_program, true) = true
+                    AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
+                )
                 OR LOWER(p.name) LIKE $2
             )
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN COALESCE(us.privacy_show_program, true) = true
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC,
+            p.updated_at DESC
         LIMIT $4
         ",
     )
