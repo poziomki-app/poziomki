@@ -92,6 +92,33 @@ pub async fn search_all(
     })
 }
 
+/// Searches profiles that match the given text query and returns their profile documents.
+///
+/// The search respects each profile's discoverability and program-visibility settings with
+/// respect to `viewer_user_id`. Results are ranked by text-search relevance (using the
+/// profile's public search vector and, when permitted, the program field) and then by
+/// most recently updated. Returned documents include id (as a string), name, bio,
+/// program (when visible), profile picture, and aggregated tag names.
+///
+/// # Arguments
+///
+/// * `query` - The raw search query used for full-text matching.
+/// * `pattern` - A prepared LIKE pattern (typically `LOWER(query)` wrapped with `%`) used for name and tag matching.
+/// * `limit_i64` - Maximum number of results to return.
+/// * `viewer_user_id` - ID of the user performing the search; used to apply privacy rules.
+///
+/// # Returns
+///
+/// A `Vec<ProfileDocument>` containing matching profiles.
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
+/// let results = crate::search_profiles("alice", "%alice%", 10, 42).await?;
+/// // `results` is a Vec<ProfileDocument>
+/// # Ok(()) }
+/// ```
 async fn search_profiles(
     query: &str,
     pattern: &str,
@@ -123,8 +150,7 @@ async fn search_profiles(
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
             AND (
-                to_tsvector('simple', COALESCE(p.name, '')) @@ websearch_to_tsquery('simple', $1)
-                OR to_tsvector('simple', COALESCE(p.bio, '')) @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR (
                     (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
                     AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
@@ -139,10 +165,17 @@ async fn search_profiles(
                 )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector,
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC,
             p.updated_at DESC
         LIMIT $3
         ",
@@ -325,6 +358,31 @@ pub async fn search_message_rooms(
     Ok(room_ids)
 }
 
+/// Finds direct-message room IDs for profiles that match the provided search query, excluding the given user.
+///
+/// Matches profiles by their public search vector, by program text when the profile permits showing program,
+/// or by a case-insensitive name LIKE pattern. Results are ordered by relevance (respecting program privacy)
+/// then by profile update time, and limited to `limit_i64`.
+///
+/// Parameters:
+/// - `query`: full-text search query passed to the text-search predicates.
+/// - `pattern`: SQL LIKE pattern (typically lowercase) used for name matching.
+/// - `user_pid`: the profile UUID of the querying user; rooms involving this profile are paired with matching profiles and the profile itself is excluded.
+/// - `limit_i64`: maximum number of room IDs to return.
+///
+/// # Examples
+///
+/// ```
+/// use uuid::Uuid;
+/// // run the async function on the current thread for demonstration
+/// let rooms = futures::executor::block_on(crate::search_dm_room_ids(
+///     "alice",
+///     "%alice%",
+///     &Uuid::nil(),
+///     10,
+/// )).unwrap();
+/// assert!(rooms.len() <= 10);
+/// ```
 async fn search_dm_room_ids(
     query: &str,
     pattern: &str,
@@ -338,17 +396,30 @@ async fn search_dm_room_ids(
         SELECT dmr.room_id
         FROM profiles p
         JOIN users u ON u.id = p.user_id
+        LEFT JOIN user_settings us ON us.user_id = p.user_id
         JOIN matrix_dm_rooms dmr
           ON (dmr.user_low_pid = p.id AND dmr.user_high_pid = $3)
           OR (dmr.user_high_pid = p.id AND dmr.user_low_pid = $3)
         WHERE
             p.id != $3
             AND (
-                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
+                OR (
+                    COALESCE(us.privacy_show_program, true) = true
+                    AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
+                )
                 OR LOWER(p.name) LIKE $2
             )
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN COALESCE(us.privacy_show_program, true) = true
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC,
+            p.updated_at DESC
         LIMIT $4
         ",
     )
