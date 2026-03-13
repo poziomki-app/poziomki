@@ -314,16 +314,13 @@ pub(in crate::api) async fn event_attend(
     };
 
     let status_str = resolve_attend_status(payload);
-    let existing_attendee = events_write_repo::load_attendee(event_uuid, profile.id).await?;
-    let already_going = existing_attendee
-        .as_ref()
-        .is_some_and(|attendee| attendee.status == "going");
 
     // Approval gate only applies to "going" — "interested" is a soft signal that
     // intentionally bypasses approval so users can bookmark events without creator action.
     let effective_status =
         if event.requires_approval && status_str == "going" && event.creator_id != profile.id {
-            if already_going {
+            let existing = events_write_repo::load_attendee(event_uuid, profile.id).await?;
+            if existing.is_some_and(|a| a.status == "going") {
                 "going"
             } else {
                 "pending"
