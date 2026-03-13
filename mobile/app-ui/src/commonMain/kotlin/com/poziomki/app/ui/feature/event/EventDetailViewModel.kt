@@ -82,7 +82,7 @@ class EventDetailViewModel(
                 is ApiResult.Error -> {
                     _state.value =
                         _state.value.copy(
-                            snackbarMessage = result.message,
+                            snackbarMessage = "nie udało się dołączyć do wydarzenia",
                             snackbarType = SnackbarType.ERROR,
                         )
                 }
