@@ -94,6 +94,7 @@ internal class EventRoomRepository(
             conversation_id = conversationId,
             cached_at = current.cached_at,
             is_dirty = current.is_dirty,
+            max_attendees = current.max_attendees,
         )
     }
 }
