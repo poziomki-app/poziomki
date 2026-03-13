@@ -22,6 +22,7 @@ data class EventsState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val refreshError: String? = null,
+    val savedError: String? = null,
     val searchQuery: String = "",
     val activeFilter: TimeFilter = TimeFilter.ALL,
     val userLat: Double? = null,
@@ -152,9 +153,13 @@ class EventsViewModel(
                     } else {
                         "Nie udało się zapisać wydarzenia"
                     }
-                _state.value = _state.value.copy(refreshError = msg)
+                _state.value = _state.value.copy(savedError = msg)
             }
         }
+    }
+
+    fun clearSavedError() {
+        _state.value = _state.value.copy(savedError = null)
     }
 
     fun setTimeFilter(filter: TimeFilter) {
@@ -253,6 +258,8 @@ class EventsViewModel(
         _state.value = current.copy(events = filtered)
     }
 
+    // Events not in the recommendation list are intentionally hidden on the "polecane" tab;
+    // only recommended events (enriched with fresh cached data) are shown.
     private fun recommendedDisplayEvents(
         recommended: List<Event>,
         cached: List<Event>,
