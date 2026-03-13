@@ -148,12 +148,12 @@ pub(super) async fn events_recommendations(
     let all_history_tags = repo
         .batch_load_event_tag_ids(&all_history_ids, &mut conn)
         .await?;
-    // Deduplicate: if an event is both saved (1.0) and joined (0.5), keep max weight
+    // Deduplicate: if an event is both joined (1.0) and saved (0.5), keep max weight
     let mut event_weights: HashMap<Uuid, f64> = HashMap::new();
-    for &id in &saved_event_ids {
+    for &id in &joined_event_ids {
         event_weights.insert(id, 1.0);
     }
-    for &id in &joined_event_ids {
+    for &id in &saved_event_ids {
         event_weights.entry(id).or_insert(0.5);
     }
     let history_affinity = build_affinity_map(
