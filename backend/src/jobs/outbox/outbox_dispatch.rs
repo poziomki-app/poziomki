@@ -33,6 +33,7 @@ struct UploadVariantsGenerationJobPayload {
     upload_id: String,
 }
 
+#[tracing::instrument(skip(job), fields(job_id = %job.id, job_topic = %job.topic))]
 pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), String> {
     match job.topic.as_str() {
         OUTBOX_TOPIC_OTP_EMAIL => dispatch_otp_email(&job.payload_json).await,
@@ -148,14 +149,6 @@ pub(super) async fn mark_job_failed(
         .await?;
     }
 
-    tracing::warn!(
-        job_id = %job.id,
-        topic = %job.topic,
-        attempts = job.attempts,
-        max_attempts = job.max_attempts,
-        error = %error_message,
-        "outbox job failed"
-    );
     Ok(())
 }
 

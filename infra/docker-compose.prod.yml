@@ -145,6 +145,7 @@ services:
     ports:
       - "127.0.0.1:5150:5150"
     environment:
+      RUST_ENV: production
       PORT: 5150
       SERVER_BINDING: 0.0.0.0
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
@@ -218,6 +219,7 @@ services:
       stalwart:
         condition: service_started
     environment:
+      RUST_ENV: production
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}

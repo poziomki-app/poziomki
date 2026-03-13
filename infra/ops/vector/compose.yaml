@@ -1,0 +1,37 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    compress: "true"
+
+services:
+  vector:
+    image: timberio/vector:0.54.0-alpine
+    restart: unless-stopped
+    environment:
+      PARSEABLE_PASSWORD: ${PARSEABLE_PASSWORD}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - vector-data:/var/lib/vector
+    command: ["--config", "/etc/vector/vector.yaml"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
+    logging: *default-logging
+    networks: [app]
+
+volumes:
+  vector-data:
+
+networks:
+  app:
+    external: true
+    name: poziomki-rs_app

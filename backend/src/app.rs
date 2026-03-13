@@ -37,15 +37,35 @@ fn init_tracing_once() -> crate::error::AppResult<()> {
         return Ok(());
     }
 
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
-    let filter = tracing_subscriber::EnvFilter::try_new(level)
-        .map_err(|e| crate::error::AppError::Any(e.into()))?;
+    let filter = match tracing_subscriber::EnvFilter::try_from_default_env() {
+        Ok(f) => f,
+        Err(e) if std::env::var("RUST_LOG").is_ok() => {
+            return Err(crate::error::AppError::Message(format!(
+                "invalid RUST_LOG: {e}"
+            )));
+        }
+        Err(_) => tracing_subscriber::EnvFilter::new("info"),
+    };
 
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(true)
-        .try_init()
-        .map_err(|e| crate::error::AppError::Message(format!("logger init failed: {e}")))?;
+    let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production";
+
+    if is_production {
+        tracing_subscriber::fmt()
+            .json()
+            .flatten_event(true)
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_current_span(true)
+            .with_span_list(true)
+            .try_init()
+            .map_err(|e| crate::error::AppError::Message(format!("logger init: {e}")))?;
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .try_init()
+            .map_err(|e| crate::error::AppError::Message(format!("logger init: {e}")))?;
+    }
 
     let _ = TRACING_INIT.set(());
     Ok(())
