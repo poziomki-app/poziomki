@@ -123,8 +123,7 @@ async fn search_profiles(
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
             AND (
-                to_tsvector('simple', COALESCE(p.name, '')) @@ websearch_to_tsquery('simple', $1)
-                OR to_tsvector('simple', COALESCE(p.bio, '')) @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR (
                     (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
                     AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
@@ -139,10 +138,10 @@ async fn search_profiles(
                 )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.search_vector,
+            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)) DESC,
             p.updated_at DESC
         LIMIT $3
         ",

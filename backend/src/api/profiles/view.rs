@@ -26,26 +26,27 @@ async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
     map.into_values().next()
 }
 
-async fn load_show_program(profile_user_id: i32) -> bool {
-    let Ok(mut conn) = crate::db::conn().await else {
-        return true;
-    };
-    user_settings::table
-        .filter(user_settings::user_id.eq(profile_user_id))
-        .first::<UserSetting>(&mut conn)
-        .await
-        .optional()
-        .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
-        .unwrap_or(true)
-}
-
-fn maybe_hide_program(
+async fn resolve_program(
     program: Option<String>,
     viewer_user_id: Option<i32>,
     profile_user_id: i32,
-    show_program: bool,
 ) -> Option<String> {
-    if viewer_user_id == Some(profile_user_id) || show_program {
+    if viewer_user_id == Some(profile_user_id) {
+        return program;
+    }
+    let show = {
+        let Ok(mut conn) = crate::db::conn().await else {
+            return program;
+        };
+        user_settings::table
+            .filter(user_settings::user_id.eq(profile_user_id))
+            .first::<UserSetting>(&mut conn)
+            .await
+            .optional()
+            .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
+            .unwrap_or(true)
+    };
+    if show {
         program
     } else {
         None
@@ -67,17 +68,7 @@ pub(in crate::api) async fn profile_to_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let show_program = if viewer_user_id == Some(profile.user_id) {
-        true
-    } else {
-        load_show_program(profile.user_id).await
-    };
-    let program = maybe_hide_program(
-        profile.program.clone(),
-        viewer_user_id,
-        profile.user_id,
-        show_program,
-    );
+    let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
     ProfileResponse {
         id: profile.id.to_string(),
@@ -112,17 +103,7 @@ pub(in crate::api) async fn full_profile_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let show_program = if viewer_user_id == Some(profile.user_id) {
-        true
-    } else {
-        load_show_program(profile.user_id).await
-    };
-    let program = maybe_hide_program(
-        profile.program.clone(),
-        viewer_user_id,
-        profile.user_id,
-        show_program,
-    );
+    let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
     Ok(FullProfileResponse {
         id: profile.id.to_string(),
