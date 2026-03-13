@@ -1,0 +1,16 @@
+CREATE TABLE cache_state (
+    key TEXT NOT NULL PRIMARY KEY,
+    cached_at INTEGER NOT NULL
+);
+
+selectByKey:
+SELECT *
+FROM cache_state
+WHERE key = ?;
+
+upsert:
+INSERT OR REPLACE INTO cache_state(key, cached_at)
+VALUES (?, ?);
+
+deleteAll:
+DELETE FROM cache_state;

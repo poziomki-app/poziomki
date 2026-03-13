@@ -28,6 +28,11 @@ class EventRepository(
     private val pendingOps: PendingOperationsManager,
     private val matrixClient: MatrixClient,
 ) {
+    companion object {
+        private const val EVENTS_LIST_CACHE_KEY = "events_list"
+        private const val RECOMMENDED_EVENTS_CACHE_KEY = "recommended_events"
+    }
+
     private val eventRoomManager = EventRoomRepository(db = db, api = api, matrixClient = matrixClient)
     private val eventMutationManager =
         EventMutationRepository(
@@ -71,8 +76,20 @@ class EventRepository(
     suspend fun fetchRecommendedEvents(): List<Event> =
         withContext(Dispatchers.IO) {
             when (val result = api.getMatchingEvents()) {
-                is ApiResult.Success -> result.data
-                is ApiResult.Error -> emptyList()
+                is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.transaction {
+                        result.data.forEach { event ->
+                            eventMutationManager.upsertEvent(event, now, inListFeed = false)
+                        }
+                        db.cacheStateQueries.upsert(RECOMMENDED_EVENTS_CACHE_KEY, now)
+                    }
+                    result.data
+                }
+
+                is ApiResult.Error -> {
+                    emptyList()
+                }
             }
         }
 
@@ -80,19 +97,21 @@ class EventRepository(
         withContext(Dispatchers.IO) {
             if (!forceRefresh) {
                 val cachedAt =
-                    db.eventQueries
-                        .latestCachedAt()
+                    db.cacheStateQueries
+                        .selectByKey(EVENTS_LIST_CACHE_KEY)
                         .executeAsOneOrNull()
-                        ?.MAX
+                        ?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
             }
             when (val result = api.getEvents()) {
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
+                        db.eventQueries.clearListFeedFlags()
                         result.data.forEach { event ->
-                            eventMutationManager.upsertEvent(event, now)
+                            eventMutationManager.upsertEvent(event, now, inListFeed = true)
                         }
+                        db.cacheStateQueries.upsert(EVENTS_LIST_CACHE_KEY, now)
                     }
                     true
                 }
@@ -160,6 +179,10 @@ class EventRepository(
     suspend fun attendEvent(id: String): ApiResult<Unit> = eventMutationManager.attendEvent(id)
 
     suspend fun leaveEvent(id: String): ApiResult<Unit> = eventMutationManager.leaveEvent(id)
+
+    suspend fun saveEvent(id: String): ApiResult<Unit> = eventMutationManager.saveEvent(id)
+
+    suspend fun unsaveEvent(id: String): ApiResult<Unit> = eventMutationManager.unsaveEvent(id)
 
     suspend fun deleteEvent(id: String): ApiResult<Unit> = eventMutationManager.deleteEvent(id)
 

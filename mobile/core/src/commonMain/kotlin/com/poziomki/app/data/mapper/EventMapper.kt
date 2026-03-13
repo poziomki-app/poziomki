@@ -4,6 +4,7 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.network.EventAttendeePreview
 import com.poziomki.app.network.EventCreator
+import com.poziomki.app.network.Tag
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,9 +26,12 @@ fun Event.toDbParams(): List<Any?> =
         attendeesCount.toLong(),
         maxAttendees?.toLong(),
         if (isAttending) 1L else 0L,
+        if (isSaved) 1L else 0L,
         json.encodeToString(attendeesPreview),
+        json.encodeToString(tags),
         createdAt,
         conversationId,
+        score,
         Clock.System.now().toEpochMilliseconds(),
         0L,
         latitude,
@@ -52,6 +56,7 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         attendeesCount = attendees_count.toInt(),
         maxAttendees = max_attendees?.toInt(),
         isAttending = is_attending != 0L,
+        isSaved = is_saved != 0L,
         isPending = is_pending != 0L,
         requiresApproval = requires_approval != 0L,
         creator =
@@ -63,7 +68,9 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
                 )
             },
         attendeesPreview = parseAttendeesPreview(attendees_preview_json),
+        tags = parseTags(tags_json),
         conversationId = conversation_id,
+        score = score,
     )
 
 private fun parseAttendeesPreview(jsonStr: String?): List<EventAttendeePreview> =
@@ -71,6 +78,14 @@ private fun parseAttendeesPreview(jsonStr: String?): List<EventAttendeePreview> 
         emptyList()
     } else {
         runCatching { json.decodeFromString<List<EventAttendeePreview>>(jsonStr) }
+            .getOrDefault(emptyList())
+    }
+
+private fun parseTags(jsonStr: String?): List<Tag> =
+    if (jsonStr.isNullOrBlank()) {
+        emptyList()
+    } else {
+        runCatching { json.decodeFromString<List<Tag>>(jsonStr) }
             .getOrDefault(emptyList())
     }
 

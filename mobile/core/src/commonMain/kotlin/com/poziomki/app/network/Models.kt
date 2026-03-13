@@ -172,11 +172,14 @@ data class Event(
     val attendeesCount: Int = 0,
     val maxAttendees: Int? = null,
     val isAttending: Boolean = false,
+    val isSaved: Boolean = false,
     val isPending: Boolean = false,
     val requiresApproval: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
+    val tags: List<Tag> = emptyList(),
     val conversationId: String? = null,
+    val score: Double = 0.0,
 )
 
 @Serializable
@@ -204,6 +207,7 @@ data class UpdateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val tagIds: List<String>? = null,
     val maxAttendees: JsonElement = JsonNull,
     val requiresApproval: Boolean? = null,
 ) {
@@ -237,12 +241,27 @@ data class Tag(
     val scope: String,
     val category: String? = null,
     val emoji: String? = null,
+    val parentId: String? = null,
 )
 
 @Serializable
 data class CreateTagRequest(
     val name: String,
     val scope: String,
+    val parentId: String? = null,
+)
+
+@Serializable
+data class TagSuggestion(
+    val tag: Tag,
+    val score: Double = 0.0,
+)
+
+@Serializable
+data class TagSuggestionsRequest(
+    val scope: String,
+    val title: String,
+    val description: String? = null,
 )
 
 // Upload models
@@ -392,6 +411,7 @@ data class SearchTag(
     val scope: String,
     val category: String? = null,
     val emoji: String? = null,
+    val parentId: String? = null,
 )
 
 @Serializable
