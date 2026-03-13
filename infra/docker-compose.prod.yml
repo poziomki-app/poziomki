@@ -5,11 +5,41 @@ x-logging: &default-logging
     max-file: "5"
     compress: "true"
 
+x-backend-env: &backend-env
+  RUST_ENV: production
+  SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+  DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+  JWT_SECRET: ${JWT_SECRET}
+  GARAGE_S3_ENDPOINT: http://garage:3900
+  GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
+  GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+  GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+  GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
+  GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+  GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
+  ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
+  MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
+  MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
+  MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
+  MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
+  PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
+  PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
+  SMTP_ENABLE: ${SMTP_ENABLE:-true}
+  SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
+  DKIM_DOMAIN: ${DKIM_DOMAIN:-poziomki.app}
+  DKIM_SELECTOR: ${DKIM_SELECTOR:-mail}
+  DKIM_PRIVATE_KEY_PATH: /etc/dkim/private.key
+  IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
+  IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
+  IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
+  IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+
 services:
   postgres:
     image: postgres:18-alpine
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "127.0.0.1:5433:5432"
     environment:
@@ -43,9 +73,9 @@ services:
           cpus: '1.0'
           pids: 128
     tmpfs:
-      - /tmp
-      - /run
-      - /var/run/postgresql:uid=999,gid=999
+      - /tmp:size=50m
+      - /run:size=10m
+      - /var/run/postgresql:uid=999,gid=999,size=10m
     logging: *default-logging
     networks: [db]
 
@@ -82,7 +112,7 @@ services:
       - ALL
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=10m
     deploy:
       resources:
         limits:
@@ -118,7 +148,7 @@ services:
       - ALL
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=50m
     deploy:
       resources:
         limits:
@@ -140,56 +170,28 @@ services:
         condition: service_healthy
       tuwunel:
         condition: service_started
-      stalwart:
-        condition: service_started
     ports:
       - "127.0.0.1:5150:5150"
     environment:
-      RUST_ENV: production
+      <<: *backend-env
       PORT: 5150
       SERVER_BINDING: 0.0.0.0
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-16}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
       DB_POOL_RECYCLE_TIMEOUT_MS: ${API_DB_POOL_RECYCLE_TIMEOUT_MS:-5000}
-      JWT_SECRET: ${JWT_SECRET}
-      GARAGE_S3_ENDPOINT: http://garage:3900
-      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
-      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
-      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
-      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
-      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
-      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
-      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
-      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
-      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
-      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
-      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
-      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
-      SMTP_ENABLE: ${SMTP_ENABLE:-true}
-      SMTP_HOST: ${SMTP_HOST:-stalwart}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-admin}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
-      SMTP_TLS_NAME: ${SMTP_TLS_NAME:-mail.poziomki.app}
       OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
-      IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
-      IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
-      IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
-      IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+    volumes:
+      - ./ops/dkim/private.key:/etc/dkim/private.key:ro
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=50m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -201,7 +203,7 @@ services:
           cpus: '1.0'
           pids: 256
     logging: *default-logging
-    networks: [app]
+    networks: [app, storage]
 
   worker:
     build:
@@ -216,42 +218,12 @@ services:
         condition: service_healthy
       tuwunel:
         condition: service_started
-      stalwart:
-        condition: service_started
     environment:
-      RUST_ENV: production
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+      <<: *backend-env
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${WORKER_DB_POOL_CREATE_TIMEOUT_MS:-5000}
       DB_POOL_RECYCLE_TIMEOUT_MS: ${WORKER_DB_POOL_RECYCLE_TIMEOUT_MS:-5000}
-      JWT_SECRET: ${JWT_SECRET}
-      GARAGE_S3_ENDPOINT: http://garage:3900
-      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
-      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
-      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
-      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
-      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
-      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
-      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
-      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
-      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
-      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
-      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
-      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
-      SMTP_ENABLE: ${SMTP_ENABLE:-true}
-      SMTP_HOST: ${SMTP_HOST:-stalwart}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-admin}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
-      SMTP_TLS_NAME: ${SMTP_TLS_NAME:-mail.poziomki.app}
-      IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
-      IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
-      IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
-      IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
     healthcheck:
       test:
         [
@@ -262,9 +234,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    volumes:
+      - ./ops/dkim/private.key:/etc/dkim/private.key:ro
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=50m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -276,30 +250,7 @@ services:
           cpus: '0.5'
           pids: 512
     logging: *default-logging
-    networks: [app]
-
-  stalwart:
-    image: stalwartlabs/stalwart:v0.15.5-alpine
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8443:443"
-    volumes:
-      - stalwart_data:/opt/stalwart
-    read_only: false
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 587"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          cpus: '0.5'
-          pids: 128
-    logging: *default-logging
-    networks: [app]
+    networks: [app, storage]
 
   imgproxy:
     build:
@@ -335,7 +286,7 @@ services:
       start_period: 5s
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=100m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -347,7 +298,7 @@ services:
           cpus: '0.5'
           pids: 64
     logging: *default-logging
-    networks: [app]
+    networks: [storage]
 
   garage:
     image: dxflrs/garage:v1.3.1
@@ -368,7 +319,7 @@ services:
       - ALL
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=50m
     deploy:
       resources:
         limits:
@@ -376,17 +327,18 @@ services:
           cpus: '1.0'
           pids: 128
     logging: *default-logging
-    networks: [app]
+    networks: [storage]
 
 volumes:
   postgres_data:
   garage_data:
   garage_meta:
   tuwunel_data:
-  stalwart_data:
 
 networks:
   db:
     internal: true
   app:
     driver: bridge
+  storage:
+    internal: true

@@ -47,6 +47,9 @@ DerivedData/
 # Environment
 .env
 
+# DKIM private key
+infra/ops/dkim/
+
 # gewnerated by nix, doesnt need to be commited
 /.pre-commit-config.yaml
 result
