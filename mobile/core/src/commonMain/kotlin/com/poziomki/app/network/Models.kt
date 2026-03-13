@@ -212,8 +212,7 @@ data class UpdateEventRequest(
     val requiresApproval: Boolean? = null,
 ) {
     companion object {
-        fun maxAttendeesValue(value: Int?): JsonElement =
-            value?.let { JsonPrimitive(it) } ?: JsonNull
+        fun maxAttendeesValue(value: Int?): JsonElement = value?.let { JsonPrimitive(it) } ?: JsonNull
     }
 }
 

@@ -5,6 +5,7 @@ use super::profile_responses::ProfilePreview;
 use super::shared::AttendeeStatus;
 
 #[derive(Clone, Debug, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub(in crate::api) struct EventResponse {
     pub(in crate::api) id: String,
     pub(in crate::api) title: String,

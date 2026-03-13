@@ -183,7 +183,9 @@ pub(in crate::api) async fn event_update(
                 conversation_id: changeset.conversation_id.clone(),
                 latitude: changeset.latitude,
                 longitude: changeset.longitude,
+                max_attendees: changeset.max_attendees,
                 updated_at: changeset.updated_at,
+                requires_approval: changeset.requires_approval,
             };
             let tag_names = tag_names.clone();
             let validated_tag_ids = validated_tag_ids.clone();
@@ -278,7 +280,11 @@ pub(in crate::api) async fn event_attend(
     // intentionally bypasses approval so users can bookmark events without creator action.
     let effective_status =
         if event.requires_approval && status_str == "going" && event.creator_id != profile.id {
-            if already_going { "going" } else { "pending" }
+            if already_going {
+                "going"
+            } else {
+                "pending"
+            }
         } else {
             status_str
         };
@@ -293,13 +299,6 @@ pub(in crate::api) async fn event_attend(
     .await?;
     if !accepted {
         return Ok(validation_error(&headers, "Event is full"));
-    }
-
-    // Track interaction for recommendation system
-    if effective_status == ATTENDEE_GOING {
-        upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
-    } else {
-        delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
     }
 
     if effective_status != "pending" {
@@ -368,6 +367,7 @@ pub(in crate::api) async fn event_approve_attendee(
         ));
     }
 
+    // upsert_attendee records the "joined" interaction inside the same transaction
     events_write_repo::upsert_attendee(event_uuid, target_profile_id, "going").await?;
 
     if let Err(error) =

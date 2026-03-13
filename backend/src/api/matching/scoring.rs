@@ -250,8 +250,10 @@ mod tests {
             conversation_id: None,
             latitude: None,
             longitude: None,
+            max_attendees: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            requires_approval: false,
         };
 
         let score = score_event(
