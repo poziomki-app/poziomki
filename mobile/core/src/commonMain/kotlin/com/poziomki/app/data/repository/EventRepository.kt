@@ -139,6 +139,7 @@ class EventRepository(
                                 name = attendee.name,
                                 profile_picture = attendee.profilePicture,
                                 status = attendee.status,
+                                is_creator = if (attendee.isCreator) 1L else 0L,
                             )
                         }
                     }

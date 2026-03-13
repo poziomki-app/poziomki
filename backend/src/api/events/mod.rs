@@ -121,10 +121,10 @@ pub(super) async fn event_attendees(
     let event_uuid = Uuid::parse_str(&id)
         .map_err(|_| crate::error::AppError::Message("Invalid event ID".to_string()))?;
 
-    if !events_repo::event_exists(event_uuid).await? {
+    let Some(event) = events_repo::find_event(event_uuid).await? else {
         return Ok(not_found_event(&headers, &id));
-    }
+    };
 
-    let data = attendee_info(event_uuid).await?;
+    let data = attendee_info(event_uuid, event.creator_id).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

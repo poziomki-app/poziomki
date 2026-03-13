@@ -36,6 +36,8 @@ pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) latitude: Option<f64>,
     #[serde(default)]
     pub(in crate::api) longitude: Option<f64>,
+    #[serde(default, rename = "maxAttendees")]
+    pub(in crate::api) max_attendees: Option<i32>,
     #[serde(default)]
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
@@ -64,6 +66,12 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) latitude: Option<Option<f64>>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::api) longitude: Option<Option<f64>>,
+    #[serde(
+        default,
+        rename = "maxAttendees",
+        deserialize_with = "deserialize_some"
+    )]
+    pub(in crate::api) max_attendees: Option<Option<i32>>,
     #[serde(default)]
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
