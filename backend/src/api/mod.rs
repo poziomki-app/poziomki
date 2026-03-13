@@ -163,6 +163,8 @@ impl<B> tower_http::trace::OnResponse<B> for StatusAwareOnResponse {
         let latency_ms = latency.as_millis();
         if status >= 500 {
             tracing::error!(parent: span, status, latency_ms, "response");
+        } else if status >= 400 {
+            tracing::warn!(parent: span, status, latency_ms, "response");
         } else {
             tracing::info!(parent: span, status, latency_ms, "response");
         }

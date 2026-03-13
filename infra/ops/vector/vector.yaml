@@ -21,6 +21,8 @@ transforms:
             ts, ts_err = parse_timestamp(.timestamp, format: "%+")
             if ts_err == null { .timestamp = ts }
           }
+        } else {
+          .level = "RAW"
         }
       }
 

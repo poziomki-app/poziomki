@@ -149,14 +149,6 @@ pub(super) async fn mark_job_failed(
         .await?;
     }
 
-    tracing::warn!(
-        job_id = %job.id,
-        topic = %job.topic,
-        attempts = job.attempts,
-        max_attempts = job.max_attempts,
-        error = %error_message,
-        "outbox job failed"
-    );
     Ok(())
 }
 
