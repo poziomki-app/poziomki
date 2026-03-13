@@ -350,11 +350,11 @@ async fn search_dm_room_ids(
         WHERE
             p.id != $3
             AND (
-                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR LOWER(p.name) LIKE $2
             )
         ORDER BY
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple', $1)) DESC
+            ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)) DESC
         LIMIT $4
         ",
     )
