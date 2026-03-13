@@ -380,7 +380,7 @@ private fun EventCard(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Attendees row
-                if (event.attendeesCount > 0) {
+                if (event.attendeesCount > 0 || event.maxAttendees != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (event.attendeesPreview.isNotEmpty()) {
                             StackedAvatars(
@@ -390,13 +390,7 @@ private fun EventCard(
                             Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
                         }
                         Text(
-                            text =
-                                pluralizePolish(
-                                    event.attendeesCount,
-                                    "osoba",
-                                    "osoby",
-                                    "osób",
-                                ),
+                            text = event.attendeeUsageLabel(),
                             fontFamily = NunitoFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -408,6 +402,15 @@ private fun EventCard(
         }
     }
 }
+
+private fun Event.attendeeUsageLabel(): String =
+    maxAttendees?.let { "$attendeesCount / $it" }
+        ?: pluralizePolish(
+            attendeesCount,
+            "osoba",
+            "osoby",
+            "osób",
+        )
 
 @Composable
 private fun WeekEventsContent(

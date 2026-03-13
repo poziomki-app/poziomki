@@ -16,6 +16,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.long
 
 internal class EventMutationRepository(
     private val db: PoziomkiDatabase,
@@ -47,6 +49,7 @@ internal class EventMutationRepository(
                     longitude = request.longitude,
                     startsAt = request.startsAt,
                     endsAt = request.endsAt,
+                    maxAttendees = request.maxAttendees,
                 )
             val now = Clock.System.now().toEpochMilliseconds()
             upsertEvent(tempEvent, now, isDirty = true)
@@ -115,6 +118,7 @@ internal class EventMutationRepository(
                     creator_name = current.creator_name,
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
+                    max_attendees = (request.maxAttendees as? JsonPrimitive)?.long,
                     is_attending = current.is_attending,
                     attendees_preview_json = current.attendees_preview_json,
                     created_at = current.created_at,
@@ -144,6 +148,18 @@ internal class EventMutationRepository(
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
             val previousAttending = current?.is_attending == 1L
             val previousCount = current?.attendees_count ?: 0L
+            val isFull =
+                current != null &&
+                    !previousAttending &&
+                    current.max_attendees != null &&
+                    current.attendees_count >= current.max_attendees
+            if (isFull && !connectivityMonitor.isOnline.value) {
+                return@withContext ApiResult.Error(
+                    message = "Event is full",
+                    code = "VALIDATION_ERROR",
+                    status = 400,
+                )
+            }
             if (current != null && !previousAttending) {
                 db.eventQueries.updateAttendance(
                     is_attending = 1L,
@@ -273,6 +289,7 @@ internal class EventMutationRepository(
             creator_name = event.creator?.name,
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
+            max_attendees = event.maxAttendees?.toLong(),
             is_attending = if (event.isAttending) 1L else 0L,
             attendees_preview_json = json.encodeToString(event.attendeesPreview),
             created_at = event.createdAt,
@@ -339,6 +356,7 @@ internal class EventMutationRepository(
             creator_name = event.creator_name,
             creator_profile_picture = event.creator_profile_picture,
             attendees_count = event.attendees_count,
+            max_attendees = event.max_attendees,
             is_attending = event.is_attending,
             attendees_preview_json = event.attendees_preview_json,
             created_at = event.created_at,
