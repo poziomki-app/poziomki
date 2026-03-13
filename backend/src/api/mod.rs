@@ -61,10 +61,13 @@ fn degrees_routes() -> Router<AppContext> {
 }
 
 fn tags_routes() -> Router<AppContext> {
-    Router::new()
+    let cached = Router::new()
         .route("/", get(catalog::tags_search).post(catalog::tags_create))
+        .layer(cache_layer("public, max-age=1800"));
+
+    Router::new()
         .route("/suggestions", post(catalog::tags_suggestions))
-        .layer(cache_layer("public, max-age=1800"))
+        .merge(cached)
 }
 
 fn events_routes() -> Router<AppContext> {
