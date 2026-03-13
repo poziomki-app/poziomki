@@ -65,7 +65,12 @@ async fn process_one_job() -> std::result::Result<bool, String> {
             mark_job_done(&job.id).await.map_err(|e| e.to_string())?;
         }
         Err(ref error) => {
-            tracing::error!(%error, job_id = %job.id, job_topic = %job.topic, attempts = job.attempts, max_attempts = job.max_attempts, "job dispatch failed");
+            let is_terminal = job.attempts >= job.max_attempts;
+            if is_terminal {
+                tracing::error!(%error, job_id = %job.id, job_topic = %job.topic, attempts = job.attempts, max_attempts = job.max_attempts, "job permanently failed");
+            } else {
+                tracing::warn!(%error, job_id = %job.id, job_topic = %job.topic, attempts = job.attempts, max_attempts = job.max_attempts, "job dispatch failed, will retry");
+            }
             mark_job_failed(&job, error)
                 .await
                 .map_err(|e| e.to_string())?;

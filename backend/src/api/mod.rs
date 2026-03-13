@@ -212,10 +212,14 @@ pub fn router() -> Router<AppContext> {
                             },
                             String::from,
                         );
+                    let path = req
+                        .extensions()
+                        .get::<axum::extract::MatchedPath>()
+                        .map_or_else(|| req.uri().path().to_owned(), |mp| mp.as_str().to_owned());
                     tracing::info_span!(
                         "request",
                         method = %req.method(),
-                        path = %req.uri().path(),
+                        path = %path,
                         request_id = %request_id,
                     )
                 })
