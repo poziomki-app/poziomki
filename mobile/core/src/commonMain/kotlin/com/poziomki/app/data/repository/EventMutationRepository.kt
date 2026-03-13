@@ -30,6 +30,7 @@ internal class EventMutationRepository(
 ) {
     companion object {
         private const val CREATE_EVENT_ONLINE_TIMEOUT_MS = 1500L
+        private const val MUTATION_TIMEOUT_MS = 10_000L
         private const val NETWORK_STATUS_CODE = 0
         private const val REQUEST_TIMEOUT_STATUS_CODE = 408
         private const val TOO_MANY_REQUESTS_STATUS_CODE = 429
@@ -86,7 +87,7 @@ internal class EventMutationRepository(
             }
         }
 
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     suspend fun updateEvent(
         id: String,
         request: UpdateEventRequest,
@@ -139,7 +140,17 @@ internal class EventMutationRepository(
                 optimisticEvent?.let { ApiResult.Success(it) }
                     ?: ApiResult.Error("Offline and no cached data", "OFFLINE", 0)
             } else {
-                updateEventOnline(id, request, optimisticEvent)
+                withTimeoutOrNull(MUTATION_TIMEOUT_MS) {
+                    updateEventOnline(id, request, optimisticEvent)
+                } ?: run {
+                    pendingOps.enqueue(
+                        type = "update_event",
+                        entityId = id,
+                        payload = json.encodeToString(request),
+                    )
+                    optimisticEvent?.let { ApiResult.Success(it) }
+                        ?: ApiResult.Error("Timeout", "TIMEOUT", 0)
+                }
             }
         }
 
@@ -169,7 +180,8 @@ internal class EventMutationRepository(
             }
 
             if (connectivityMonitor.isOnline.value) {
-                when (val result = api.attendEvent(id)) {
+                val result = withTimeoutOrNull(MUTATION_TIMEOUT_MS) { api.attendEvent(id) }
+                when (result) {
                     is ApiResult.Success -> {
                         upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
                         eventRoomManager.reconcileMembershipAfterAttend(result.data.conversationId)
@@ -188,6 +200,11 @@ internal class EventMutationRepository(
                             )
                             result
                         }
+                    }
+
+                    null -> {
+                        pendingOps.enqueue("attend_event", id, "{}")
+                        ApiResult.Success(Unit)
                     }
                 }
             } else {
@@ -210,7 +227,8 @@ internal class EventMutationRepository(
             }
 
             if (connectivityMonitor.isOnline.value) {
-                when (val result = api.leaveEvent(id)) {
+                val result = withTimeoutOrNull(MUTATION_TIMEOUT_MS) { api.leaveEvent(id) }
+                when (result) {
                     is ApiResult.Success -> {
                         upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
                         eventRoomManager.reconcileMembershipAfterLeave()
@@ -230,6 +248,11 @@ internal class EventMutationRepository(
                             result
                         }
                     }
+
+                    null -> {
+                        pendingOps.enqueue("leave_event", id, "{}")
+                        ApiResult.Success(Unit)
+                    }
                 }
             } else {
                 pendingOps.enqueue("leave_event", id, "{}")
@@ -242,7 +265,8 @@ internal class EventMutationRepository(
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
             db.eventQueries.deleteById(id)
             if (connectivityMonitor.isOnline.value) {
-                when (val result = api.deleteEvent(id)) {
+                val result = withTimeoutOrNull(MUTATION_TIMEOUT_MS) { api.deleteEvent(id) }
+                when (result) {
                     is ApiResult.Success -> {
                         ApiResult.Success(Unit)
                     }
@@ -255,6 +279,11 @@ internal class EventMutationRepository(
                             current?.let(::restoreEvent)
                             result
                         }
+                    }
+
+                    null -> {
+                        pendingOps.enqueue("delete_event", id, "{}")
+                        ApiResult.Success(Unit)
                     }
                 }
             } else {
@@ -280,7 +309,10 @@ internal class EventMutationRepository(
             db.eventQueries.updateSaved(is_saved = if (saved) 1L else 0L, id = id)
 
             if (connectivityMonitor.isOnline.value) {
-                val result = if (saved) api.saveEvent(id) else api.unsaveEvent(id)
+                val result =
+                    withTimeoutOrNull(MUTATION_TIMEOUT_MS) {
+                        if (saved) api.saveEvent(id) else api.unsaveEvent(id)
+                    }
                 when (result) {
                     is ApiResult.Success -> {
                         upsertEvent(result.data, Clock.System.now().toEpochMilliseconds())
@@ -299,6 +331,11 @@ internal class EventMutationRepository(
                             db.eventQueries.updateSaved(is_saved = previousSaved, id = id)
                             result
                         }
+                    }
+
+                    null -> {
+                        pendingOps.enqueue(if (saved) "save_event" else "unsave_event", id, "{}")
+                        ApiResult.Success(Unit)
                     }
                 }
             } else {
