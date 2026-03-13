@@ -258,8 +258,9 @@ class EventsViewModel(
         _state.value = current.copy(events = filtered)
     }
 
-    // Events not in the recommendation list are intentionally hidden on the "polecane" tab;
-    // only recommended events (enriched with fresh cached data) are shown.
+    // Recommendations-first UX: cached non-recommended events are intentionally dropped here.
+    // The "polecane" tab prioritizes showing fresh recommendations over stale cached events.
+    // When recommendations are available, only those events are shown (enriched with cached data).
     private fun recommendedDisplayEvents(
         recommended: List<Event>,
         cached: List<Event>,

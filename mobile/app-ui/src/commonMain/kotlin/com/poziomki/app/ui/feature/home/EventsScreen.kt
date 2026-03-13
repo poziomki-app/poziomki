@@ -245,6 +245,22 @@ fun EventsScreen(
                     viewModel.clearRefreshError()
                 }
             }
+
+            // Save-toggle error snackbar
+            state.savedError?.let { error ->
+                Snackbar(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(PoziomkiTheme.spacing.md),
+                ) {
+                    Text(text = error)
+                }
+                LaunchedEffect(error) {
+                    delay(3000)
+                    viewModel.clearSavedError()
+                }
+            }
         }
     }
 }
