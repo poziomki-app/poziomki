@@ -359,7 +359,14 @@ async fn search_dm_room_ids(
                 OR LOWER(p.name) LIKE $2
             )
         ORDER BY
-            ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)) DESC
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN COALESCE(us.privacy_show_program, true) = true
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC
         LIMIT $4
         ",
     )
