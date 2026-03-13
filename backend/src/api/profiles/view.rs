@@ -66,7 +66,11 @@ pub(in crate::api) async fn profile_to_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let show_program = load_show_program(profile.user_id).await;
+    let show_program = if viewer_user_id == Some(profile.user_id) {
+        true
+    } else {
+        load_show_program(profile.user_id).await
+    };
     let program = maybe_hide_program(
         profile.program.clone(),
         viewer_user_id,
@@ -107,7 +111,11 @@ pub(in crate::api) async fn full_profile_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let show_program = load_show_program(profile.user_id).await;
+    let show_program = if viewer_user_id == Some(profile.user_id) {
+        true
+    } else {
+        load_show_program(profile.user_id).await
+    };
     let program = maybe_hide_program(
         profile.program.clone(),
         viewer_user_id,
