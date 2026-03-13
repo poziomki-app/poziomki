@@ -21,13 +21,11 @@ use crate::db::models::profiles::Profile;
 use crate::jobs::enqueue_matrix_event_membership_sync;
 
 use super::events_interactions_repo::{
-    delete_event_interaction, upsert_event_interaction, upsert_event_interaction_with_conn,
-    EVENT_INTERACTION_JOINED, EVENT_INTERACTION_SAVED,
+    delete_event_interaction, delete_event_interaction_with_conn, upsert_event_interaction,
+    upsert_event_interaction_with_conn, EVENT_INTERACTION_JOINED, EVENT_INTERACTION_SAVED,
 };
 use super::events_service::{forbidden, load_event, parse_create_dates, require_auth_profile};
-use super::events_tags_repo::{
-    sync_event_tags_with_conn, upsert_attendee, upsert_attendee_with_conn,
-};
+use super::events_tags_repo::{sync_event_tags_with_conn, upsert_attendee_with_conn};
 use super::events_tags_service::{
     maybe_sync_tags_with_conn, resolve_event_tag_ids, resolve_event_tag_ids_with_conn,
 };
@@ -262,12 +260,31 @@ pub(in crate::api) async fn event_attend(
 
     let status_str = resolve_attend_status(payload);
 
-    upsert_attendee(event_uuid, profile.id, status_str).await?;
-    if status_str == ATTENDEE_GOING {
-        upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
-    } else {
-        delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
-    }
+    let mut conn = crate::db::conn().await?;
+    conn.transaction(|conn| {
+        Box::pin(async move {
+            upsert_attendee_with_conn(conn, event_uuid, profile.id, status_str).await?;
+            if status_str == ATTENDEE_GOING {
+                upsert_event_interaction_with_conn(
+                    conn,
+                    profile.id,
+                    event_uuid,
+                    EVENT_INTERACTION_JOINED,
+                )
+                .await?;
+            } else {
+                delete_event_interaction_with_conn(
+                    conn,
+                    profile.id,
+                    event_uuid,
+                    EVENT_INTERACTION_JOINED,
+                )
+                .await?;
+            }
+            Ok::<(), crate::error::AppError>(())
+        })
+    })
+    .await?;
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await {
         tracing::warn!(
             %error,
@@ -322,8 +339,22 @@ pub(in crate::api) async fn event_leave(
         Err(response) => return Ok(*response),
     };
 
-    events_write_repo::delete_event_attendee(event_uuid, profile.id).await?;
-    delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_JOINED).await?;
+    let mut conn = crate::db::conn().await?;
+    conn.transaction(|conn| {
+        Box::pin(async move {
+            events_write_repo::delete_event_attendee_with_conn(conn, event_uuid, profile.id)
+                .await?;
+            delete_event_interaction_with_conn(
+                conn,
+                profile.id,
+                event_uuid,
+                EVENT_INTERACTION_JOINED,
+            )
+            .await?;
+            Ok::<(), crate::error::AppError>(())
+        })
+    })
+    .await?;
 
     if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, true).await {
         tracing::warn!(
