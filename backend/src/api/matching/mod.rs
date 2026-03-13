@@ -24,7 +24,7 @@ use uuid::Uuid;
 use super::state::{DataResponse, MatchingQuery};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
-use matching_assembler::build_recommendations_response;
+use matching_assembler::{batch_load_show_program, build_recommendations_response};
 use matching_repo::MatchingRepository;
 use matching_scoring::{
     build_affinity_map, rank_and_take, rank_events_and_take, score_event, score_profile,
@@ -66,6 +66,9 @@ pub(super) async fn profiles_recommendations(
 
     let my_program = user_ctx.profile.as_ref().and_then(|p| p.program.clone());
 
+    let candidate_user_ids: Vec<i32> = candidates.iter().map(|c| c.user_id).collect();
+    let privacy_map = batch_load_show_program(&candidate_user_ids, &mut conn).await?;
+
     // Score each candidate
     let mut scored: Vec<(f64, &Profile)> = candidates
         .iter()
@@ -74,11 +77,13 @@ pub(super) async fn profiles_recommendations(
                 .get(&candidate.id)
                 .cloned()
                 .unwrap_or_default();
+            let show_program = privacy_map.get(&candidate.user_id).copied().unwrap_or(true);
             let score = score_profile(
                 &user_ctx.profile_tag_ids,
                 &candidate_tags,
                 my_program.as_deref(),
                 candidate,
+                show_program,
             );
             (score, candidate)
         })

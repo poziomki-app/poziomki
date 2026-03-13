@@ -67,7 +67,7 @@ fn build_profile_recommendation(
     }
 }
 
-async fn batch_load_show_program(
+pub(super) async fn batch_load_show_program(
     user_ids: &[i32],
     conn: &mut crate::db::DbConn,
 ) -> crate::error::AppResult<HashMap<i32, bool>> {

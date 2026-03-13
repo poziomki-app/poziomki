@@ -123,7 +123,12 @@ async fn search_profiles(
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
             AND (
-                p.search_vector @@ websearch_to_tsquery('simple', $1)
+                to_tsvector('simple', COALESCE(p.name, '')) @@ websearch_to_tsquery('simple', $1)
+                OR to_tsvector('simple', COALESCE(p.bio, '')) @@ websearch_to_tsquery('simple', $1)
+                OR (
+                    (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
+                    AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
+                )
                 OR LOWER(p.name) LIKE $2
                 OR EXISTS (
                     SELECT 1

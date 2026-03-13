@@ -21,5 +21,8 @@ INSERT OR REPLACE INTO user_settings(
     cached_at, is_dirty
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
+clearDirty:
+UPDATE user_settings SET is_dirty = 0 WHERE user_id = ?;
+
 deleteAll:
 DELETE FROM user_settings;

@@ -10,6 +10,7 @@ import com.poziomki.app.network.CreateEventRequest
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.UpdateEventRequest
 import com.poziomki.app.network.UpdateProfileRequest
+import com.poziomki.app.network.UpdateSettingsRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -113,8 +114,7 @@ class SyncEngine(
             }
 
             OperationType.UPDATE_SETTINGS -> {
-                pendingOps.complete(op.id)
-                true
+                processUpdateSettings(op)
             }
 
             else -> {
@@ -288,6 +288,20 @@ class SyncEngine(
             is ApiResult.Error -> {
                 false
             }
+        }
+    }
+
+    private suspend fun processUpdateSettings(op: Pending_operation): Boolean {
+        val entityId = op.entity_id ?: return true
+        val request = json.decodeFromString<UpdateSettingsRequest>(op.payload_json)
+        return when (api.updateSettings(request)) {
+            is ApiResult.Success -> {
+                pendingOps.complete(op.id)
+                db.userSettingsQueries.clearDirty(entityId)
+                true
+            }
+
+            is ApiResult.Error -> false
         }
     }
 
