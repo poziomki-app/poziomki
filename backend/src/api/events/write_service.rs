@@ -134,12 +134,12 @@ pub(in crate::api) async fn event_update_inner(
     headers: &HeaderMap,
     id: &str,
     payload: &UpdateEventBody,
-) -> std::result::Result<(EventChangeset, Uuid, Profile), Box<axum::response::Response>> {
+) -> std::result::Result<(EventChangeset, Uuid, Profile, Event), Box<axum::response::Response>> {
     let (profile, _user_pid) = require_auth_profile(headers).await?;
     let (event, event_uuid) = load_event(headers, id).await?;
     validate_creator(headers, &event, profile.id)?;
     validate_event_basic_fields(headers, payload)?;
     let dates = parse_event_dates(headers, &event, payload)?;
     let changeset = build_update_changeset(payload, dates);
-    Ok((changeset, event_uuid, profile))
+    Ok((changeset, event_uuid, profile, event))
 }
