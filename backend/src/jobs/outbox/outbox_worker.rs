@@ -53,6 +53,7 @@ struct OutboxJobRow {
     max_attempts: i32,
 }
 
+#[tracing::instrument(skip_all)]
 async fn process_one_job() -> std::result::Result<bool, String> {
     let Some(job) = claim_next_job().await.map_err(|e| e.to_string())? else {
         return Ok(false);
@@ -63,8 +64,9 @@ async fn process_one_job() -> std::result::Result<bool, String> {
         Ok(()) => {
             mark_job_done(&job.id).await.map_err(|e| e.to_string())?;
         }
-        Err(error) => {
-            mark_job_failed(&job, &error)
+        Err(ref error) => {
+            tracing::error!(%error, job_id = %job.id, job_topic = %job.topic, "job dispatch failed");
+            mark_job_failed(&job, error)
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -73,6 +75,7 @@ async fn process_one_job() -> std::result::Result<bool, String> {
     Ok(true)
 }
 
+#[tracing::instrument(skip_all)]
 async fn claim_next_job() -> std::result::Result<Option<OutboxJob>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
 

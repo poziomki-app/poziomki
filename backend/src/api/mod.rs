@@ -4,6 +4,7 @@ use axum::{
     Router,
 };
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::TraceLayer;
 
 use crate::app::AppContext;
 
@@ -148,6 +149,26 @@ fn push_gateway_routes() -> Router<AppContext> {
     Router::new().route("/notify", post(push_gateway::notify))
 }
 
+#[derive(Clone)]
+struct StatusAwareOnResponse;
+
+impl<B> tower_http::trace::OnResponse<B> for StatusAwareOnResponse {
+    fn on_response(
+        self,
+        response: &axum::http::Response<B>,
+        latency: std::time::Duration,
+        span: &tracing::Span,
+    ) {
+        let status = response.status().as_u16();
+        let latency_ms = latency.as_millis();
+        if status >= 500 {
+            tracing::error!(parent: span, status, latency_ms, "response");
+        } else {
+            tracing::info!(parent: span, status, latency_ms, "response");
+        }
+    }
+}
+
 fn ops_routes() -> Router<AppContext> {
     Router::new()
         .route("/outbox/status", get(root::outbox_status))
@@ -172,6 +193,32 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_room_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &axum::http::Request<_>| {
+                    if req.uri().path() == "/health" {
+                        return tracing::Span::none();
+                    }
+                    let request_id = req
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|v| v.to_str().ok())
+                        .map_or_else(
+                            || {
+                                let (hi, _) = uuid::Uuid::new_v4().as_u64_pair();
+                                format!("{:08x}", (hi >> 32) as u32)
+                            },
+                            String::from,
+                        );
+                    tracing::info_span!(
+                        "request",
+                        method = %req.method(),
+                        path = %req.uri().path(),
+                        request_id = %request_id,
+                    )
+                })
+                .on_response(StatusAwareOnResponse),
+        )
 }
 
 pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {

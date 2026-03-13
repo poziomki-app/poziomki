@@ -128,6 +128,7 @@ pub fn init_pool(database_url: &str) -> Result<(), String> {
 /// # Errors
 /// Returns an error when the pool is not yet initialised or when obtaining a
 /// connection from the pool fails.
+#[tracing::instrument(skip_all)]
 pub async fn conn() -> Result<DbConn, diesel_async::pooled_connection::deadpool::PoolError> {
     POOL.get()
         .ok_or(diesel_async::pooled_connection::deadpool::PoolError::NoRuntimeSpecified)?

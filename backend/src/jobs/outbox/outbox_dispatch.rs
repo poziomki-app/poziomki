@@ -33,6 +33,7 @@ struct UploadVariantsGenerationJobPayload {
     upload_id: String,
 }
 
+#[tracing::instrument(skip(job), fields(job_id = %job.id, job_topic = %job.topic))]
 pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), String> {
     match job.topic.as_str() {
         OUTBOX_TOPIC_OTP_EMAIL => dispatch_otp_email(&job.payload_json).await,
