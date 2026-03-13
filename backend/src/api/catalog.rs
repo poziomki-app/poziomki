@@ -198,6 +198,7 @@ async fn validate_and_insert_tag(
         scope: scope_str.to_string(),
         category: payload.category,
         emoji: payload.emoji,
+        parent_id: None,
         onboarding_order: None,
         created_at: now,
         updated_at: now,
