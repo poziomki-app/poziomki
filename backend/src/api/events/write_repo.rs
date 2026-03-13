@@ -8,7 +8,7 @@ use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
 use crate::db::schema::{event_attendees, event_interactions, events};
 
-pub(in crate::api) const MAX_SERIALIZATION_RETRIES: usize = 3;
+pub(in crate::api) const MAX_ATTEMPTS: usize = 3;
 
 const fn is_serialization_failure(err: &diesel::result::Error) -> bool {
     matches!(
@@ -30,7 +30,10 @@ pub(in crate::api) fn is_serialization_failure_app(err: &crate::error::AppError)
 }
 
 pub(in crate::api) enum UpsertOutcome {
-    Accepted,
+    /// The upsert succeeded. Contains the status that was actually written,
+    /// which may differ from the requested status when the approval gate
+    /// downgrades "going" → "pending".
+    Accepted(String),
     Full,
     StatusMismatch,
 }
@@ -41,12 +44,18 @@ pub(in crate::api) enum UpsertOutcome {
 ///
 /// When `require_status` is `Some`, the attendee's current status is verified
 /// inside the transaction before proceeding, preventing TOCTOU races.
+///
+/// When `requires_approval` is true and the requested status is "going",
+/// the approval gate is evaluated inside the transaction: if the attendee
+/// is not already "going", the written status is downgraded to "pending".
+/// The actual written status is returned in `UpsertOutcome::Accepted`.
 pub(in crate::api) async fn check_capacity_and_upsert(
     event_id: Uuid,
     profile_id: Uuid,
     status: &str,
     max_attendees: Option<i32>,
     require_status: Option<&str>,
+    requires_approval: bool,
 ) -> std::result::Result<UpsertOutcome, crate::error::AppError> {
     let status = status.to_string();
     let require_status = require_status.map(String::from);
@@ -82,8 +91,16 @@ pub(in crate::api) async fn check_capacity_and_upsert(
 
                     let already_going = current_status.as_deref() == Some("going");
 
+                    // Approval gate: downgrade "going" → "pending" unless already going
+                    let effective_status =
+                        if requires_approval && status == "going" && !already_going {
+                            "pending".to_string()
+                        } else {
+                            status
+                        };
+
                     // Capacity gate: only enforce when switching to "going"
-                    if status == "going" && !already_going {
+                    if effective_status == "going" && !already_going {
                         if let Some(max) = max_attendees {
                             let current_going = event_attendees::table
                                 .filter(event_attendees::event_id.eq(event_id))
@@ -109,7 +126,7 @@ pub(in crate::api) async fn check_capacity_and_upsert(
                     let attendee = EventAttendee {
                         event_id,
                         profile_id,
-                        status: status.clone(),
+                        status: effective_status.clone(),
                     };
                     diesel::insert_into(event_attendees::table)
                         .values(&attendee)
@@ -117,19 +134,19 @@ pub(in crate::api) async fn check_capacity_and_upsert(
                         .await?;
 
                     // Track "joined" interaction atomically with the attendee change
-                    if status == "going" {
+                    if effective_status == "going" {
                         upsert_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
                     } else {
                         delete_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
                     }
 
-                    Ok(UpsertOutcome::Accepted)
+                    Ok(UpsertOutcome::Accepted(effective_status))
                 })
             })
             .await;
         match result {
             Ok(val) => return Ok(val),
-            Err(ref e) if attempts < MAX_SERIALIZATION_RETRIES && is_serialization_failure(e) => {
+            Err(ref e) if attempts < MAX_ATTEMPTS && is_serialization_failure(e) => {
                 tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
             }
             Err(e) => return Err(e.into()),
@@ -201,20 +218,6 @@ pub(in crate::api) async fn delete_event_attendee_with_conn(
     .execute(conn)
     .await?;
     Ok(())
-}
-
-pub(in crate::api) async fn load_attendee(
-    event_id: Uuid,
-    profile_id: Uuid,
-) -> std::result::Result<Option<EventAttendee>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    let attendee = event_attendees::table
-        .filter(event_attendees::event_id.eq(event_id))
-        .filter(event_attendees::profile_id.eq(profile_id))
-        .first::<EventAttendee>(&mut conn)
-        .await
-        .optional()?;
-    Ok(attendee)
 }
 
 /// Auto-approve pending attendees for an event, respecting `max_attendees`.

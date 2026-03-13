@@ -221,7 +221,7 @@ pub(in crate::api) async fn event_update(
         match result {
             Ok(val) => break val,
             Err(ref e)
-                if attempts < events_write_repo::MAX_SERIALIZATION_RETRIES
+                if attempts < events_write_repo::MAX_ATTEMPTS
                     && events_write_repo::is_serialization_failure_app(e) =>
             {
                 tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
@@ -317,37 +317,30 @@ pub(in crate::api) async fn event_attend(
 
     // Approval gate only applies to "going" — "interested" is a soft signal that
     // intentionally bypasses approval so users can bookmark events without creator action.
-    let effective_status =
-        if event.requires_approval && status_str == "going" && event.creator_id != profile.id {
-            let existing = events_write_repo::load_attendee(event_uuid, profile.id).await?;
-            if existing.is_some_and(|a| a.status == "going") {
-                "going"
-            } else {
-                "pending"
-            }
-        } else {
-            status_str
-        };
+    let requires_approval =
+        event.requires_approval && status_str == "going" && event.creator_id != profile.id;
 
     let outcome = events_write_repo::check_capacity_and_upsert(
         event_uuid,
         profile.id,
-        effective_status,
+        status_str,
         event.max_attendees,
         None,
+        requires_approval,
     )
     .await?;
-    match outcome {
+    let written_status = match outcome {
         events_write_repo::UpsertOutcome::Full => {
             return Ok(validation_error(&headers, "Event is full"));
         }
-        events_write_repo::UpsertOutcome::Accepted => {}
+        events_write_repo::UpsertOutcome::Accepted(s) => s,
         events_write_repo::UpsertOutcome::StatusMismatch => {
             debug_assert!(false, "StatusMismatch returned with require_status = None");
+            return Ok(validation_error(&headers, "Unexpected status mismatch"));
         }
-    }
+    };
 
-    if effective_status != "pending" {
+    if written_status != "pending" {
         if let Err(error) =
             enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await
         {
@@ -411,6 +404,7 @@ pub(in crate::api) async fn event_approve_attendee(
         "going",
         event.max_attendees,
         Some("pending"),
+        false,
     )
     .await?;
     match outcome {
@@ -423,7 +417,7 @@ pub(in crate::api) async fn event_approve_attendee(
                 "Attendee is not pending approval",
             ));
         }
-        events_write_repo::UpsertOutcome::Accepted => {}
+        events_write_repo::UpsertOutcome::Accepted(_) => {}
     }
 
     if let Err(error) =
