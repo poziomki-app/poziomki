@@ -292,6 +292,14 @@ pub(in crate::api) async fn event_reject_attendee(
     let target_profile_id = Uuid::parse_str(&profile_id_str)
         .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
 
+    let existing = events_write_repo::find_attendee_status(event_uuid, target_profile_id).await?;
+    if existing.as_deref() != Some("pending") {
+        return Ok(super::events_service::validation_error(
+            &headers,
+            "Attendee is not pending approval",
+        ));
+    }
+
     events_write_repo::delete_event_attendee(event_uuid, target_profile_id).await?;
 
     Ok(Json(DataResponse {
