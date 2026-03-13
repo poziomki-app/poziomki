@@ -263,7 +263,8 @@ pub(in crate::api) async fn auto_approve_pending_with_conn(
     diesel::update(
         event_attendees::table
             .filter(event_attendees::event_id.eq(event_id))
-            .filter(event_attendees::profile_id.eq_any(&to_approve)),
+            .filter(event_attendees::profile_id.eq_any(&to_approve))
+            .filter(event_attendees::status.eq("pending")),
     )
     .set(event_attendees::status.eq("going"))
     .execute(conn)

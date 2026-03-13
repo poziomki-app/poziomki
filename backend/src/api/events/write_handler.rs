@@ -9,7 +9,8 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use diesel_async::AsyncConnection;
+use diesel::QueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::state::{
@@ -155,7 +156,7 @@ pub(in crate::api) async fn event_update(
     Path(id): Path<String>,
     Json(payload): Json<UpdateEventBody>,
 ) -> Result<Response> {
-    let (changeset, event_uuid, profile, current_event) =
+    let (changeset, event_uuid, profile, _current_event) =
         match event_update_inner(&headers, &id, &payload).await {
             Ok(data) => data,
             Err(response) => return Ok(*response),
@@ -171,8 +172,7 @@ pub(in crate::api) async fn event_update(
         None
     };
 
-    let disabling_approval =
-        current_event.requires_approval && changeset.requires_approval == Some(false);
+    let sets_approval_false = changeset.requires_approval == Some(false);
 
     let mut conn = crate::db::conn().await?;
     let mut attempts = 0;
@@ -199,10 +199,17 @@ pub(in crate::api) async fn event_update(
                 let tag_names = tag_names.clone();
                 let validated_tag_ids = validated_tag_ids.clone();
                 Box::pin(async move {
+                    // Read requires_approval inside the txn so retries see fresh state
+                    let was_requiring = sets_approval_false
+                        && crate::db::schema::events::table
+                            .find(event_uuid)
+                            .select(crate::db::schema::events::requires_approval)
+                            .first::<bool>(conn)
+                            .await?;
                     let updated =
                         events_write_repo::update_event_with_conn(conn, event_uuid, &changeset)
                             .await?;
-                    let auto_approved = if disabling_approval {
+                    let auto_approved = if was_requiring {
                         events_write_repo::auto_approve_pending_with_conn(
                             conn,
                             event_uuid,
