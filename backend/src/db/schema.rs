@@ -58,8 +58,10 @@ diesel::table! {
         conversation_id -> Nullable<Varchar>,
         latitude -> Nullable<Float8>,
         longitude -> Nullable<Float8>,
+        max_attendees -> Nullable<Int4>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        requires_approval -> Bool,
     }
 }
 
