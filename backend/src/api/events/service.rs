@@ -150,6 +150,16 @@ pub(in crate::api) fn validate_event_location(
     }
 }
 
+pub(in crate::api) fn validate_max_attendees(
+    value: Option<i32>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|limit| limit <= 0) {
+        Err("Attendee limit must be greater than 0")
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_event_title(value: &str) -> std::result::Result<String, &'static str> {
     let normalized = value.trim();
     let length = normalized.chars().count();
