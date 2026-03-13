@@ -366,7 +366,8 @@ async fn search_dm_room_ids(
                     THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
                     ELSE 0
                 END
-            ) DESC
+            ) DESC,
+            p.updated_at DESC
         LIMIT $4
         ",
     )
