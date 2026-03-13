@@ -77,7 +77,9 @@ internal class EventMutationRepository(
                     }
                 }
 
-                null -> enqueueCreate(tempId, request, tempEvent)
+                null -> {
+                    enqueueCreate(tempId, request, tempEvent)
+                }
             }
         }
 
