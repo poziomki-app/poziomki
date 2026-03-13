@@ -139,71 +139,75 @@ class EventCreateViewModel(
         }
     }
 
+    private fun parseAttendeeLimit(s: EventCreateState): Int? {
+        if (s.attendeeLimit.isBlank()) return null
+        val parsed = s.attendeeLimit.toIntOrNull()
+        if (parsed == null) {
+            _state.value = s.copy(attendeeLimitError = "Podaj poprawny limit")
+            return null
+        }
+        if (parsed <= 0) {
+            _state.value = s.copy(attendeeLimitError = "Limit musi być większy od 0")
+            return null
+        }
+        return parsed
+    }
+
     fun saveEvent(onSaved: () -> Unit) {
         val s = _state.value
         if (s.title.isBlank() || s.startsAt.isBlank()) return
-        val maxAttendees =
-            when {
-                s.attendeeLimit.isBlank() -> null
-                s.attendeeLimit.toIntOrNull() == null -> {
-                    _state.value = s.copy(attendeeLimitError = "Podaj poprawny limit")
-                    return
-                }
-                s.attendeeLimit.toInt() <= 0 -> {
-                    _state.value = s.copy(attendeeLimitError = "Limit musi być większy od 0")
-                    return
-                }
-                else -> s.attendeeLimit.toInt()
-            }
+        if (s.attendeeLimit.isNotBlank() && s.attendeeLimit.toIntOrNull().let { it == null || it <= 0 }) {
+            parseAttendeeLimit(s)
+            return
+        }
+        val maxAttendees = if (s.attendeeLimit.isBlank()) null else s.attendeeLimit.toInt()
 
         viewModelScope.launch {
             _state.value = s.copy(isLoading = true, error = null)
             val eventId = s.eventId
             if (eventId != null) {
-                val request =
-                    UpdateEventRequest(
-                        title = s.title,
-                        description = s.description.ifBlank { null },
-                        coverImage = s.coverImageUrl,
-                        location = s.location.ifBlank { null },
-                        startsAt = s.startsAt,
-                        endsAt = s.endsAt.ifBlank { null },
-                        latitude = s.latitude,
-                        longitude = s.longitude,
-                        maxAttendees = maxAttendees,
-                    )
-                when (eventRepository.updateEvent(eventId, request)) {
-                    is ApiResult.Success -> {
-                        onSaved()
-                    }
-
-                    is ApiResult.Error -> {
-                        _state.value = _state.value.copy(isLoading = false, error = "Nie udało się zaktualizować wydarzenia")
-                    }
-                }
+                submitUpdate(s, eventId, maxAttendees, onSaved)
             } else {
-                val request =
-                    CreateEventRequest(
-                        title = s.title,
-                        description = s.description.ifBlank { null },
-                        coverImage = s.coverImageUrl,
-                        location = s.location.ifBlank { null },
-                        startsAt = s.startsAt,
-                        endsAt = s.endsAt.ifBlank { null },
-                        latitude = s.latitude,
-                        longitude = s.longitude,
-                        maxAttendees = maxAttendees,
-                    )
-                when (eventRepository.createEvent(request)) {
-                    is ApiResult.Success -> {
-                        onSaved()
-                    }
-
-                    is ApiResult.Error -> {
-                        _state.value = _state.value.copy(isLoading = false, error = "Nie udało się utworzyć wydarzenia")
-                    }
-                }
+                submitCreate(s, maxAttendees, onSaved)
             }
+        }
+    }
+
+    private suspend fun submitUpdate(s: EventCreateState, eventId: String, maxAttendees: Int?, onSaved: () -> Unit) {
+        val request =
+            UpdateEventRequest(
+                title = s.title,
+                description = s.description.ifBlank { null },
+                coverImage = s.coverImageUrl,
+                location = s.location.ifBlank { null },
+                startsAt = s.startsAt,
+                endsAt = s.endsAt.ifBlank { null },
+                latitude = s.latitude,
+                longitude = s.longitude,
+                maxAttendees = maxAttendees,
+            )
+        when (eventRepository.updateEvent(eventId, request)) {
+            is ApiResult.Success -> onSaved()
+            is ApiResult.Error -> _state.value = _state.value.copy(isLoading = false, error = "Nie udało się zaktualizować wydarzenia")
+        }
+    }
+
+    private suspend fun submitCreate(s: EventCreateState, maxAttendees: Int?, onSaved: () -> Unit) {
+        val request =
+            CreateEventRequest(
+                title = s.title,
+                description = s.description.ifBlank { null },
+                coverImage = s.coverImageUrl,
+                location = s.location.ifBlank { null },
+                startsAt = s.startsAt,
+                endsAt = s.endsAt.ifBlank { null },
+                latitude = s.latitude,
+                longitude = s.longitude,
+                maxAttendees = maxAttendees,
+            )
+        when (eventRepository.createEvent(request)) {
+            is ApiResult.Success -> onSaved()
+            is ApiResult.Error -> _state.value = _state.value.copy(isLoading = false, error = "Nie udało się utworzyć wydarzenia")
         }
     }
 }

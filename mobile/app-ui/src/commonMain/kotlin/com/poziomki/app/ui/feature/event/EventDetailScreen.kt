@@ -137,9 +137,10 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
                                 ) {
+                                    val max = event.maxAttendees
                                     val isFull =
-                                        event.maxAttendees != null &&
-                                            event.attendeesCount >= event.maxAttendees &&
+                                        max != null &&
+                                            event.attendeesCount >= max &&
                                             !event.isAttending
                                     if (event.isAttending) {
                                         OutlinedButton(
