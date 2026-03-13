@@ -21,7 +21,9 @@ class TagRepository(
     private val api: ApiService,
 ) {
     companion object {
-        private const val TAGS_CACHE_KEY = "tags_catalog"
+        private const val CACHE_PREFIX = "tags_catalog"
+
+        private fun cacheKey(scope: String?): String = if (scope != null) "${CACHE_PREFIX}_$scope" else CACHE_PREFIX
     }
 
     fun observeTags(scope: String? = null): Flow<List<Tag>> {
@@ -45,9 +47,10 @@ class TagRepository(
             if (scope == "interest") {
                 ensureInterestSeedIfEmpty()
             }
+            val key = cacheKey(scope)
             val lastRefreshMs =
                 db.cacheStateQueries
-                    .selectByKey(TAGS_CACHE_KEY)
+                    .selectByKey(key)
                     .executeAsOneOrNull()
                     ?.cached_at ?: 0L
             if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
@@ -65,7 +68,7 @@ class TagRepository(
                                 parent_id = tag.parentId,
                             )
                         }
-                        db.cacheStateQueries.upsert(TAGS_CACHE_KEY, now)
+                        db.cacheStateQueries.upsert(key, now)
                     }
                     true
                 }
