@@ -88,6 +88,7 @@ internal class EventRoomRepository(
             creator_name = current.creator_name,
             creator_profile_picture = current.creator_profile_picture,
             attendees_count = current.attendees_count,
+            max_attendees = current.max_attendees,
             is_attending = current.is_attending,
             attendees_preview_json = current.attendees_preview_json,
             created_at = current.created_at,

@@ -82,6 +82,7 @@ fn build_from_context(
         updated_at: event.updated_at.to_rfc3339(),
         creator,
         attendees_count,
+        max_attendees: event.max_attendees,
         attendees_preview,
         tags: event_tags,
         is_attending,

@@ -137,6 +137,11 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
                                 ) {
+                                    val max = event.maxAttendees
+                                    val isFull =
+                                        max != null &&
+                                            event.attendeesCount >= max &&
+                                            !event.isAttending
                                     if (event.isAttending) {
                                         OutlinedButton(
                                             onClick = { showLeaveDialog = true },
@@ -147,14 +152,24 @@ fun EventDetailScreen(
                                     } else {
                                         Button(
                                             onClick = { viewModel.attendEvent() },
+                                            enabled = !isFull,
                                             modifier = Modifier.weight(1f),
                                         ) {
-                                            Text("Attend")
+                                            Text(if (isFull) "pełne" else "Attend")
                                         }
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+                                event.maxAttendees?.let { maxAttendees ->
+                                    Text(
+                                        text = "${event.attendeesCount} / $maxAttendees attendees",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                                }
 
                                 OutlinedButton(
                                     onClick = { viewModel.openEventChat(onNavigateToChat) },
