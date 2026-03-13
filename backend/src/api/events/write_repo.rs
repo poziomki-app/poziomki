@@ -64,6 +64,7 @@ pub(in crate::api) async fn check_capacity_and_upsert(
         .map_err(Into::into)
 }
 
+
 pub(in crate::api) async fn insert_event_with_conn(
     conn: &mut AsyncPgConnection,
     new_event: &NewEvent,
@@ -128,14 +129,7 @@ pub(in crate::api) async fn delete_event_attendee(
     profile_id: Uuid,
 ) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
-    diesel::delete(
-        event_attendees::table
-            .filter(event_attendees::event_id.eq(event_id))
-            .filter(event_attendees::profile_id.eq(profile_id)),
-    )
-    .execute(&mut conn)
-    .await?;
-    Ok(())
+    delete_event_attendee_with_conn(&mut conn, event_id, profile_id).await
 }
 
 pub(in crate::api) async fn delete_event_attendee_with_conn(
