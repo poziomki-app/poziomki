@@ -214,15 +214,6 @@ pub(super) fn validate_profile_name(name: &str) -> std::result::Result<(), &'sta
     }
 }
 
-pub(super) fn validate_profile_age(age: Option<u8>) -> std::result::Result<(), &'static str> {
-    if let Some(a) = age {
-        if !(15..=67).contains(&a) {
-            return Err("Age must be between 15 and 67");
-        }
-    }
-    Ok(())
-}
-
 pub(super) fn validate_profile_bio(
     value: Option<&String>,
 ) -> std::result::Result<(), &'static str> {

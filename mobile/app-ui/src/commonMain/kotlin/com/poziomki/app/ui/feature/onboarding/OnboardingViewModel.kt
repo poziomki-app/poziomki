@@ -42,7 +42,6 @@ class OnboardingViewModel(
     @Serializable
     private data class OnboardingDraft(
         val name: String,
-        val age: String? = null,
         val program: String,
         val bio: String,
         val selectedTagIds: Set<String>,
