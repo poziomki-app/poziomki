@@ -2,6 +2,9 @@ package com.poziomki.app.network
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class ApiResponse<T>(
@@ -198,8 +201,13 @@ data class UpdateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val maxAttendees: Int? = null,
-)
+    val maxAttendees: JsonElement = JsonNull,
+) {
+    companion object {
+        fun maxAttendeesValue(value: Int?): JsonElement =
+            value?.let { JsonPrimitive(it) } ?: JsonNull
+    }
+}
 
 @Serializable
 data class AttendEventRequest(

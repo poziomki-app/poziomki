@@ -16,6 +16,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.long
 
 internal class EventMutationRepository(
     private val db: PoziomkiDatabase,
@@ -116,7 +118,7 @@ internal class EventMutationRepository(
                     creator_name = current.creator_name,
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
-                    max_attendees = request.maxAttendees?.toLong(),
+                    max_attendees = (request.maxAttendees as? JsonPrimitive)?.long,
                     is_attending = current.is_attending,
                     attendees_preview_json = current.attendees_preview_json,
                     created_at = current.created_at,
@@ -149,7 +151,7 @@ internal class EventMutationRepository(
                     !previousAttending &&
                     current.max_attendees != null &&
                     current.attendees_count >= current.max_attendees
-            if (isFull) {
+            if (isFull && !connectivityMonitor.isOnline.value) {
                 return@withContext ApiResult.Error(
                     message = "Event is full",
                     code = "VALIDATION_ERROR",
