@@ -91,7 +91,7 @@ pub(super) async fn profiles_recommendations(
 
     let top = rank_and_take(&mut scored, limit);
 
-    let data = build_recommendations_response(&top, &repo, &mut conn).await?;
+    let data = build_recommendations_response(&top, &repo, &mut conn, &privacy_map).await?;
 
     let mut response = Json(DataResponse { data }).into_response();
     response

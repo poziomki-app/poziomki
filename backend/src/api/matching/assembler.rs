@@ -88,14 +88,13 @@ pub(super) async fn build_recommendations_response(
     top: &[(f64, &Profile)],
     repo: &MatchingRepository,
     conn: &mut crate::db::DbConn,
+    privacy_map: &HashMap<i32, bool>,
 ) -> std::result::Result<Vec<ProfileRecommendation>, crate::error::AppError> {
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
     let user_models = repo.load_users_by_ids(&user_ids, conn).await?;
 
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
     let top_tags = repo.batch_load_profile_tags(&top_ids, conn).await?;
-
-    let privacy_map = batch_load_show_program(&user_ids, conn).await?;
 
     let pic_filenames: Vec<String> = top
         .iter()
@@ -112,7 +111,7 @@ pub(super) async fn build_recommendations_response(
         user_models: &user_models,
         pic_map: &pic_map,
         thumbhash_map: &thumbhash_map,
-        privacy_map: &privacy_map,
+        privacy_map,
     };
     Ok(top
         .iter()
