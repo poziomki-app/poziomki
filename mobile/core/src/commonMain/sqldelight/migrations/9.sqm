@@ -54,6 +54,3 @@ CREATE TABLE user_settings_new (
 INSERT INTO user_settings_new SELECT user_id, theme, language, notifications_enabled, privacy_show_program, privacy_discoverable, cached_at, is_dirty FROM user_settings;
 DROP TABLE user_settings;
 ALTER TABLE user_settings_new RENAME TO user_settings;
-
-ALTER TABLE event ADD COLUMN max_attendees INTEGER;
-ALTER TABLE event_attendee ADD COLUMN is_creator INTEGER NOT NULL DEFAULT 0;

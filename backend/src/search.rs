@@ -121,7 +121,7 @@ async fn search_profiles(
         LEFT JOIN profile_tags pt_agg ON pt_agg.profile_id = p.id
         LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
-            COALESCE(us.privacy_discoverable, true) = true
+            (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
             AND (
                 p.search_vector @@ websearch_to_tsquery('simple', $1)
                 OR LOWER(p.name) LIKE $2
