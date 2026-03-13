@@ -23,6 +23,7 @@ fun Event.toDbParams(): List<Any?> =
         creator?.name,
         creator?.profilePicture,
         attendeesCount.toLong(),
+        maxAttendees?.toLong(),
         if (isAttending) 1L else 0L,
         json.encodeToString(attendeesPreview),
         createdAt,
@@ -47,6 +48,7 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         creatorId = creator_id,
         createdAt = created_at,
         attendeesCount = attendees_count.toInt(),
+        maxAttendees = max_attendees?.toInt(),
         isAttending = is_attending != 0L,
         creator =
             creator_id?.let {

@@ -589,6 +589,7 @@ async fn events_flow_matches_phase_3_contract() {
                 "title": "Rust migration event",
                 "startsAt": "2030-01-01T12:00:00Z",
                 "endsAt": "2030-01-01T13:00:00Z",
+                "maxAttendees": 2,
                 "tags": ["music"]
             }))
             .await;
@@ -601,6 +602,7 @@ async fn events_flow_matches_phase_3_contract() {
             .unwrap_or_default();
         assert!(!event_id.is_empty());
         assert_eq!(created_payload["data"]["attendeesCount"], 1);
+        assert_eq!(created_payload["data"]["maxAttendees"], 2);
         assert_eq!(created_payload["data"]["isAttending"], true);
         assert_eq!(created_payload["data"]["latitude"], serde_json::Value::Null);
         assert_eq!(
@@ -645,13 +647,15 @@ async fn events_flow_matches_phase_3_contract() {
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
             .json(&serde_json::json!({
                 "latitude": 50.0647,
-                "longitude": 19.9450
+                "longitude": 19.9450,
+                "maxAttendees": 3
             }))
             .await;
         assert_eq!(update_geo.status_code(), 200);
         let updated_payload: serde_json::Value = update_geo.json();
         assert_eq!(updated_payload["data"]["latitude"], 50.0647);
         assert_eq!(updated_payload["data"]["longitude"], 19.945);
+        assert_eq!(updated_payload["data"]["maxAttendees"], 3);
 
         // Update event to clear geo coordinates
         let clear_geo = request
@@ -701,6 +705,42 @@ async fn events_flow_matches_phase_3_contract() {
         assert_eq!(list_response.status_code(), 200);
         let list_payload: serde_json::Value = list_response.json();
         assert_eq!(list_payload["data"][0]["id"], event_id);
+        assert_eq!(list_payload["data"][0]["maxAttendees"], 3);
+
+        let third_token =
+            sign_up_and_verify(&request, "third@example.com", "secret123", "Third").await;
+
+        let (third_auth_key, third_auth_value) = auth_header(&third_token);
+        let third_profile_response = request
+            .post("/api/v1/profiles")
+            .add_header(third_auth_key.clone(), third_auth_value.clone())
+            .json(&serde_json::json!({
+                "name": "Third",
+                "age": 24,
+            }))
+            .await;
+        assert_eq!(third_profile_response.status_code(), 201);
+
+        let full_update = request
+            .patch(&format!("/api/v1/events/{event_id}"))
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "maxAttendees": 2
+            }))
+            .await;
+        assert_eq!(full_update.status_code(), 200);
+        let full_update_payload: serde_json::Value = full_update.json();
+        assert_eq!(full_update_payload["data"]["maxAttendees"], 2);
+
+        let blocked_attend = request
+            .post(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(third_auth_key.clone(), third_auth_value.clone())
+            .json(&serde_json::json!({ "status": "going" }))
+            .await;
+        assert_eq!(blocked_attend.status_code(), 400);
+        let blocked_payload: serde_json::Value = blocked_attend.json();
+        assert_eq!(blocked_payload["code"], "VALIDATION_ERROR");
+        assert_eq!(blocked_payload["error"], "Event is full");
     })
     .await;
 }

@@ -337,7 +337,7 @@ internal fun NearbyEventsContent(
                         )
                     }
 
-                    if (selectedEvent.attendeesCount > 0) {
+                    if (selectedEvent.attendeesCount > 0 || selectedEvent.maxAttendees != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (selectedEvent.attendeesPreview.isNotEmpty()) {
@@ -349,12 +349,13 @@ internal fun NearbyEventsContent(
                             }
                             Text(
                                 text =
-                                    pluralizePolish(
-                                        selectedEvent.attendeesCount,
-                                        "osoba",
-                                        "osoby",
-                                        "osób",
-                                    ),
+                                    selectedEvent.maxAttendees?.let { "${selectedEvent.attendeesCount} / $it" }
+                                        ?: pluralizePolish(
+                                            selectedEvent.attendeesCount,
+                                            "osoba",
+                                            "osoby",
+                                            "osób",
+                                        ),
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,

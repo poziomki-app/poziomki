@@ -147,6 +147,7 @@ class SyncEngine(
                     creator_name = serverEvent.creator?.name,
                     creator_profile_picture = serverEvent.creator?.profilePicture,
                     attendees_count = serverEvent.attendeesCount.toLong(),
+                    max_attendees = serverEvent.maxAttendees?.toLong(),
                     is_attending = if (serverEvent.isAttending) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
@@ -194,6 +195,7 @@ class SyncEngine(
                     creator_name = event.creator?.name,
                     creator_profile_picture = event.creator?.profilePicture,
                     attendees_count = event.attendeesCount.toLong(),
+                    max_attendees = event.maxAttendees?.toLong(),
                     is_attending = if (event.isAttending) 1L else 0L,
                     attendees_preview_json =
                         json.encodeToString(
