@@ -29,6 +29,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    event_interactions (profile_id, event_id, kind) {
+        profile_id -> Uuid,
+        event_id -> Uuid,
+        kind -> Varchar,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     event_tags (event_id, tag_id) {
         event_id -> Uuid,
         tag_id -> Uuid,
@@ -139,6 +149,7 @@ diesel::table! {
         scope -> Varchar,
         category -> Nullable<Varchar>,
         emoji -> Nullable<Varchar>,
+        parent_id -> Nullable<Uuid>,
         onboarding_order -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
@@ -198,6 +209,8 @@ diesel::table! {
 
 diesel::joinable!(event_attendees -> events (event_id));
 diesel::joinable!(event_attendees -> profiles (profile_id));
+diesel::joinable!(event_interactions -> events (event_id));
+diesel::joinable!(event_interactions -> profiles (profile_id));
 diesel::joinable!(event_tags -> events (event_id));
 diesel::joinable!(event_tags -> tags (tag_id));
 diesel::joinable!(events -> profiles (creator_id));
@@ -211,6 +224,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     auth_rate_limits,
     degrees,
     event_attendees,
+    event_interactions,
     event_tags,
     events,
     job_outbox,
