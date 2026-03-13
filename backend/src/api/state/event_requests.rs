@@ -42,6 +42,8 @@ pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::api) tag_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::api) requires_approval: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -74,6 +76,8 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::api) tag_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::api) requires_approval: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

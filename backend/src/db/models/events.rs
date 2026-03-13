@@ -21,6 +21,7 @@ pub struct Event {
     pub max_attendees: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub requires_approval: bool,
 }
 
 #[derive(Debug, Insertable)]
@@ -40,6 +41,7 @@ pub struct NewEvent {
     pub max_attendees: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub requires_approval: bool,
 }
 
 #[derive(Debug, AsChangeset, Default)]
@@ -56,4 +58,5 @@ pub struct EventChangeset {
     pub longitude: Option<Option<f64>>,
     pub max_attendees: Option<Option<i32>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub requires_approval: Option<bool>,
 }

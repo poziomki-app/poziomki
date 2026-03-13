@@ -125,6 +125,8 @@ internal class EventMutationRepository(
                     conversation_id = current.conversation_id,
                     cached_at = current.cached_at,
                     is_dirty = 1L,
+                    requires_approval = current.requires_approval,
+                    is_pending = current.is_pending,
                 )
             }
 
@@ -294,6 +296,8 @@ internal class EventMutationRepository(
             conversation_id = conversationId,
             cached_at = cachedAt,
             is_dirty = if (isDirty) 1L else 0L,
+            requires_approval = if (event.requiresApproval) 1L else 0L,
+            is_pending = if (event.isPending) 1L else 0L,
         )
     }
 
@@ -359,6 +363,8 @@ internal class EventMutationRepository(
             conversation_id = event.conversation_id,
             cached_at = event.cached_at,
             is_dirty = event.is_dirty,
+            requires_approval = event.requires_approval,
+            is_pending = event.is_pending,
         )
     }
 }

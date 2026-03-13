@@ -32,6 +32,8 @@ fun Event.toDbParams(): List<Any?> =
         0L,
         latitude,
         longitude,
+        if (requiresApproval) 1L else 0L,
+        if (isPending) 1L else 0L,
     )
 
 fun com.poziomki.app.db.Event.toApiModel(): Event =
@@ -50,6 +52,8 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         attendeesCount = attendees_count.toInt(),
         maxAttendees = max_attendees?.toInt(),
         isAttending = is_attending != 0L,
+        isPending = is_pending != 0L,
+        requiresApproval = requires_approval != 0L,
         creator =
             creator_id?.let {
                 EventCreator(

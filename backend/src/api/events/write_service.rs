@@ -82,6 +82,10 @@ fn parse_event_dates(
 fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> EventChangeset {
     let mut changeset = EventChangeset::default();
 
+    if let Some(req_approval) = payload.requires_approval {
+        changeset.requires_approval = Some(req_approval);
+    }
+
     if let Some(title) = &payload.title {
         changeset.title = Some(title.trim().to_string());
     }
