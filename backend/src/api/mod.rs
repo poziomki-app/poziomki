@@ -198,7 +198,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_room_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
-        .route_layer(
+        .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &axum::http::Request<_>| {
                     if req.uri().path() == "/health" {
@@ -215,14 +215,10 @@ pub fn router() -> Router<AppContext> {
                             },
                             String::from,
                         );
-                    let path = req
-                        .extensions()
-                        .get::<axum::extract::MatchedPath>()
-                        .map_or_else(|| req.uri().path().to_owned(), |mp| mp.as_str().to_owned());
                     tracing::info_span!(
                         "request",
                         method = %req.method(),
-                        path = %path,
+                        path = %req.uri().path(),
                         request_id = %request_id,
                     )
                 })
