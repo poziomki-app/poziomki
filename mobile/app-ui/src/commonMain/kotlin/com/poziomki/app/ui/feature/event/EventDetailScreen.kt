@@ -137,6 +137,11 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.md),
                                 ) {
+                                    val max = event.maxAttendees
+                                    val isFull =
+                                        max != null &&
+                                            event.attendeesCount >= max &&
+                                            !event.isAttending
                                     if (event.isAttending) {
                                         OutlinedButton(
                                             onClick = { showLeaveDialog = true },
@@ -144,17 +149,42 @@ fun EventDetailScreen(
                                         ) {
                                             Text("Leave")
                                         }
-                                    } else {
+                                    } else if (event.isPending) {
+                                        OutlinedButton(
+                                            onClick = {},
+                                            enabled = false,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text("Oczekiwanie na akceptacj\u0119")
+                                        }
+                                    } else if (event.requiresApproval) {
                                         Button(
                                             onClick = { viewModel.attendEvent() },
                                             modifier = Modifier.weight(1f),
                                         ) {
-                                            Text("Attend")
+                                            Text("Popro\u015b o do\u0142\u0105czenie")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = { viewModel.attendEvent() },
+                                            enabled = !isFull,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text(if (isFull) "pełne" else "Attend")
                                         }
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+                                event.maxAttendees?.let { maxAttendees ->
+                                    Text(
+                                        text = "${event.attendeesCount} / $maxAttendees attendees",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                                }
 
                                 OutlinedButton(
                                     onClick = { viewModel.openEventChat(onNavigateToChat) },
@@ -215,6 +245,35 @@ fun EventDetailScreen(
                                                     style = MaterialTheme.typography.labelSmall,
                                                     maxLines = 1,
                                                 )
+                                                if (attendee.status == "pending" && state.isCreator) {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Button(
+                                                            onClick = { viewModel.approveAttendee(attendee.profileId) },
+                                                            modifier = Modifier.height(24.dp),
+                                                        ) {
+                                                            Text("OK", style = MaterialTheme.typography.labelSmall)
+                                                        }
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.rejectAttendee(attendee.profileId) },
+                                                            modifier = Modifier.height(24.dp),
+                                                        ) {
+                                                            Text("X", style = MaterialTheme.typography.labelSmall)
+                                                        }
+                                                    }
+                                                } else if (attendee.status == "pending") {
+                                                    Text(
+                                                        text = "oczekuje",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                } else if (attendee.isCreator) {
+                                                    Text(
+                                                        text = "Organizator",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        maxLines = 1,
+                                                    )
+                                                }
                                             }
                                         }
                                     }

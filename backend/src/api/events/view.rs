@@ -21,6 +21,7 @@ fn status_from_str(s: &str) -> AttendeeStatus {
     match s {
         "going" => AttendeeStatus::Going,
         "interested" => AttendeeStatus::Interested,
+        "pending" => AttendeeStatus::Pending,
         _ => AttendeeStatus::Invited,
     }
 }
@@ -60,6 +61,10 @@ fn build_from_context(
         .iter()
         .any(|a| a.profile.id == *profile_id && a.status == AttendeeStatus::Going);
 
+    let is_pending = attendee_rows
+        .iter()
+        .any(|a| a.profile.id == *profile_id && a.status == AttendeeStatus::Pending);
+
     let creator = ctx
         .creators
         .get(&event.creator_id)
@@ -83,10 +88,13 @@ fn build_from_context(
         updated_at: event.updated_at.to_rfc3339(),
         creator,
         attendees_count,
+        max_attendees: event.max_attendees,
         attendees_preview,
         tags: event_tags,
         is_attending,
         is_saved,
+        is_pending,
+        requires_approval: event.requires_approval,
         conversation_id: event.conversation_id.clone(),
         score: None,
     }

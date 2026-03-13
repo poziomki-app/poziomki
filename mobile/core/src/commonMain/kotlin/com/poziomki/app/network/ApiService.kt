@@ -80,6 +80,16 @@ class ApiService(
 
     suspend fun leaveEvent(id: String): ApiResult<Event> = client.delete("/api/v1/events/$id/attend")
 
+    suspend fun approveAttendee(
+        eventId: String,
+        profileId: String,
+    ): ApiResult<SuccessResponse> = client.post("/api/v1/events/$eventId/attendees/$profileId/approve")
+
+    suspend fun rejectAttendee(
+        eventId: String,
+        profileId: String,
+    ): ApiResult<SuccessResponse> = client.post("/api/v1/events/$eventId/attendees/$profileId/reject")
+
     // Uploads
 
     suspend fun uploadImage(
