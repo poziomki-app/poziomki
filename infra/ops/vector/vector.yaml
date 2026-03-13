@@ -1,0 +1,104 @@
+sources:
+  docker_logs:
+    type: docker_logs
+    exclude_containers:
+      - "poziomki-rs-garage-1"
+      - "parseable"
+      - "vector-vector-1"
+
+transforms:
+  parse_json:
+    type: remap
+    inputs: ["docker_logs"]
+    source: |-
+      name = string(.container_name) ?? ""
+      if starts_with(name, "poziomki-rs-api-") || starts_with(name, "poziomki-rs-worker-") {
+        parsed, err = parse_json(.message)
+        if err == null {
+          merged, merge_err = merge(., parsed)
+          if merge_err == null {
+            . = merged
+            ts, ts_err = parse_timestamp(.timestamp, format: "%+")
+            if ts_err == null { .timestamp = ts }
+          }
+        } else {
+          .level = "RAW"
+        }
+      }
+
+  route_streams:
+    type: route
+    inputs: ["parse_json"]
+    route:
+      api: 'starts_with(string(.container_name) ?? "", "poziomki-rs-api-")'
+      worker: 'starts_with(string(.container_name) ?? "", "poziomki-rs-worker-")'
+
+sinks:
+  parseable_api:
+    type: http
+    inputs: ["route_streams.api"]
+    uri: http://parseable:8000/api/v1/ingest
+    method: post
+    encoding:
+      codec: json
+    auth:
+      strategy: basic
+      user: admin
+      password: "${PARSEABLE_PASSWORD}"
+    request:
+      headers:
+        X-P-Stream: api
+    compression: gzip
+    batch:
+      max_events: 100
+      timeout_secs: 2
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block
+
+  parseable_worker:
+    type: http
+    inputs: ["route_streams.worker"]
+    uri: http://parseable:8000/api/v1/ingest
+    method: post
+    encoding:
+      codec: json
+    auth:
+      strategy: basic
+      user: admin
+      password: "${PARSEABLE_PASSWORD}"
+    request:
+      headers:
+        X-P-Stream: worker
+    compression: gzip
+    batch:
+      max_events: 100
+      timeout_secs: 2
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block
+
+  parseable_infra:
+    type: http
+    inputs: ["route_streams._unmatched"]
+    uri: http://parseable:8000/api/v1/ingest
+    method: post
+    encoding:
+      codec: json
+    auth:
+      strategy: basic
+      user: admin
+      password: "${PARSEABLE_PASSWORD}"
+    request:
+      headers:
+        X-P-Stream: infra
+    compression: gzip
+    batch:
+      max_events: 100
+      timeout_secs: 5
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block

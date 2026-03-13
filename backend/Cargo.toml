@@ -47,7 +47,7 @@ tokio = { version = "=1.50.0", default-features = false, features = [
 ] }
 axum = { version = "=0.8.8", features = ["multipart"] }
 tracing = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 chrono = { version = "=0.4.44", default-features = false, features = ["clock", "serde"] }
 validator = { version = "=0.20.0", features = ["derive"] }
 uuid = { version = "=1.21.0", features = ["v4"] }
@@ -65,7 +65,7 @@ fast_image_resize = "=6.0.0"
 webp = "=0.3.1"
 thumbhash = "=0.1.0"
 base64 = "=0.22.1"
-tower-http = { version = "=0.6.8", features = ["set-header"] }
+tower-http = { version = "=0.6.8", features = ["set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 jsonwebtoken = "=10.3.0"
