@@ -5,6 +5,7 @@ CREATE TABLE event_attendee (
     name TEXT NOT NULL,
     profile_picture TEXT,
     status TEXT NOT NULL,
+    is_creator INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (event_id, profile_id)
 );
 
@@ -15,8 +16,8 @@ WHERE event_id = ?;
 
 upsert:
 INSERT OR REPLACE INTO event_attendee(
-    event_id, profile_id, user_id, name, profile_picture, status
-) VALUES (?, ?, ?, ?, ?, ?);
+    event_id, profile_id, user_id, name, profile_picture, status, is_creator
+) VALUES (?, ?, ?, ?, ?, ?, ?);
 
 deleteByEventId:
 DELETE FROM event_attendee
