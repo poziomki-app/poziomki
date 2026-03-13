@@ -133,6 +133,7 @@ class SyncEngine(
             val delayIndex = minOf(op.retry_count.toInt(), BACKOFF_DELAYS.size - 1)
             delay(BACKOFF_DELAYS[delayIndex])
         } else if (!success) {
+            println("[SyncEngine] permanently retiring ${op.type} (entity=${op.entity_id}) after $MAX_RETRIES retries")
             pendingOps.complete(op.id)
         }
     }

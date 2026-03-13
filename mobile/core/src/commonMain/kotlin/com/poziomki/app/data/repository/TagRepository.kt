@@ -53,6 +53,7 @@ class TagRepository(
             if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getTags(scope)) {
                 is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
                         result.data.forEach { tag ->
                             db.tagQueries.upsert(
@@ -64,9 +65,8 @@ class TagRepository(
                                 parent_id = tag.parentId,
                             )
                         }
+                        db.cacheStateQueries.upsert(TAGS_CACHE_KEY, now)
                     }
-                    val now = Clock.System.now().toEpochMilliseconds()
-                    db.cacheStateQueries.upsert(TAGS_CACHE_KEY, now)
                     true
                 }
 
