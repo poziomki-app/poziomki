@@ -37,8 +37,15 @@ fn init_tracing_once() -> crate::error::AppResult<()> {
         return Ok(());
     }
 
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let filter = match tracing_subscriber::EnvFilter::try_from_default_env() {
+        Ok(f) => f,
+        Err(e) if std::env::var("RUST_LOG").is_ok() => {
+            return Err(crate::error::AppError::Message(format!(
+                "invalid RUST_LOG: {e}"
+            )));
+        }
+        Err(_) => tracing_subscriber::EnvFilter::new("info"),
+    };
 
     let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production";
 
