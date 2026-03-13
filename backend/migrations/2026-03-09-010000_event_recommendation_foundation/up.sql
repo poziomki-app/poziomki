@@ -41,6 +41,18 @@ ON CONFLICT (id) DO UPDATE SET
   parent_id = EXCLUDED.parent_id,
   updated_at = NOW();
 
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_event_interactions_updated_at
+  BEFORE UPDATE ON event_interactions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 UPDATE tags
 SET parent_id = CASE category
   WHEN 'sport' THEN 'b665ff1d-52e3-4efc-9b68-1f53d2efad10'::uuid
