@@ -125,6 +125,7 @@ class EventDetailViewModel(
                     eventRepository.refreshAttendees(eventId)
                     eventRepository.refreshEvent(eventId, forceRefresh = true)
                 }
+
                 is ApiResult.Error -> {
                     _state.value =
                         _state.value.copy(
@@ -142,6 +143,7 @@ class EventDetailViewModel(
                 is ApiResult.Success -> {
                     eventRepository.refreshAttendees(eventId)
                 }
+
                 is ApiResult.Error -> {
                     _state.value =
                         _state.value.copy(

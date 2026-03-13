@@ -187,21 +187,18 @@ pub(in crate::api) async fn event_attend(
     let status_str = resolve_attend_status(payload);
 
     // If the event requires approval and user isn't already going, set status to pending
-    let effective_status = if event.requires_approval
-        && status_str == "going"
-        && event.creator_id != profile.id
-    {
-        // Check if user is already going (re-attend shouldn't downgrade to pending)
-        let existing =
-            events_write_repo::find_attendee_status(event_uuid, profile.id).await?;
-        if existing.as_deref() == Some("going") {
-            "going"
+    let effective_status =
+        if event.requires_approval && status_str == "going" && event.creator_id != profile.id {
+            // Check if user is already going (re-attend shouldn't downgrade to pending)
+            let existing = events_write_repo::find_attendee_status(event_uuid, profile.id).await?;
+            if existing.as_deref() == Some("going") {
+                "going"
+            } else {
+                "pending"
+            }
         } else {
-            "pending"
-        }
-    } else {
-        status_str
-    };
+            status_str
+        };
 
     upsert_attendee(event_uuid, profile.id, effective_status).await?;
     if effective_status != "pending" {
@@ -237,7 +234,10 @@ pub(in crate::api) async fn event_approve_attendee(
     };
 
     if event.creator_id != profile.id {
-        return Ok(forbidden(&headers, "Only the creator can approve attendees"));
+        return Ok(forbidden(
+            &headers,
+            "Only the creator can approve attendees",
+        ));
     }
 
     let target_profile_id = Uuid::parse_str(&profile_id_str)
