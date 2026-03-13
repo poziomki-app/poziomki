@@ -13,7 +13,6 @@ fun ProfileWithTags.toProfile(): Profile =
         userId = userId,
         name = name,
         bio = bio,
-
         profilePicture = profilePicture,
         thumbhash = thumbhash,
         images = images,
@@ -28,7 +27,6 @@ fun com.poziomki.app.db.Profile.toApiModel(): Profile =
         userId = user_id,
         name = name,
         bio = bio,
-
         profilePicture = profile_picture,
         thumbhash = thumbhash,
         images = parseImages(images_json),
@@ -45,7 +43,6 @@ fun com.poziomki.app.db.Profile.toApiModelWithTags(tags: List<Tag>): ProfileWith
         userId = user_id,
         name = name,
         bio = bio,
-
         profilePicture = profile_picture,
         thumbhash = thumbhash,
         images = parseImages(images_json),
