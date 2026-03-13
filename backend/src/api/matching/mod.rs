@@ -146,21 +146,21 @@ pub(super) async fn events_recommendations(
     let all_history_tags = repo
         .batch_load_event_tag_ids(&all_history_ids, &mut conn)
         .await?;
+    // Deduplicate: if an event is both saved (1.0) and joined (0.5), keep max weight
+    let mut event_weights: HashMap<Uuid, f64> = HashMap::new();
+    for &id in &saved_event_ids {
+        event_weights.insert(id, 1.0);
+    }
+    for &id in &joined_event_ids {
+        event_weights.entry(id).or_insert(0.5);
+    }
     let history_affinity = build_affinity_map(
-        saved_event_ids
-            .iter()
-            .flat_map(|id| {
-                all_history_tags
-                    .get(id)
-                    .into_iter()
-                    .flat_map(|tags| tags.iter().copied().map(|tag_id| (tag_id, 1.0)))
-            })
-            .chain(joined_event_ids.iter().flat_map(|id| {
-                all_history_tags
-                    .get(id)
-                    .into_iter()
-                    .flat_map(|tags| tags.iter().copied().map(|tag_id| (tag_id, 0.5)))
-            })),
+        event_weights.iter().flat_map(|(id, &weight)| {
+            all_history_tags
+                .get(id)
+                .into_iter()
+                .flat_map(move |tags| tags.iter().copied().map(move |tag_id| (tag_id, weight)))
+        }),
         &tag_parent_map,
     );
 
@@ -205,6 +205,7 @@ pub(super) async fn events_recommendations(
         .into_iter()
         .map(|mut event| {
             event.score = Uuid::parse_str(&event.id)
+                .inspect_err(|e| tracing::warn!("failed to parse event id: {e}"))
                 .ok()
                 .and_then(|uuid| score_by_event.get(&uuid).copied());
             event

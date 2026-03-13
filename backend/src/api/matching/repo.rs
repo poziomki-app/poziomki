@@ -220,10 +220,10 @@ impl MatchingRepository {
         conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashMap<Uuid, Option<Uuid>>, crate::error::AppError> {
         Ok(tags::table
-            .load::<Tag>(conn)
+            .select((tags::id, tags::parent_id))
+            .load::<(Uuid, Option<Uuid>)>(conn)
             .await?
             .into_iter()
-            .map(|tag| (tag.id, tag.parent_id))
             .collect())
     }
 }
