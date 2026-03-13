@@ -133,7 +133,7 @@ class SyncEngine(
             val delayIndex = minOf(op.retry_count.toInt(), BACKOFF_DELAYS.size - 1)
             delay(BACKOFF_DELAYS[delayIndex])
         } else if (!success) {
-            pendingOps.fail(op.id)
+            pendingOps.complete(op.id)
         }
     }
 

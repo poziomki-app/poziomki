@@ -5,40 +5,9 @@ import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.network.EventAttendeePreview
 import com.poziomki.app.network.EventCreator
 import com.poziomki.app.network.Tag
-import kotlinx.datetime.Clock
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
-
-fun Event.toDbParams(): List<Any?> =
-    listOf(
-        id,
-        title,
-        description,
-        coverImage,
-        location,
-        startsAt,
-        endsAt,
-        creatorId,
-        creator?.name,
-        creator?.profilePicture,
-        attendeesCount.toLong(),
-        maxAttendees?.toLong(),
-        if (isAttending) 1L else 0L,
-        if (isSaved) 1L else 0L,
-        json.encodeToString(attendeesPreview),
-        json.encodeToString(tags),
-        createdAt,
-        conversationId,
-        score,
-        Clock.System.now().toEpochMilliseconds(),
-        0L,
-        latitude,
-        longitude,
-        if (requiresApproval) 1L else 0L,
-        if (isPending) 1L else 0L,
-    )
 
 fun com.poziomki.app.db.Event.toApiModel(): Event =
     Event(
@@ -88,17 +57,6 @@ private fun parseTags(jsonStr: String?): List<Tag> =
         runCatching { json.decodeFromString<List<Tag>>(jsonStr) }
             .getOrDefault(emptyList())
     }
-
-fun EventAttendee.toDbParams(eventId: String): List<Any?> =
-    listOf(
-        eventId,
-        profileId,
-        userId,
-        name,
-        profilePicture,
-        status,
-        if (isCreator) 1L else 0L,
-    )
 
 fun com.poziomki.app.db.Event_attendee.toApiModel(): EventAttendee =
     EventAttendee(

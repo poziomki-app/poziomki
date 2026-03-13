@@ -20,7 +20,9 @@ class TagRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
 ) {
-    private var lastRefreshMs: Long = 0L
+    companion object {
+        private const val TAGS_CACHE_KEY = "tags_catalog"
+    }
 
     fun observeTags(scope: String? = null): Flow<List<Tag>> {
         val query =
@@ -43,6 +45,11 @@ class TagRepository(
             if (scope == "interest") {
                 ensureInterestSeedIfEmpty()
             }
+            val lastRefreshMs =
+                db.cacheStateQueries
+                    .selectByKey(TAGS_CACHE_KEY)
+                    .executeAsOneOrNull()
+                    ?.cached_at ?: 0L
             if (!forceRefresh && !CachePolicy.isCatalogStale(lastRefreshMs)) return@withContext true
             when (val result = api.getTags(scope)) {
                 is ApiResult.Success -> {
@@ -58,7 +65,8 @@ class TagRepository(
                             )
                         }
                     }
-                    lastRefreshMs = Clock.System.now().toEpochMilliseconds()
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.cacheStateQueries.upsert(TAGS_CACHE_KEY, now)
                     true
                 }
 
