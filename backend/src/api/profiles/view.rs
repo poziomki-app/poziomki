@@ -44,7 +44,7 @@ async fn resolve_program(
             .await
             .optional()
             .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
-            .unwrap_or(true)
+            .unwrap_or(false)
     };
     if show {
         program
