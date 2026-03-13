@@ -46,7 +46,6 @@ pub(in crate::api) async fn check_capacity_and_upsert(
     profile_id: Uuid,
     status: &str,
     max_attendees: Option<i32>,
-    already_going: bool,
     require_status: Option<&str>,
 ) -> std::result::Result<UpsertOutcome, crate::error::AppError> {
     let status = status.to_string();
@@ -63,21 +62,25 @@ pub(in crate::api) async fn check_capacity_and_upsert(
                 let status = status.clone();
                 let require_status = require_status.clone();
                 Box::pin(async move {
-                    // Precondition: verify attendee has required status (inside txn)
+                    // Read current status inside the txn so retries see fresh state
+                    let current_status = event_attendees::table
+                        .filter(event_attendees::event_id.eq(event_id))
+                        .filter(event_attendees::profile_id.eq(profile_id))
+                        .select(event_attendees::status)
+                        .first::<String>(conn)
+                        .await
+                        .optional()?;
+
+                    // Precondition: verify attendee has required status
                     if let Some(required) = &require_status {
-                        let current = event_attendees::table
-                            .filter(event_attendees::event_id.eq(event_id))
-                            .filter(event_attendees::profile_id.eq(profile_id))
-                            .select(event_attendees::status)
-                            .first::<String>(conn)
-                            .await
-                            .optional()?;
-                        if current.as_deref() != Some(required.as_str()) {
+                        if current_status.as_deref() != Some(required.as_str()) {
                             return Ok::<UpsertOutcome, diesel::result::Error>(
                                 UpsertOutcome::StatusMismatch,
                             );
                         }
                     }
+
+                    let already_going = current_status.as_deref() == Some("going");
 
                     // Capacity gate: only enforce when switching to "going"
                     if status == "going" && !already_going {

@@ -337,7 +337,6 @@ pub(in crate::api) async fn event_attend(
         profile.id,
         effective_status,
         event.max_attendees,
-        already_going,
         None,
     )
     .await?;
@@ -414,7 +413,6 @@ pub(in crate::api) async fn event_approve_attendee(
         target_profile_id,
         "going",
         event.max_attendees,
-        false,
         Some("pending"),
     )
     .await?;
