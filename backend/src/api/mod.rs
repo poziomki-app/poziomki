@@ -77,6 +77,14 @@ fn events_routes() -> Router<AppContext> {
         .route("/{id}/attendees", get(events::event_attendees))
         .route("/{id}/attend", post(events::event_attend))
         .route("/{id}/attend", delete(events::event_leave))
+        .route(
+            "/{id}/attendees/{profile_id}/approve",
+            post(events::event_approve_attendee),
+        )
+        .route(
+            "/{id}/attendees/{profile_id}/reject",
+            post(events::event_reject_attendee),
+        )
         .layer(cache_layer("private, max-age=60"))
 }
 

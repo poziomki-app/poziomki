@@ -51,6 +51,7 @@ diesel::table! {
         max_attendees -> Nullable<Int4>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        requires_approval -> Bool,
     }
 }
 

@@ -27,6 +27,7 @@ data class EventCreateState(
     val isUploadingCover: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val requiresApproval: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val eventId: String? = null,
@@ -72,6 +73,10 @@ class EventCreateViewModel(
 
     fun updateEndsAt(endsAt: String) {
         _state.value = _state.value.copy(endsAt = endsAt)
+    }
+
+    fun updateRequiresApproval(value: Boolean) {
+        _state.value = _state.value.copy(requiresApproval = value)
     }
 
     fun updateAttendeeLimit(attendeeLimit: String) {
@@ -130,6 +135,7 @@ class EventCreateViewModel(
                         coverImageUrl = event.coverImage,
                         latitude = event.latitude,
                         longitude = event.longitude,
+                        requiresApproval = event.requiresApproval,
                         isLoading = false,
                         eventId = eventId,
                     )
@@ -190,6 +196,7 @@ class EventCreateViewModel(
                 latitude = s.latitude,
                 longitude = s.longitude,
                 maxAttendees = UpdateEventRequest.maxAttendeesValue(maxAttendees),
+                requiresApproval = s.requiresApproval,
             )
         when (eventRepository.updateEvent(eventId, request)) {
             is ApiResult.Success -> onSaved()
@@ -213,6 +220,7 @@ class EventCreateViewModel(
                 latitude = s.latitude,
                 longitude = s.longitude,
                 maxAttendees = maxAttendees,
+                requiresApproval = if (s.requiresApproval) true else null,
             )
         when (eventRepository.createEvent(request)) {
             is ApiResult.Success -> onSaved()

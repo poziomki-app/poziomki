@@ -172,6 +172,8 @@ data class Event(
     val attendeesCount: Int = 0,
     val maxAttendees: Int? = null,
     val isAttending: Boolean = false,
+    val isPending: Boolean = false,
+    val requiresApproval: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val conversationId: String? = null,
@@ -189,6 +191,7 @@ data class CreateEventRequest(
     val longitude: Double? = null,
     val maxAttendees: Int? = null,
     val tagIds: List<String> = emptyList(),
+    val requiresApproval: Boolean? = null,
 )
 
 @Serializable
@@ -202,6 +205,7 @@ data class UpdateEventRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val maxAttendees: JsonElement = JsonNull,
+    val requiresApproval: Boolean? = null,
 ) {
     companion object {
         fun maxAttendeesValue(value: Int?): JsonElement =

@@ -149,6 +149,21 @@ fun EventDetailScreen(
                                         ) {
                                             Text("Leave")
                                         }
+                                    } else if (event.isPending) {
+                                        OutlinedButton(
+                                            onClick = {},
+                                            enabled = false,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text("Oczekiwanie na akceptacj\u0119")
+                                        }
+                                    } else if (event.requiresApproval) {
+                                        Button(
+                                            onClick = { viewModel.attendEvent() },
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text("Popro\u015b o do\u0142\u0105czenie")
+                                        }
                                     } else {
                                         Button(
                                             onClick = { viewModel.attendEvent() },
@@ -230,7 +245,28 @@ fun EventDetailScreen(
                                                     style = MaterialTheme.typography.labelSmall,
                                                     maxLines = 1,
                                                 )
-                                                if (attendee.isCreator) {
+                                                if (attendee.status == "pending" && state.isCreator) {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Button(
+                                                            onClick = { viewModel.approveAttendee(attendee.profileId) },
+                                                            modifier = Modifier.height(24.dp),
+                                                        ) {
+                                                            Text("OK", style = MaterialTheme.typography.labelSmall)
+                                                        }
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.rejectAttendee(attendee.profileId) },
+                                                            modifier = Modifier.height(24.dp),
+                                                        ) {
+                                                            Text("X", style = MaterialTheme.typography.labelSmall)
+                                                        }
+                                                    }
+                                                } else if (attendee.status == "pending") {
+                                                    Text(
+                                                        text = "oczekuje",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                } else if (attendee.isCreator) {
                                                     Text(
                                                         text = "Organizator",
                                                         style = MaterialTheme.typography.labelSmall,
