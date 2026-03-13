@@ -14,7 +14,7 @@ import com.poziomki.app.ui.navigation.Route
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 data class EventDetailState(
@@ -48,11 +48,12 @@ class EventDetailViewModel(
 
     private fun observeEvent() {
         viewModelScope.launch {
-            eventRepository.observeEvent(eventId).collect { event ->
-                val ownProfileId = profileRepository.observeOwnProfile().firstOrNull()?.id
-                val isCreator = event?.creatorId != null && event.creatorId == ownProfileId
-                _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
-            }
+            eventRepository.observeEvent(eventId)
+                .combine(profileRepository.observeOwnProfile()) { event, profile ->
+                    val isCreator = event?.creatorId != null && event.creatorId == profile?.id
+                    _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
+                }
+                .collect {}
         }
     }
 
