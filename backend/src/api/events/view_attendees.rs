@@ -68,6 +68,10 @@ pub(in crate::api) async fn attendee_info(
         .iter()
         .map(|row| build_attendee_info(row, &user_models, &url_map, creator_id))
         .collect();
-    list.sort_by(|a, b| b.is_creator.cmp(&a.is_creator).then_with(|| a.name.cmp(&b.name)));
+    list.sort_by(|a, b| {
+        b.is_creator
+            .cmp(&a.is_creator)
+            .then_with(|| a.name.cmp(&b.name))
+    });
     Ok(list)
 }
