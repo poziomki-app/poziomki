@@ -159,15 +159,15 @@ internal class EventMutationRepository(
                     }
 
                     is ApiResult.Error -> {
-                        restoreAttendance(
-                            id = id,
-                            isAttending = previousAttending,
-                            attendeesCount = previousCount,
-                        )
                         if (shouldRetry(result.status)) {
                             pendingOps.enqueue("attend_event", id, "{}")
                             ApiResult.Success(Unit)
                         } else {
+                            restoreAttendance(
+                                id = id,
+                                isAttending = previousAttending,
+                                attendeesCount = previousCount,
+                            )
                             result
                         }
                     }
@@ -200,15 +200,15 @@ internal class EventMutationRepository(
                     }
 
                     is ApiResult.Error -> {
-                        restoreAttendance(
-                            id = id,
-                            isAttending = previousAttending,
-                            attendeesCount = previousCount,
-                        )
                         if (shouldRetry(result.status)) {
                             pendingOps.enqueue("leave_event", id, "{}")
                             ApiResult.Success(Unit)
                         } else {
+                            restoreAttendance(
+                                id = id,
+                                isAttending = previousAttending,
+                                attendeesCount = previousCount,
+                            )
                             result
                         }
                     }

@@ -229,6 +229,7 @@ class SyncEngine(
         return when (api.attendEvent(entityId)) {
             is ApiResult.Success -> {
                 pendingOps.complete(op.id)
+                db.eventQueries.clearDirty(entityId)
                 true
             }
 
@@ -243,6 +244,7 @@ class SyncEngine(
         return when (api.leaveEvent(entityId)) {
             is ApiResult.Success -> {
                 pendingOps.complete(op.id)
+                db.eventQueries.clearDirty(entityId)
                 true
             }
 
