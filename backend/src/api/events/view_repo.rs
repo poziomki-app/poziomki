@@ -195,7 +195,7 @@ async fn load_saved_event_ids(
     let rows = event_interactions::table
         .filter(event_interactions::profile_id.eq(profile_id))
         .filter(event_interactions::event_id.eq_any(event_ids))
-        .filter(event_interactions::kind.eq("saved"))
+        .filter(event_interactions::kind.eq(crate::api::events::EVENT_INTERACTION_SAVED))
         .load::<EventInteraction>(conn)
         .await?;
 

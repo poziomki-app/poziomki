@@ -93,15 +93,6 @@ pub(in crate::api) async fn sync_event_tags_with_conn(
     Ok(())
 }
 
-pub(in crate::api) async fn upsert_attendee(
-    event_uuid: Uuid,
-    profile_id: Uuid,
-    status: &str,
-) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    upsert_attendee_with_conn(&mut conn, event_uuid, profile_id, status).await
-}
-
 pub(in crate::api) async fn upsert_attendee_with_conn(
     conn: &mut AsyncPgConnection,
     event_uuid: Uuid,

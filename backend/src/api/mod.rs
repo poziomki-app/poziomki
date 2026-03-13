@@ -61,10 +61,13 @@ fn degrees_routes() -> Router<AppContext> {
 }
 
 fn tags_routes() -> Router<AppContext> {
-    Router::new()
+    let cached = Router::new()
         .route("/", get(catalog::tags_search).post(catalog::tags_create))
+        .layer(cache_layer("public, max-age=1800"));
+
+    Router::new()
         .route("/suggestions", post(catalog::tags_suggestions))
-        .layer(cache_layer("public, max-age=1800"))
+        .merge(cached)
 }
 
 fn events_routes() -> Router<AppContext> {
@@ -79,6 +82,14 @@ fn events_routes() -> Router<AppContext> {
         .route("/{id}/attend", delete(events::event_leave))
         .route("/{id}/save", post(events::event_save))
         .route("/{id}/save", delete(events::event_unsave))
+        .route(
+            "/{id}/attendees/{profile_id}/approve",
+            post(events::event_approve_attendee),
+        )
+        .route(
+            "/{id}/attendees/{profile_id}/reject",
+            post(events::event_reject_attendee),
+        )
         .layer(cache_layer("private, max-age=60"))
 }
 

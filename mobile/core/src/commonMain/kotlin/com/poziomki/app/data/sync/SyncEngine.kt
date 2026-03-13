@@ -154,6 +154,7 @@ class SyncEngine(
             creator_name = event.creator?.name,
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
+            max_attendees = event.maxAttendees?.toLong(),
             is_attending = if (event.isAttending) 1L else 0L,
             is_saved = if (event.isSaved) 1L else 0L,
             attendees_preview_json =
@@ -173,6 +174,8 @@ class SyncEngine(
             cached_at = now,
             in_list_feed = existing?.in_list_feed ?: 1L,
             is_dirty = 0L,
+            requires_approval = if (event.requiresApproval) 1L else 0L,
+            is_pending = if (event.isPending) 1L else 0L,
         )
     }
 

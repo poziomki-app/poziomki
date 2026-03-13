@@ -158,6 +158,7 @@ class EventRepository(
                                 name = attendee.name,
                                 profile_picture = attendee.profilePicture,
                                 status = attendee.status,
+                                is_creator = if (attendee.isCreator) 1L else 0L,
                             )
                         }
                     }
@@ -184,6 +185,28 @@ class EventRepository(
     suspend fun unsaveEvent(id: String): ApiResult<Unit> = eventMutationManager.unsaveEvent(id)
 
     suspend fun deleteEvent(id: String): ApiResult<Unit> = eventMutationManager.deleteEvent(id)
+
+    suspend fun approveAttendee(
+        eventId: String,
+        profileId: String,
+    ): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            when (val result = api.approveAttendee(eventId, profileId)) {
+                is ApiResult.Success -> ApiResult.Success(Unit)
+                is ApiResult.Error -> result
+            }
+        }
+
+    suspend fun rejectAttendee(
+        eventId: String,
+        profileId: String,
+    ): ApiResult<Unit> =
+        withContext(Dispatchers.IO) {
+            when (val result = api.rejectAttendee(eventId, profileId)) {
+                is ApiResult.Success -> ApiResult.Success(Unit)
+                is ApiResult.Error -> result
+            }
+        }
 
     suspend fun ensureEventRoom(eventId: String): Result<String> =
         withContext(Dispatchers.IO) {

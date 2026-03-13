@@ -212,6 +212,7 @@ async fn validate_and_insert_tag(
     if let Some(parent_uuid) = parent_id {
         let parent_exists = tags::table
             .filter(tags::id.eq(parent_uuid))
+            .filter(tags::scope.eq(scope_str))
             .select(tags::id)
             .first::<Uuid>(&mut conn)
             .await
@@ -300,12 +301,12 @@ pub(super) async fn tags_suggestions(
             if !search.is_empty() {
                 search.push(' ');
             }
-            search.push_str(trimmed);
+            search.push_str(&trimmed.to_lowercase());
         }
     }
     search.truncate(search.floor_char_boundary(200));
 
-    if search.len() < 3 {
+    if search.chars().count() < 3 {
         return Ok(Json(DataResponse {
             data: Vec::<TagSuggestionResponse>::new(),
         })
@@ -324,7 +325,7 @@ pub(super) async fn tags_suggestions(
             t.category,
             t.emoji,
             t.parent_id,
-            ts_rank_cd(t.search_vector, to_tsquery('simple', $1))::double precision AS score
+            CASE WHEN $1 != '' THEN ts_rank_cd(t.search_vector, to_tsquery('simple', $1))::double precision ELSE 0.0 END AS score
         FROM tags t
         WHERE
             t.scope = $2
