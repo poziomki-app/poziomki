@@ -141,7 +141,14 @@ async fn search_profiles(
             p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
-            ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)) DESC,
+            GREATEST(
+                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
+                CASE
+                    WHEN (COALESCE(us.privacy_show_program, true) = true OR p.user_id = $4)
+                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
+                    ELSE 0
+                END
+            ) DESC,
             p.updated_at DESC
         LIMIT $3
         ",
