@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::db::models::event_interactions::EventInteraction;
 use crate::db::schema::event_interactions;
 
-pub(super) const EVENT_INTERACTION_SAVED: &str = "saved";
+pub(in crate::api) const EVENT_INTERACTION_SAVED: &str = "saved";
 pub(super) const EVENT_INTERACTION_JOINED: &str = "joined";
 
 pub(super) async fn upsert_event_interaction(

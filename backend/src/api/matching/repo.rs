@@ -19,6 +19,11 @@ use crate::db::schema::{
 
 pub(super) struct MatchingRepository;
 
+pub(super) struct MatchingProfileContext {
+    pub(super) profile: Option<Profile>,
+    pub(super) profile_tag_ids: HashSet<Uuid>,
+}
+
 pub(super) struct MatchingUserContext {
     pub(super) profile: Option<Profile>,
     pub(super) profile_tag_ids: HashSet<Uuid>,
@@ -51,6 +56,27 @@ impl MatchingRepository {
             .load::<EventInteraction>(conn)
             .await?;
         Ok(interactions.into_iter().map(|row| row.event_id).collect())
+    }
+
+    /// Lean context for profile-only recommendations (no event interactions).
+    pub(super) async fn load_profile_context(
+        &self,
+        user_id: i32,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<MatchingProfileContext, crate::error::AppError> {
+        let profile = profiles::table
+            .filter(profiles::user_id.eq(user_id))
+            .first::<Profile>(conn)
+            .await
+            .optional()?;
+        let profile_tag_ids = match &profile {
+            Some(profile) => self.load_profile_tag_ids(profile.id, conn).await?,
+            None => HashSet::new(),
+        };
+        Ok(MatchingProfileContext {
+            profile,
+            profile_tag_ids,
+        })
     }
 
     pub(super) async fn load_user_context(
@@ -220,10 +246,10 @@ impl MatchingRepository {
         conn: &mut crate::db::DbConn,
     ) -> std::result::Result<HashMap<Uuid, Option<Uuid>>, crate::error::AppError> {
         Ok(tags::table
-            .load::<Tag>(conn)
+            .select((tags::id, tags::parent_id))
+            .load::<(Uuid, Option<Uuid>)>(conn)
             .await?
             .into_iter()
-            .map(|tag| (tag.id, tag.parent_id))
             .collect())
     }
 }

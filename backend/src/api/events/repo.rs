@@ -43,9 +43,3 @@ pub(in crate::api) async fn find_event(
         .optional()?;
     Ok(model)
 }
-
-pub(in crate::api) async fn event_exists(
-    event_id: Uuid,
-) -> std::result::Result<bool, crate::error::AppError> {
-    Ok(find_event(event_id).await?.is_some())
-}

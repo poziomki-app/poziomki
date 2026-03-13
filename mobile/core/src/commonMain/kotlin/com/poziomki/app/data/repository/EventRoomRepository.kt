@@ -88,6 +88,7 @@ internal class EventRoomRepository(
             creator_name = current.creator_name,
             creator_profile_picture = current.creator_profile_picture,
             attendees_count = current.attendees_count,
+            max_attendees = current.max_attendees,
             is_attending = current.is_attending,
             is_saved = current.is_saved,
             attendees_preview_json = current.attendees_preview_json,
@@ -98,6 +99,8 @@ internal class EventRoomRepository(
             cached_at = current.cached_at,
             in_list_feed = current.in_list_feed,
             is_dirty = current.is_dirty,
+            requires_approval = current.requires_approval,
+            is_pending = current.is_pending,
         )
     }
 }

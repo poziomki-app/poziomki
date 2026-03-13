@@ -2,6 +2,9 @@ package com.poziomki.app.network
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class ApiResponse<T>(
@@ -167,8 +170,11 @@ data class Event(
     val creatorId: String? = null,
     val createdAt: String? = null,
     val attendeesCount: Int = 0,
+    val maxAttendees: Int? = null,
     val isAttending: Boolean = false,
     val isSaved: Boolean = false,
+    val isPending: Boolean = false,
+    val requiresApproval: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val tags: List<Tag> = emptyList(),
@@ -186,7 +192,9 @@ data class CreateEventRequest(
     val endsAt: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val maxAttendees: Int? = null,
     val tagIds: List<String> = emptyList(),
+    val requiresApproval: Boolean? = null,
 )
 
 @Serializable
@@ -200,7 +208,14 @@ data class UpdateEventRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val tagIds: List<String>? = null,
-)
+    val maxAttendees: JsonElement = JsonNull,
+    val requiresApproval: Boolean? = null,
+) {
+    companion object {
+        fun maxAttendeesValue(value: Int?): JsonElement =
+            value?.let { JsonPrimitive(it) } ?: JsonNull
+    }
+}
 
 @Serializable
 data class AttendEventRequest(
@@ -214,6 +229,7 @@ data class EventAttendee(
     val name: String,
     val profilePicture: String? = null,
     val status: String,
+    val isCreator: Boolean = false,
 )
 
 // Tag models
