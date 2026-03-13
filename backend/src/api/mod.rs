@@ -159,6 +159,9 @@ impl<B> tower_http::trace::OnResponse<B> for StatusAwareOnResponse {
         latency: std::time::Duration,
         span: &tracing::Span,
     ) {
+        if span.is_disabled() {
+            return;
+        }
         let status = response.status().as_u16();
         let latency_ms = latency.as_millis();
         if status >= 500 {
@@ -195,7 +198,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_room_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
-        .layer(
+        .route_layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &axum::http::Request<_>| {
                     if req.uri().path() == "/health" {
