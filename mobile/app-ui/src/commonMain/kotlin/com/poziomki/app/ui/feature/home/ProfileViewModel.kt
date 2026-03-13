@@ -48,7 +48,6 @@ class ProfileViewModel(
                                     userId = profileWithTags.userId,
                                     name = profileWithTags.name,
                                     bio = profileWithTags.bio,
-                                    age = profileWithTags.age,
                                     profilePicture = profileWithTags.profilePicture,
                                     images = profileWithTags.images,
                                     program = profileWithTags.program,

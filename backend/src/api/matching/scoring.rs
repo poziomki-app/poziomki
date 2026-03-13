@@ -39,11 +39,15 @@ pub(super) fn score_profile(
     candidate_tags: &HashSet<Uuid>,
     my_program: Option<&str>,
     candidate: &Profile,
+    candidate_show_program: bool,
 ) -> f64 {
     let mut score = jaccard(my_tag_ids, candidate_tags) * 100.0;
-    let same_program = my_program.is_some_and(|prog| candidate.program.as_deref() == Some(prog));
-    if same_program {
-        score += 10.0;
+    if candidate_show_program {
+        let same_program =
+            my_program.is_some_and(|prog| candidate.program.as_deref() == Some(prog));
+        if same_program {
+            score += 10.0;
+        }
     }
     score
 }

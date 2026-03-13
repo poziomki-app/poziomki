@@ -66,7 +66,6 @@ class MatchProfileRepository(
                                 user_id = profile.userId,
                                 name = profile.name,
                                 bio = profile.bio,
-                                age = profile.age?.toLong(),
                                 profile_picture = profile.profilePicture,
                                 thumbhash = profile.thumbhash,
                                 images_json = json.encodeToString(profile.images),
