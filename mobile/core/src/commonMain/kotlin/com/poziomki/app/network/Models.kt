@@ -210,6 +210,7 @@ data class EventAttendee(
     val name: String,
     val profilePicture: String? = null,
     val status: String,
+    val isCreator: Boolean = false,
 )
 
 // Tag models

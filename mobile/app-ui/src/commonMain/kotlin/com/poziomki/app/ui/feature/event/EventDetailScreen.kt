@@ -215,6 +215,14 @@ fun EventDetailScreen(
                                                     style = MaterialTheme.typography.labelSmall,
                                                     maxLines = 1,
                                                 )
+                                                if (attendee.isCreator) {
+                                                    Text(
+                                                        text = "Organizator",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        maxLines = 1,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
