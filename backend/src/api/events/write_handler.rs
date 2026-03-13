@@ -325,8 +325,12 @@ pub(in crate::api) async fn event_attend(
         None,
     )
     .await?;
-    if outcome == events_write_repo::UpsertOutcome::Full {
-        return Ok(validation_error(&headers, "Event is full"));
+    match outcome {
+        events_write_repo::UpsertOutcome::Full => {
+            return Ok(validation_error(&headers, "Event is full"));
+        }
+        events_write_repo::UpsertOutcome::Accepted
+        | events_write_repo::UpsertOutcome::StatusMismatch => {}
     }
 
     if effective_status != "pending" {

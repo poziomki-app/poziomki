@@ -8,7 +8,6 @@ use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
 use crate::db::schema::{event_attendees, event_interactions, events};
 
-#[derive(PartialEq, Eq)]
 pub(in crate::api) enum UpsertOutcome {
     Accepted,
     Full,
@@ -193,7 +192,7 @@ pub(in crate::api) async fn auto_approve_pending_with_conn(
     conn: &mut AsyncPgConnection,
     event_id: Uuid,
     max_attendees: Option<i32>,
-) -> std::result::Result<Vec<Uuid>, diesel::result::Error> {
+) -> std::result::Result<Vec<Uuid>, crate::error::AppError> {
     let pending_ids: Vec<Uuid> = event_attendees::table
         .filter(event_attendees::event_id.eq(event_id))
         .filter(event_attendees::status.eq("pending"))
