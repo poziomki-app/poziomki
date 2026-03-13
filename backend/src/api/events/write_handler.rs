@@ -186,7 +186,8 @@ pub(in crate::api) async fn event_attend(
 
     let status_str = resolve_attend_status(payload);
 
-    // If the event requires approval and user isn't already going, set status to pending
+    // Approval gate only applies to "going" — "interested" is a soft signal that
+    // intentionally bypasses approval so users can bookmark events without creator action.
     let effective_status =
         if event.requires_approval && status_str == "going" && event.creator_id != profile.id {
             // Check if user is already going (re-attend shouldn't downgrade to pending)
