@@ -54,8 +54,11 @@ class NtfyPushService :
         flags: Int,
         startId: Int,
     ): Int {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val url = intent?.getStringExtra(EXTRA_SSE_URL)
+            ?: prefs.getString(PREF_SSE_URL, null)
         if (url != null && url != sseUrl) {
+            prefs.edit().putString(PREF_SSE_URL, url).apply()
             sseUrl = url
             sseJob?.cancel()
             sseJob = serviceScope.launch { connectWithBackoff(url) }
@@ -129,6 +132,8 @@ class NtfyPushService :
 
     companion object {
         const val EXTRA_SSE_URL = "sse_url"
+        private const val PREFS_NAME = "ntfy_push"
+        private const val PREF_SSE_URL = "sse_url"
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 60_000L
     }
