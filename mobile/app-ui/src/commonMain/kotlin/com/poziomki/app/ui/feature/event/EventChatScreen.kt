@@ -29,7 +29,7 @@ fun EventChatScreen(
     LaunchedEffect(eventState.event?.conversationId, eventState.event?.isAttending) {
         val event = eventState.event
         val roomId = event?.conversationId
-        if (event?.isAttending == true && roomId != null && roomId.startsWith("!")) {
+        if (event?.isAttending == true && roomId != null && roomId.isNotBlank()) {
             chatViewModel.loadRoom(roomId, fallbackDisplayName = event.title)
         }
     }
@@ -71,7 +71,7 @@ fun EventChatScreen(
                 EventChatJoinRequiredView(onJoin = eventDetailViewModel::attendEvent)
             }
 
-            eventState.isOpeningChat || eventState.event?.conversationId?.startsWith("!") != true -> {
+            eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
                 EventChatLoadingView()
             }
 

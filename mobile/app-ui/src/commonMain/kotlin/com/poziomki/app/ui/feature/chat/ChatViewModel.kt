@@ -77,18 +77,8 @@ class ChatViewModel(
         fallbackDirectUserId: String? = null,
     ) {
         if (roomId.isBlank()) return
-        if (!roomId.startsWith("!")) {
-            val avatarOverrides = _uiState.value.avatarOverrides
-            _uiState.value =
-                ChatUiState(
-                    roomId = roomId,
-                    roomDisplayName = fallbackDisplayName.orEmpty(),
-                    roomAvatarUrl =
-                        fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
-                    isDirectRoom = fallbackDirectUserId != null,
-                    avatarOverrides = avatarOverrides,
-                    error = "Invalid chat route id. Expected Matrix room id (!...)",
-                )
+        if (roomId.length < 2) {
+            _uiState.value = ChatUiState(error = "Invalid chat room id")
             return
         }
         val isAlreadyBound = boundRoomId == roomId && activeRoom != null

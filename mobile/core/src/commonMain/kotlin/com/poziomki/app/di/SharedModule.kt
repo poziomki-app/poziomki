@@ -47,6 +47,7 @@ val sharedModule =
             WsConnection(
                 baseUrl = getProperty("API_BASE_URL", "http://localhost:5150"),
                 tokenProvider = { sessionManager.getToken() },
+                engine = get(),
             )
         }
         single { GeocodingService(get()) }
