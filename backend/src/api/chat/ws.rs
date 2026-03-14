@@ -1,0 +1,473 @@
+use axum::extract::ws::{Message, WebSocket};
+use futures_util::{SinkExt, StreamExt};
+use tokio::sync::mpsc;
+
+use super::conversations;
+use super::hub::ChatHub;
+use super::messages as chat_messages;
+use super::protocol::{ClientMessage, ServerMessage};
+use crate::api::state::hash_session_token;
+
+const AUTH_TIMEOUT_SECS: u64 = 5;
+const DEFAULT_HISTORY_LIMIT: i64 = 50;
+const MAX_HISTORY_LIMIT: i64 = 200;
+
+/// Handle a WebSocket connection after Axum upgrade.
+pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
+    let (mut ws_tx, mut ws_rx) = socket.split();
+
+    // --- Step 1: Authenticate ---
+    let Some((user_id, _user_pid)) = authenticate(&mut ws_tx, &mut ws_rx).await else {
+        return;
+    };
+
+    // --- Step 2: Register in hub ---
+    let mut hub_rx = hub.register(user_id);
+
+    // Clone a sender handle for unregister later
+    // We need to keep track of which sender this connection uses
+    let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
+
+    // Re-register with the proper sender (replace the last registered one)
+    // Actually, we'll use the hub_rx we already got and forward outbound_tx messages
+    // The hub.register already gave us a receiver; let's use that directly.
+
+    // Send initial conversation list
+    let conv_list = conversations::list_for_user(user_id)
+        .await
+        .unwrap_or_default();
+    let init_msg = ServerMessage::Conversations {
+        conversations: conv_list,
+    };
+    if send_json(&mut ws_tx, &init_msg).await.is_err() {
+        hub.unregister(user_id, &outbound_tx);
+        return;
+    }
+
+    // --- Step 3: Main loop ---
+    // Spawn a writer task that drains hub messages + outbound messages
+    let writer_hub = hub.clone();
+    let writer_user_id = user_id;
+    let writer_task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                Some(msg) = hub_rx.recv() => {
+                    if send_json(&mut ws_tx, &msg).await.is_err() {
+                        break;
+                    }
+                }
+                Some(msg) = outbound_rx.recv() => {
+                    if send_json(&mut ws_tx, &msg).await.is_err() {
+                        break;
+                    }
+                }
+                else => break,
+            }
+        }
+        // Intentionally not unregistering here; the reader loop handles it
+        let _ = (writer_hub, writer_user_id);
+    });
+
+    // Reader loop: process incoming client messages
+    while let Some(Ok(frame)) = ws_rx.next().await {
+        match frame {
+            Message::Text(text) => {
+                let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
+                match parsed {
+                    Ok(client_msg) => {
+                        handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
+                    }
+                    Err(e) => {
+                        let _ = outbound_tx.send(ServerMessage::Error {
+                            message: format!("invalid message: {e}"),
+                        });
+                    }
+                }
+            }
+            Message::Close(_) => break,
+            _ => {}
+        }
+    }
+
+    // Cleanup
+    hub.unregister(user_id, &outbound_tx);
+    writer_task.abort();
+}
+
+/// Authenticate the first message. Returns (`user_id`, `user_pid`) or None on failure.
+async fn authenticate(
+    ws_tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    ws_rx: &mut futures_util::stream::SplitStream<WebSocket>,
+) -> Option<(i32, uuid::Uuid)> {
+    use crate::db::schema::{sessions, users};
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+
+    let timeout = tokio::time::timeout(
+        std::time::Duration::from_secs(AUTH_TIMEOUT_SECS),
+        ws_rx.next(),
+    );
+
+    let Ok(Some(Ok(Message::Text(frame)))) = timeout.await else {
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "auth timeout or invalid frame".to_string(),
+            },
+        )
+        .await;
+        return None;
+    };
+
+    let parsed: Result<ClientMessage, _> = serde_json::from_str(&frame);
+    let Ok(ClientMessage::Auth { token }) = parsed else {
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "first message must be auth".to_string(),
+            },
+        )
+        .await;
+        return None;
+    };
+
+    // Validate the bearer token using existing auth infrastructure
+    let hashed = hash_session_token(&token);
+
+    let Ok(mut conn) = crate::db::conn().await else {
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "internal error".to_string(),
+            },
+        )
+        .await;
+        return None;
+    };
+
+    let row: Option<(i32, uuid::Uuid)> = sessions::table
+        .inner_join(users::table.on(users::id.eq(sessions::user_id)))
+        .filter(sessions::token.eq(&hashed))
+        .select((users::id, users::pid))
+        .first::<(i32, uuid::Uuid)>(&mut conn)
+        .await
+        .optional()
+        .ok()
+        .flatten();
+
+    if let Some((uid, pid)) = row {
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthOk {
+                user_id: pid.to_string(),
+            },
+        )
+        .await;
+        Some((uid, pid))
+    } else {
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "invalid token".to_string(),
+            },
+        )
+        .await;
+        None
+    }
+}
+
+/// Process a single client message.
+async fn handle_client_message(
+    msg: ClientMessage,
+    user_id: i32,
+    hub: &ChatHub,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    match msg {
+        ClientMessage::Auth { .. } => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "already authenticated".to_string(),
+            });
+        }
+        ClientMessage::Send {
+            conversation_id,
+            body,
+            kind,
+            reply_to_id,
+            attachment_upload_id,
+            client_id,
+        } => {
+            handle_send(
+                user_id,
+                conversation_id,
+                &body,
+                kind.as_deref().unwrap_or("text"),
+                reply_to_id,
+                attachment_upload_id,
+                client_id,
+                hub,
+                outbound_tx,
+            )
+            .await;
+        }
+        ClientMessage::Edit { message_id, body } => {
+            handle_edit(user_id, message_id, &body, hub, outbound_tx).await;
+        }
+        ClientMessage::Delete { message_id } => {
+            handle_delete(user_id, message_id, hub, outbound_tx).await;
+        }
+        ClientMessage::React { message_id, emoji } => {
+            handle_react(user_id, message_id, &emoji, hub, outbound_tx).await;
+        }
+        ClientMessage::Read {
+            conversation_id,
+            message_id,
+        } => {
+            handle_read(user_id, conversation_id, message_id, hub).await;
+        }
+        ClientMessage::Typing {
+            conversation_id,
+            is_typing,
+        } => {
+            handle_typing(user_id, conversation_id, is_typing, hub).await;
+        }
+        ClientMessage::History {
+            conversation_id,
+            before,
+            limit,
+        } => {
+            handle_history(user_id, conversation_id, before, limit, outbound_tx).await;
+        }
+        ClientMessage::Ping => {
+            let _ = outbound_tx.send(ServerMessage::Pong);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_send(
+    user_id: i32,
+    conversation_id: uuid::Uuid,
+    body: &str,
+    kind: &str,
+    reply_to_id: Option<uuid::Uuid>,
+    attachment_upload_id: Option<uuid::Uuid>,
+    client_id: Option<String>,
+    hub: &ChatHub,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    // Verify membership
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "not a member of this conversation".to_string(),
+        });
+        return;
+    }
+
+    match chat_messages::create_message(
+        conversation_id,
+        user_id,
+        body,
+        kind,
+        reply_to_id,
+        attachment_upload_id,
+        client_id,
+    )
+    .await
+    {
+        Ok((_msg, payload)) => {
+            let members = conversations::member_user_ids(conversation_id)
+                .await
+                .unwrap_or_default();
+
+            // Broadcast to all members (including sender for confirmation)
+            let server_msg = ServerMessage::Message {
+                msg: Box::new(payload),
+            };
+            hub.broadcast(&members, &server_msg);
+
+            // Push notifications to offline members
+            let offline = hub.offline_users(&members);
+            if !offline.is_empty() {
+                // Fire-and-forget push delivery
+                let msg_body = body.to_string();
+                tokio::spawn(async move {
+                    super::push::notify_offline(offline, conversation_id, user_id, &msg_body).await;
+                });
+            }
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("send failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn handle_edit(
+    user_id: i32,
+    message_id: uuid::Uuid,
+    body: &str,
+    hub: &ChatHub,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    match chat_messages::edit_message(message_id, user_id, body).await {
+        Ok(msg) => {
+            let members = conversations::member_user_ids(msg.conversation_id)
+                .await
+                .unwrap_or_default();
+            let server_msg = ServerMessage::Edited {
+                message_id: msg.id,
+                conversation_id: msg.conversation_id,
+                body: msg.body,
+                edited_at: msg.edited_at.map_or_else(String::new, |t| t.to_rfc3339()),
+            };
+            hub.broadcast(&members, &server_msg);
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("edit failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn handle_delete(
+    user_id: i32,
+    message_id: uuid::Uuid,
+    hub: &ChatHub,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    match chat_messages::delete_message(message_id, user_id).await {
+        Ok(msg) => {
+            let members = conversations::member_user_ids(msg.conversation_id)
+                .await
+                .unwrap_or_default();
+            let server_msg = ServerMessage::Deleted {
+                message_id: msg.id,
+                conversation_id: msg.conversation_id,
+            };
+            hub.broadcast(&members, &server_msg);
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("delete failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn handle_react(
+    user_id: i32,
+    message_id: uuid::Uuid,
+    emoji: &str,
+    hub: &ChatHub,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    match chat_messages::toggle_reaction(message_id, user_id, emoji).await {
+        Ok((added, msg)) => {
+            let members = conversations::member_user_ids(msg.conversation_id)
+                .await
+                .unwrap_or_default();
+            let server_msg = ServerMessage::Reaction {
+                message_id: msg.id,
+                conversation_id: msg.conversation_id,
+                emoji: emoji.to_string(),
+                user_id,
+                added,
+            };
+            hub.broadcast(&members, &server_msg);
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("react failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn handle_read(
+    user_id: i32,
+    conversation_id: uuid::Uuid,
+    message_id: uuid::Uuid,
+    hub: &ChatHub,
+) {
+    if chat_messages::mark_read(conversation_id, user_id, message_id)
+        .await
+        .is_ok()
+    {
+        let members = conversations::member_user_ids(conversation_id)
+            .await
+            .unwrap_or_default();
+        let server_msg = ServerMessage::ReadReceipt {
+            conversation_id,
+            user_id,
+            message_id,
+        };
+        hub.broadcast(&members, &server_msg);
+    }
+}
+
+async fn handle_typing(user_id: i32, conversation_id: uuid::Uuid, is_typing: bool, hub: &ChatHub) {
+    let members = conversations::member_user_ids(conversation_id)
+        .await
+        .unwrap_or_default();
+    let server_msg = ServerMessage::Typing {
+        conversation_id,
+        user_id,
+        is_typing,
+    };
+    // Send to all members except the typer
+    let others: Vec<i32> = members.into_iter().filter(|id| *id != user_id).collect();
+    hub.broadcast(&others, &server_msg);
+}
+
+async fn handle_history(
+    user_id: i32,
+    conversation_id: uuid::Uuid,
+    before: Option<uuid::Uuid>,
+    limit: Option<i64>,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "not a member of this conversation".to_string(),
+        });
+        return;
+    }
+
+    let limit = limit
+        .unwrap_or(DEFAULT_HISTORY_LIMIT)
+        .clamp(1, MAX_HISTORY_LIMIT);
+
+    match chat_messages::load_history(conversation_id, before, limit, user_id).await {
+        Ok((messages, has_more)) => {
+            let _ = outbound_tx.send(ServerMessage::HistoryResponse {
+                conversation_id,
+                messages,
+                has_more,
+            });
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("history failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn send_json(
+    ws_tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    msg: &ServerMessage,
+) -> Result<(), ()> {
+    match serde_json::to_string(msg) {
+        Ok(json) => ws_tx.send(Message::text(json)).await.map_err(|_| ()),
+        Err(_) => Err(()),
+    }
+}

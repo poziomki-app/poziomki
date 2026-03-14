@@ -10,6 +10,7 @@ use crate::app::AppContext;
 
 mod auth;
 mod catalog;
+pub(crate) mod chat;
 mod common;
 mod events;
 pub(crate) mod imgproxy_signing;
@@ -145,6 +146,20 @@ fn matrix_room_routes() -> Router<AppContext> {
         .layer(cache_layer("no-store"))
 }
 
+fn chat_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/ws", get(chat::ws_upgrade))
+        .route("/config", get(chat::chat_config))
+        .route("/dms", post(chat::resolve_dm))
+        .route(
+            "/events/{eventId}/conversation",
+            get(chat::resolve_event_conversation),
+        )
+        .route("/push/register", post(chat::push_register))
+        .route("/push/unregister", post(chat::push_unregister))
+        .layer(cache_layer("no-store"))
+}
+
 fn push_gateway_routes() -> Router<AppContext> {
     Router::new().route("/notify", post(push_gateway::notify))
 }
@@ -196,6 +211,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matrix", matrix_config_routes())
         .nest("/api/v1/matrix", matrix_session_routes())
         .nest("/api/v1/matrix", matrix_room_routes())
+        .nest("/api/v1/chat", chat_routes())
         .nest("/_matrix/push/v1", push_gateway_routes())
         .nest("/api/v1/ops", ops_routes())
         .layer(
