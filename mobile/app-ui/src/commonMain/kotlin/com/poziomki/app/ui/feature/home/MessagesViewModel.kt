@@ -11,9 +11,7 @@ import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.ui.feature.home.messages.MessagesUiState
-import com.poziomki.app.ui.feature.home.messages.buildDisplayNameOverrides
 import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByName
-import com.poziomki.app.ui.feature.home.messages.buildProfilePicturesByUserId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -66,9 +64,7 @@ class MessagesViewModel(
         observeRooms()
         observeEventRooms()
         observeEventRoomAvatars()
-        observeProfilePictures()
         observeProfilePicturesByName()
-        observeDisplayNameOverrides()
         refresh()
         refreshProfilePictures()
         refreshProfilePicturesPeriodically()
@@ -238,26 +234,10 @@ class MessagesViewModel(
             }
     }
 
-    private fun observeProfilePictures() {
-        viewModelScope.launch {
-            matchProfileRepository.observeProfilePicturesByUserId().collect { userIdToPic ->
-                _state.update { it.copy(profilePictures = buildProfilePicturesByUserId(userIdToPic)) }
-            }
-        }
-    }
-
     private fun observeProfilePicturesByName() {
         viewModelScope.launch {
             matchProfileRepository.observeProfiles().collect { profiles ->
                 _state.update { it.copy(profilePicturesByName = buildProfilePicturesByName(profiles)) }
-            }
-        }
-    }
-
-    private fun observeDisplayNameOverrides() {
-        viewModelScope.launch {
-            matchProfileRepository.observeProfiles().collect { profiles ->
-                _state.update { it.copy(displayNameOverrides = buildDisplayNameOverrides(profiles)) }
             }
         }
     }

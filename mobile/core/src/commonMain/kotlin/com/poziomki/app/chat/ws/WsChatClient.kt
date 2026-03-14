@@ -119,13 +119,6 @@ class WsChatClient(
         if (_state.value is ChatClientState.Ready) return Result.success(Unit)
 
         _state.value = ChatClientState.Connecting
-
-        // Clear stale cache before connecting — cached isMine values may belong
-        // to a different account or have been computed with the old (broken) UUID userId.
-        roomTimelineCacheStore.clearAll()
-        openedRooms.values.forEach { it.liveTimeline.close() }
-        openedRooms.clear()
-
         wsConnection.connect()
 
         // Wait for connected state

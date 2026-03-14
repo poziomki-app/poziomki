@@ -33,27 +33,6 @@ fun deduplicateRooms(rooms: List<RoomSummary>): List<RoomSummary> {
     return deduplicated.values.toList()
 }
 
-fun buildProfilePicturesByUserId(userIdToPic: Map<String, String>): Map<String, String> {
-    val pictureMap = mutableMapOf<String, String>()
-    userIdToPic.forEach { (userId, pic) ->
-        pictureMap[userId] = pic
-        pictureMap[userId.lowercase()] = pic
-    }
-    return pictureMap
-}
-
-fun buildDisplayNameOverrides(profiles: List<MatchProfile>): Map<String, String> {
-    val nameMap = mutableMapOf<String, String>()
-    profiles.forEach { profile ->
-        val name = profile.name.trim()
-        if (name.isBlank()) return@forEach
-        val userId = profile.userId
-        nameMap[userId] = name
-        nameMap[userId.lowercase()] = name
-    }
-    return nameMap
-}
-
 fun buildProfilePicturesByName(profiles: List<MatchProfile>): Map<String, String> =
     profiles
         .asSequence()

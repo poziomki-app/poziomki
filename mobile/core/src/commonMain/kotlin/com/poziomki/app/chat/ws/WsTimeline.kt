@@ -52,7 +52,19 @@ class WsTimeline(
         scope.launch {
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
-                _items.value = cached.items
+                val uid = wsConnection.userId.value
+                val corrected = if (uid != null) {
+                    cached.items.map { item ->
+                        if (item is TimelineItem.Event) {
+                            item.copy(isMine = item.senderId == uid, isEditable = item.senderId == uid)
+                        } else {
+                            item
+                        }
+                    }
+                } else {
+                    cached.items
+                }
+                _items.value = corrected
                 _hasMoreBackwards.value = !cached.isHydrated
             } else {
                 // No cache — request initial history from server
