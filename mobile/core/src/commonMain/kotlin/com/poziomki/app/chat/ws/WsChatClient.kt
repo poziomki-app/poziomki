@@ -1,12 +1,12 @@
 package com.poziomki.app.chat.ws
 
+import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.chat.api.ChatClientState
+import com.poziomki.app.chat.api.EventSendStatus
+import com.poziomki.app.chat.api.JoinedRoom
+import com.poziomki.app.chat.api.RoomSummary
+import com.poziomki.app.chat.api.RoomTimelineCacheSnapshot
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
-import com.poziomki.app.chat.matrix.api.JoinedRoom
-import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.api.MatrixClientState
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
-import com.poziomki.app.chat.matrix.api.RoomTimelineCacheSnapshot
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.session.SessionManager
@@ -25,16 +25,19 @@ class WsChatClient(
     @Suppress("UnusedPrivateProperty") private val sessionManager: SessionManager,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
-) : MatrixClient {
+) : ChatClient {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val _state = MutableStateFlow<MatrixClientState>(MatrixClientState.Idle)
-    override val state: StateFlow<MatrixClientState> = _state
+    private val _state = MutableStateFlow<ChatClientState>(ChatClientState.Idle)
+    override val state: StateFlow<ChatClientState> = _state
 
-    private val _rooms = MutableStateFlow<List<MatrixRoomSummary>>(emptyList())
-    override val rooms: StateFlow<List<MatrixRoomSummary>> = _rooms
+    private val _rooms = MutableStateFlow<List<RoomSummary>>(emptyList())
+    override val rooms: StateFlow<List<RoomSummary>> = _rooms
 
     private val openedRooms = mutableMapOf<String, WsJoinedRoom>()
+
+    /** Cache conversation metadata for populating member caches on room open */
+    private var latestConversations: List<WsConversationPayload> = emptyList()
 
     init {
         // Observe connection state
@@ -42,13 +45,13 @@ class WsChatClient(
             wsConnection.isConnected.collect { connected ->
                 if (connected) {
                     val userId = wsConnection.userId.value ?: ""
-                    _state.value = MatrixClientState.Ready(
+                    _state.value = ChatClientState.Ready(
                         userId = userId,
                         homeserver = "",
                         deviceId = deviceId(),
                     )
-                } else if (_state.value is MatrixClientState.Ready) {
-                    _state.value = MatrixClientState.Connecting
+                } else if (_state.value is ChatClientState.Ready) {
+                    _state.value = ChatClientState.Connecting
                 }
             }
         }
@@ -64,6 +67,7 @@ class WsChatClient(
     private fun handleServerMessage(msg: WsServerMessage) {
         when (msg) {
             is WsServerMessage.Conversations -> {
+                latestConversations = msg.conversations
                 _rooms.value = msg.conversations.map { it.toRoomSummary() }
             }
             is WsServerMessage.Message -> {
@@ -102,7 +106,7 @@ class WsChatClient(
                 latestMessage = msg.body,
                 latestTimestampMillis = parseTimestamp(msg.createdAt),
                 latestMessageIsMine = msg.isMine,
-                latestMessageSendStatus = MatrixEventSendStatus.Sent,
+                latestMessageSendStatus = EventSendStatus.Sent,
                 unreadCount = if (msg.isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
             )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
@@ -111,9 +115,9 @@ class WsChatClient(
     }
 
     override suspend fun ensureStarted(): Result<Unit> {
-        if (_state.value is MatrixClientState.Ready) return Result.success(Unit)
+        if (_state.value is ChatClientState.Ready) return Result.success(Unit)
 
-        _state.value = MatrixClientState.Connecting
+        _state.value = ChatClientState.Connecting
         wsConnection.connect()
 
         // Wait for connected state
@@ -124,7 +128,7 @@ class WsChatClient(
         return if (connected == true) {
             Result.success(Unit)
         } else {
-            _state.value = MatrixClientState.Error("Connection timeout")
+            _state.value = ChatClientState.Error("Connection timeout")
             Result.failure(IllegalStateException("WebSocket connection timeout"))
         }
     }
@@ -141,11 +145,15 @@ class WsChatClient(
         val summary = _rooms.value.find { it.roomId == roomId }
         val displayName = summary?.displayName ?: ""
 
+        val conversation = latestConversations.find { it.id == roomId }
         val room = WsJoinedRoom(
             roomId = roomId,
             initialDisplayName = displayName,
             wsConnection = wsConnection,
             roomTimelineCacheStore = roomTimelineCacheStore,
+            directUserId = conversation?.directUserId ?: summary?.directUserId,
+            directUserName = conversation?.directUserName,
+            directUserAvatar = conversation?.directUserAvatar,
         )
         openedRooms[roomId] = room
         return room
@@ -203,7 +211,10 @@ class WsChatClient(
         wsConnection.disconnect()
         openedRooms.values.forEach { it.liveTimeline.close() }
         openedRooms.clear()
-        _state.value = MatrixClientState.Idle
+        latestConversations = emptyList()
+        _rooms.value = emptyList()
+        roomTimelineCacheStore.clearAll()
+        _state.value = ChatClientState.Idle
     }
 
     private fun deviceId(): String {
@@ -212,8 +223,8 @@ class WsChatClient(
     }
 }
 
-private fun WsConversationPayload.toRoomSummary(): MatrixRoomSummary =
-    MatrixRoomSummary(
+private fun WsConversationPayload.toRoomSummary(): RoomSummary =
+    RoomSummary(
         roomId = id,
         displayName = if (isDirect) directUserName ?: title ?: "" else title ?: "",
         avatarUrl = directUserAvatar,
@@ -223,7 +234,7 @@ private fun WsConversationPayload.toRoomSummary(): MatrixRoomSummary =
         latestMessage = latestMessage,
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },
         latestMessageIsMine = latestMessageIsMine,
-        latestMessageSendStatus = if (latestMessage != null) MatrixEventSendStatus.Sent else null,
+        latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
     )
 
 internal fun parseTimestamp(iso8601: String): Long =

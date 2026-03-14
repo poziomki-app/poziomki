@@ -4,7 +4,7 @@
  * Copyright 2025 New Vector Ltd.
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
  */
-package com.poziomki.app.chat.matrix.api
+package com.poziomki.app.chat.api
 
 import kotlinx.coroutines.flow.StateFlow
 

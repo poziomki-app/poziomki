@@ -2,8 +2,8 @@ package com.poziomki.app.chat.push
 
 import android.content.Context
 import android.content.Intent
-import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.api.MatrixClientState
+import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.chat.api.ChatClientState
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import kotlinx.coroutines.CoroutineScope
@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class PushManager(
-    private val matrixClient: MatrixClient,
+    private val chatClient: ChatClient,
     private val apiService: ApiService,
     private val appContext: Context,
 ) {
@@ -21,13 +21,13 @@ class PushManager(
 
     fun startObserving() {
         scope.launch {
-            matrixClient.state.collectLatest { state ->
+            chatClient.state.collectLatest { state ->
                 when (state) {
-                    is MatrixClientState.Ready -> {
+                    is ChatClientState.Ready -> {
                         startPushService(state.deviceId)
                     }
 
-                    is MatrixClientState.Idle -> {
+                    is ChatClientState.Idle -> {
                         stopPushService()
                     }
 

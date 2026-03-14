@@ -1,6 +1,6 @@
 package com.poziomki.app.data.repository
 
-import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 internal class EventRoomRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
-    private val matrixClient: MatrixClient,
+    private val chatClient: ChatClient,
 ) {
     companion object {
         private const val EVENT_CHAT_ACCESS_DENIED_MESSAGE = "Brak dost\u0119pu do czatu wydarzenia"
@@ -36,14 +36,14 @@ internal class EventRoomRepository(
 
     suspend fun reconcileMembershipAfterAttend(conversationId: String?) {
         val roomId = conversationId?.takeIf { it.isNotBlank() } ?: return
-        matrixClient.ensureStarted().getOrElse { return }
-        matrixClient.refreshRooms()
-        matrixClient.getJoinedRoom(roomId)
+        chatClient.ensureStarted().getOrElse { return }
+        chatClient.refreshRooms()
+        chatClient.getJoinedRoom(roomId)
     }
 
     suspend fun reconcileMembershipAfterLeave() {
-        matrixClient.ensureStarted().getOrElse { return }
-        matrixClient.refreshRooms()
+        chatClient.ensureStarted().getOrElse { return }
+        chatClient.refreshRooms()
     }
 
     private suspend fun resolveEventConversationViaBackend(eventId: String): String =

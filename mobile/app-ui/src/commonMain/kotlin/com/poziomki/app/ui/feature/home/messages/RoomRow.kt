@@ -28,8 +28,8 @@ import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
 import com.adamglin.phosphoricons.bold.WarningCircle
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.api.EventSendStatus
+import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -43,7 +43,7 @@ import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun RoomRow(
-    room: MatrixRoomSummary,
+    room: RoomSummary,
     profilePictureUrl: String? = null,
     displayNameOverride: String? = null,
     onClick: () -> Unit,
@@ -160,7 +160,7 @@ fun RoomRow(
     }
 }
 
-private fun MatrixRoomSummary.latestMessagePreview(): String =
+private fun RoomSummary.latestMessagePreview(): String =
     latestMessage
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
@@ -225,15 +225,15 @@ private data class RoomStatusIconSpec(
 
 @Composable
 private fun latestRoomStatusIconSpec(
-    sendStatus: MatrixEventSendStatus?,
+    sendStatus: EventSendStatus?,
     readByCount: Int,
 ): RoomStatusIconSpec? =
     when {
-        sendStatus == MatrixEventSendStatus.Failed -> {
+        sendStatus == EventSendStatus.Failed -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
         }
 
-        sendStatus == MatrixEventSendStatus.Sending -> {
+        sendStatus == EventSendStatus.Sending -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
         }
 
@@ -241,7 +241,7 @@ private fun latestRoomStatusIconSpec(
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
         }
 
-        sendStatus == MatrixEventSendStatus.Sent -> {
+        sendStatus == EventSendStatus.Sent -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
         }
 

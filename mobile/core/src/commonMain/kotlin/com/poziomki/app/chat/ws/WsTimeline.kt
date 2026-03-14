@@ -1,13 +1,13 @@
 package com.poziomki.app.chat.ws
 
+import com.poziomki.app.chat.api.EventSendStatus
+import com.poziomki.app.chat.api.Reaction
+import com.poziomki.app.chat.api.ReactionSender
+import com.poziomki.app.chat.api.ReplyDetails
+import com.poziomki.app.chat.api.Timeline
+import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.chat.api.TimelineMode
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
-import com.poziomki.app.chat.matrix.api.MatrixReaction
-import com.poziomki.app.chat.matrix.api.MatrixReactionSender
-import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
-import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
-import com.poziomki.app.chat.matrix.api.Timeline
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import kotlinx.coroutines.CompletableDeferred
@@ -29,13 +29,14 @@ class WsTimeline(
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
     private val apiService: ApiService? = null,
-    override val mode: MatrixTimelineMode = MatrixTimelineMode.Live,
+    override val mode: TimelineMode = TimelineMode.Live,
+    private val memberCache: MemberCache? = null,
 ) : Timeline {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val itemsMutex = Mutex()
 
-    private val _items = MutableStateFlow<List<MatrixTimelineItem>>(emptyList())
-    override val items: StateFlow<List<MatrixTimelineItem>> = _items
+    private val _items = MutableStateFlow<List<TimelineItem>>(emptyList())
+    override val items: StateFlow<List<TimelineItem>> = _items
 
     private val _isPaginatingBackwards = MutableStateFlow(false)
     override val isPaginatingBackwards: StateFlow<Boolean> = _isPaginatingBackwards
@@ -44,7 +45,6 @@ class WsTimeline(
     override val hasMoreBackwards: StateFlow<Boolean> = _hasMoreBackwards
 
     private var pendingHistoryDeferred: CompletableDeferred<Boolean>? = null
-    private var debounceJob: Job? = null
     private var persistJob: Job? = null
 
     init {
@@ -73,31 +73,32 @@ class WsTimeline(
     }
 
     internal fun onMessage(msg: WsServerMessage.Message) {
+        cacheMembers(msg)
         scope.launch {
             itemsMutex.withLock {
-                val item = msg.toTimelineItem()
+                val item = msg.toTimelineItem(wsConnection.userId.value)
                 val current = _items.value.toMutableList()
 
                 // Check for optimistic update by clientId
                 val clientId = msg.clientId
                 if (clientId != null) {
                     val idx = current.indexOfFirst {
-                        it is MatrixTimelineItem.Event && it.eventOrTransactionId == clientId
+                        it is TimelineItem.Event && it.eventOrTransactionId == clientId
                     }
                     if (idx >= 0) {
                         current[idx] = item
-                        scheduleEmit(current)
+                        emitAndPersist(current)
                         return@withLock
                     }
                 }
 
                 // Check for duplicate by id
                 val exists = current.any {
-                    it is MatrixTimelineItem.Event && it.eventId == msg.id
+                    it is TimelineItem.Event && it.eventId == msg.id
                 }
                 if (!exists) {
                     current.add(item)
-                    scheduleEmit(current)
+                    emitAndPersist(current)
                 }
             }
         }
@@ -108,12 +109,12 @@ class WsTimeline(
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
                 val idx = current.indexOfFirst {
-                    it is MatrixTimelineItem.Event && it.eventId == msg.messageId
+                    it is TimelineItem.Event && it.eventId == msg.messageId
                 }
                 if (idx >= 0) {
-                    val event = current[idx] as MatrixTimelineItem.Event
+                    val event = current[idx] as TimelineItem.Event
                     current[idx] = event.copy(body = msg.body)
-                    scheduleEmit(current)
+                    emitAndPersist(current)
                 }
             }
         }
@@ -124,9 +125,9 @@ class WsTimeline(
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
                 current.removeAll {
-                    it is MatrixTimelineItem.Event && it.eventId == msg.messageId
+                    it is TimelineItem.Event && it.eventId == msg.messageId
                 }
-                scheduleEmit(current)
+                emitAndPersist(current)
             }
         }
     }
@@ -136,25 +137,33 @@ class WsTimeline(
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
                 val idx = current.indexOfFirst {
-                    it is MatrixTimelineItem.Event && it.eventId == msg.messageId
+                    it is TimelineItem.Event && it.eventId == msg.messageId
                 }
                 if (idx >= 0) {
-                    val event = current[idx] as MatrixTimelineItem.Event
+                    val event = current[idx] as TimelineItem.Event
                     val reactions = event.reactions.toMutableList()
                     val existingIdx = reactions.indexOfFirst { it.emoji == msg.emoji }
+                    val senderId = msg.userId.toString()
+                    val isMe = senderId == wsConnection.userId.value
                     if (msg.added) {
+                        val sender = ReactionSender(
+                            senderId = senderId,
+                            displayName = memberCache?.getDisplayName(senderId),
+                        )
                         if (existingIdx >= 0) {
                             val r = reactions[existingIdx]
                             reactions[existingIdx] = r.copy(
                                 count = r.count + 1,
-                                reactedByMe = r.reactedByMe || (msg.userId.toString() == wsConnection.userId.value),
+                                reactedByMe = r.reactedByMe || isMe,
+                                senders = r.senders + sender,
                             )
                         } else {
                             reactions.add(
-                                MatrixReaction(
+                                Reaction(
                                     emoji = msg.emoji,
                                     count = 1,
-                                    reactedByMe = msg.userId.toString() == wsConnection.userId.value,
+                                    reactedByMe = isMe,
+                                    senders = listOf(sender),
                                 ),
                             )
                         }
@@ -163,34 +172,49 @@ class WsTimeline(
                         if (r.count <= 1) {
                             reactions.removeAt(existingIdx)
                         } else {
-                            val wasMe = msg.userId.toString() == wsConnection.userId.value
                             reactions[existingIdx] = r.copy(
                                 count = r.count - 1,
-                                reactedByMe = if (wasMe) false else r.reactedByMe,
+                                reactedByMe = if (isMe) false else r.reactedByMe,
+                                senders = r.senders.filter { it.senderId != senderId },
                             )
                         }
                     }
                     current[idx] = event.copy(reactions = reactions)
-                    scheduleEmit(current)
+                    emitAndPersist(current)
                 }
             }
         }
     }
 
-    @Suppress("UnusedParameter")
     internal fun onReadReceipt(msg: WsServerMessage.ReadReceipt) {
-        // Could update readByCount on messages - simplified for now
+        val receiptUserId = msg.userId.toString()
+        if (receiptUserId == wsConnection.userId.value) return
+        scope.launch {
+            itemsMutex.withLock {
+                val current = _items.value.toMutableList()
+                val idx = current.indexOfFirst {
+                    it is TimelineItem.Event && it.eventId == msg.messageId
+                }
+                if (idx >= 0) {
+                    val event = current[idx] as TimelineItem.Event
+                    current[idx] = event.copy(readByCount = event.readByCount + 1)
+                    emitAndPersist(current)
+                }
+            }
+        }
     }
 
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {
+        cacheHistoryMembers(msg.messages)
         scope.launch {
             itemsMutex.withLock {
-                val historyItems = msg.messages.map { it.toTimelineItem() }
+                val uid = wsConnection.userId.value
+                val historyItems = msg.messages.map { it.toTimelineItem(uid) }
                 val current = _items.value.toMutableList()
 
                 // Filter duplicates
                 val existingIds = current
-                    .filterIsInstance<MatrixTimelineItem.Event>()
+                    .filterIsInstance<TimelineItem.Event>()
                     .mapNotNull { it.eventId }
                     .toSet()
                 val newItems = historyItems.filter { item ->
@@ -200,28 +224,24 @@ class WsTimeline(
                 // Prepend history
                 current.addAll(0, newItems)
                 if (!msg.hasMore) {
-                    current.add(0, MatrixTimelineItem.TimelineStart)
+                    current.add(0, TimelineItem.TimelineStart)
                 }
 
                 _hasMoreBackwards.value = msg.hasMore
                 _isPaginatingBackwards.value = false
-                scheduleEmit(current)
+                emitAndPersist(current)
             }
             pendingHistoryDeferred?.complete(msg.hasMore)
             pendingHistoryDeferred = null
         }
     }
 
-    private fun scheduleEmit(items: List<MatrixTimelineItem>) {
-        debounceJob?.cancel()
-        debounceJob = scope.launch {
-            delay(120)
-            _items.value = items
-            schedulePersist(items)
-        }
+    private fun emitAndPersist(items: List<TimelineItem>) {
+        _items.value = items
+        schedulePersist(items)
     }
 
-    private fun schedulePersist(items: List<MatrixTimelineItem>) {
+    private fun schedulePersist(items: List<TimelineItem>) {
         persistJob?.cancel()
         persistJob = scope.launch {
             delay(350)
@@ -242,7 +262,7 @@ class WsTimeline(
         pendingHistoryDeferred = deferred
 
         val oldestId = _items.value
-            .filterIsInstance<MatrixTimelineItem.Event>()
+            .filterIsInstance<TimelineItem.Event>()
             .firstOrNull()
             ?.eventId
 
@@ -338,7 +358,7 @@ class WsTimeline(
 
     override suspend fun markAsRead(): Result<Unit> {
         val lastEvent = _items.value
-            .filterIsInstance<MatrixTimelineItem.Event>()
+            .filterIsInstance<TimelineItem.Event>()
             .lastOrNull()
             ?: return Result.success(Unit)
         return sendReadReceipt(lastEvent.eventId ?: lastEvent.eventOrTransactionId)
@@ -350,7 +370,6 @@ class WsTimeline(
     }
 
     override fun close() {
-        debounceJob?.cancel()
         persistJob?.cancel()
         pendingHistoryDeferred?.cancel()
     }
@@ -359,7 +378,7 @@ class WsTimeline(
         itemsMutex.withLock {
             val current = _items.value.toMutableList()
             current.add(
-                MatrixTimelineItem.Event(
+                TimelineItem.Event(
                     eventOrTransactionId = clientId,
                     eventId = null,
                     senderId = wsConnection.userId.value ?: "",
@@ -370,7 +389,7 @@ class WsTimeline(
                     inReplyTo = null,
                     reactions = emptyList(),
                     isEditable = true,
-                    sendStatus = MatrixEventSendStatus.Sending,
+                    sendStatus = EventSendStatus.Sending,
                     readByCount = 0,
                     canReply = true,
                 ),
@@ -378,62 +397,77 @@ class WsTimeline(
             _items.value = current
         }
     }
+
+    private fun cacheMembers(msg: WsServerMessage.Message) {
+        memberCache?.put(msg.senderId.toString(), msg.senderName, msg.senderAvatar)
+    }
+
+    private fun cacheHistoryMembers(messages: List<WsMessagePayload>) {
+        val cache = memberCache ?: return
+        messages.forEach { msg ->
+            cache.put(msg.senderId.toString(), msg.senderName, msg.senderAvatar)
+        }
+    }
 }
 
-private fun WsServerMessage.Message.toTimelineItem(): MatrixTimelineItem.Event =
-    MatrixTimelineItem.Event(
+private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): TimelineItem.Event {
+    val mine = currentUserId != null && senderId.toString() == currentUserId
+    return TimelineItem.Event(
         eventOrTransactionId = id,
         eventId = id,
         senderId = senderId.toString(),
         senderDisplayName = senderName,
         senderAvatarUrl = senderAvatar,
-        isMine = isMine,
+        isMine = mine,
         body = body,
         timestampMillis = parseTimestamp(createdAt),
         inReplyTo = replyTo?.let {
-            MatrixReplyDetails(
+            ReplyDetails(
                 eventId = it.messageId,
                 senderDisplayName = it.senderName,
                 body = it.body,
             )
         },
-        reactions = reactions.map { it.toMatrixReaction() },
-        isEditable = isMine,
-        sendStatus = MatrixEventSendStatus.Sent,
+        reactions = reactions.map { it.toReaction() },
+        isEditable = mine,
+        sendStatus = EventSendStatus.Sent,
         readByCount = 0,
         canReply = true,
     )
+}
 
-private fun WsReactionPayload.toMatrixReaction(): MatrixReaction =
-    MatrixReaction(
+private fun WsReactionPayload.toReaction(): Reaction =
+    Reaction(
         emoji = emoji,
         count = count,
         reactedByMe = reactedByMe,
         senders = userIds.zip(senderNames).map { (uid, name) ->
-            MatrixReactionSender(senderId = uid.toString(), displayName = name)
+            ReactionSender(senderId = uid.toString(), displayName = name)
         },
     )
 
-internal fun WsMessagePayload.toTimelineItem(): MatrixTimelineItem.Event =
-    MatrixTimelineItem.Event(
+internal fun WsMessagePayload.toTimelineItem(currentUserId: String? = null): TimelineItem.Event {
+    val mine = if (currentUserId != null) senderId.toString() == currentUserId else isMine
+    return TimelineItem.Event(
         eventOrTransactionId = id,
         eventId = id,
         senderId = senderId.toString(),
         senderDisplayName = senderName,
         senderAvatarUrl = senderAvatar,
-        isMine = isMine,
+        isMine = mine,
         body = body,
         timestampMillis = parseTimestamp(createdAt),
         inReplyTo = replyTo?.let {
-            MatrixReplyDetails(
+            ReplyDetails(
                 eventId = it.messageId,
                 senderDisplayName = it.senderName,
                 body = it.body,
             )
         },
-        reactions = reactions.map { it.toMatrixReaction() },
-        isEditable = isMine,
-        sendStatus = MatrixEventSendStatus.Sent,
+        reactions = reactions.map { it.toReaction() },
+        isEditable = mine,
+        sendStatus = EventSendStatus.Sent,
         readByCount = 0,
         canReply = true,
     )
+}

@@ -1,13 +1,13 @@
 package com.poziomki.app.ui.feature.home.messages
 
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.api.RoomSummary
 
-fun List<MatrixRoomSummary>.filterMessagesRooms(
+fun List<RoomSummary>.filterMessagesRooms(
     selectedFilter: MessagesRoomFilter,
     searchQuery: String,
     eventRoomIds: Set<String>,
     searchMatchingRoomIds: Set<String>? = null,
-): List<MatrixRoomSummary> {
+): List<RoomSummary> {
     val normalizedQuery = searchQuery.trim().lowercase()
 
     return asSequence()

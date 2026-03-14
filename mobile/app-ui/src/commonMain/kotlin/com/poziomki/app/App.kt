@@ -14,7 +14,7 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
-import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
@@ -34,7 +34,7 @@ private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
 @Composable
 fun App() {
     val engine = koinInject<HttpClientEngine>()
-    val matrixClient = koinInject<MatrixClient>()
+    val chatClient = koinInject<ChatClient>()
     val imageHttpClient = remember(engine) { HttpClient(engine) }
     val imageLoaderFactory: (PlatformContext) -> ImageLoader =
         remember(imageHttpClient) { buildImageLoaderFactory(imageHttpClient) }
@@ -70,10 +70,10 @@ fun App() {
         }
     }
 
-    // Warm up Matrix client (E2EE init) in background so first chat open is fast.
+    // Warm up chat client in background so first chat open is fast.
     LaunchedEffect(startDestination) {
         if (startDestination == Route.MainGraph) {
-            matrixClient.ensureStarted()
+            chatClient.ensureStarted()
         }
     }
 

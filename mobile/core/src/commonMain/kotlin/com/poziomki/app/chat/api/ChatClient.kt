@@ -4,27 +4,27 @@
  * Copyright 2023-2025 New Vector Ltd.
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
  */
-package com.poziomki.app.chat.matrix.api
+package com.poziomki.app.chat.api
 
 import kotlinx.coroutines.flow.StateFlow
 
-sealed interface MatrixClientState {
-    data object Idle : MatrixClientState
+sealed interface ChatClientState {
+    data object Idle : ChatClientState
 
-    data object Connecting : MatrixClientState
+    data object Connecting : ChatClientState
 
     data class Ready(
         val userId: String,
         val homeserver: String,
         val deviceId: String,
-    ) : MatrixClientState
+    ) : ChatClientState
 
     data class Error(
         val message: String,
-    ) : MatrixClientState
+    ) : ChatClientState
 }
 
-data class MatrixRoomSummary(
+data class RoomSummary(
     val roomId: String,
     val displayName: String,
     val avatarUrl: String?,
@@ -34,20 +34,20 @@ data class MatrixRoomSummary(
     val latestMessage: String?,
     val latestTimestampMillis: Long?,
     val latestMessageIsMine: Boolean = false,
-    val latestMessageSendStatus: MatrixEventSendStatus? = null,
+    val latestMessageSendStatus: EventSendStatus? = null,
     val latestMessageReadByCount: Int = 0,
 )
 
 data class RoomTimelineCacheSnapshot(
-    val items: List<MatrixTimelineItem>,
+    val items: List<TimelineItem>,
     val isHydrated: Boolean,
     val cachedItemCount: Int,
     val updatedAtMillis: Long,
 )
 
-interface MatrixClient {
-    val state: StateFlow<MatrixClientState>
-    val rooms: StateFlow<List<MatrixRoomSummary>>
+interface ChatClient {
+    val state: StateFlow<ChatClientState>
+    val rooms: StateFlow<List<RoomSummary>>
 
     suspend fun ensureStarted(): Result<Unit>
 
