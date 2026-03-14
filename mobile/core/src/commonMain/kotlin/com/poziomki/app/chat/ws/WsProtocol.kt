@@ -59,6 +59,10 @@ sealed interface WsClientMessage {
     ) : WsClientMessage
 
     @Serializable
+    @SerialName("listConversations")
+    data object ListConversations : WsClientMessage
+
+    @Serializable
     @SerialName("ping")
     data object Ping : WsClientMessage
 }
@@ -190,6 +194,7 @@ data class WsReactionPayload(
     val count: Int,
     val reactedByMe: Boolean,
     val userIds: List<Int> = emptyList(),
+    val senderNames: List<String> = emptyList(),
 )
 
 @Serializable

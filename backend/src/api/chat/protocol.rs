@@ -56,6 +56,7 @@ pub enum ClientMessage {
         before: Option<Uuid>,
         limit: Option<i64>,
     },
+    ListConversations,
     Ping,
 }
 
@@ -168,6 +169,7 @@ pub struct ReactionPayload {
     pub count: i64,
     pub reacted_by_me: bool,
     pub user_ids: Vec<i32>,
+    pub sender_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

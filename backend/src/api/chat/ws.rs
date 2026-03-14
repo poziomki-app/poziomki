@@ -238,6 +238,14 @@ async fn handle_client_message(
         } => {
             handle_history(user_id, conversation_id, before, limit, outbound_tx).await;
         }
+        ClientMessage::ListConversations => {
+            let conv_list = conversations::list_for_user(user_id)
+                .await
+                .unwrap_or_default();
+            let _ = outbound_tx.send(ServerMessage::Conversations {
+                conversations: conv_list,
+            });
+        }
         ClientMessage::Ping => {
             let _ = outbound_tx.send(ServerMessage::Pong);
         }

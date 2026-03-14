@@ -281,23 +281,47 @@ async fn message_to_payload(
         .load(conn)
         .await?;
 
-    let mut reaction_map: std::collections::HashMap<String, (Vec<i32>, bool)> =
+    // Collect unique user IDs for name resolution
+    let reaction_user_ids: Vec<i32> = raw_reactions.iter().map(|(_, uid)| *uid).collect();
+    let user_names: std::collections::HashMap<i32, String> = if reaction_user_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        profiles::table
+            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+            .filter(users::id.eq_any(&reaction_user_ids))
+            .select((users::id, profiles::name))
+            .load::<(i32, String)>(conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
+    let mut reaction_map: std::collections::HashMap<String, (Vec<i32>, Vec<String>, bool)> =
         std::collections::HashMap::new();
     for (emoji, uid) in &raw_reactions {
         let entry = reaction_map.entry(emoji.clone()).or_default();
         entry.0.push(*uid);
+        entry.1.push(
+            user_names
+                .get(uid)
+                .cloned()
+                .unwrap_or_else(|| "Unknown".to_string()),
+        );
         if *uid == viewer_user_id {
-            entry.1 = true;
+            entry.2 = true;
         }
     }
     let reactions: Vec<ReactionPayload> = reaction_map
         .into_iter()
-        .map(|(emoji, (user_ids, reacted_by_me))| ReactionPayload {
-            count: i64::try_from(user_ids.len()).unwrap_or(0),
-            emoji,
-            reacted_by_me,
-            user_ids,
-        })
+        .map(
+            |(emoji, (user_ids, sender_names, reacted_by_me))| ReactionPayload {
+                count: i64::try_from(user_ids.len()).unwrap_or(0),
+                emoji,
+                reacted_by_me,
+                user_ids,
+                sender_names,
+            },
+        )
         .collect();
 
     Ok(MessagePayload {
