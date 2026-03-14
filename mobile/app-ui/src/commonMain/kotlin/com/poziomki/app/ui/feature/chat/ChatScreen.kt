@@ -16,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +29,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -53,6 +55,11 @@ fun ChatScreen(
             fallbackDisplayName = initialTitle,
             fallbackDirectUserId = initialDirectUserId,
         )
+    }
+
+    DisposableEffect(chatId) {
+        ActiveChat.roomId = chatId
+        onDispose { ActiveChat.roomId = null }
     }
 
     Scaffold(
