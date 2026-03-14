@@ -5,9 +5,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.impl.RustMatrixClient
 import com.poziomki.app.chat.push.NotificationHelper
 import com.poziomki.app.chat.push.PushManager
+import com.poziomki.app.chat.ws.WsChatClient
 import com.poziomki.app.connectivity.AndroidConnectivityMonitor
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
@@ -38,7 +38,7 @@ actual fun platformModule(): Module =
         }
         single { createDataStore(get<Context>()) }
         single<SessionTokenStore> { AndroidSecureSessionTokenStore(get<Context>()) }
-        single<MatrixClient> { RustMatrixClient(get(), get(), get(), get(), get()) }
+        single<MatrixClient> { WsChatClient(get(), get(), get(), get()) }
         single<SqlDriver> {
             val context = get<Context>()
             val dbName = "poziomki.db"

@@ -37,7 +37,7 @@ fun App() {
     val matrixClient = koinInject<MatrixClient>()
     val imageHttpClient = remember(engine) { HttpClient(engine) }
     val imageLoaderFactory: (PlatformContext) -> ImageLoader =
-        remember(matrixClient, imageHttpClient) { buildImageLoaderFactory(matrixClient, imageHttpClient) }
+        remember(imageHttpClient) { buildImageLoaderFactory(imageHttpClient) }
 
     setSingletonImageLoaderFactory(imageLoaderFactory)
 
@@ -85,7 +85,6 @@ fun App() {
 }
 
 private fun buildImageLoaderFactory(
-    matrixClient: MatrixClient,
     imageHttpClient: HttpClient,
 ): (PlatformContext) -> ImageLoader =
     { context: PlatformContext ->
@@ -104,7 +103,7 @@ private fun buildImageLoaderFactory(
                     .build()
             }.components {
                 add(ImgproxyCacheInterceptor())
-                add(MxcMediaFetcher.Factory(matrixClient))
+                add(MxcMediaFetcher.Factory())
                 @OptIn(ExperimentalCoilApi::class)
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()

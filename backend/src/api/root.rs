@@ -5,11 +5,10 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use url::Url;
 
 use crate::app::AppContext;
 
-use super::{env_non_empty, state::require_auth_db};
+use super::env_non_empty;
 
 type Result<T> = crate::error::AppResult<T>;
 
@@ -30,19 +29,6 @@ struct HealthResponse {
 struct OutboxStatusResponse {
     status: &'static str,
     metrics: crate::jobs::OutboxStatsSnapshot,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct MatrixConfigResponse {
-    data: MatrixConfigData,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct MatrixConfigData {
-    homeserver: Option<String>,
-    chat_mode: &'static str,
-    push_gateway_url: Option<String>,
-    ntfy_server: Option<String>,
 }
 
 pub(super) async fn health() -> Result<Response> {
@@ -92,50 +78,4 @@ pub(super) async fn root() -> Result<Response> {
         version: "1.0.0",
     })
     .into_response())
-}
-
-pub(super) async fn matrix_config(headers: HeaderMap) -> Result<Response> {
-    let authenticated = require_auth_db(&headers).await.is_ok();
-
-    let homeserver = env_non_empty("MATRIX_HOMESERVER_PUBLIC_URL")
-        .or_else(|| env_non_empty("MATRIX_HOMESERVER_URL"));
-    let push_gateway_url = env_non_empty("PUSH_GATEWAY_URL").and_then(|url| {
-        if authenticated {
-            Some(url)
-        } else {
-            redact_push_gateway_url(&url)
-        }
-    });
-    let ntfy_server = env_non_empty("NTFY_SERVER_URL");
-    Ok(Json(MatrixConfigResponse {
-        data: MatrixConfigData {
-            homeserver,
-            chat_mode: "matrix-native",
-            push_gateway_url,
-            ntfy_server,
-        },
-    })
-    .into_response())
-}
-
-fn redact_push_gateway_url(raw: &str) -> Option<String> {
-    let mut url = Url::parse(raw).ok()?;
-    let _ = url.set_username("");
-    let _ = url.set_password(None);
-    url.set_query(None);
-    url.set_fragment(None);
-    Some(url.into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::redact_push_gateway_url;
-
-    #[test]
-    #[allow(clippy::expect_used)]
-    fn redact_push_gateway_url_strips_query_and_fragment() {
-        let raw = "https://user:pass@push.example/_matrix/push/v1/notify?token=secret#frag";
-        let redacted = redact_push_gateway_url(raw).expect("valid url");
-        assert_eq!(redacted, "https://push.example/_matrix/push/v1/notify");
-    }
 }

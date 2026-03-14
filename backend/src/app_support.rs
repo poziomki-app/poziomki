@@ -4,7 +4,11 @@ use diesel_async::RunQueryDsl;
 const TRUNCATE_ORDER: &[&str] = &[
     "job_outbox",
     "auth_rate_limits",
-    "matrix_dm_rooms",
+    "message_reactions",
+    "messages",
+    "conversation_members",
+    "conversations",
+    "push_subscriptions",
     "event_attendees",
     "event_interactions",
     "event_tags",

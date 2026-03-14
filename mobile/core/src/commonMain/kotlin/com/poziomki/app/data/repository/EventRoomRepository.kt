@@ -4,7 +4,6 @@ import com.poziomki.app.chat.matrix.api.MatrixClient
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
-import com.poziomki.app.network.resolveRoomId
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -14,7 +13,7 @@ internal class EventRoomRepository(
     private val matrixClient: MatrixClient,
 ) {
     companion object {
-        private const val EVENT_CHAT_ACCESS_DENIED_MESSAGE = "Brak dostępu do czatu wydarzenia"
+        private const val EVENT_CHAT_ACCESS_DENIED_MESSAGE = "Brak dost\u0119pu do czatu wydarzenia"
         private const val HTTP_STATUS_UNAUTHORIZED = 401
         private const val HTTP_STATUS_FORBIDDEN = 403
     }
@@ -25,24 +24,20 @@ internal class EventRoomRepository(
         eventRoomMutex.withLock {
             runCatching {
                 val existingEvent = db.eventQueries.selectById(eventId).executeAsOneOrNull()
-                existingEvent?.conversation_id?.takeIf { it.startsWith("!") }?.let { existingRoomId ->
+                existingEvent?.conversation_id?.takeIf { it.isNotBlank() }?.let { existingRoomId ->
                     return@runCatching existingRoomId
                 }
 
-                val roomId = resolveEventRoomViaBackend(eventId)
-                updateEventConversationId(eventId, roomId)
-                roomId
+                val conversationId = resolveEventConversationViaBackend(eventId)
+                updateEventConversationId(eventId, conversationId)
+                conversationId
             }
         }
 
     suspend fun reconcileMembershipAfterAttend(conversationId: String?) {
-        val roomId = conversationId?.takeIf { it.startsWith("!") } ?: return
-
+        val roomId = conversationId?.takeIf { it.isNotBlank() } ?: return
         matrixClient.ensureStarted().getOrElse { return }
         matrixClient.refreshRooms()
-
-        // getJoinedRoom auto-joins invited rooms in RustMatrixClient; this keeps attendee
-        // state and room membership aligned without additional UI steps.
         matrixClient.getJoinedRoom(roomId)
     }
 
@@ -51,21 +46,18 @@ internal class EventRoomRepository(
         matrixClient.refreshRooms()
     }
 
-    private suspend fun resolveEventRoomViaBackend(eventId: String): String =
-        when (val backendResult = api.getMatrixEventRoom(eventId)) {
-            is ApiResult.Success -> {
-                backendResult.data.resolveRoomId()
-                    ?: error("Backend returned empty event room id")
-            }
+    private suspend fun resolveEventConversationViaBackend(eventId: String): String =
+        when (val result = api.getChatEventConversation(eventId)) {
+            is ApiResult.Success -> result.data.conversationId
 
             is ApiResult.Error -> {
                 if (
-                    backendResult.status == HTTP_STATUS_UNAUTHORIZED ||
-                    backendResult.status == HTTP_STATUS_FORBIDDEN
+                    result.status == HTTP_STATUS_UNAUTHORIZED ||
+                    result.status == HTTP_STATUS_FORBIDDEN
                 ) {
                     error(EVENT_CHAT_ACCESS_DENIED_MESSAGE)
                 }
-                error(backendResult.message)
+                error(result.message)
             }
         }
 
