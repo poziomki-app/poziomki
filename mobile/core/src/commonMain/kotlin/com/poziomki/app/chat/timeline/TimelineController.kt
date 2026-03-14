@@ -1,18 +1,18 @@
 package com.poziomki.app.chat.timeline
 
-import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
+import com.poziomki.app.chat.api.TimelineMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class TimelineController {
-    private val _mode = MutableStateFlow<MatrixTimelineMode>(MatrixTimelineMode.Live)
-    val mode: StateFlow<MatrixTimelineMode> = _mode
+    private val _mode = MutableStateFlow<TimelineMode>(TimelineMode.Live)
+    val mode: StateFlow<TimelineMode> = _mode
 
     fun enterLive() {
-        _mode.value = MatrixTimelineMode.Live
+        _mode.value = TimelineMode.Live
     }
 
     fun focusOnEvent(eventId: String) {
-        _mode.value = MatrixTimelineMode.FocusedOnEvent(eventId)
+        _mode.value = TimelineMode.FocusedOnEvent(eventId)
     }
 }

@@ -2,9 +2,9 @@ package com.poziomki.app.ui.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.api.MatrixClientState
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
+import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.chat.api.ChatClientState
+import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
@@ -27,7 +27,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MessagesViewModel(
-    private val matrixClient: MatrixClient,
+    private val chatClient: ChatClient,
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
     private val apiService: ApiService,
@@ -50,14 +50,14 @@ class MessagesViewModel(
     private val _state = MutableStateFlow(MessagesUiState(isLoading = true))
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
 
-    private val roomSortComparator: Comparator<MatrixRoomSummary> =
-        compareByDescending<MatrixRoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
+    private val roomSortComparator: Comparator<RoomSummary> =
+        compareByDescending<RoomSummary> { it.latestTimestampMillis ?: Long.MIN_VALUE }
             .thenByDescending { it.unreadCount }
             .thenBy { stableRoomKey(it) }
             .thenBy { it.roomId }
 
     init {
-        val cachedRooms = deduplicateAndSortRooms(matrixClient.rooms.value)
+        val cachedRooms = deduplicateAndSortRooms(chatClient.rooms.value)
         if (cachedRooms.isNotEmpty()) {
             _state.value = _state.value.copy(rooms = cachedRooms, isLoading = false)
         }
@@ -80,13 +80,13 @@ class MessagesViewModel(
                 _state.update { it.copy(isLoading = true) }
             }
 
-            matrixClient.ensureStarted().onFailure {
+            chatClient.ensureStarted().onFailure {
                 pendingConnectivityRetry = true
                 _state.update { current -> current.copy(isLoading = false) }
                 return@launch
             }
 
-            matrixClient.refreshRooms().onFailure {
+            chatClient.refreshRooms().onFailure {
                 pendingConnectivityRetry = true
                 _state.update { current -> current.copy(isLoading = false) }
                 return@launch
@@ -123,13 +123,13 @@ class MessagesViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isRefreshing = true) }
 
-            matrixClient.ensureStarted().onFailure {
+            chatClient.ensureStarted().onFailure {
                 pendingConnectivityRetry = true
                 _state.update { it.copy(isRefreshing = false) }
                 return@launch
             }
 
-            matrixClient.refreshRooms().onFailure {
+            chatClient.refreshRooms().onFailure {
                 pendingConnectivityRetry = true
                 _state.update { it.copy(isRefreshing = false) }
                 return@launch
@@ -179,15 +179,15 @@ class MessagesViewModel(
 
     private fun observeClientState() {
         viewModelScope.launch {
-            matrixClient.state.collect { matrixState ->
-                _state.update { current -> current.copy(matrixState = matrixState) }
+            chatClient.state.collect { chatState ->
+                _state.update { current -> current.copy(chatState = chatState) }
             }
         }
     }
 
     private fun observeRooms() {
         viewModelScope.launch {
-            matrixClient.rooms.collect { rooms ->
+            chatClient.rooms.collect { rooms ->
                 val deduplicatedRooms = deduplicateAndSortRooms(rooms)
                 warmupMissingRoomPreviews(deduplicatedRooms)
                 _state.update { current ->
@@ -203,7 +203,7 @@ class MessagesViewModel(
         }
     }
 
-    private fun warmupMissingRoomPreviews(rooms: List<MatrixRoomSummary>) {
+    private fun warmupMissingRoomPreviews(rooms: List<RoomSummary>) {
         rooms.forEach { room ->
             if (!room.latestMessage.isNullOrBlank()) return@forEach
             val roomId = room.roomId
@@ -229,7 +229,7 @@ class MessagesViewModel(
                         batch
                             .map { roomId ->
                                 async {
-                                    runCatching { matrixClient.getJoinedRoom(roomId) }
+                                    runCatching { chatClient.getJoinedRoom(roomId) }
                                     warmedPreviewRoomIds += roomId
                                 }
                             }.awaitAll()
@@ -297,8 +297,8 @@ class MessagesViewModel(
         }
     }
 
-    private fun deduplicateAndSortRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
-        val deduplicated = LinkedHashMap<String, MatrixRoomSummary>()
+    private fun deduplicateAndSortRooms(rooms: List<RoomSummary>): List<RoomSummary> {
+        val deduplicated = LinkedHashMap<String, RoomSummary>()
         rooms.forEach { room ->
             val key = stableRoomKey(room)
             val existing = deduplicated[key]
@@ -313,7 +313,7 @@ class MessagesViewModel(
         return deduplicated.values.sortedWith(roomSortComparator)
     }
 
-    private fun stableRoomKey(room: MatrixRoomSummary): String =
+    private fun stableRoomKey(room: RoomSummary): String =
         if (room.isDirect && room.roomId !in _state.value.eventRoomIds) {
             room.directUserId
                 ?.trim()
@@ -325,8 +325,8 @@ class MessagesViewModel(
         }
 
     private fun isPreferredRoomCandidate(
-        candidate: MatrixRoomSummary,
-        current: MatrixRoomSummary,
+        candidate: RoomSummary,
+        current: RoomSummary,
     ): Boolean {
         val candidateTs = candidate.latestTimestampMillis ?: Long.MIN_VALUE
         val currentTs = current.latestTimestampMillis ?: Long.MIN_VALUE

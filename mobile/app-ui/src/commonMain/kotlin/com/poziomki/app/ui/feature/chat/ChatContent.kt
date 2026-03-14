@@ -67,9 +67,8 @@ import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
-import com.poziomki.app.chat.matrix.api.MatrixReaction
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
-import com.poziomki.app.core.ids.appUserIdFromMatrixUserId
+import com.poziomki.app.chat.api.Reaction
+import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -104,8 +103,8 @@ fun ChatContent(
     onMarkAsRead: () -> Unit,
     onViewportChanged: (Int?) -> Unit,
     onJumpToLatest: () -> Unit,
-    onStartReply: (MatrixTimelineItem.Event) -> Unit,
-    onStartEdit: (MatrixTimelineItem.Event) -> Unit,
+    onStartReply: (TimelineItem.Event) -> Unit,
+    onStartEdit: (TimelineItem.Event) -> Unit,
     onCancelComposerMode: () -> Unit,
     onRedactEvent: (String) -> Unit,
     onClearError: () -> Unit,
@@ -120,8 +119,8 @@ fun ChatContent(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    var selectedActionEvent by remember { mutableStateOf<MatrixTimelineItem.Event?>(null) }
-    var selectedReactionEvent by remember { mutableStateOf<MatrixTimelineItem.Event?>(null) }
+    var selectedActionEvent by remember { mutableStateOf<TimelineItem.Event?>(null) }
+    var selectedReactionEvent by remember { mutableStateOf<TimelineItem.Event?>(null) }
     var showAttachmentMenu by remember { mutableStateOf(false) }
 
     val pickImage = rememberSingleImagePicker { bytes -> bytes?.let(onSendImageAttachment) }
@@ -205,14 +204,14 @@ fun ChatContent(
                     ) { index, item ->
                         Box(modifier = itemPadding) {
                             when (item) {
-                                is MatrixTimelineItem.DateDivider -> {
+                                is TimelineItem.DateDivider -> {
                                     Spacer(modifier = Modifier.height(2.dp))
                                 }
 
-                                is MatrixTimelineItem.Event -> {
+                                is TimelineItem.Event -> {
                                     // "Visually previous" (above) = older event = index + 1 in reversed list
                                     val previousEvent =
-                                        reversedItems.getOrNull(index + 1) as? MatrixTimelineItem.Event
+                                        reversedItems.getOrNull(index + 1) as? TimelineItem.Event
                                     MessageEventRow(
                                         event = item,
                                         groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
@@ -235,11 +234,11 @@ fun ChatContent(
                                     )
                                 }
 
-                                MatrixTimelineItem.ReadMarker -> {
+                                TimelineItem.ReadMarker -> {
                                     NewMessagesDivider()
                                 }
 
-                                MatrixTimelineItem.TimelineStart -> {
+                                TimelineItem.TimelineStart -> {
                                     StatusDivider(text = "Początek rozmowy")
                                 }
                             }
@@ -449,7 +448,7 @@ fun ChatContent(
 
 @Composable
 private fun MessageActionDialog(
-    event: MatrixTimelineItem.Event,
+    event: TimelineItem.Event,
     onDismiss: () -> Unit,
     onReaction: (String) -> Unit,
     onReply: () -> Unit,
@@ -549,7 +548,7 @@ private fun MessageActionDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReactionBreakdownSheet(
-    reactions: List<MatrixReaction>,
+    reactions: List<Reaction>,
     senderDisplayNames: Map<String, String>,
     senderAvatarUrls: Map<String, String>,
     avatarOverrides: Map<String, String>,
@@ -564,7 +563,7 @@ private fun ReactionBreakdownSheet(
                     .distinctBy { sender -> sender.senderId }
                     .map { sender -> sender to reaction.emoji }
             }.distinctBy { (sender, emoji) -> sender.senderId to emoji }
-    val totalCount = allSenders.size
+    val totalCount = if (allSenders.isNotEmpty()) allSenders.size else reactions.sumOf { it.count }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -599,7 +598,7 @@ private fun ReactionBreakdownSheet(
                         onClick = { selectedTab = index + 1 },
                         text = {
                             Text(
-                                text = "${reaction.emoji} ${reaction.senders.map { it.senderId }.distinct().size}",
+                                text = "${reaction.emoji} ${reaction.senders.distinctBy { it.senderId }.size.takeIf { it > 0 } ?: reaction.count}",
                                 fontWeight = if (selectedTab == index + 1) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
@@ -809,8 +808,8 @@ internal fun composerPlaceholder(mode: ComposerMode): String =
     }
 
 internal fun shouldGroupWithPrevious(
-    previous: MatrixTimelineItem.Event?,
-    current: MatrixTimelineItem.Event,
+    previous: TimelineItem.Event?,
+    current: TimelineItem.Event,
 ): Boolean {
     if (previous == null) return false
     if (previous.senderId != current.senderId) return false
@@ -838,10 +837,10 @@ internal fun formatDate(timestampMillis: Long): String {
     }
 }
 
-private fun formatTimelineCapsuleLabel(item: MatrixTimelineItem?): String? =
+private fun formatTimelineCapsuleLabel(item: TimelineItem?): String? =
     when (item) {
-        is MatrixTimelineItem.DateDivider -> formatDate(item.timestampMillis)
-        is MatrixTimelineItem.Event -> formatDate(item.timestampMillis)
+        is TimelineItem.DateDivider -> formatDate(item.timestampMillis)
+        is TimelineItem.Event -> formatDate(item.timestampMillis)
         else -> null
     }
 
@@ -873,42 +872,23 @@ private fun monthShort(monthNumber: Int): String =
         else -> "?"
     }
 
-internal fun timelineItemKey(item: MatrixTimelineItem): String =
+internal fun timelineItemKey(item: TimelineItem): String =
     when (item) {
-        is MatrixTimelineItem.Event -> "event_${item.eventOrTransactionId}"
-        is MatrixTimelineItem.DateDivider -> "date_${item.timestampMillis}"
-        MatrixTimelineItem.ReadMarker -> "read_marker"
-        MatrixTimelineItem.TimelineStart -> "timeline_start"
+        is TimelineItem.Event -> "event_${item.eventOrTransactionId}"
+        is TimelineItem.DateDivider -> "date_${item.timestampMillis}"
+        TimelineItem.ReadMarker -> "read_marker"
+        TimelineItem.TimelineStart -> "timeline_start"
     }
 
 /**
- * Resolve a Poziomki profile picture URL for a Matrix sender ID.
- *
- * Matrix sender IDs look like `@poziomki_{uuid}:{server}`.
- * The [overrides] map is keyed by the normalized UUID (lowercase alphanum, no hyphens)
- * derived from the Poziomki user ID.
+ * Resolve a profile picture URL for a sender ID.
+ * User IDs are plain UUIDs or integer strings; the [overrides] map is keyed by userId.
  */
 internal fun resolveAvatarOverride(
     senderId: String,
     overrides: Map<String, String>,
 ): String? {
     if (overrides.isEmpty()) return null
-    val matrixUserId = senderId.trim()
-    val localpart = matrixUserId.removePrefix("@").substringBefore(":")
-    val uuid = localpart.removePrefix("poziomki_")
-    val appUserId = appUserIdFromMatrixUserId(matrixUserId)
-    val candidates =
-        listOfNotNull(
-            matrixUserId,
-            matrixUserId.lowercase(),
-            matrixUserId.substringBefore(":"),
-            matrixUserId.substringBefore(":").lowercase(),
-            localpart,
-            "@$localpart",
-            uuid,
-            uuid.lowercase(),
-            appUserId,
-            appUserId?.lowercase(),
-        )
-    return candidates.firstNotNullOfOrNull { overrides[it] }
+    val id = senderId.trim()
+    return overrides[id] ?: overrides[id.lowercase()]
 }

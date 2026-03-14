@@ -3,7 +3,7 @@ package com.poziomki.app.data.repository
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
-import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.mapper.toApiModel
 import com.poziomki.app.data.sync.PendingOperationsManager
@@ -26,14 +26,14 @@ class EventRepository(
     private val api: ApiService,
     private val connectivityMonitor: ConnectivityMonitor,
     private val pendingOps: PendingOperationsManager,
-    private val matrixClient: MatrixClient,
+    private val chatClient: ChatClient,
 ) {
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
         private const val RECOMMENDED_EVENTS_CACHE_KEY = "recommended_events"
     }
 
-    private val eventRoomManager = EventRoomRepository(db = db, api = api, matrixClient = matrixClient)
+    private val eventRoomManager = EventRoomRepository(db = db, api = api, chatClient = chatClient)
     private val eventMutationManager =
         EventMutationRepository(
             db = db,

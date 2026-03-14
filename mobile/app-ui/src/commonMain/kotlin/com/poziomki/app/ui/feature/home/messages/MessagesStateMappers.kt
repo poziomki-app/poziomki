@@ -1,11 +1,10 @@
 package com.poziomki.app.ui.feature.home.messages
 
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
-import com.poziomki.app.core.ids.matrixLocalpartFromUserId
+import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.network.MatchProfile
 
-fun deduplicateRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
-    val deduplicated = LinkedHashMap<String, MatrixRoomSummary>()
+fun deduplicateRooms(rooms: List<RoomSummary>): List<RoomSummary> {
+    val deduplicated = LinkedHashMap<String, RoomSummary>()
 
     rooms.forEach { room ->
         val key =
@@ -37,11 +36,8 @@ fun deduplicateRooms(rooms: List<MatrixRoomSummary>): List<MatrixRoomSummary> {
 fun buildProfilePicturesByUserId(userIdToPic: Map<String, String>): Map<String, String> {
     val pictureMap = mutableMapOf<String, String>()
     userIdToPic.forEach { (userId, pic) ->
-        val localpart = matrixLocalpartFromUserId(userId)
         pictureMap[userId] = pic
         pictureMap[userId.lowercase()] = pic
-        pictureMap[localpart] = pic
-        pictureMap["@$localpart"] = pic
     }
     return pictureMap
 }
@@ -52,11 +48,8 @@ fun buildDisplayNameOverrides(profiles: List<MatchProfile>): Map<String, String>
         val name = profile.name.trim()
         if (name.isBlank()) return@forEach
         val userId = profile.userId
-        val localpart = matrixLocalpartFromUserId(userId)
         nameMap[userId] = name
         nameMap[userId.lowercase()] = name
-        nameMap[localpart] = name
-        nameMap["@$localpart"] = name
     }
     return nameMap
 }

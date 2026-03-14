@@ -39,7 +39,9 @@ pub async fn create_message(
         .get_result::<Message>(&mut conn)
         .await?;
 
-    let payload = message_to_payload(&msg, sender_id, &mut conn).await?;
+    // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
+    // Each client computes isMine locally; sender matches via client_id.
+    let payload = message_to_payload(&msg, 0, &mut conn).await?;
     Ok((msg, payload))
 }
 

@@ -67,7 +67,7 @@ import com.adamglin.phosphoricons.fill.UsersThree
 import com.adamglin.phosphoricons.regular.CalendarDots
 import com.adamglin.phosphoricons.regular.ChatCircle
 import com.adamglin.phosphoricons.regular.UsersThree
-import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
 import com.poziomki.app.ui.designsystem.components.UserAvatar
@@ -123,7 +123,7 @@ fun AppNavigation(
     isLoggedIn: Boolean,
     navController: NavHostController = rememberNavController(),
 ) {
-    val matrixClient = koinInject<MatrixClient>()
+    val chatClient = koinInject<ChatClient>()
     val chatRoomRepository = koinInject<ChatRoomRepository>()
     val navigationScope = rememberCoroutineScope()
 
@@ -131,7 +131,7 @@ fun AppNavigation(
     var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
     LaunchedEffect(isLoggedIn) {
         if (wasLoggedIn && !isLoggedIn) {
-            matrixClient.stop()
+            chatClient.stop()
             navController.navigate(Route.AuthGraph) {
                 popUpTo(0) { inclusive = true }
             }
@@ -151,7 +151,7 @@ fun AppNavigation(
 
                     else -> {
                         // User ID — resolve DM conversation
-                        matrixClient.createDM(chatTargetId).getOrElse { error ->
+                        chatClient.createDM(chatTargetId).getOrElse { error ->
                             println("Failed to create DM with $chatTargetId: ${error.message}")
                             return@launch
                         }
@@ -170,11 +170,11 @@ fun AppNavigation(
                     println("Failed to resolve DM room for $userId: ${error.message}")
                     return@launch
                 }
-            runCatching { matrixClient.refreshRooms() }
+            runCatching { chatClient.refreshRooms() }
             // Pre-hydrate the room locally before opening ChatScreen.
             // Fresh backend-created DMs can exist server-side for a moment before the local SDK
             // has a joined room + timeline, which otherwise leaves the composer in "connecting".
-            val hydratedRoom = runCatching { matrixClient.getJoinedRoom(roomId) }.getOrNull()
+            val hydratedRoom = runCatching { chatClient.getJoinedRoom(roomId) }.getOrNull()
             if (hydratedRoom == null) {
                 println("DM room $roomId is not hydrated locally yet; opening chat with retry path")
             }

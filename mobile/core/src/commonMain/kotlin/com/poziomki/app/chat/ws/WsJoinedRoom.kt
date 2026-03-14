@@ -1,17 +1,35 @@
 package com.poziomki.app.chat.ws
 
+import com.poziomki.app.chat.api.JoinedRoom
+import com.poziomki.app.chat.api.Timeline
+import com.poziomki.app.chat.api.TimelineMode
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
-import com.poziomki.app.chat.matrix.api.JoinedRoom
-import com.poziomki.app.chat.matrix.api.Timeline
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-@Suppress("TooManyFunctions")
+class MemberCache internal constructor() {
+    private val names = mutableMapOf<String, String>()
+    private val avatars = mutableMapOf<String, String>()
+
+    fun put(userId: String, name: String?, avatar: String?) {
+        if (!name.isNullOrBlank()) names[userId] = name
+        if (!avatar.isNullOrBlank()) avatars[userId] = avatar
+    }
+
+    fun getDisplayName(userId: String): String? = names[userId]
+
+    fun getAvatarUrl(userId: String): String? = avatars[userId]
+}
+
+@Suppress("TooManyFunctions", "LongParameterList")
 class WsJoinedRoom(
     override val roomId: String,
     initialDisplayName: String,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
+    directUserId: String? = null,
+    directUserName: String? = null,
+    directUserAvatar: String? = null,
 ) : JoinedRoom {
     private val _displayName = MutableStateFlow(initialDisplayName)
     override val displayName: StateFlow<String> = _displayName
@@ -19,10 +37,19 @@ class WsJoinedRoom(
     private val _typingUserIds = MutableStateFlow<List<String>>(emptyList())
     override val typingUserIds: StateFlow<List<String>> = _typingUserIds
 
+    internal val memberCache = MemberCache()
+
+    init {
+        if (directUserId != null) {
+            memberCache.put(directUserId, directUserName, directUserAvatar)
+        }
+    }
+
     override val liveTimeline: WsTimeline = WsTimeline(
         conversationId = roomId,
         wsConnection = wsConnection,
         roomTimelineCacheStore = roomTimelineCacheStore,
+        memberCache = memberCache,
     )
 
     internal fun onMessage(msg: WsServerMessage.Message) {
@@ -67,7 +94,8 @@ class WsJoinedRoom(
             conversationId = roomId,
             wsConnection = wsConnection,
             roomTimelineCacheStore = roomTimelineCacheStore,
-            mode = com.poziomki.app.chat.matrix.api.MatrixTimelineMode.FocusedOnEvent(eventId),
+            mode = TimelineMode.FocusedOnEvent(eventId),
+            memberCache = memberCache,
         )
         return Result.success(timeline)
     }
@@ -82,7 +110,9 @@ class WsJoinedRoom(
     override suspend fun inviteUserById(userId: String): Result<Unit> =
         Result.success(Unit) // Event rooms auto-manage membership
 
-    override suspend fun getMemberDisplayName(userId: String): String? = null
+    override suspend fun getMemberDisplayName(userId: String): String? =
+        memberCache.getDisplayName(userId)
 
-    override suspend fun getMemberAvatarUrl(userId: String): String? = null
+    override suspend fun getMemberAvatarUrl(userId: String): String? =
+        memberCache.getAvatarUrl(userId)
 }

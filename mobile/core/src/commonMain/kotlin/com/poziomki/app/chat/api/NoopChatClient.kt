@@ -1,13 +1,13 @@
-package com.poziomki.app.chat.matrix.api
+package com.poziomki.app.chat.api
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class NoopMatrixClient : MatrixClient {
-    private val _state = MutableStateFlow<MatrixClientState>(MatrixClientState.Idle)
-    override val state: StateFlow<MatrixClientState> = _state
+class NoopChatClient : ChatClient {
+    private val _state = MutableStateFlow<ChatClientState>(ChatClientState.Idle)
+    override val state: StateFlow<ChatClientState> = _state
 
-    override val rooms: StateFlow<List<MatrixRoomSummary>> = MutableStateFlow(emptyList())
+    override val rooms: StateFlow<List<RoomSummary>> = MutableStateFlow(emptyList())
 
     override suspend fun ensureStarted(): Result<Unit> = Result.success(Unit)
 
@@ -54,6 +54,6 @@ class NoopMatrixClient : MatrixClient {
     override suspend fun getMediaContent(mxcUrl: String): ByteArray? = null
 
     override suspend fun stop() {
-        _state.value = MatrixClientState.Idle
+        _state.value = ChatClientState.Idle
     }
 }
