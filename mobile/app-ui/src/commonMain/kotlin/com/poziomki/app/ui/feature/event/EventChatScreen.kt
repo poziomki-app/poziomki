@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.feature.chat.ChatContent
 import com.poziomki.app.ui.feature.chat.ChatViewModel
@@ -26,12 +28,18 @@ fun EventChatScreen(
     val chatState by chatViewModel.uiState.collectAsState()
     val timelineListState = rememberLazyListState()
 
-    LaunchedEffect(eventState.event?.conversationId, eventState.event?.isAttending) {
+    val conversationId = eventState.event?.conversationId
+
+    LaunchedEffect(conversationId, eventState.event?.isAttending) {
         val event = eventState.event
-        val roomId = event?.conversationId
-        if (event?.isAttending == true && roomId != null && roomId.startsWith("!")) {
-            chatViewModel.loadRoom(roomId, fallbackDisplayName = event.title)
+        if (event?.isAttending == true && conversationId != null && conversationId.isNotBlank()) {
+            chatViewModel.loadRoom(conversationId, fallbackDisplayName = event.title)
         }
+    }
+
+    DisposableEffect(conversationId) {
+        ActiveChat.roomId = conversationId
+        onDispose { ActiveChat.roomId = null }
     }
 
     LaunchedEffect(eventState.event?.id, eventState.event?.isAttending, eventState.event?.conversationId, eventState.isOpeningChat) {
@@ -71,7 +79,7 @@ fun EventChatScreen(
                 EventChatJoinRequiredView(onJoin = eventDetailViewModel::attendEvent)
             }
 
-            eventState.isOpeningChat || eventState.event?.conversationId?.startsWith("!") != true -> {
+            eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
                 EventChatLoadingView()
             }
 

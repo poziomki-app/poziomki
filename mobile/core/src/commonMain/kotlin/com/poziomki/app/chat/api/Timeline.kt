@@ -4,72 +4,73 @@
  * Copyright 2024-2025 New Vector Ltd.
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
  */
-package com.poziomki.app.chat.matrix.api
+package com.poziomki.app.chat.api
 
 import kotlinx.coroutines.flow.StateFlow
 
-sealed interface MatrixTimelineMode {
-    data object Live : MatrixTimelineMode
+sealed interface TimelineMode {
+    data object Live : TimelineMode
 
     data class FocusedOnEvent(
         val eventId: String,
-    ) : MatrixTimelineMode
+    ) : TimelineMode
 }
 
-data class MatrixReactionSender(
+data class ReactionSender(
     val senderId: String,
     val displayName: String?,
 )
 
-data class MatrixReaction(
+data class Reaction(
     val emoji: String,
     val count: Int,
     val reactedByMe: Boolean,
-    val senders: List<MatrixReactionSender> = emptyList(),
+    val senders: List<ReactionSender> = emptyList(),
 )
 
-data class MatrixReplyDetails(
+data class ReplyDetails(
     val eventId: String,
     val senderDisplayName: String?,
     val body: String?,
 )
 
-enum class MatrixEventSendStatus {
+enum class EventSendStatus {
     Sending,
     Sent,
     Failed,
 }
 
-sealed interface MatrixTimelineItem {
+sealed interface TimelineItem {
     data class Event(
         val eventOrTransactionId: String,
         val eventId: String?,
         val senderId: String,
+        val senderPid: String? = null,
         val senderDisplayName: String?,
         val senderAvatarUrl: String? = null,
         val isMine: Boolean,
         val body: String,
         val timestampMillis: Long,
-        val inReplyTo: MatrixReplyDetails?,
-        val reactions: List<MatrixReaction>,
+        val inReplyTo: ReplyDetails?,
+        val reactions: List<Reaction>,
         val isEditable: Boolean,
-        val sendStatus: MatrixEventSendStatus?,
+        val sendStatus: EventSendStatus?,
         val readByCount: Int,
         val canReply: Boolean,
-    ) : MatrixTimelineItem
+    ) : TimelineItem
 
     data class DateDivider(
         val timestampMillis: Long,
-    ) : MatrixTimelineItem
+    ) : TimelineItem
 
-    data object ReadMarker : MatrixTimelineItem
+    data object ReadMarker : TimelineItem
 
-    data object TimelineStart : MatrixTimelineItem
+    data object TimelineStart : TimelineItem
 }
 
 interface Timeline : AutoCloseable {
-    val mode: MatrixTimelineMode
-    val items: StateFlow<List<MatrixTimelineItem>>
+    val mode: TimelineMode
+    val items: StateFlow<List<TimelineItem>>
     val isPaginatingBackwards: StateFlow<Boolean>
     val hasMoreBackwards: StateFlow<Boolean>
 

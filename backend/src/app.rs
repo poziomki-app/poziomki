@@ -1,5 +1,13 @@
-#[derive(Clone, Debug)]
-pub struct AppContext {}
+#[derive(Clone)]
+pub struct AppContext {
+    pub chat_hub: crate::api::chat::hub::ChatHub,
+}
+
+impl std::fmt::Debug for AppContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppContext").finish()
+    }
+}
 
 #[derive(Clone, Debug)]
 struct RuntimeConfig {
@@ -123,7 +131,9 @@ fn build_app_context() -> crate::error::AppResult<AppContext> {
         .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
     crate::db::run_migrations(&url).map_err(crate::error::AppError::Message)?;
     init_diesel_pool()?;
-    Ok(AppContext {})
+    Ok(AppContext {
+        chat_hub: crate::api::chat::hub::ChatHub::new(),
+    })
 }
 
 pub fn build_test_app_context() -> crate::error::AppResult<AppContext> {

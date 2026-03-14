@@ -13,15 +13,13 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
+use super::{full_profile_response, parse_tag_uuids, sync_profile_tags};
 use crate::api::{
     extract_filename,
     state::{CreateProfileBody, DataResponse, SuccessResponse, UpdateProfileBody},
 };
 use crate::db::models::profiles::{NewProfile, Profile};
 use crate::db::schema::profiles;
-use crate::jobs::enqueue_matrix_profile_avatar_sync;
-
-use super::{full_profile_response, parse_tag_uuids, sync_profile_tags};
 
 #[path = "write_service.rs"]
 mod write_service;
@@ -55,15 +53,6 @@ fn build_create_model(
         updated_at: now,
     };
     (model, profile_id)
-}
-
-fn fire_avatar_sync(user_pid: uuid::Uuid, picture: Option<String>, context: &'static str) {
-    tokio::spawn(async move {
-        if let Err(error) = enqueue_matrix_profile_avatar_sync(&user_pid, picture.as_deref()).await
-        {
-            tracing::warn!(%error, user_pid = %user_pid, "failed to enqueue matrix avatar sync after {context}");
-        }
-    });
 }
 
 async fn insert_profile(
@@ -103,10 +92,6 @@ pub(in crate::api) async fn profile_create(
     let (new_profile, profile_id) = build_create_model(&user, &payload, picture);
     let inserted = insert_profile(&new_profile, profile_id, &payload).await?;
 
-    if inserted.profile_picture.is_some() {
-        fire_avatar_sync(user.pid, inserted.profile_picture.clone(), "profile create");
-    }
-
     let data = full_profile_response(&inserted, &user.pid, Some(user.id)).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
 }
@@ -141,13 +126,8 @@ pub(in crate::api) async fn profile_update(
         Ok(data) => data,
         Err(response) => return Ok(*response),
     };
-    let sync_avatar = picture.is_some();
     let changeset = build_update_changeset(&payload, picture);
     let updated = apply_update(&profile, &payload, changeset).await?;
-
-    if sync_avatar {
-        fire_avatar_sync(user.pid, updated.profile_picture.clone(), "profile update");
-    }
 
     let data = full_profile_response(&updated, &user.pid, Some(user.id)).await?;
     Ok(Json(DataResponse { data }).into_response())

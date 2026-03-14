@@ -2,7 +2,6 @@ package com.poziomki.app.data.repository
 
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
-import com.poziomki.app.network.resolveRoomId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
@@ -17,22 +16,9 @@ class ChatRoomRepository(
                 return@withContext Result.failure(IllegalArgumentException("Target user id cannot be blank"))
             }
 
-            resolveViaBackend(normalizedTarget)
-        }
-
-    private suspend fun resolveViaBackend(targetUserId: String): Result<String> =
-        when (val result = api.resolveMatrixDirectRoom(targetUserId)) {
-            is ApiResult.Success -> {
-                val roomId = result.data.resolveRoomId()
-                if (roomId == null) {
-                    Result.failure(IllegalStateException("Backend returned empty direct room id"))
-                } else {
-                    Result.success(roomId)
-                }
-            }
-
-            is ApiResult.Error -> {
-                Result.failure(IllegalStateException(result.message))
+            when (val result = api.resolveChatDm(normalizedTarget)) {
+                is ApiResult.Success -> Result.success(result.data.conversationId)
+                is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
             }
         }
 }

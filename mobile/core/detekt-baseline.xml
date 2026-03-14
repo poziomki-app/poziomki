@@ -59,12 +59,11 @@
     <ID>TooManyFunctions:ApiService.kt$ApiService</ID>
     <ID>TooManyFunctions:ChatTimeline.kt$ChatTimeline : Timeline</ID>
     <ID>TooManyFunctions:EventRepository.kt$EventRepository</ID>
-    <ID>TooManyFunctions:MatrixClient.kt$MatrixClient</ID>
-    <ID>TooManyFunctions:NoopMatrixClient.kt$NoopMatrixClient : MatrixClient</ID>
-    <ID>TooManyFunctions:RustMatrixClient.kt$RustMatrixClient : MatrixClient</ID>
-    <ID>TooManyFunctions:RustMatrixClient.kt$com.poziomki.app.chat.matrix.impl.RustMatrixClient.kt</ID>
+    <ID>TooManyFunctions:ChatClient.kt$ChatClient</ID>
+    <ID>TooManyFunctions:NoopChatClient.kt$NoopChatClient : ChatClient</ID>
     <ID>TooManyFunctions:SyncEngine.kt$SyncEngine</ID>
     <ID>TooManyFunctions:Timeline.kt$Timeline : AutoCloseable</ID>
+    <ID>LongParameterList:WsJoinedRoom.kt$WsJoinedRoom$(roomId: String, initialDisplayName: String, wsConnection: WsConnection, roomTimelineCacheStore: RoomTimelineCacheStore, directUserId: String?, directUserName: String?, directUserAvatar: String?)</ID>
     <ID>UnusedParameter:ProfileRepository.kt$ProfileRepository$bytes: ByteArray</ID>
     <ID>UnusedPrivateProperty:SettingsRepository.kt$SettingsRepository$private val connectivityMonitor: ConnectivityMonitor</ID>
     <ID>Wrapping:JoinedRustRoom.kt$JoinedRustRoom$innerRoom.memberAvatarUrl(userId)</ID>

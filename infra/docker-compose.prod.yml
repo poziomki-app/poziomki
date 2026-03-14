@@ -58,6 +58,7 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:6432:6432"
+      - "127.0.0.1:9187:9187"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -68,6 +69,7 @@ services:
       POOL_MODE: transaction
       LISTEN_PORT: 6432
       HEALTHCHECK_PORT: 6433
+      OPENMETRICS_PORT: 9187
     volumes:
       - ./ops/pgdog/entrypoint.sh:/opt/pgdog/entrypoint.sh:ro
     healthcheck:
@@ -92,42 +94,6 @@ services:
     logging: *default-logging
     networks: [db, app]
 
-  tuwunel:
-    image: jevolk/tuwunel:v1.5.0
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6167:6167"
-    environment:
-      TUWUNEL_SERVER_NAME: "${MATRIX_SERVER_NAME:-chat.poziomki.app}"
-      TUWUNEL_PORT: "6167"
-      TUWUNEL_ADDRESS: "0.0.0.0"
-      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
-      TUWUNEL_ALLOW_REGISTRATION: "true"
-      TUWUNEL_REGISTRATION_TOKEN: "${MATRIX_REGISTRATION_TOKEN:-changeme}"
-      TUWUNEL_ALLOW_FEDERATION: "false"
-      TUWUNEL_ALLOW_LEGACY_MEDIA: "true"
-      TUWUNEL_REQUEST_LEGACY_MEDIA: "true"
-      TUWUNEL_CREATE_ADMIN_ROOM: "true"
-      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
-      TUWUNEL_LOG: "warn"
-    volumes:
-      - tuwunel_data:/var/lib/tuwunel
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '1.0'
-          pids: 512
-    logging: *default-logging
-    networks: [app]
-
   api:
     build:
       context: ..
@@ -138,8 +104,6 @@ services:
         condition: service_healthy
       pgdog:
         condition: service_healthy
-      tuwunel:
-        condition: service_started
       stalwart:
         condition: service_started
     ports:
@@ -163,12 +127,7 @@ services:
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
-      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
-      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
-      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
-      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
-      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
       SMTP_ENABLE: ${SMTP_ENABLE:-true}
       SMTP_HOST: ${SMTP_HOST:-stalwart}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -214,8 +173,6 @@ services:
         condition: service_healthy
       pgdog:
         condition: service_healthy
-      tuwunel:
-        condition: service_started
       stalwart:
         condition: service_started
     environment:
@@ -235,12 +192,7 @@ services:
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://cdn.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
-      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://tuwunel:6167}
-      MATRIX_HOMESERVER_PUBLIC_URL: ${MATRIX_HOMESERVER_PUBLIC_URL:-}
-      MATRIX_PASSWORD_PEPPER: ${MATRIX_PASSWORD_PEPPER:-}
-      MATRIX_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN:-}
-      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN}
-      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-ntfy.poziomki.app}
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
       SMTP_ENABLE: ${SMTP_ENABLE:-true}
       SMTP_HOST: ${SMTP_HOST:-stalwart}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -382,7 +334,6 @@ volumes:
   postgres_data:
   garage_data:
   garage_meta:
-  tuwunel_data:
   stalwart_data:
 
 networks:

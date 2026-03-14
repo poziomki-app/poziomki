@@ -43,6 +43,11 @@ POOL_MODE="${POOL_MODE:-transaction}"
 LISTEN_PORT="${LISTEN_PORT:-6432}"
 HEALTHCHECK_PORT="${HEALTHCHECK_PORT:-6433}"
 
+QUERY_TIMEOUT="${QUERY_TIMEOUT:-30000}"
+BAN_TIMEOUT="${BAN_TIMEOUT:-30000}"
+SERVER_LIFETIME="${SERVER_LIFETIME:-3600000}"
+OPENMETRICS_PORT="${OPENMETRICS_PORT:-9187}"
+
 cat > "${CFG_DIR}/pgdog.toml" <<EOF
 [general]
 host = "0.0.0.0"
@@ -53,11 +58,25 @@ min_pool_size = 1
 pooler_mode = "${POOL_MODE}"
 auth_type = "scram"
 prepared_statements = "extended"
+
+# Health & monitoring
 healthcheck_port = ${HEALTHCHECK_PORT}
 healthcheck_interval = 30000
+openmetrics_port = ${OPENMETRICS_PORT}
+
+# Timeouts
 idle_timeout = 60000
 connect_timeout = 5000
 checkout_timeout = 3000
+query_timeout = ${QUERY_TIMEOUT}
+server_lifetime = ${SERVER_LIFETIME}
+client_idle_in_transaction_timeout = 15000
+
+# Recovery
+ban_timeout = ${BAN_TIMEOUT}
+connection_recovery = "recover"
+
+# Logging
 log_connections = true
 log_disconnections = true
 

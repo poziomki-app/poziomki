@@ -2,12 +2,6 @@ package com.poziomki.app.network
 
 import io.ktor.http.encodeURLQueryComponent
 
-private const val MATRIX_DIRECT_ROOMS_PATH = "/api/v1/matrix/dms"
-
-private fun matrixEventRoomPath(eventId: String): String = "/api/v1/matrix/events/$eventId/room"
-
-private fun matrixDirectRoomRequest(targetUserId: String): MatrixDirectRoomRequest = MatrixDirectRoomRequest(targetUserId = targetUserId)
-
 class ApiService(
     private val client: ApiClient,
 ) {
@@ -181,21 +175,22 @@ class ApiService(
     suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> =
         client.patch("/api/v1/settings", request)
 
-    // Matrix bootstrap
+    // Chat (WebSocket backend)
 
-    suspend fun getMatrixConfig(): ApiResult<MatrixConfigData> = client.get("/api/v1/matrix/config")
+    suspend fun getChatConfig(): ApiResult<ChatConfigData> = client.get("/api/v1/chat/config")
 
-    suspend fun createMatrixSession(
-        deviceName: String = "Poziomki Mobile",
-        deviceId: String? = null,
-    ): ApiResult<MatrixSessionData> =
-        client.post(
-            "/api/v1/matrix/session",
-            MatrixSessionRequest(deviceName = deviceName, deviceId = deviceId),
-        )
+    suspend fun resolveChatDm(targetUserId: String): ApiResult<ChatConversationResolveData> =
+        client.post("/api/v1/chat/dms", ChatDmRequest(userId = targetUserId))
 
-    suspend fun getMatrixEventRoom(eventId: String): ApiResult<MatrixRoomResolveData> = client.get(matrixEventRoomPath(eventId))
+    suspend fun getChatEventConversation(eventId: String): ApiResult<ChatConversationResolveData> =
+        client.get("/api/v1/chat/events/$eventId/conversation")
 
-    suspend fun resolveMatrixDirectRoom(targetUserId: String): ApiResult<MatrixRoomResolveData> =
-        client.post(MATRIX_DIRECT_ROOMS_PATH, matrixDirectRoomRequest(targetUserId))
+    suspend fun registerChatPush(
+        deviceId: String,
+        ntfyTopic: String,
+    ): ApiResult<SuccessResponse> =
+        client.post("/api/v1/chat/push/register", ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic))
+
+    suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =
+        client.post("/api/v1/chat/push/unregister", ChatPushUnregisterRequest(deviceId = deviceId))
 }

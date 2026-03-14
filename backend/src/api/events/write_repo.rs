@@ -225,7 +225,7 @@ pub(in crate::api) async fn delete_event_attendee_with_conn(
 /// Promotion order is deterministic (by UUID) but not FIFO — the table has no
 /// `created_at` column, so arrival-time ordering is unavailable.
 /// Returns the profile IDs that were promoted so the caller can enqueue
-/// Matrix membership syncs.
+/// chat membership syncs.
 pub(in crate::api) async fn auto_approve_pending_with_conn(
     conn: &mut AsyncPgConnection,
     event_id: Uuid,

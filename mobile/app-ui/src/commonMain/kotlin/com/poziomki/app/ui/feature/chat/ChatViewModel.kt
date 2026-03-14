@@ -2,15 +2,14 @@ package com.poziomki.app.ui.feature.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.chat.api.JoinedRoom
+import com.poziomki.app.chat.api.RoomSummary
+import com.poziomki.app.chat.api.Timeline
+import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.chat.api.TimelineMode
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
-import com.poziomki.app.chat.matrix.api.JoinedRoom
-import com.poziomki.app.chat.matrix.api.MatrixClient
-import com.poziomki.app.chat.matrix.api.MatrixRoomSummary
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
-import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
-import com.poziomki.app.chat.matrix.api.Timeline
 import com.poziomki.app.chat.timeline.TimelineController
-import com.poziomki.app.core.ids.matrixLocalpartFromUserId
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
@@ -29,7 +28,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 
 class ChatViewModel(
-    private val matrixClient: MatrixClient,
+    private val chatClient: ChatClient,
     private val roomComposerDraftStore: RoomComposerDraftStore,
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
@@ -61,7 +60,7 @@ class ChatViewModel(
     private var typingIndicatorTimeoutJob: Job? = null
     private var lastVisibleTimelineIndex: Int? = null
     private var totalTimelineItemCount: Int = 0
-    private var latestRoomSummaries: List<MatrixRoomSummary> = emptyList()
+    private var latestRoomSummaries: List<RoomSummary> = emptyList()
     private var activeDirectUserId: String? = null
     private var latestAvatarByName: Map<String, String> = emptyMap()
     private var eventCoverByRoomId: Map<String, String> = emptyMap()
@@ -77,18 +76,8 @@ class ChatViewModel(
         fallbackDirectUserId: String? = null,
     ) {
         if (roomId.isBlank()) return
-        if (!roomId.startsWith("!")) {
-            val avatarOverrides = _uiState.value.avatarOverrides
-            _uiState.value =
-                ChatUiState(
-                    roomId = roomId,
-                    roomDisplayName = fallbackDisplayName.orEmpty(),
-                    roomAvatarUrl =
-                        fallbackDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
-                    isDirectRoom = fallbackDirectUserId != null,
-                    avatarOverrides = avatarOverrides,
-                    error = "Invalid chat route id. Expected Matrix room id (!...)",
-                )
+        if (roomId.length < 2) {
+            _uiState.value = ChatUiState(error = "Invalid chat room id")
             return
         }
         val isAlreadyBound = boundRoomId == roomId && activeRoom != null
@@ -126,9 +115,9 @@ class ChatViewModel(
     ): JoinedRoom? {
         var currentDelay = initialDelayMs
         repeat(attempts) { attempt ->
-            matrixClient.getJoinedRoom(roomId)?.let { return it }
+            chatClient.getJoinedRoom(roomId)?.let { return it }
             if (attempt == 0 || attempt % 3 == 2) {
-                runCatching { matrixClient.refreshRooms() }
+                runCatching { chatClient.refreshRooms() }
             }
             if (attempt < attempts - 1) {
                 delay(currentDelay)
@@ -251,7 +240,7 @@ class ChatViewModel(
             // Enforce one reaction per user: remove existing different reaction first
             val event =
                 _uiState.value.timelineItems
-                    .filterIsInstance<MatrixTimelineItem.Event>()
+                    .filterIsInstance<TimelineItem.Event>()
                     .find { it.eventOrTransactionId == eventOrTransactionId }
             event
                 ?.reactions
@@ -304,7 +293,7 @@ class ChatViewModel(
         markAsRead()
     }
 
-    fun startReply(event: com.poziomki.app.chat.matrix.api.MatrixTimelineItem.Event) {
+    fun startReply(event: TimelineItem.Event) {
         val eventId = event.eventId ?: return
         _uiState.update {
             it.copy(
@@ -318,7 +307,7 @@ class ChatViewModel(
         }
     }
 
-    fun startEdit(event: com.poziomki.app.chat.matrix.api.MatrixTimelineItem.Event) {
+    fun startEdit(event: TimelineItem.Event) {
         if (!event.isEditable) return
         _uiState.update {
             it.copy(
@@ -405,11 +394,11 @@ class ChatViewModel(
         typingState = false
         activeDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() }
         if (latestRoomSummaries.isEmpty()) {
-            latestRoomSummaries = matrixClient.rooms.value
+            latestRoomSummaries = chatClient.rooms.value
         }
         val cachedTimeline =
             runCatching {
-                matrixClient.getRoomTimelineCache(roomId = roomId, limit = 500)
+                chatClient.getRoomTimelineCache(roomId = roomId, limit = 500)
             }.getOrNull()
         val knownSummary = latestRoomSummaries.firstOrNull { it.roomId == roomId }
         val inferredDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() } ?: knownSummary?.directUserId
@@ -437,7 +426,7 @@ class ChatViewModel(
         lastVisibleTimelineIndex = null
         totalTimelineItemCount = 0
 
-        matrixClient.ensureStarted().getOrElse { throwable ->
+        chatClient.ensureStarted().getOrElse { throwable ->
             _uiState.update { current ->
                 if (current.timelineItems.isNotEmpty()) {
                     current.copy(
@@ -447,7 +436,7 @@ class ChatViewModel(
                 } else {
                     current.copy(
                         isLoading = false,
-                        error = throwable.message ?: "Failed to initialize Matrix",
+                        error = throwable.message ?: "Failed to initialize chat",
                     )
                 }
             }
@@ -460,7 +449,7 @@ class ChatViewModel(
             }
             return
         }
-        runCatching { matrixClient.refreshRooms() }
+        runCatching { chatClient.refreshRooms() }
 
         val room =
             awaitJoinedRoom(roomId) ?: run {
@@ -528,7 +517,7 @@ class ChatViewModel(
                 messageDraft = restoredDraft,
                 composerMode = ComposerMode.NewMessage,
                 isLoading = cachedTimeline?.items.isNullOrEmpty(),
-                timelineMode = MatrixTimelineMode.Live,
+                timelineMode = TimelineMode.Live,
                 error = null,
             )
         }
@@ -571,7 +560,7 @@ class ChatViewModel(
 
         roomJobs +=
             viewModelScope.launch {
-                matrixClient.rooms.collectLatest { summaries ->
+                chatClient.rooms.collectLatest { summaries ->
                     latestRoomSummaries = summaries
                     val summary = summaries.firstOrNull { it.roomId == room.roomId }
                     activeDirectUserId = summary?.directUserId ?: activeDirectUserId
@@ -784,7 +773,7 @@ class ChatViewModel(
             val roomId = boundRoomId
             if (!roomId.isNullOrBlank()) {
                 if (attempt == 0 || attempt % 3 == 2) {
-                    runCatching { matrixClient.refreshRooms() }
+                    runCatching { chatClient.refreshRooms() }
                 }
                 val shouldKickRebind =
                     activeRoom == null &&
@@ -814,16 +803,16 @@ class ChatViewModel(
 
     private suspend fun activateTimeline(
         room: JoinedRoom,
-        mode: MatrixTimelineMode,
+        mode: TimelineMode,
     ) {
         when (mode) {
-            MatrixTimelineMode.Live -> {
+            TimelineMode.Live -> {
                 focusedTimeline?.close()
                 focusedTimeline = null
                 bindActiveTimeline(room.liveTimeline)
             }
 
-            is MatrixTimelineMode.FocusedOnEvent -> {
+            is TimelineMode.FocusedOnEvent -> {
                 room
                     .createFocusedTimeline(mode.eventId)
                     .onSuccess { focused ->
@@ -879,7 +868,7 @@ class ChatViewModel(
 
     private fun applyTimelineItems(
         timeline: Timeline,
-        items: List<MatrixTimelineItem>,
+        items: List<TimelineItem>,
     ) {
         totalTimelineItemCount = items.size
         val unreadBelowCount = computeUnreadBelowCount(items)
@@ -887,7 +876,7 @@ class ChatViewModel(
             val timelineAvatar =
                 items
                     .asSequence()
-                    .filterIsInstance<MatrixTimelineItem.Event>()
+                    .filterIsInstance<TimelineItem.Event>()
                     .filter { !it.isMine }
                     .mapNotNull { event ->
                         resolveAvatarOverride(event.senderId, current.avatarOverrides)
@@ -926,13 +915,8 @@ class ChatViewModel(
                     val userId = profile.userId
                     val pic = profile.profilePicture ?: return@forEach
                     if (pic.isBlank()) return@forEach
-                    val localpart = matrixLocalpartFromUserId(userId)
-                    val normalizedUserId = userId.filter { it.isLetterOrDigit() }.lowercase()
                     overrides[userId] = pic
                     overrides[userId.lowercase()] = pic
-                    overrides[normalizedUserId] = pic
-                    overrides[localpart] = pic
-                    overrides["@$localpart"] = pic
                 }
                 val byName =
                     profiles
@@ -990,7 +974,7 @@ class ChatViewModel(
     }
 
     private fun resolveRoomAvatar(
-        summary: MatrixRoomSummary?,
+        summary: RoomSummary?,
         overrides: Map<String, String>,
         roomDisplayName: String,
         currentAvatar: String?,
@@ -1018,8 +1002,8 @@ class ChatViewModel(
                 repeat(12) { attempt ->
                     delay((1_000L + attempt * 500L).coerceAtMost(5_000L))
                     if (boundRoomId != roomId || activeRoom != null) return@launch
-                    runCatching { matrixClient.refreshRooms() }
-                    if (matrixClient.getJoinedRoom(roomId) != null) {
+                    runCatching { chatClient.refreshRooms() }
+                    if (chatClient.getJoinedRoom(roomId) != null) {
                         loadRoom(
                             roomId = roomId,
                             fallbackDisplayName = fallbackDisplayName,
@@ -1033,7 +1017,7 @@ class ChatViewModel(
 
     private fun resolvePreferredRoomDisplayName(
         roomId: String,
-        summary: MatrixRoomSummary?,
+        summary: RoomSummary?,
         liveName: String?,
         currentName: String,
         fallbackDisplayName: String?,
@@ -1074,12 +1058,12 @@ class ChatViewModel(
         }
     }
 
-    private fun computeUnreadBelowCount(items: List<com.poziomki.app.chat.matrix.api.MatrixTimelineItem>): Int {
-        val readMarkerIndex = items.indexOfLast { it == com.poziomki.app.chat.matrix.api.MatrixTimelineItem.ReadMarker }
+    private fun computeUnreadBelowCount(items: List<TimelineItem>): Int {
+        val readMarkerIndex = items.indexOfLast { it == TimelineItem.ReadMarker }
         if (readMarkerIndex < 0) return 0
         return items
             .drop(readMarkerIndex + 1)
-            .count { it is com.poziomki.app.chat.matrix.api.MatrixTimelineItem.Event }
+            .count { it is TimelineItem.Event }
     }
 
     // In reversed layout, index 0 = newest message at the bottom.

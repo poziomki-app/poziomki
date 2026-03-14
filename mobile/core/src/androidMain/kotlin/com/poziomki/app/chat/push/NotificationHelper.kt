@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.graphics.BitmapFactory
+import java.net.URL
 import java.util.concurrent.atomic.AtomicInteger
 
 class NotificationHelper(
@@ -46,25 +48,50 @@ class NotificationHelper(
     fun showMessageNotification(
         sender: String?,
         roomId: String?,
+        body: String? = null,
+        avatarUrl: String? = null,
     ) {
         val title = sender ?: "New message"
-        val body = "You have a new message"
+        val text = body ?: "You have a new message"
         val groupKey = "poz_messages_${roomId ?: "unknown"}"
 
-        val notification =
+        val builder =
             Notification
                 .Builder(context, CHANNEL_MESSAGES)
                 .setContentTitle(title)
-                .setContentText(body)
+                .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_dialog_email)
                 .setAutoCancel(true)
                 .setGroup(groupKey)
-                .build()
 
-        notificationManager.notify(notificationIdCounter.getAndIncrement(), notification)
+        if (avatarUrl != null) {
+            runCatching {
+                val bitmap = URL(avatarUrl).openStream().use { BitmapFactory.decodeStream(it) }
+                if (bitmap != null) builder.setLargeIcon(bitmap)
+            }
+        }
+
+        notificationManager.notify(notificationIdCounter.getAndIncrement(), builder.build())
+
+        // Always post group summary so all notifications stack
+        val key = roomId ?: "unknown"
+        val summaryId = GROUP_SUMMARY_BASE + key.hashCode()
+        val summary =
+            Notification
+                .Builder(context, CHANNEL_MESSAGES)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setGroup(groupKey)
+                .setGroupSummary(true)
+                .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN)
+                .setAutoCancel(true)
+                .build()
+        notificationManager.notify(summaryId, summary)
     }
 
     companion object {
+        private const val GROUP_SUMMARY_BASE = 500
         const val CHANNEL_MESSAGES = "poz_messages"
         const val CHANNEL_SERVICE = "poz_push_service"
         const val SERVICE_NOTIFICATION_ID = 900

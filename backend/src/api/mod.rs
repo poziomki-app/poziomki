@@ -10,13 +10,12 @@ use crate::app::AppContext;
 
 mod auth;
 mod catalog;
+pub(crate) mod chat;
 mod common;
 mod events;
 pub(crate) mod imgproxy_signing;
 mod matching;
-mod matrix;
 mod profiles;
-mod push_gateway;
 mod root;
 mod search;
 mod settings;
@@ -126,27 +125,18 @@ fn search_routes() -> Router<AppContext> {
         .layer(cache_layer("private, max-age=60"))
 }
 
-fn matrix_config_routes() -> Router<AppContext> {
+fn chat_routes() -> Router<AppContext> {
     Router::new()
-        .route("/config", get(root::matrix_config))
+        .route("/ws", get(chat::ws_upgrade))
+        .route("/config", get(chat::chat_config))
+        .route("/dms", post(chat::resolve_dm))
+        .route(
+            "/events/{eventId}/conversation",
+            get(chat::resolve_event_conversation),
+        )
+        .route("/push/register", post(chat::push_register))
+        .route("/push/unregister", post(chat::push_unregister))
         .layer(cache_layer("no-store"))
-}
-
-fn matrix_session_routes() -> Router<AppContext> {
-    Router::new()
-        .route("/session", post(matrix::create_session))
-        .layer(cache_layer("no-store"))
-}
-
-fn matrix_room_routes() -> Router<AppContext> {
-    Router::new()
-        .route("/events/{eventId}/room", get(matrix::resolve_event_room))
-        .route("/dms", post(matrix::resolve_dm_room))
-        .layer(cache_layer("no-store"))
-}
-
-fn push_gateway_routes() -> Router<AppContext> {
-    Router::new().route("/notify", post(push_gateway::notify))
 }
 
 #[derive(Clone)]
@@ -193,10 +183,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/uploads", uploads_routes())
         .nest("/api/v1/settings", settings_routes())
         .nest("/api/v1", search_routes())
-        .nest("/api/v1/matrix", matrix_config_routes())
-        .nest("/api/v1/matrix", matrix_session_routes())
-        .nest("/api/v1/matrix", matrix_room_routes())
-        .nest("/_matrix/push/v1", push_gateway_routes())
+        .nest("/api/v1/chat", chat_routes())
         .nest("/api/v1/ops", ops_routes())
         .layer(
             TraceLayer::new_for_http()
@@ -230,23 +217,12 @@ pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) {
     auth::deliver_otp_email_job(to, code).await;
 }
 
-pub(crate) async fn deliver_matrix_profile_avatar_sync_job(
-    user_pid: &uuid::Uuid,
-    profile_picture_filename: Option<&str>,
-) {
-    matrix::sync_profile_avatar_best_effort(user_pid, profile_picture_filename).await;
-}
-
-pub(crate) async fn deliver_matrix_event_membership_sync_job(
+pub(crate) async fn deliver_chat_membership_sync_job(
     event_id: uuid::Uuid,
     profile_id: uuid::Uuid,
     leave: bool,
 ) -> std::result::Result<(), String> {
-    if leave {
-        matrix::sync_event_membership_after_leave_background(event_id, profile_id).await
-    } else {
-        matrix::sync_event_membership_after_attend_background(event_id, profile_id).await
-    }
+    chat::conversations::sync_event_membership(event_id, profile_id, leave).await
 }
 
 pub(crate) async fn deliver_upload_variants_generation_job(

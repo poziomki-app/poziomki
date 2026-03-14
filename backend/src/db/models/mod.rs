@@ -1,14 +1,19 @@
 pub mod auth_rate_limits;
+pub mod conversation_members;
+pub mod conversations;
 pub mod degrees;
 pub mod event_attendees;
 pub mod event_interactions;
 pub mod event_tags;
 pub mod events;
 pub mod job_outbox;
-pub mod matrix_dm_rooms;
+
+pub mod message_reactions;
+pub mod messages;
 pub mod otp_codes;
 pub mod profile_tags;
 pub mod profiles;
+pub mod push_subscriptions;
 pub mod sessions;
 pub mod tags;
 pub mod uploads;
