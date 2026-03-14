@@ -131,6 +131,7 @@ class WsChatClient(
 
     override suspend fun refreshRooms(): Result<Unit> {
         ensureStarted().getOrElse { return Result.failure(it) }
+        wsConnection.send(WsClientMessage.ListConversations)
         return Result.success(Unit)
     }
 

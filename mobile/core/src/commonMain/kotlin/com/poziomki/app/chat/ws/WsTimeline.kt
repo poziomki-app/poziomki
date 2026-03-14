@@ -3,6 +3,7 @@ package com.poziomki.app.chat.ws
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
 import com.poziomki.app.chat.matrix.api.MatrixReaction
+import com.poziomki.app.chat.matrix.api.MatrixReactionSender
 import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
 import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
 import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
@@ -396,17 +397,21 @@ private fun WsServerMessage.Message.toTimelineItem(): MatrixTimelineItem.Event =
                 body = it.body,
             )
         },
-        reactions = reactions.map {
-            MatrixReaction(
-                emoji = it.emoji,
-                count = it.count,
-                reactedByMe = it.reactedByMe,
-            )
-        },
+        reactions = reactions.map { it.toMatrixReaction() },
         isEditable = isMine,
         sendStatus = MatrixEventSendStatus.Sent,
         readByCount = 0,
         canReply = true,
+    )
+
+private fun WsReactionPayload.toMatrixReaction(): MatrixReaction =
+    MatrixReaction(
+        emoji = emoji,
+        count = count,
+        reactedByMe = reactedByMe,
+        senders = userIds.zip(senderNames).map { (uid, name) ->
+            MatrixReactionSender(senderId = uid.toString(), displayName = name)
+        },
     )
 
 internal fun WsMessagePayload.toTimelineItem(): MatrixTimelineItem.Event =
@@ -426,13 +431,7 @@ internal fun WsMessagePayload.toTimelineItem(): MatrixTimelineItem.Event =
                 body = it.body,
             )
         },
-        reactions = reactions.map {
-            MatrixReaction(
-                emoji = it.emoji,
-                count = it.count,
-                reactedByMe = it.reactedByMe,
-            )
-        },
+        reactions = reactions.map { it.toMatrixReaction() },
         isEditable = isMine,
         sendStatus = MatrixEventSendStatus.Sent,
         readByCount = 0,
