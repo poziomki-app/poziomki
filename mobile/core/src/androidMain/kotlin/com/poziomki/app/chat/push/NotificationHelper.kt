@@ -72,9 +72,24 @@ class NotificationHelper(
         }
 
         notificationManager.notify(notificationIdCounter.getAndIncrement(), builder.build())
+
+        // Post/update group summary so Android stacks notifications from the same room
+        val summaryId = GROUP_SUMMARY_BASE + (roomId?.hashCode() ?: 0)
+        val summary =
+            Notification
+                .Builder(context, CHANNEL_MESSAGES)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setGroup(groupKey)
+                .setGroupSummary(true)
+                .setAutoCancel(true)
+                .build()
+        notificationManager.notify(summaryId, summary)
     }
 
     companion object {
+        private const val GROUP_SUMMARY_BASE = 500
         const val CHANNEL_MESSAGES = "poz_messages"
         const val CHANNEL_SERVICE = "poz_push_service"
         const val SERVICE_NOTIFICATION_ID = 900
