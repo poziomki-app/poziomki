@@ -271,20 +271,20 @@ pub async fn list_for_user(
                 conv.user_low_id
             };
             if let Some(other_id) = other_user_id {
-                let profile: Option<(Uuid, String, Option<String>)> = profiles::table
+                let profile: Option<(i32, String, Option<String>)> = profiles::table
                     .inner_join(users::table.on(users::id.eq(profiles::user_id)))
                     .filter(users::id.eq(other_id))
-                    .select((users::pid, profiles::name, profiles::profile_picture))
+                    .select((users::id, profiles::name, profiles::profile_picture))
                     .first(&mut conn)
                     .await
                     .optional()?;
                 match profile {
-                    Some((pid, name, avatar)) => {
+                    Some((uid, name, avatar)) => {
                         let avatar_url = avatar.as_ref().map(|filename| {
                             crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
                                 .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
                         });
-                        (Some(pid.to_string()), Some(name), avatar_url)
+                        (Some(uid.to_string()), Some(name), avatar_url)
                     }
                     None => (None, None, None),
                 }

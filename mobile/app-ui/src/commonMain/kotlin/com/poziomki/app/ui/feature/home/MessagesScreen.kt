@@ -48,7 +48,6 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.home.messages.MessagesRoomFilter
 import com.poziomki.app.ui.feature.home.messages.RoomRow
 import com.poziomki.app.ui.feature.home.messages.filterMessagesRooms
-import com.poziomki.app.ui.feature.home.messages.resolveRoomDisplayName
 import com.poziomki.app.ui.feature.home.messages.resolveRoomProfilePicture
 import com.poziomki.app.ui.feature.home.messages.roomFilterTabs
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
@@ -144,23 +143,12 @@ fun MessagesScreen(
                                     val profilePicture =
                                         resolveRoomProfilePicture(
                                             room = room,
-                                            profilePictures = state.profilePictures,
                                             profilePicturesByName = state.profilePicturesByName,
                                             eventRoomAvatars = state.eventRoomAvatars,
                                         )
-                                    val displayNameOverride =
-                                        if (room.roomId in state.eventRoomIds) {
-                                            null
-                                        } else {
-                                            resolveRoomDisplayName(
-                                                room = room,
-                                                displayNameOverrides = state.displayNameOverrides,
-                                            )
-                                        }
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,
-                                        displayNameOverride = displayNameOverride,
                                         onClick = { onNavigateToChat(room.roomId) },
                                         onAvatarClick =
                                             room.directUserId?.let { userId ->
