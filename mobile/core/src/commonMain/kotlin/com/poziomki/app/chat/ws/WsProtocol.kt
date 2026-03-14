@@ -85,6 +85,7 @@ sealed interface WsServerMessage {
         val id: String,
         val conversationId: String,
         val senderId: Int,
+        val senderPid: String? = null,
         val senderName: String,
         val senderAvatar: String? = null,
         val body: String,
@@ -122,6 +123,8 @@ sealed interface WsServerMessage {
         val emoji: String,
         val userId: Int,
         val added: Boolean,
+        val senderName: String = "Unknown",
+        val senderAvatar: String? = null,
     ) : WsServerMessage
 
     @Serializable
@@ -168,6 +171,7 @@ data class WsMessagePayload(
     val id: String,
     val conversationId: String,
     val senderId: Int,
+    val senderPid: String? = null,
     val senderName: String,
     val senderAvatar: String? = null,
     val body: String,
@@ -204,6 +208,7 @@ data class WsConversationPayload(
     val title: String? = null,
     val isDirect: Boolean = false,
     val directUserId: String? = null,
+    val directUserPid: String? = null,
     val directUserName: String? = null,
     val directUserAvatar: String? = null,
     val unreadCount: Long = 0,

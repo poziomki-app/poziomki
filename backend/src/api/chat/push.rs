@@ -11,8 +11,8 @@ pub async fn notify_offline(
     sender_id: i32,
     body: &str,
 ) {
-    // Resolve sender name
-    let Some(sender_name) = resolve_sender_name(sender_id).await else {
+    // Resolve sender name + avatar
+    let Some((sender_name, sender_avatar)) = resolve_sender_profile(sender_id).await else {
         return;
     };
 
@@ -35,9 +35,15 @@ pub async fn notify_offline(
         body.to_string()
     };
 
+    let avatar_url = sender_avatar
+        .as_ref()
+        .and_then(|filename| crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp"));
+
     let push_data = serde_json::json!({
         "room_id": conversation_id.to_string(),
         "sender": sender_name,
+        "body": push_body,
+        "avatar": avatar_url,
     });
 
     for (ntfy_topic, ntfy_server) in &topics {
@@ -57,17 +63,15 @@ pub async fn notify_offline(
             );
         }
     }
-
-    let _ = push_body; // will be used when we refine the push payload
 }
 
-async fn resolve_sender_name(sender_id: i32) -> Option<String> {
+async fn resolve_sender_profile(sender_id: i32) -> Option<(String, Option<String>)> {
     let mut conn = crate::db::conn().await.ok()?;
     profiles::table
         .inner_join(users::table.on(users::id.eq(profiles::user_id)))
         .filter(users::id.eq(sender_id))
-        .select(profiles::name)
-        .first::<String>(&mut conn)
+        .select((profiles::name, profiles::profile_picture))
+        .first::<(String, Option<String>)>(&mut conn)
         .await
         .ok()
 }

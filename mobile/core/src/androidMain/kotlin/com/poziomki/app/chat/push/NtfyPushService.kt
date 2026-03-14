@@ -116,8 +116,10 @@ class NtfyPushService :
             parsed["title"]?.jsonPrimitive?.content
                 ?: pushData?.get("sender")?.jsonPrimitive?.content
         val roomId = pushData?.get("room_id")?.jsonPrimitive?.content
+        val body = pushData?.get("body")?.jsonPrimitive?.content
+        val avatar = pushData?.get("avatar")?.jsonPrimitive?.content
 
-        notificationHelper.showMessageNotification(sender, roomId)
+        notificationHelper.showMessageNotification(sender, roomId, body, avatar)
     }
 
     companion object {

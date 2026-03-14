@@ -380,12 +380,16 @@ async fn handle_react(
             let members = conversations::member_user_ids(msg.conversation_id)
                 .await
                 .unwrap_or_default();
+
+            let (sender_name, sender_avatar) = resolve_sender_for_reaction(user_id).await;
             let server_msg = ServerMessage::Reaction {
                 message_id: msg.id,
                 conversation_id: msg.conversation_id,
                 emoji: emoji.to_string(),
                 user_id,
                 added,
+                sender_name,
+                sender_avatar,
             };
             hub.broadcast(&members, &server_msg);
         }
@@ -394,6 +398,34 @@ async fn handle_react(
                 message: format!("react failed: {e}"),
             });
         }
+    }
+}
+
+async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
+    use crate::db::schema::{profiles, users};
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+
+    let result: Option<(String, Option<String>)> = async {
+        let mut conn = crate::db::conn().await.ok()?;
+        profiles::table
+            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+            .filter(users::id.eq(user_id))
+            .select((profiles::name, profiles::profile_picture))
+            .first::<(String, Option<String>)>(&mut conn)
+            .await
+            .ok()
+    }
+    .await;
+
+    match result {
+        Some((name, avatar)) => {
+            let avatar_url = avatar.as_ref().and_then(|filename| {
+                crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
+            });
+            (name, avatar_url)
+        }
+        None => ("Unknown".to_string(), None),
     }
 }
 

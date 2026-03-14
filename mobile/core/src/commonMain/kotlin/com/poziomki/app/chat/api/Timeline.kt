@@ -45,6 +45,7 @@ sealed interface TimelineItem {
         val eventOrTransactionId: String,
         val eventId: String?,
         val senderId: String,
+        val senderPid: String? = null,
         val senderDisplayName: String?,
         val senderAvatarUrl: String? = null,
         val isMine: Boolean,

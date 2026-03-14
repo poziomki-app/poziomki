@@ -32,7 +32,8 @@ class WsTimeline(
     override val mode: TimelineMode = TimelineMode.Live,
     private val memberCache: MemberCache? = null,
 ) : Timeline {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
     private val itemsMutex = Mutex()
 
     private val _items = MutableStateFlow<List<TimelineItem>>(emptyList())
@@ -145,6 +146,8 @@ class WsTimeline(
     }
 
     internal fun onReaction(msg: WsServerMessage.Reaction) {
+        val senderId = msg.userId.toString()
+        memberCache?.put(senderId, msg.senderName, msg.senderAvatar)
         scope.launch {
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
@@ -155,12 +158,11 @@ class WsTimeline(
                     val event = current[idx] as TimelineItem.Event
                     val reactions = event.reactions.toMutableList()
                     val existingIdx = reactions.indexOfFirst { it.emoji == msg.emoji }
-                    val senderId = msg.userId.toString()
                     val isMe = senderId == wsConnection.userId.value
                     if (msg.added) {
                         val sender = ReactionSender(
                             senderId = senderId,
-                            displayName = memberCache?.getDisplayName(senderId),
+                            displayName = msg.senderName,
                         )
                         if (existingIdx >= 0) {
                             val r = reactions[existingIdx]
@@ -382,7 +384,7 @@ class WsTimeline(
     }
 
     override fun close() {
-        persistJob?.cancel()
+        scopeJob.cancel()
         pendingHistoryDeferred?.cancel()
     }
 
@@ -428,6 +430,7 @@ private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): Time
         eventOrTransactionId = id,
         eventId = id,
         senderId = senderId.toString(),
+        senderPid = senderPid,
         senderDisplayName = senderName,
         senderAvatarUrl = senderAvatar,
         isMine = mine,
@@ -464,6 +467,7 @@ internal fun WsMessagePayload.toTimelineItem(currentUserId: String? = null): Tim
         eventOrTransactionId = id,
         eventId = id,
         senderId = senderId.toString(),
+        senderPid = senderPid,
         senderDisplayName = senderName,
         senderAvatarUrl = senderAvatar,
         isMine = mine,

@@ -102,6 +102,10 @@ pub enum ServerMessage {
         #[serde(rename = "userId")]
         user_id: i32,
         added: bool,
+        #[serde(rename = "senderName")]
+        sender_name: String,
+        #[serde(rename = "senderAvatar")]
+        sender_avatar: Option<String>,
     },
     ReadReceipt {
         #[serde(rename = "conversationId")]
@@ -141,6 +145,7 @@ pub struct MessagePayload {
     pub id: Uuid,
     pub conversation_id: Uuid,
     pub sender_id: i32,
+    pub sender_pid: Option<String>,
     pub sender_name: String,
     pub sender_avatar: Option<String>,
     pub body: String,
@@ -180,6 +185,7 @@ pub struct ConversationPayload {
     pub title: Option<String>,
     pub is_direct: bool,
     pub direct_user_id: Option<String>,
+    pub direct_user_pid: Option<String>,
     pub direct_user_name: Option<String>,
     pub direct_user_avatar: Option<String>,
     pub unread_count: i64,

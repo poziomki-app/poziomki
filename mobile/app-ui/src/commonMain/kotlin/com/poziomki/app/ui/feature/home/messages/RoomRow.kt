@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -71,19 +70,6 @@ fun RoomRow(
                 fallbackPicture = room.avatarUrl,
                 displayName = displayName,
             )
-            if (room.unreadCount > 0) {
-                Badge(
-                    containerColor = Primary,
-                    contentColor = Background,
-                    modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Text(
-                        text = room.unreadCount.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -238,7 +224,7 @@ private fun latestRoomStatusIconSpec(
         }
 
         readByCount > 0 -> {
-            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = Primary)
         }
 
         sendStatus == EventSendStatus.Sent -> {
