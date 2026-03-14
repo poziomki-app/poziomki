@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::db::models::conversation_members::NewConversationMember;
 use crate::db::models::conversations::{Conversation, NewConversation};
-use crate::db::schema::{conversation_members, conversations, profiles, users};
+use crate::db::schema::{conversation_members, conversations, events, profiles, users};
 
 /// Resolve or create a DM conversation between two users.
 /// Uses canonical pair (lower id, higher id) for uniqueness.
@@ -329,4 +329,92 @@ pub async fn list_for_user(
     payloads.sort_by(|a, b| b.latest_timestamp.cmp(&a.latest_timestamp));
 
     Ok(payloads)
+}
+
+/// Sync event membership: add or remove a user from the event conversation.
+/// Called from outbox job dispatch.
+#[allow(clippy::similar_names)]
+pub async fn sync_event_membership(
+    event_id: Uuid,
+    profile_id: Uuid,
+    leave: bool,
+) -> std::result::Result<(), String> {
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| format!("db conn: {e}"))?;
+
+    // Resolve user_id from profile_id
+    let user_id: Option<i32> = profiles::table
+        .filter(profiles::id.eq(profile_id))
+        .select(profiles::user_id)
+        .first(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| format!("resolve user_id: {e}"))?;
+
+    let Some(user_id) = user_id else {
+        return Err(format!("profile {profile_id} not found"));
+    };
+
+    if leave {
+        // Remove from conversation if it exists
+        let conv: Option<Conversation> = conversations::table
+            .filter(conversations::kind.eq("event"))
+            .filter(conversations::event_id.eq(event_id))
+            .first(&mut conn)
+            .await
+            .optional()
+            .map_err(|e| format!("find conversation: {e}"))?;
+
+        if let Some(conv) = conv {
+            diesel::delete(
+                conversation_members::table
+                    .filter(conversation_members::conversation_id.eq(conv.id))
+                    .filter(conversation_members::user_id.eq(user_id)),
+            )
+            .execute(&mut conn)
+            .await
+            .map_err(|e| format!("delete member: {e}"))?;
+        }
+    } else {
+        // Resolve event title
+        let event_row: Option<(String, Uuid)> = events::table
+            .filter(events::id.eq(event_id))
+            .select((events::title, events::creator_id))
+            .first(&mut conn)
+            .await
+            .optional()
+            .map_err(|e| format!("load event: {e}"))?;
+
+        let Some((event_title, creator_profile_id)) = event_row else {
+            return Err(format!("event {event_id} not found"));
+        };
+
+        // Resolve creator user_id
+        let creator_user_id: i32 = profiles::table
+            .filter(profiles::id.eq(creator_profile_id))
+            .select(profiles::user_id)
+            .first(&mut conn)
+            .await
+            .map_err(|e| format!("resolve creator user_id: {e}"))?;
+
+        // Ensure conversation exists
+        let conv = resolve_or_create_event_conversation(event_id, &event_title, creator_user_id)
+            .await
+            .map_err(|e| format!("resolve conversation: {e}"))?;
+
+        // Add member
+        diesel::insert_into(conversation_members::table)
+            .values(&NewConversationMember {
+                conversation_id: conv.id,
+                user_id,
+                joined_at: Utc::now(),
+            })
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await
+            .map_err(|e| format!("insert member: {e}"))?;
+    }
+
+    Ok(())
 }

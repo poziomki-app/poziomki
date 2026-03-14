@@ -57,24 +57,7 @@ pub async fn enqueue_otp_email(to: &str, code: &str) -> Result<()> {
     enqueue_job(outbox_dispatch::OUTBOX_TOPIC_OTP_EMAIL, payload).await
 }
 
-pub async fn enqueue_matrix_profile_avatar_sync(
-    user_pid: &uuid::Uuid,
-    profile_picture_filename: Option<&str>,
-) -> Result<()> {
-    let payload = json!({
-        "user_pid": user_pid.to_string(),
-        "profile_picture_filename": profile_picture_filename,
-    })
-    .to_string();
-
-    enqueue_job(
-        outbox_dispatch::OUTBOX_TOPIC_MATRIX_PROFILE_AVATAR_SYNC,
-        payload,
-    )
-    .await
-}
-
-pub async fn enqueue_matrix_event_membership_sync(
+pub async fn enqueue_chat_membership_sync(
     event_id: &uuid::Uuid,
     profile_id: &uuid::Uuid,
     leave: bool,
@@ -86,11 +69,7 @@ pub async fn enqueue_matrix_event_membership_sync(
     })
     .to_string();
 
-    enqueue_job(
-        outbox_dispatch::OUTBOX_TOPIC_MATRIX_EVENT_MEMBERSHIP_SYNC,
-        payload,
-    )
-    .await
+    enqueue_job(outbox_dispatch::OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC, payload).await
 }
 
 pub async fn enqueue_upload_variants_generation(upload_id: &uuid::Uuid) -> Result<()> {

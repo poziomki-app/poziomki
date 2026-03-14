@@ -39,14 +39,18 @@ class PushManager(
 
     private suspend fun startPushService(deviceId: String) {
         val config =
-            when (val result = apiService.getMatrixConfig()) {
+            when (val result = apiService.getChatConfig()) {
                 is ApiResult.Success -> result.data
                 is ApiResult.Error -> return
             }
 
         val ntfyServer = config.ntfyServer ?: return
-        val sseUrl = "$ntfyServer/poz_$deviceId/sse"
+        val ntfyTopic = "poz_$deviceId"
 
+        // Register push subscription with backend
+        apiService.registerChatPush(deviceId, ntfyTopic)
+
+        val sseUrl = "$ntfyServer/$ntfyTopic/sse"
         val intent =
             Intent(appContext, NtfyPushService::class.java).apply {
                 putExtra(NtfyPushService.EXTRA_SSE_URL, sseUrl)

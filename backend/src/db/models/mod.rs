@@ -7,7 +7,7 @@ pub mod event_interactions;
 pub mod event_tags;
 pub mod events;
 pub mod job_outbox;
-pub mod matrix_dm_rooms;
+
 pub mod message_reactions;
 pub mod messages;
 pub mod otp_codes;

@@ -295,57 +295,35 @@ data class MatchProfile(
     val score: Double = 0.0,
 )
 
-// Matrix bootstrap models
+// Chat (WebSocket backend) models
 
 @Serializable
-data class MatrixConfigEnvelope(
-    val data: MatrixConfigData,
-)
-
-@Serializable
-data class MatrixConfigData(
-    val homeserver: String? = null,
-    @SerialName("chat_mode")
-    val chatMode: String = "matrix-native",
-    @SerialName("push_gateway_url")
-    val pushGatewayUrl: String? = null,
-    @SerialName("ntfy_server")
+data class ChatConfigData(
+    @SerialName("chatMode")
+    val chatMode: String = "ws",
+    @SerialName("ntfyServer")
     val ntfyServer: String? = null,
 )
 
 @Serializable
-data class MatrixSessionRequest(
-    val deviceName: String = "Poziomki Mobile",
-    val deviceId: String? = null,
+data class ChatConversationResolveData(
+    val conversationId: String,
 )
 
 @Serializable
-data class MatrixSessionEnvelope(
-    val data: MatrixSessionData? = null,
+data class ChatDmRequest(
+    val userId: String,
 )
 
 @Serializable
-data class MatrixSessionData(
-    val homeserver: String? = null,
-    val accessToken: String? = null,
-    val refreshToken: String? = null,
-    val userId: String? = null,
-    val deviceId: String? = null,
-    val expiresAt: Long? = null,
+data class ChatPushRequest(
+    val deviceId: String,
+    val ntfyTopic: String,
 )
 
 @Serializable
-data class MatrixRoomResolveData(
-    @SerialName("roomId")
-    val roomId: String? = null,
-    @SerialName("room_id")
-    val roomIdSnakeCase: String? = null,
-)
-
-@Serializable
-data class MatrixDirectRoomRequest(
-    @SerialName("userId")
-    val targetUserId: String,
+data class ChatPushUnregisterRequest(
+    val deviceId: String,
 )
 
 // Message search models

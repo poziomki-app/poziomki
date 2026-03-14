@@ -5,9 +5,8 @@ use serde::Deserialize;
 use super::OutboxJob;
 
 pub(super) const OUTBOX_TOPIC_OTP_EMAIL: &str = "otp_email_send";
-pub(super) const OUTBOX_TOPIC_MATRIX_PROFILE_AVATAR_SYNC: &str = "matrix_profile_avatar_sync";
-pub(super) const OUTBOX_TOPIC_MATRIX_EVENT_MEMBERSHIP_SYNC: &str = "matrix_event_membership_sync";
 pub(super) const OUTBOX_TOPIC_UPLOAD_VARIANTS_GENERATION: &str = "upload_variants_generation";
+pub(super) const OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC: &str = "chat_membership_sync";
 
 #[derive(Debug, Deserialize)]
 struct OtpEmailJobPayload {
@@ -16,36 +15,25 @@ struct OtpEmailJobPayload {
 }
 
 #[derive(Debug, Deserialize)]
-struct MatrixProfileAvatarSyncJobPayload {
-    user_pid: String,
-    profile_picture_filename: Option<String>,
+struct UploadVariantsGenerationJobPayload {
+    upload_id: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct MatrixEventMembershipSyncJobPayload {
+struct ChatMembershipSyncJobPayload {
     event_id: String,
     profile_id: String,
     leave: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct UploadVariantsGenerationJobPayload {
-    upload_id: String,
 }
 
 #[tracing::instrument(skip(job), fields(job_id = %job.id, job_topic = %job.topic))]
 pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), String> {
     match job.topic.as_str() {
         OUTBOX_TOPIC_OTP_EMAIL => dispatch_otp_email(&job.payload_json).await,
-        OUTBOX_TOPIC_MATRIX_PROFILE_AVATAR_SYNC => {
-            dispatch_matrix_avatar_sync(&job.payload_json).await
-        }
-        OUTBOX_TOPIC_MATRIX_EVENT_MEMBERSHIP_SYNC => {
-            dispatch_matrix_membership_sync(&job.payload_json).await
-        }
         OUTBOX_TOPIC_UPLOAD_VARIANTS_GENERATION => {
             dispatch_upload_variants(&job.payload_json).await
         }
+        OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC => dispatch_chat_membership_sync(&job.payload_json).await,
         other => Err(format!("unsupported outbox topic: {other}")),
     }
 }
@@ -57,27 +45,14 @@ async fn dispatch_otp_email(payload_json: &str) -> std::result::Result<(), Strin
     Ok(())
 }
 
-async fn dispatch_matrix_avatar_sync(payload_json: &str) -> std::result::Result<(), String> {
-    let payload: MatrixProfileAvatarSyncJobPayload = serde_json::from_str(payload_json)
-        .map_err(|e| format!("invalid matrix avatar sync payload: {e}"))?;
-    let user_pid = uuid::Uuid::parse_str(&payload.user_pid)
-        .map_err(|e| format!("invalid matrix avatar sync user_pid: {e}"))?;
-    crate::api::deliver_matrix_profile_avatar_sync_job(
-        &user_pid,
-        payload.profile_picture_filename.as_deref(),
-    )
-    .await;
-    Ok(())
-}
-
-async fn dispatch_matrix_membership_sync(payload_json: &str) -> std::result::Result<(), String> {
-    let payload: MatrixEventMembershipSyncJobPayload = serde_json::from_str(payload_json)
-        .map_err(|e| format!("invalid matrix membership sync payload: {e}"))?;
+async fn dispatch_chat_membership_sync(payload_json: &str) -> std::result::Result<(), String> {
+    let payload: ChatMembershipSyncJobPayload = serde_json::from_str(payload_json)
+        .map_err(|e| format!("invalid chat membership sync payload: {e}"))?;
     let event_id = uuid::Uuid::parse_str(&payload.event_id)
-        .map_err(|e| format!("invalid matrix membership sync event_id: {e}"))?;
+        .map_err(|e| format!("invalid chat membership sync event_id: {e}"))?;
     let profile_id = uuid::Uuid::parse_str(&payload.profile_id)
-        .map_err(|e| format!("invalid matrix membership sync profile_id: {e}"))?;
-    crate::api::deliver_matrix_event_membership_sync_job(event_id, profile_id, payload.leave).await
+        .map_err(|e| format!("invalid chat membership sync profile_id: {e}"))?;
+    crate::api::deliver_chat_membership_sync_job(event_id, profile_id, payload.leave).await
 }
 
 async fn dispatch_upload_variants(payload_json: &str) -> std::result::Result<(), String> {

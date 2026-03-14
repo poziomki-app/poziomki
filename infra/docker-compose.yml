@@ -39,8 +39,7 @@ services:
       GARAGE_S3_REGION: ${GARAGE_S3_REGION:-us-east-1}
       GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-}
-      PUSH_GATEWAY_TOKEN: ${PUSH_GATEWAY_TOKEN:-dev-push-gateway-token}
-      PUSH_GATEWAY_ALLOWED_HOSTS: ${PUSH_GATEWAY_ALLOWED_HOSTS:-localhost,127.0.0.1,ntfy,ntfy.sh}
+      NTFY_SERVER: ${NTFY_SERVER:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -82,27 +81,7 @@ services:
       - garage_meta:/var/lib/garage/meta
       - ./garage/garage.toml:/etc/garage.toml:ro,z
 
-  tuwunel:
-    image: jevolk/tuwunel:latest
-    restart: unless-stopped
-    ports:
-      - "6167:6167"
-    environment:
-      TUWUNEL_SERVER_NAME: "localhost"
-      TUWUNEL_PORT: "6167"
-      TUWUNEL_ADDRESS: "0.0.0.0"
-      TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
-      TUWUNEL_ALLOW_REGISTRATION: "true"
-      TUWUNEL_REGISTRATION_TOKEN: "poziomki-dev-token"
-      TUWUNEL_ALLOW_FEDERATION: "false"
-      TUWUNEL_CREATE_ADMIN_ROOM: "true"
-      TUWUNEL_GRANT_ADMIN_TO_FIRST_USER: "true"
-      TUWUNEL_LOG: "info"
-    volumes:
-      - tuwunel_data:/var/lib/tuwunel
-
 volumes:
   postgres_data:
   garage_data:
   garage_meta:
-  tuwunel_data:

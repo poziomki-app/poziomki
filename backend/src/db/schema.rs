@@ -141,17 +141,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    matrix_dm_rooms (id) {
-        id -> Uuid,
-        user_low_pid -> Uuid,
-        user_high_pid -> Uuid,
-        room_id -> Varchar,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
-    }
-}
-
-diesel::table! {
     otp_codes (id) {
         id -> Uuid,
         email -> Varchar,
@@ -291,7 +280,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     event_tags,
     events,
     job_outbox,
-    matrix_dm_rooms,
     message_reactions,
     messages,
     otp_codes,

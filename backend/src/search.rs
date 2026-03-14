@@ -1,5 +1,6 @@
 use diesel::deserialize::QueryableByName;
-use diesel::sql_types::{Array, BigInt, Float8, Nullable, Text, Uuid as DieselUuid};
+use diesel::sql_types::{Array, BigInt, Float8, Integer, Nullable, Text, Uuid as DieselUuid};
+use diesel::OptionalExtension;
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 
@@ -307,6 +308,12 @@ struct RoomIdRow {
     room_id: String,
 }
 
+#[derive(Debug, Clone, QueryableByName)]
+struct UserIdRow {
+    #[diesel(sql_type = Integer)]
+    id: i32,
+}
+
 pub async fn search_message_rooms(
     query: &str,
     user_pid: &uuid::Uuid,
@@ -331,6 +338,7 @@ pub async fn search_message_rooms(
     Ok(room_ids)
 }
 
+#[allow(clippy::similar_names)]
 async fn search_dm_room_ids(
     query: &str,
     pattern: &str,
@@ -339,41 +347,46 @@ async fn search_dm_room_ids(
 ) -> crate::error::AppResult<Vec<String>> {
     let mut conn = crate::db::conn().await?;
 
+    // Resolve user's internal id from pid
+    let user_id: Option<i32> = diesel::sql_query("SELECT id FROM users WHERE pid = $1")
+        .bind::<DieselUuid, _>(user_pid)
+        .get_result::<UserIdRow>(&mut conn)
+        .await
+        .optional()?
+        .map(|r| r.id);
+
+    let Some(user_id) = user_id else {
+        return Ok(Vec::new());
+    };
+
     let rows = diesel::sql_query(
         r"
-        SELECT dmr.room_id
-        FROM profiles p
-        JOIN users u ON u.id = p.user_id
-        LEFT JOIN user_settings us ON us.user_id = p.user_id
-        JOIN matrix_dm_rooms dmr
-          ON (dmr.user_low_pid = p.id AND dmr.user_high_pid = $3)
-          OR (dmr.user_high_pid = p.id AND dmr.user_low_pid = $3)
-        WHERE
-            p.id != $3
-            AND (
+        SELECT c.id::text AS room_id
+        FROM conversations c
+        JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $3
+        WHERE c.kind = 'dm'
+          AND EXISTS (
+            SELECT 1 FROM conversation_members cm2
+            JOIN users u2 ON u2.id = cm2.user_id
+            JOIN profiles p ON p.user_id = u2.id
+            LEFT JOIN user_settings us ON us.user_id = u2.id
+            WHERE cm2.conversation_id = c.id
+              AND cm2.user_id != $3
+              AND (
                 p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR (
                     COALESCE(us.privacy_show_program, true) = true
                     AND to_tsvector('simple', COALESCE(p.program, '')) @@ websearch_to_tsquery('simple', $1)
                 )
                 OR LOWER(p.name) LIKE $2
-            )
-        ORDER BY
-            GREATEST(
-                ts_rank_cd(p.public_search_vector, websearch_to_tsquery('simple', $1)),
-                CASE
-                    WHEN COALESCE(us.privacy_show_program, true) = true
-                    THEN ts_rank_cd(to_tsvector('simple', COALESCE(p.program, '')), websearch_to_tsquery('simple', $1))
-                    ELSE 0
-                END
-            ) DESC,
-            p.updated_at DESC
+              )
+          )
         LIMIT $4
         ",
     )
     .bind::<Text, _>(query)
     .bind::<Text, _>(pattern)
-    .bind::<DieselUuid, _>(user_pid)
+    .bind::<Integer, _>(user_id)
     .bind::<BigInt, _>(limit_i64)
     .load::<RoomIdRow>(&mut conn)
     .await?;
