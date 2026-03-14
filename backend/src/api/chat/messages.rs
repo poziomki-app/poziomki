@@ -217,13 +217,16 @@ async fn message_to_payload(
     conn: &mut crate::db::DbConn,
 ) -> Result<MessagePayload, crate::error::AppError> {
     // Resolve sender profile
-    let (sender_name, sender_avatar) = profiles::table
+    let (sender_name, sender_pid, sender_avatar) = profiles::table
         .inner_join(users::table.on(users::id.eq(profiles::user_id)))
         .filter(users::id.eq(msg.sender_id))
-        .select((profiles::name, profiles::profile_picture))
-        .first::<(String, Option<String>)>(conn)
+        .select((profiles::name, users::pid, profiles::profile_picture))
+        .first::<(String, uuid::Uuid, Option<String>)>(conn)
         .await
-        .unwrap_or_else(|_| ("Unknown".to_string(), None));
+        .map_or_else(
+            |_| ("Unknown".to_string(), None, None),
+            |(name, pid, avatar)| (name, Some(pid.to_string()), avatar),
+        );
 
     let sender_avatar = sender_avatar
         .and_then(|filename| crate::api::imgproxy_signing::signed_url(&filename, "thumb", "webp"));
@@ -330,6 +333,7 @@ async fn message_to_payload(
         id: msg.id,
         conversation_id: msg.conversation_id,
         sender_id: msg.sender_id,
+        sender_pid,
         sender_name,
         sender_avatar,
         body: msg.body.clone(),

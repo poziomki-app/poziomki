@@ -180,6 +180,7 @@ pub async fn is_member(
 }
 
 /// Load conversations for a user with latest message info for the room list.
+#[allow(clippy::similar_names)]
 pub async fn list_for_user(
     user_id: i32,
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
@@ -264,35 +265,47 @@ pub async fn list_for_user(
         };
 
         // For DMs, resolve the other user's profile
-        let (direct_user_id, direct_user_name, direct_user_avatar) = if conv.kind == "dm" {
+        let (direct_user_id, direct_user_pid, direct_user_name, direct_user_avatar) = if conv.kind
+            == "dm"
+        {
             let other_user_id = if conv.user_low_id == Some(user_id) {
                 conv.user_high_id
             } else {
                 conv.user_low_id
             };
             if let Some(other_id) = other_user_id {
-                let profile: Option<(i32, String, Option<String>)> = profiles::table
+                let profile: Option<(i32, uuid::Uuid, String, Option<String>)> = profiles::table
                     .inner_join(users::table.on(users::id.eq(profiles::user_id)))
                     .filter(users::id.eq(other_id))
-                    .select((users::id, profiles::name, profiles::profile_picture))
+                    .select((
+                        users::id,
+                        users::pid,
+                        profiles::name,
+                        profiles::profile_picture,
+                    ))
                     .first(&mut conn)
                     .await
                     .optional()?;
                 match profile {
-                    Some((uid, name, avatar)) => {
+                    Some((uid, upid, name, avatar)) => {
                         let avatar_url = avatar.as_ref().map(|filename| {
                             crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
                                 .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
                         });
-                        (Some(uid.to_string()), Some(name), avatar_url)
+                        (
+                            Some(uid.to_string()),
+                            Some(upid.to_string()),
+                            Some(name),
+                            avatar_url,
+                        )
                     }
-                    None => (None, None, None),
+                    None => (None, None, None, None),
                 }
             } else {
-                (None, None, None)
+                (None, None, None, None)
             }
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         // Resolve latest message sender name
@@ -315,6 +328,7 @@ pub async fn list_for_user(
             title: conv.title.clone(),
             is_direct: conv.kind == "dm",
             direct_user_id,
+            direct_user_pid,
             direct_user_name,
             direct_user_avatar,
             unread_count,

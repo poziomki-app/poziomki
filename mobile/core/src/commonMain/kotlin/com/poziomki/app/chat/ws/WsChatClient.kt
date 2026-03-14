@@ -65,6 +65,7 @@ class WsChatClient(
     }
 
     private fun handleServerMessage(msg: WsServerMessage) {
+        if (_state.value is ChatClientState.Idle) return
         when (msg) {
             is WsServerMessage.Conversations -> {
                 latestConversations = msg.conversations
@@ -87,6 +88,11 @@ class WsChatClient(
             }
             is WsServerMessage.ReadReceipt -> {
                 openedRooms[msg.conversationId]?.onReadReceipt(msg)
+                if (msg.userId.toString() == wsConnection.userId.value) {
+                    clearRoomUnreadCount(msg.conversationId)
+                } else {
+                    updateRoomReadByCount(msg.conversationId)
+                }
             }
             is WsServerMessage.Typing -> {
                 openedRooms[msg.conversationId]?.onTyping(msg)
@@ -109,8 +115,29 @@ class WsChatClient(
                 latestMessageIsMine = isMine,
                 latestMessageSendStatus = EventSendStatus.Sent,
                 unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
+                latestMessageReadByCount = 0,
             )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
+            _rooms.value = current
+        }
+    }
+
+    private fun clearRoomUnreadCount(roomId: String) {
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == roomId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(unreadCount = 0)
+            _rooms.value = current
+        }
+    }
+
+    private fun updateRoomReadByCount(roomId: String) {
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == roomId }
+        if (idx >= 0 && current[idx].latestMessageIsMine) {
+            current[idx] = current[idx].copy(
+                latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
+            )
             _rooms.value = current
         }
     }
@@ -119,6 +146,13 @@ class WsChatClient(
         if (_state.value is ChatClientState.Ready) return Result.success(Unit)
 
         _state.value = ChatClientState.Connecting
+
+        openedRooms.values.forEach { it.liveTimeline.close() }
+        openedRooms.clear()
+        latestConversations = emptyList()
+        _rooms.value = emptyList()
+        roomTimelineCacheStore.clearAll()
+
         wsConnection.connect()
 
         // Wait for connected state
@@ -209,13 +243,13 @@ class WsChatClient(
     override suspend fun getMediaContent(mxcUrl: String): ByteArray? = null
 
     override suspend fun stop() {
+        _state.value = ChatClientState.Idle
         wsConnection.disconnect()
         openedRooms.values.forEach { it.liveTimeline.close() }
         openedRooms.clear()
         latestConversations = emptyList()
         _rooms.value = emptyList()
         roomTimelineCacheStore.clearAll()
-        _state.value = ChatClientState.Idle
     }
 
     private fun deviceId(): String {
@@ -230,7 +264,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         displayName = if (isDirect) directUserName ?: title ?: "" else title ?: "",
         avatarUrl = directUserAvatar,
         isDirect = isDirect,
-        directUserId = directUserId,
+        directUserId = directUserPid ?: directUserId,
         unreadCount = unreadCount.toInt(),
         latestMessage = latestMessage,
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },
