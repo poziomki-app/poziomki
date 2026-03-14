@@ -14,7 +14,6 @@ class NotificationHelper(
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val notificationIdCounter = AtomicInteger(1000)
-    private val roomNotificationCount = mutableMapOf<String, Int>()
 
     fun createChannels() {
         val messagesChannel =
@@ -74,25 +73,21 @@ class NotificationHelper(
 
         notificationManager.notify(notificationIdCounter.getAndIncrement(), builder.build())
 
-        // Post group summary only when 2+ notifications exist for this room
+        // Always post group summary so all notifications stack
         val key = roomId ?: "unknown"
-        val count = (roomNotificationCount[key] ?: 0) + 1
-        roomNotificationCount[key] = count
-        if (count >= 2) {
-            val summaryId = GROUP_SUMMARY_BASE + key.hashCode()
-            val summary =
-                Notification
-                    .Builder(context, CHANNEL_MESSAGES)
-                    .setContentTitle(title)
-                    .setContentText("$count new messages")
-                    .setSmallIcon(android.R.drawable.ic_dialog_email)
-                    .setGroup(groupKey)
-                    .setGroupSummary(true)
-                    .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN)
-                    .setAutoCancel(true)
-                    .build()
-            notificationManager.notify(summaryId, summary)
-        }
+        val summaryId = GROUP_SUMMARY_BASE + key.hashCode()
+        val summary =
+            Notification
+                .Builder(context, CHANNEL_MESSAGES)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setGroup(groupKey)
+                .setGroupSummary(true)
+                .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN)
+                .setAutoCancel(true)
+                .build()
+        notificationManager.notify(summaryId, summary)
     }
 
     companion object {
