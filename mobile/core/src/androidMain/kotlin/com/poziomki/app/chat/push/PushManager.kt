@@ -20,18 +20,18 @@ class PushManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun startObserving() {
-        // If the service was previously started (URL persisted), restart it immediately
-        // so it survives app kills without waiting for ChatClient to become Ready.
-        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getString(PREF_SSE_URL, null) != null) {
-            val intent = Intent(appContext, NtfyPushService::class.java)
-            appContext.startForegroundService(intent)
-        }
-
         scope.launch {
             chatClient.state.collectLatest { state ->
-                if (state is ChatClientState.Ready) {
-                    startPushService(state.deviceId)
+                when (state) {
+                    is ChatClientState.Ready -> {
+                        startPushService(state.deviceId)
+                    }
+
+                    is ChatClientState.Idle -> {
+                        stopPushService()
+                    }
+
+                    else -> {}
                 }
             }
         }
@@ -58,8 +58,8 @@ class PushManager(
         appContext.startForegroundService(intent)
     }
 
-    companion object {
-        private const val PREFS_NAME = "ntfy_push"
-        private const val PREF_SSE_URL = "sse_url"
+    private fun stopPushService() {
+        val intent = Intent(appContext, NtfyPushService::class.java)
+        appContext.stopService(intent)
     }
 }
