@@ -3,6 +3,7 @@ package com.poziomki.app.chat.push
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import com.poziomki.app.chat.ActiveChat
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.prepareGet
@@ -91,16 +92,17 @@ class NtfyPushService :
             // Reset backoff on successful connection
             while (!channel.isClosedForRead) {
                 val line = channel.readUTF8Line() ?: break
-                if (line.isBlank()) continue
+                if (line.isBlank() || line.startsWith("event:") || line.startsWith("id:")) continue
                 handleSseEvent(line)
             }
         }
     }
 
     private fun handleSseEvent(data: String) {
+        val jsonStr = if (data.startsWith("data:")) data.substringAfter("data:").trim() else data
         val parsed =
             runCatching {
-                json.decodeFromString<JsonObject>(data)
+                json.decodeFromString<JsonObject>(jsonStr)
             }.getOrNull() ?: return
 
         val event = parsed["event"]?.jsonPrimitive?.content
@@ -118,6 +120,9 @@ class NtfyPushService :
         val roomId = pushData?.get("room_id")?.jsonPrimitive?.content
         val body = pushData?.get("body")?.jsonPrimitive?.content
         val avatar = pushData?.get("avatar")?.jsonPrimitive?.content
+
+        // Suppress notification if the user is viewing this chat
+        if (roomId != null && roomId == ActiveChat.roomId) return
 
         notificationHelper.showMessageNotification(sender, roomId, body, avatar)
     }

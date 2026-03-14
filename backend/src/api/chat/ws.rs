@@ -22,15 +22,8 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     };
 
     // --- Step 2: Register in hub ---
-    let mut hub_rx = hub.register(user_id);
-
-    // Clone a sender handle for unregister later
-    // We need to keep track of which sender this connection uses
+    let (hub_tx, mut hub_rx) = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
-
-    // Re-register with the proper sender (replace the last registered one)
-    // Actually, we'll use the hub_rx we already got and forward outbound_tx messages
-    // The hub.register already gave us a receiver; let's use that directly.
 
     // Send initial conversation list
     let conv_list = conversations::list_for_user(user_id)
@@ -40,7 +33,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         conversations: conv_list,
     };
     if send_json(&mut ws_tx, &init_msg).await.is_err() {
-        hub.unregister(user_id, &outbound_tx);
+        hub.unregister(user_id, &hub_tx);
         return;
     }
 
@@ -90,7 +83,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     }
 
     // Cleanup
-    hub.unregister(user_id, &outbound_tx);
+    hub.unregister(user_id, &hub_tx);
     writer_task.abort();
 }
 
@@ -297,13 +290,17 @@ async fn handle_send(
             };
             hub.broadcast(&members, &server_msg);
 
-            // Push notifications to offline members
-            let offline = hub.offline_users(&members);
-            if !offline.is_empty() {
-                // Fire-and-forget push delivery
+            // Push notifications to all members except sender
+            let push_targets: Vec<i32> = members
+                .iter()
+                .copied()
+                .filter(|&id| id != user_id)
+                .collect();
+            if !push_targets.is_empty() {
                 let msg_body = body.to_string();
                 tokio::spawn(async move {
-                    super::push::notify_offline(offline, conversation_id, user_id, &msg_body).await;
+                    super::push::notify_push(push_targets, conversation_id, user_id, &msg_body)
+                        .await;
                 });
             }
         }

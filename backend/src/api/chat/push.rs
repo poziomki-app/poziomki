@@ -4,20 +4,15 @@ use uuid::Uuid;
 
 use crate::db::schema::{profiles, push_subscriptions, users};
 
-/// Send push notifications to offline users for a new message.
-pub async fn notify_offline(
-    offline_user_ids: Vec<i32>,
-    conversation_id: Uuid,
-    sender_id: i32,
-    body: &str,
-) {
+/// Send push notifications to conversation members for a new message.
+pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i32, body: &str) {
     // Resolve sender name + avatar
     let Some((sender_name, sender_avatar)) = resolve_sender_profile(sender_id).await else {
         return;
     };
 
-    // Resolve ntfy topics for offline users
-    let topics = match resolve_ntfy_topics(&offline_user_ids).await {
+    // Resolve ntfy topics for target users
+    let topics = match resolve_ntfy_topics(&user_ids).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(error = %e, "failed to resolve push topics");

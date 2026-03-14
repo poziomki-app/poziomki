@@ -25,11 +25,15 @@ impl ChatHub {
     }
 
     /// Register a new connection for the given user.
-    /// Returns an `UnboundedReceiver` that the WebSocket writer task should drain.
-    pub fn register(&self, user_id: i32) -> mpsc::UnboundedReceiver<ServerMessage> {
+    /// Returns the `(Sender, Receiver)` pair. The caller must pass the `Sender`
+    /// back to [`unregister`] so the connection can be cleaned up.
+    pub fn register(&self, user_id: i32) -> (Sender, mpsc::UnboundedReceiver<ServerMessage>) {
         let (tx, rx) = mpsc::unbounded_channel();
-        self.connections.entry(user_id).or_default().push(tx);
-        rx
+        self.connections
+            .entry(user_id)
+            .or_default()
+            .push(tx.clone());
+        (tx, rx)
     }
 
     /// Remove a specific sender for the given user (matched by pointer identity).
@@ -45,11 +49,17 @@ impl ChatHub {
     }
 
     /// Send a message to all connections of the listed user IDs.
+    /// Prunes closed senders on the fly.
     pub fn broadcast(&self, user_ids: &[i32], msg: &ServerMessage) {
         for uid in user_ids {
-            if let Some(senders) = self.connections.get(uid) {
+            if let Some(mut senders) = self.connections.get_mut(uid) {
+                senders.retain(|s| !s.is_closed());
                 for sender in senders.value() {
                     let _ = sender.send(msg.clone());
+                }
+                if senders.is_empty() {
+                    drop(senders);
+                    self.connections.remove(uid);
                 }
             }
         }
@@ -57,7 +67,8 @@ impl ChatHub {
 
     /// Send a message to a single user (all their connections).
     pub fn send_to_user(&self, user_id: i32, msg: &ServerMessage) {
-        if let Some(senders) = self.connections.get(&user_id) {
+        if let Some(mut senders) = self.connections.get_mut(&user_id) {
+            senders.retain(|s| !s.is_closed());
             for sender in senders.value() {
                 let _ = sender.send(msg.clone());
             }
@@ -65,10 +76,19 @@ impl ChatHub {
     }
 
     /// Check whether a user has at least one active connection.
+    /// Prunes closed senders before checking.
     pub fn is_online(&self, user_id: i32) -> bool {
-        self.connections
-            .get(&user_id)
-            .is_some_and(|entry| !entry.is_empty())
+        if let Some(mut entry) = self.connections.get_mut(&user_id) {
+            entry.retain(|s| !s.is_closed());
+            if entry.is_empty() {
+                drop(entry);
+                self.connections.remove(&user_id);
+                return false;
+            }
+            true
+        } else {
+            false
+        }
     }
 
     /// Return the list of user IDs that have NO active connections
