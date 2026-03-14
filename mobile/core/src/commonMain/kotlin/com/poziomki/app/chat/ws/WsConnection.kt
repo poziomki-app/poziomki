@@ -1,6 +1,8 @@
 package com.poziomki.app.chat.ws
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.http.URLProtocol
@@ -23,6 +25,7 @@ import kotlinx.serialization.encodeToString
 class WsConnection(
     private val baseUrl: String,
     private val tokenProvider: suspend () -> String?,
+    engine: HttpClientEngine,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _incoming = MutableSharedFlow<WsServerMessage>(extraBufferCapacity = 64)
@@ -37,8 +40,11 @@ class WsConnection(
     private var connectionJob: Job? = null
     private var heartbeatJob: Job? = null
 
-    private val wsClient = HttpClient {
+    private val wsClient = HttpClient(engine) {
         install(WebSockets)
+        defaultRequest {
+            headers.append("Origin", baseUrl.trimEnd('/'))
+        }
     }
 
     private var sendChannel: (suspend (String) -> Unit)? = null
@@ -152,7 +158,7 @@ class WsConnection(
 private data class HostConfig(val host: String, val port: Int, val useTls: Boolean)
 
 private fun parseBaseUrl(baseUrl: String): HostConfig {
-    val stripped = baseUrl.removePrefix("https://").removePrefix("http://")
+    val stripped = baseUrl.removePrefix("https://").removePrefix("http://").trimEnd('/')
     val useTls = baseUrl.startsWith("https://")
     val parts = stripped.split(":", limit = 2)
     val host = parts[0]

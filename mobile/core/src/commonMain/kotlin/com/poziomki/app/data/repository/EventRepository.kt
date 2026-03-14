@@ -69,7 +69,7 @@ class EventRepository(
             events
                 .filter { it.isAttending }
                 .mapNotNull(Event::conversationId)
-                .filter { it.startsWith("!") }
+                .filter { it.isNotBlank() }
                 .toSet()
         }
 

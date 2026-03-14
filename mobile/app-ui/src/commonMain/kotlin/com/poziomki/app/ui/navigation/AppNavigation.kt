@@ -144,11 +144,13 @@ fun AppNavigation(
         navigationScope.launch {
             val roomId =
                 when {
-                    chatTargetId.startsWith("!") -> {
+                    chatTargetId.contains("-") -> {
+                        // UUID conversation ID — use directly
                         chatTargetId
                     }
 
                     else -> {
+                        // User ID — resolve DM conversation
                         matrixClient.createDM(chatTargetId).getOrElse { error ->
                             println("Failed to create DM with $chatTargetId: ${error.message}")
                             return@launch

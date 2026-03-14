@@ -47,14 +47,28 @@ class WsTimeline(
     private var persistJob: Job? = null
 
     init {
-        // Load cached items on start
+        // Load cached items on start, request history if empty
         scope.launch {
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
                 _items.value = cached.items
                 _hasMoreBackwards.value = !cached.isHydrated
+            } else {
+                // No cache — request initial history from server
+                requestInitialHistory()
             }
         }
+    }
+
+    private suspend fun requestInitialHistory() {
+        if (!wsConnection.isConnected.value) return
+        wsConnection.send(
+            WsClientMessage.History(
+                conversationId = conversationId,
+                before = null,
+                limit = 50,
+            ),
+        )
     }
 
     internal fun onMessage(msg: WsServerMessage.Message) {
