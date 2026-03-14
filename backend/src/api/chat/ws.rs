@@ -159,7 +159,7 @@ async fn authenticate(
         let _ = send_json(
             ws_tx,
             &ServerMessage::AuthOk {
-                user_id: pid.to_string(),
+                user_id: uid.to_string(),
             },
         )
         .await;
