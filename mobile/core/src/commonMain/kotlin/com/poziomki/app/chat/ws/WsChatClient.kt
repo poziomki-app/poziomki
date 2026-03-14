@@ -102,12 +102,13 @@ class WsChatClient(
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == msg.conversationId }
         if (idx >= 0) {
+            val isMine = msg.senderId.toString() == wsConnection.userId.value
             current[idx] = current[idx].copy(
                 latestMessage = msg.body,
                 latestTimestampMillis = parseTimestamp(msg.createdAt),
-                latestMessageIsMine = msg.isMine,
+                latestMessageIsMine = isMine,
                 latestMessageSendStatus = EventSendStatus.Sent,
-                unreadCount = if (msg.isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
+                unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
             )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
