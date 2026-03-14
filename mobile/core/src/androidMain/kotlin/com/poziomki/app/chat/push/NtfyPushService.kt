@@ -1,12 +1,8 @@
 package com.poziomki.app.chat.push
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.os.IBinder
-import android.os.SystemClock
 import com.poziomki.app.chat.ActiveChat
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -58,21 +54,13 @@ class NtfyPushService :
         flags: Int,
         startId: Int,
     ): Int {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val url = intent?.getStringExtra(EXTRA_SSE_URL)
-            ?: prefs.getString(PREF_SSE_URL, null)
         if (url != null && url != sseUrl) {
-            prefs.edit().putString(PREF_SSE_URL, url).apply()
             sseUrl = url
             sseJob?.cancel()
             sseJob = serviceScope.launch { connectWithBackoff(url) }
         }
         return START_STICKY
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        scheduleRestart()
     }
 
     override fun onDestroy() {
@@ -82,22 +70,6 @@ class NtfyPushService :
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun scheduleRestart() {
-        val restartIntent = Intent(this, NtfyPushService::class.java)
-        val pendingIntent = PendingIntent.getForegroundService(
-            this,
-            RESTART_REQUEST_CODE,
-            restartIntent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + RESTART_DELAY_MS,
-            pendingIntent,
-        )
-    }
 
     private suspend fun connectWithBackoff(url: String) {
         var backoffMs = INITIAL_BACKOFF_MS
@@ -157,10 +129,6 @@ class NtfyPushService :
 
     companion object {
         const val EXTRA_SSE_URL = "sse_url"
-        private const val PREFS_NAME = "ntfy_push"
-        private const val PREF_SSE_URL = "sse_url"
-        private const val RESTART_REQUEST_CODE = 901
-        private const val RESTART_DELAY_MS = 3_000L
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 60_000L
     }
