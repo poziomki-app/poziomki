@@ -1,0 +1,5 @@
+Cargo.lock -diff
+backend/Cargo.lock linguist-generated=true
+backend/Dockerfile linguist-generated=true
+backend/migrations/**/*.sql linguist-generated=true
+infra/ops/**/*.sh linguist-generated=true
