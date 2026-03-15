@@ -39,6 +39,7 @@ pub async fn create_message(
     if let Some(ref cid) = client_id {
         let existing: Option<Message> = messages::table
             .filter(messages::conversation_id.eq(conversation_id))
+            .filter(messages::sender_id.eq(sender_id))
             .filter(messages::client_id.eq(cid))
             .filter(messages::deleted_at.is_null())
             .first(&mut conn)
@@ -97,6 +98,7 @@ pub async fn create_message(
                 .ok_or_else(|| crate::error::AppError::message("client_id disappeared"))?;
             let msg = messages::table
                 .filter(messages::conversation_id.eq(conversation_id))
+                .filter(messages::sender_id.eq(sender_id))
                 .filter(messages::client_id.eq(cid))
                 .filter(messages::deleted_at.is_null())
                 .first(&mut conn)

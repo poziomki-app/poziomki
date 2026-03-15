@@ -243,6 +243,18 @@ pub async fn push_register(
 
     let (_session, user) = auth_or_respond!(headers);
 
+    if body.device_id.is_empty() || body.device_id.len() > 64 {
+        return Ok(error_response(
+            StatusCode::BAD_REQUEST,
+            &headers,
+            ErrorSpec {
+                error: "invalid device_id".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        ));
+    }
+
     if body.ntfy_topic.is_empty()
         || body.ntfy_topic.len() > 128
         || !body
