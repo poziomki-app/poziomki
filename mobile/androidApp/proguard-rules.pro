@@ -16,6 +16,14 @@
 }
 -keep,includedescriptorclasses class com.poziomki.app.**$$serializer { *; }
 
+# Ktor — engine/plugin discovery via ServiceLoader + WebSocket internals
+-keep class io.ktor.client.engine.okhttp.OkHttpEngineContainer { *; }
+-keep class io.ktor.client.plugins.websocket.WebSocketCapability { *; }
+-keep class io.ktor.serialization.kotlinx.json.KotlinxSerializationJsonExtensionProvider { *; }
+-keep class io.ktor.client.plugins.contentnegotiation.ContentNegotiationCapability { *; }
+-keepclassmembers class io.ktor.** { volatile <fields>; }
+-dontwarn io.ktor.**
+
 # OkHttp
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**
