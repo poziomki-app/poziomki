@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 data class ProfileViewState(
     val profile: ProfileWithTags? = null,
     val isLoading: Boolean = true,
-    val error: String? = null,
     val isOwnProfile: Boolean = false,
 )
 

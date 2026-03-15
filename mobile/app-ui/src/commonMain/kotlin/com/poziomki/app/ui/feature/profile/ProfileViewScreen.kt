@@ -135,7 +135,7 @@ fun ProfileViewScreen(
         else -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = state.error ?: "nie znaleziono profilu",
+                    text = "nie znaleziono profilu",
                     fontFamily = NunitoFamily,
                     color = MaterialTheme.colorScheme.error,
                 )

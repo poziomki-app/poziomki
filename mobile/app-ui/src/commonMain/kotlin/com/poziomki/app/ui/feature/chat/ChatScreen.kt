@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.chat
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,6 +73,7 @@ fun ChatScreen(
                     },
                 avatarUrl = state.roomAvatarUrl,
                 onBack = onBack,
+                onProfileClick = state.directProfileId?.let { id -> { onNavigateToProfile(id) } },
             )
         },
     ) { padding ->
@@ -106,6 +108,7 @@ private fun ChatTopBar(
     title: String,
     avatarUrl: String?,
     onBack: () -> Unit,
+    onProfileClick: (() -> Unit)? = null,
 ) {
     Surface(
         color = Background,
@@ -127,24 +130,27 @@ private fun ChatTopBar(
                 )
             }
 
-            UserAvatar(
-                picture = avatarUrl,
-                displayName = title,
-                size = 34.dp,
-                backgroundColor = Primary.copy(alpha = 0.2f),
-                iconTint = Primary,
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            val profileModifier =
+                Modifier
+                    .weight(1f)
+                    .let { if (onProfileClick != null) it.clickable(onClick = onProfileClick) else it }
+            Row(modifier = profileModifier, verticalAlignment = Alignment.CenterVertically) {
+                UserAvatar(
+                    picture = avatarUrl,
+                    displayName = title,
+                    size = 34.dp,
+                    backgroundColor = Primary.copy(alpha = 0.2f),
+                    iconTint = Primary,
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             IconButton(onClick = { }) {
                 Icon(
