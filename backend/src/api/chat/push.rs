@@ -22,6 +22,10 @@ fn push_client() -> &'static reqwest::Client {
 pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i32, body: &str) {
     // Resolve sender name + avatar
     let Some((sender_name, sender_avatar)) = resolve_sender_profile(sender_id).await else {
+        tracing::warn!(
+            sender_id,
+            "push: could not resolve sender profile, skipping"
+        );
         return;
     };
 
