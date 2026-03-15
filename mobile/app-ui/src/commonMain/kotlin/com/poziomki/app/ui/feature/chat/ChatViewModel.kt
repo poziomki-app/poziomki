@@ -60,6 +60,7 @@ class ChatViewModel(
     private var totalTimelineItemCount: Int = 0
     private var latestRoomSummaries: List<RoomSummary> = emptyList()
     private var activeDirectUserId: String? = null
+    private var activeDirectProfileId: String? = null
     private var latestAvatarByName: Map<String, String> = emptyMap()
     private var eventCoverByRoomId: Map<String, String> = emptyMap()
 
@@ -72,6 +73,7 @@ class ChatViewModel(
         roomId: String,
         fallbackDisplayName: String? = null,
         fallbackDirectUserId: String? = null,
+        fallbackProfileId: String? = null,
     ) {
         if (roomId.isBlank()) return
         if (roomId.length < 2) {
@@ -92,6 +94,7 @@ class ChatViewModel(
                     if (boundRoomId != roomId) return@withLock
                     bindingRoomId = roomId
                     try {
+                        activeDirectProfileId = fallbackProfileId
                         bindRoom(
                             roomId = roomId,
                             fallbackDisplayName = fallbackDisplayName,
@@ -385,6 +388,7 @@ class ChatViewModel(
                     knownSummary?.avatarUrl
                         ?: inferredDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
                 isDirectRoom = inferredIsDirect,
+                directProfileId = activeDirectProfileId ?: activeDirectUserId,
                 avatarOverrides = avatarOverrides,
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isLoading = cachedTimeline?.items.isNullOrEmpty(),
@@ -427,6 +431,7 @@ class ChatViewModel(
                             roomDisplayName = seededDisplayName,
                             roomAvatarUrl =
                                 fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) },
+                            directProfileId = activeDirectProfileId ?: activeDirectUserId,
                             avatarOverrides = currentOverrides,
                             isLoading = false,
                             error = null,
@@ -550,6 +555,7 @@ class ChatViewModel(
                         current.copy(
                             roomDisplayName = resolvedName,
                             isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
+                            directProfileId = current.directProfileId ?: activeDirectProfileId ?: activeDirectUserId,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
