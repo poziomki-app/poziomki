@@ -34,6 +34,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         conversations: conv_list,
     };
     if send_json(&mut ws_tx, &init_msg).await.is_err() {
+        drop(hub_rx);
         hub.unregister(user_id);
         return;
     }
@@ -427,6 +428,19 @@ async fn handle_edit(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
+    if body.trim().is_empty() {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "message body cannot be empty".to_string(),
+        });
+        return;
+    }
+    if body.len() > 10_000 {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "message body too long (max 10KB)".to_string(),
+        });
+        return;
+    }
+
     let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
         return;
     };
