@@ -50,12 +50,6 @@ fun ProfileViewScreen(
     val state by viewModel.state.collectAsState()
 
     when {
-        state.isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
-            }
-        }
-
         state.profile != null -> {
             state.profile?.let { p ->
                 val images =
@@ -129,6 +123,12 @@ fun ProfileViewScreen(
                         }
                     }
                 }
+            }
+        }
+
+        state.isLoading -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Primary)
             }
         }
 
