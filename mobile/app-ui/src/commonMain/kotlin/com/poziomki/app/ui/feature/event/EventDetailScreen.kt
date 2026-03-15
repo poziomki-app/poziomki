@@ -94,7 +94,7 @@ fun EventDetailScreen(
                         ) {
                             event.coverImage?.let { url ->
                                 AsyncImage(
-                                    model = url,
+                                    model = resolveImageUrl(url),
                                     contentDescription = event.title,
                                     modifier = Modifier.fillMaxWidth().height(200.dp),
                                     contentScale = ContentScale.Crop,
