@@ -209,7 +209,7 @@ fun ChatContent(
                                         },
                                         onReactionsClick = { selectedReactionEvent = item },
                                         onFocusOnReply = { },
-                                        onSenderClick = { onNavigateToProfile(item.senderPid ?: item.senderId) },
+                                        onSenderClick = { item.senderPid?.let { onNavigateToProfile(it) } },
                                         onActionsLongPress = { selectedActionEvent = item },
                                         onSwipeReply = { onStartReply(item) },
                                         compactTimestamp = showSenderMeta,
