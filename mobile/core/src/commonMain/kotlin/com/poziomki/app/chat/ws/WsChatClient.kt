@@ -12,7 +12,9 @@ import com.poziomki.app.network.ApiService
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -26,7 +28,8 @@ class WsChatClient(
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
 ) : ChatClient {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
 
     private val _state = MutableStateFlow<ChatClientState>(ChatClientState.Idle)
     override val state: StateFlow<ChatClientState> = _state
@@ -38,6 +41,9 @@ class WsChatClient(
 
     /** Cache conversation metadata for populating member caches on room open */
     private var latestConversations: List<WsConversationPayload> = emptyList()
+
+    /** Debounce job for refreshing conversation list when an unknown room appears */
+    private var refreshJob: Job? = null
 
     init {
         // Observe connection state
@@ -127,6 +133,13 @@ class WsChatClient(
             )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
+        } else {
+            // Unknown room — debounce a conversation list refresh
+            refreshJob?.cancel()
+            refreshJob = scope.launch {
+                delay(500L)
+                wsConnection.send(WsClientMessage.ListConversations)
+            }
         }
     }
 
@@ -159,7 +172,6 @@ class WsChatClient(
         openedRooms.clear()
         latestConversations = emptyList()
         _rooms.value = emptyList()
-        roomTimelineCacheStore.clearAll()
 
         wsConnection.connect()
 
@@ -169,6 +181,7 @@ class WsChatClient(
         }
 
         return if (connected == true) {
+            roomTimelineCacheStore.clearAll()
             Result.success(Unit)
         } else {
             _state.value = ChatClientState.Error("Connection timeout")
@@ -247,6 +260,7 @@ class WsChatClient(
     }
 
     override suspend fun stop() {
+        scopeJob.cancel()
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
         openedRooms.values.forEach { it.liveTimeline.close() }

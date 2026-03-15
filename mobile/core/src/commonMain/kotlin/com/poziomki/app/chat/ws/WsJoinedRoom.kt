@@ -73,16 +73,18 @@ class WsJoinedRoom(
     }
 
     internal fun onTyping(msg: WsServerMessage.Typing) {
-        val current = _typingUserIds.value.toMutableList()
         val userId = msg.userId.toString()
-        if (msg.isTyping) {
-            if (userId !in current && userId != wsConnection.userId.value) {
-                current.add(userId)
+        _typingUserIds.update { current ->
+            if (msg.isTyping) {
+                if (userId !in current && userId != wsConnection.userId.value) {
+                    current + userId
+                } else {
+                    current
+                }
+            } else {
+                current - userId
             }
-        } else {
-            current.remove(userId)
         }
-        _typingUserIds.value = current
     }
 
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {

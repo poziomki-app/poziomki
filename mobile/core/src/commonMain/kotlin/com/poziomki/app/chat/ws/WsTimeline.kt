@@ -91,6 +91,10 @@ class WsTimeline(
 
     internal fun backfillOnReconnect() {
         scope.launch {
+            itemsMutex.withLock {
+                _items.value = emptyList()
+                _hasMoreBackwards.value = true
+            }
             requestInitialHistory()
         }
     }
@@ -150,6 +154,7 @@ class WsTimeline(
                 current.removeAll {
                     it is TimelineItem.Event && it.eventId == msg.messageId
                 }
+                readReceiptUsers.remove(msg.messageId)
                 emitAndPersist(current)
             }
         }
@@ -312,6 +317,7 @@ class WsTimeline(
             val hasMore = withTimeoutOrNull(10_000L) { deferred.await() }
                 ?: run {
                     _isPaginatingBackwards.value = false
+                    pendingHistoryDeferred = null
                     return Result.failure(IllegalStateException("History request timed out"))
                 }
             Result.success(hasMore)
@@ -372,7 +378,7 @@ class WsTimeline(
             WsClientMessage.Send(
                 conversationId = conversationId,
                 body = caption ?: fileName,
-                attachmentUploadId = upload.filename,
+                attachmentUploadId = upload.id,
                 replyToId = inReplyToEventId,
                 clientId = "local_${Clock.System.now().toEpochMilliseconds()}",
             ),
@@ -389,18 +395,18 @@ class WsTimeline(
     ): Result<Unit> = sendImage(data, fileName, mimeType, caption, inReplyToEventId)
 
     override suspend fun edit(eventOrTransactionId: String, body: String): Result<Unit> {
-        wsConnection.send(WsClientMessage.Edit(messageId = eventOrTransactionId, body = body))
-        return Result.success(Unit)
+        val sent = wsConnection.send(WsClientMessage.Edit(messageId = eventOrTransactionId, body = body))
+        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
     }
 
     override suspend fun redact(eventOrTransactionId: String, reason: String?): Result<Unit> {
-        wsConnection.send(WsClientMessage.Delete(messageId = eventOrTransactionId))
-        return Result.success(Unit)
+        val sent = wsConnection.send(WsClientMessage.Delete(messageId = eventOrTransactionId))
+        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
     }
 
     override suspend fun toggleReaction(eventOrTransactionId: String, emoji: String): Result<Boolean> {
-        wsConnection.send(WsClientMessage.React(messageId = eventOrTransactionId, emoji = emoji))
-        return Result.success(true)
+        val sent = wsConnection.send(WsClientMessage.React(messageId = eventOrTransactionId, emoji = emoji))
+        return if (sent) Result.success(true) else Result.failure(IllegalStateException("Not connected"))
     }
 
     override suspend fun markAsRead(): Result<Unit> {
@@ -412,8 +418,8 @@ class WsTimeline(
     }
 
     override suspend fun sendReadReceipt(eventId: String): Result<Unit> {
-        wsConnection.send(WsClientMessage.Read(conversationId = conversationId, messageId = eventId))
-        return Result.success(Unit)
+        val sent = wsConnection.send(WsClientMessage.Read(conversationId = conversationId, messageId = eventId))
+        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
     }
 
     override fun close() {

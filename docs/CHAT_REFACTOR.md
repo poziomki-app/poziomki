@@ -18,7 +18,7 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **No reconnect backfill (mobile)** — after WS drop/reconnect, missed messages were never fetched for opened rooms
 - [x] **`sendReply` missing optimistic UI** — reply messages had no optimistic item, causing visible delay compared to `sendMessage`
 - [x] **`paginateBackwards` hangs indefinitely** — `deferred.await()` had no timeout; if the server never responded, pagination blocked forever
-- [ ] **No client_id idempotency** — no unique index on `client_id`, retried sends can create duplicates (low risk, client deduplicates via matching)
+- [x] **No client_id idempotency** — partial unique index added in migration `2026-03-15-000000`
 
 ## Dead Matrix Code
 
@@ -33,7 +33,8 @@ Ordered by priority. Checked items are done in this PR.
 
 - [x] **Empty message body** — added validation rejecting empty/whitespace-only bodies (unless attachment present)
 - [ ] **Emoji validation in reactions** — no validation that `emoji` is actually a valid emoji string
-- [ ] **Message body length limit** — no server-side cap on message body length
+- [x] **Message body length limit** — 10KB server-side cap on message body
+- [x] **Message kind validation** — only `text`, `image`, `file` accepted
 
 ## Error Handling
 
@@ -58,6 +59,36 @@ Ordered by priority. Checked items are done in this PR.
 
 ## Concurrency
 
+- [x] **Writer task / unregister race** — abort + await before unregister (`ws.rs:82-83`)
+- [x] **Typing state non-atomic update** — `WsJoinedRoom.onTyping()` used read-modify-write on `MutableStateFlow`; replaced with atomic `update {}`
+- [x] **`pendingHistoryDeferred` not nulled on timeout** — `paginateBackwards` left stale deferred after timeout, causing next request to overwrite
+- [x] **`readReceiptUsers` map grows unbounded** — deleted messages never cleaned up from receipt tracking map
 - [ ] **Unsynchronized `openedRooms` map** — `WsChatClient.openedRooms` is a plain `mutableMapOf` accessed from multiple coroutines
-- [ ] **Writer task / unregister race** — `hub.unregister()` called before `writer_task.abort()`, writer could send to unregistered user briefly
 - [ ] **Typing indicator timeout race** — rapid typing events can cancel/restart timeout job without proper sequencing
+
+## Security & Authorization
+
+- [x] **Cross-conversation reply leakage** — `reply_to_id` not validated against target conversation; attacker could reference messages from other conversations
+- [x] **Removed members can edit/delete old messages** — `handle_edit`/`handle_delete` had no membership check; added same pattern as `handle_react`
+- [x] **Deleted event leaves orphaned chat** — conversations with `event_id` FK used `ON DELETE SET NULL`; changed to `ON DELETE CASCADE`
+- [x] **Read watermark can move backwards** — `mark_read` unconditionally set watermark; now only advances forward via timestamp comparison
+- [x] **Auth failures not logged server-side** — WS auth errors returned to client but not logged; added `tracing::warn!` for all auth failure paths
+
+## Bugs (functional)
+
+- [x] **First-message delivery broken for unknown rooms** — `updateRoomLatestMessage` silently dropped messages for rooms not in the list; now triggers debounced `ListConversations` refresh
+- [x] **Reconnect backfill prepends in wrong order** — `backfillOnReconnect` appended new messages on top of stale items; now clears items before requesting fresh history
+- [x] **Offline startup clears cache before connection** — `ensureStarted` called `clearAll()` before connecting; moved to after successful connection
+- [x] **Client actions falsely report success** — `edit`/`redact`/`toggleReaction`/`sendReadReceipt` ignored `send()` return value; now return `Result.failure` when disconnected
+- [x] **Push suppression too broad** — only pushed to offline users, missing users with app backgrounded; now pushes to all non-sender members (client suppresses when chat is in foreground)
+- [x] **WsChatClient scope never cancelled on stop** — `SupervisorJob` not cancelled in `stop()`; added `scopeJob.cancel()`
+
+## Reliability
+
+- [x] **Push HTTP timeout** — ntfy HTTP client had no timeout; added 10s timeout via `Client::builder()`
+- [ ] **Non-atomic conversation creation** — self-healing via `on_conflict`, low priority
+- [ ] **No WS message rate limiting** — no server-side throttle on incoming WS messages
+
+## Known Limitations
+
+- [ ] **Single-instance ChatHub** — in-memory only, requires Redis pub/sub for multi-replica
