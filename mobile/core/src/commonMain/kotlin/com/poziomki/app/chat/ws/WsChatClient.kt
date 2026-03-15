@@ -56,10 +56,11 @@ class WsChatClient(
                 if (connected) {
                     val isReconnect = wasReady
                     val userId = wsConnection.userId.value ?: ""
-                    _state.value = ChatClientState.Ready(
-                        userId = userId,
-                        deviceId = deviceId(),
-                    )
+                    _state.value =
+                        ChatClientState.Ready(
+                            userId = userId,
+                            deviceId = deviceId(),
+                        )
                     wasReady = true
                     if (isReconnect) {
                         // Backfill all opened rooms after reconnect
@@ -89,21 +90,26 @@ class WsChatClient(
                 latestConversations = msg.conversations
                 _rooms.value = msg.conversations.map { it.toRoomSummary() }
             }
+
             is WsServerMessage.Message -> {
                 // Update room list (latest message)
                 updateRoomLatestMessage(msg)
                 // Dispatch to opened room timeline
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onMessage(msg)
             }
+
             is WsServerMessage.Edited -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onEdited(msg)
             }
+
             is WsServerMessage.Deleted -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onDeleted(msg)
             }
+
             is WsServerMessage.Reaction -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onReaction(msg)
             }
+
             is WsServerMessage.ReadReceipt -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onReadReceipt(msg)
                 if (msg.userId.toString() == wsConnection.userId.value) {
@@ -112,12 +118,15 @@ class WsChatClient(
                     updateRoomReadByCount(msg.conversationId)
                 }
             }
+
             is WsServerMessage.Typing -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onTyping(msg)
             }
+
             is WsServerMessage.HistoryResponse -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onHistoryResponse(msg)
             }
+
             else -> {}
         }
     }
@@ -127,23 +136,25 @@ class WsChatClient(
         val idx = current.indexOfFirst { it.roomId == msg.conversationId }
         if (idx >= 0) {
             val isMine = msg.senderId.toString() == wsConnection.userId.value
-            current[idx] = current[idx].copy(
-                latestMessage = msg.body,
-                latestTimestampMillis = parseTimestamp(msg.createdAt),
-                latestMessageIsMine = isMine,
-                latestMessageSendStatus = EventSendStatus.Sent,
-                unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
-                latestMessageReadByCount = 0,
-            )
+            current[idx] =
+                current[idx].copy(
+                    latestMessage = msg.body,
+                    latestTimestampMillis = parseTimestamp(msg.createdAt),
+                    latestMessageIsMine = isMine,
+                    latestMessageSendStatus = EventSendStatus.Sent,
+                    unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
+                    latestMessageReadByCount = 0,
+                )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
         } else {
             // Unknown room — debounce a conversation list refresh
             refreshJob?.cancel()
-            refreshJob = scope.launch {
-                delay(500L)
-                wsConnection.send(WsClientMessage.ListConversations)
-            }
+            refreshJob =
+                scope.launch {
+                    delay(500L)
+                    wsConnection.send(WsClientMessage.ListConversations)
+                }
         }
     }
 
@@ -160,9 +171,10 @@ class WsChatClient(
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == roomId }
         if (idx >= 0 && current[idx].latestMessageIsMine) {
-            current[idx] = current[idx].copy(
-                latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
-            )
+            current[idx] =
+                current[idx].copy(
+                    latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
+                )
             _rooms.value = current
         }
     }
@@ -182,9 +194,10 @@ class WsChatClient(
         wsConnection.connect()
 
         // Wait for connected state
-        val connected = withTimeoutOrNull(15_000L) {
-            wsConnection.isConnected.first { it }
-        }
+        val connected =
+            withTimeoutOrNull(15_000L) {
+                wsConnection.isConnected.first { it }
+            }
 
         return if (connected == true) {
             roomTimelineCacheStore.clearAll()
@@ -208,20 +221,24 @@ class WsChatClient(
         val displayName = summary?.displayName ?: ""
 
         val conversation = latestConversations.find { it.id == roomId }
-        val room = WsJoinedRoom(
-            roomId = roomId,
-            initialDisplayName = displayName,
-            wsConnection = wsConnection,
-            roomTimelineCacheStore = roomTimelineCacheStore,
-            directUserId = conversation?.directUserId ?: summary?.directUserId,
-            directUserName = conversation?.directUserName,
-            directUserAvatar = conversation?.directUserAvatar,
-        )
+        val room =
+            WsJoinedRoom(
+                roomId = roomId,
+                initialDisplayName = displayName,
+                wsConnection = wsConnection,
+                roomTimelineCacheStore = roomTimelineCacheStore,
+                directUserId = conversation?.directUserId ?: summary?.directUserId,
+                directUserName = conversation?.directUserName,
+                directUserAvatar = conversation?.directUserAvatar,
+            )
         openedRoomsMutex.withLock { openedRooms[roomId] = room }
         return room
     }
 
-    override suspend fun getRoomTimelineCache(roomId: String, limit: Int): RoomTimelineCacheSnapshot {
+    override suspend fun getRoomTimelineCache(
+        roomId: String,
+        limit: Int,
+    ): RoomTimelineCacheSnapshot {
         val snapshot = roomTimelineCacheStore.loadSnapshot(roomId, limit)
         return RoomTimelineCacheSnapshot(
             items = snapshot.items,
@@ -232,22 +249,26 @@ class WsChatClient(
     }
 
     override suspend fun requestRoomTimelineBackfill(roomId: String): Result<Unit> {
-        val room = openedRoomsMutex.withLock { openedRooms[roomId] }
-            ?: return Result.failure(IllegalStateException("Room not opened"))
+        val room =
+            openedRoomsMutex.withLock { openedRooms[roomId] }
+                ?: return Result.failure(IllegalStateException("Room not opened"))
         room.liveTimeline.paginateBackwards(200u)
         return Result.success(Unit)
     }
 
-    override suspend fun createDM(userId: String, displayName: String?): Result<String> {
-        return when (val result = apiService.resolveChatDm(userId)) {
+    override suspend fun createDM(
+        userId: String,
+        displayName: String?,
+    ): Result<String> =
+        when (val result = apiService.resolveChatDm(userId)) {
             is ApiResult.Success -> Result.success(result.data.conversationId)
             is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
         }
-    }
 
-    override suspend fun createRoom(name: String, invitedUserIds: List<String>): Result<String> {
-        return Result.failure(UnsupportedOperationException("Event rooms are created server-side"))
-    }
+    override suspend fun createRoom(
+        name: String,
+        invitedUserIds: List<String>,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Event rooms are created server-side"))
 
     override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> {
         val deviceId = deviceId()
@@ -278,9 +299,7 @@ class WsChatClient(
         roomTimelineCacheStore.clearAll()
     }
 
-    private suspend fun deviceId(): String {
-        return sessionManager.getOrCreateDeviceId()
-    }
+    private suspend fun deviceId(): String = sessionManager.getOrCreateDeviceId()
 }
 
 private fun WsConversationPayload.toRoomSummary(): RoomSummary =
@@ -299,7 +318,9 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
 
 internal fun parseTimestamp(iso8601: String): Long =
     try {
-        kotlinx.datetime.Instant.parse(iso8601).toEpochMilliseconds()
+        kotlinx.datetime.Instant
+            .parse(iso8601)
+            .toEpochMilliseconds()
     } catch (_: Exception) {
         0L
     }

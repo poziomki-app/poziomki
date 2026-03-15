@@ -56,17 +56,18 @@ class WsTimeline(
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
                 val uid = wsConnection.userId.value
-                val corrected = if (uid != null) {
-                    cached.items.map { item ->
-                        if (item is TimelineItem.Event) {
-                            item.copy(isMine = item.senderId == uid, isEditable = item.senderId == uid)
-                        } else {
-                            item
+                val corrected =
+                    if (uid != null) {
+                        cached.items.map { item ->
+                            if (item is TimelineItem.Event) {
+                                item.copy(isMine = item.senderId == uid, isEditable = item.senderId == uid)
+                            } else {
+                                item
+                            }
                         }
+                    } else {
+                        cached.items
                     }
-                } else {
-                    cached.items
-                }
                 _items.value = corrected
                 _hasMoreBackwards.value = !cached.isHydrated
             } else {
@@ -107,9 +108,10 @@ class WsTimeline(
                 // Check for optimistic update by clientId
                 val clientId = msg.clientId
                 if (clientId != null) {
-                    val idx = current.indexOfFirst {
-                        it is TimelineItem.Event && it.eventOrTransactionId == clientId
-                    }
+                    val idx =
+                        current.indexOfFirst {
+                            it is TimelineItem.Event && it.eventOrTransactionId == clientId
+                        }
                     if (idx >= 0) {
                         current[idx] = item
                         emitAndPersist(current)
@@ -118,9 +120,10 @@ class WsTimeline(
                 }
 
                 // Check for duplicate by id
-                val exists = current.any {
-                    it is TimelineItem.Event && it.eventId == msg.id
-                }
+                val exists =
+                    current.any {
+                        it is TimelineItem.Event && it.eventId == msg.id
+                    }
                 if (!exists) {
                     current.add(item)
                     emitAndPersist(current)
@@ -133,9 +136,10 @@ class WsTimeline(
         scope.launch {
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
-                val idx = current.indexOfFirst {
-                    it is TimelineItem.Event && it.eventId == msg.messageId
-                }
+                val idx =
+                    current.indexOfFirst {
+                        it is TimelineItem.Event && it.eventId == msg.messageId
+                    }
                 if (idx >= 0) {
                     val event = current[idx] as TimelineItem.Event
                     current[idx] = event.copy(body = msg.body)
@@ -164,26 +168,29 @@ class WsTimeline(
         scope.launch {
             itemsMutex.withLock {
                 val current = _items.value.toMutableList()
-                val idx = current.indexOfFirst {
-                    it is TimelineItem.Event && it.eventId == msg.messageId
-                }
+                val idx =
+                    current.indexOfFirst {
+                        it is TimelineItem.Event && it.eventId == msg.messageId
+                    }
                 if (idx >= 0) {
                     val event = current[idx] as TimelineItem.Event
                     val reactions = event.reactions.toMutableList()
                     val existingIdx = reactions.indexOfFirst { it.emoji == msg.emoji }
                     val isMe = senderId == wsConnection.userId.value
                     if (msg.added) {
-                        val sender = ReactionSender(
-                            senderId = senderId,
-                            displayName = msg.senderName,
-                        )
+                        val sender =
+                            ReactionSender(
+                                senderId = senderId,
+                                displayName = msg.senderName,
+                            )
                         if (existingIdx >= 0) {
                             val r = reactions[existingIdx]
-                            reactions[existingIdx] = r.copy(
-                                count = r.count + 1,
-                                reactedByMe = r.reactedByMe || isMe,
-                                senders = r.senders + sender,
-                            )
+                            reactions[existingIdx] =
+                                r.copy(
+                                    count = r.count + 1,
+                                    reactedByMe = r.reactedByMe || isMe,
+                                    senders = r.senders + sender,
+                                )
                         } else {
                             reactions.add(
                                 Reaction(
@@ -199,11 +206,12 @@ class WsTimeline(
                         if (r.count <= 1) {
                             reactions.removeAt(existingIdx)
                         } else {
-                            reactions[existingIdx] = r.copy(
-                                count = r.count - 1,
-                                reactedByMe = if (isMe) false else r.reactedByMe,
-                                senders = r.senders.filter { it.senderId != senderId },
-                            )
+                            reactions[existingIdx] =
+                                r.copy(
+                                    count = r.count - 1,
+                                    reactedByMe = if (isMe) false else r.reactedByMe,
+                                    senders = r.senders.filter { it.senderId != senderId },
+                                )
                         }
                     }
                     current[idx] = event.copy(reactions = reactions)
@@ -223,9 +231,10 @@ class WsTimeline(
                 if (!seenUsers.add(receiptUserId)) return@withLock // duplicate
 
                 val current = _items.value.toMutableList()
-                val idx = current.indexOfFirst {
-                    it is TimelineItem.Event && it.eventId == messageId
-                }
+                val idx =
+                    current.indexOfFirst {
+                        it is TimelineItem.Event && it.eventId == messageId
+                    }
                 if (idx >= 0) {
                     val event = current[idx] as TimelineItem.Event
                     current[idx] = event.copy(readByCount = seenUsers.size)
@@ -244,13 +253,15 @@ class WsTimeline(
                 val current = _items.value.toMutableList()
 
                 // Filter duplicates
-                val existingIds = current
-                    .filterIsInstance<TimelineItem.Event>()
-                    .mapNotNull { it.eventId }
-                    .toSet()
-                val newItems = historyItems.filter { item ->
-                    item.eventId !in existingIds
-                }
+                val existingIds =
+                    current
+                        .filterIsInstance<TimelineItem.Event>()
+                        .mapNotNull { it.eventId }
+                        .toSet()
+                val newItems =
+                    historyItems.filter { item ->
+                        item.eventId !in existingIds
+                    }
 
                 // Prepend history
                 current.addAll(0, newItems)
@@ -274,14 +285,15 @@ class WsTimeline(
 
     private fun schedulePersist(items: List<TimelineItem>) {
         persistJob?.cancel()
-        persistJob = scope.launch {
-            delay(350)
-            roomTimelineCacheStore.saveSnapshot(
-                roomId = conversationId,
-                items = items.takeLast(500),
-                isHydrated = !_hasMoreBackwards.value,
-            )
-        }
+        persistJob =
+            scope.launch {
+                delay(350)
+                roomTimelineCacheStore.saveSnapshot(
+                    roomId = conversationId,
+                    items = items.takeLast(500),
+                    isHydrated = !_hasMoreBackwards.value,
+                )
+            }
     }
 
     override suspend fun paginateBackwards(count: UShort): Result<Boolean> {
@@ -292,18 +304,20 @@ class WsTimeline(
         val deferred = CompletableDeferred<Boolean>()
         pendingHistoryDeferred = deferred
 
-        val oldestId = _items.value
-            .filterIsInstance<TimelineItem.Event>()
-            .firstOrNull()
-            ?.eventId
+        val oldestId =
+            _items.value
+                .filterIsInstance<TimelineItem.Event>()
+                .firstOrNull()
+                ?.eventId
 
-        val sent = wsConnection.send(
-            WsClientMessage.History(
-                conversationId = conversationId,
-                before = oldestId,
-                limit = count.toInt(),
-            ),
-        )
+        val sent =
+            wsConnection.send(
+                WsClientMessage.History(
+                    conversationId = conversationId,
+                    before = oldestId,
+                    limit = count.toInt(),
+                ),
+            )
 
         if (!sent) {
             _isPaginatingBackwards.value = false
@@ -312,14 +326,17 @@ class WsTimeline(
         }
 
         return try {
-            val hasMore = withTimeoutOrNull(10_000L) { deferred.await() }
-                ?: run {
-                    _isPaginatingBackwards.value = false
-                    pendingHistoryDeferred = null
-                    return Result.failure(IllegalStateException("History request timed out"))
-                }
+            val hasMore =
+                withTimeoutOrNull(10_000L) { deferred.await() }
+                    ?: run {
+                        _isPaginatingBackwards.value = false
+                        pendingHistoryDeferred = null
+                        return Result.failure(IllegalStateException("History request timed out"))
+                    }
             Result.success(hasMore)
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
             _isPaginatingBackwards.value = false
             Result.failure(e)
         }
@@ -328,13 +345,14 @@ class WsTimeline(
     override suspend fun sendMessage(body: String): Result<Unit> {
         val clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}"
         addOptimisticItem(body, clientId)
-        val sent = wsConnection.send(
-            WsClientMessage.Send(
-                conversationId = conversationId,
-                body = body,
-                clientId = clientId,
-            ),
-        )
+        val sent =
+            wsConnection.send(
+                WsClientMessage.Send(
+                    conversationId = conversationId,
+                    body = body,
+                    clientId = clientId,
+                ),
+            )
         if (!sent) {
             removeOptimisticItem(clientId)
             return Result.failure(IllegalStateException("Not connected"))
@@ -342,17 +360,21 @@ class WsTimeline(
         return Result.success(Unit)
     }
 
-    override suspend fun sendReply(repliedToEventId: String, body: String): Result<Unit> {
+    override suspend fun sendReply(
+        repliedToEventId: String,
+        body: String,
+    ): Result<Unit> {
         val clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}"
         addOptimisticItem(body, clientId)
-        val sent = wsConnection.send(
-            WsClientMessage.Send(
-                conversationId = conversationId,
-                body = body,
-                replyToId = repliedToEventId,
-                clientId = clientId,
-            ),
-        )
+        val sent =
+            wsConnection.send(
+                WsClientMessage.Send(
+                    conversationId = conversationId,
+                    body = body,
+                    replyToId = repliedToEventId,
+                    clientId = clientId,
+                ),
+            )
         if (!sent) {
             removeOptimisticItem(clientId)
             return Result.failure(IllegalStateException("Not connected"))
@@ -376,33 +398,42 @@ class WsTimeline(
         inReplyToEventId: String?,
     ): Result<Unit> = Result.failure(UnsupportedOperationException("File sending not yet supported"))
 
-    override suspend fun edit(eventOrTransactionId: String, body: String): Result<Unit> {
-        val sent = wsConnection.send(WsClientMessage.Edit(messageId = eventOrTransactionId, body = body))
-        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
-    }
+    override suspend fun edit(
+        eventOrTransactionId: String,
+        body: String,
+    ): Result<Unit> = sendOrFail(WsClientMessage.Edit(messageId = eventOrTransactionId, body = body), Unit)
 
-    override suspend fun redact(eventOrTransactionId: String, reason: String?): Result<Unit> {
-        val sent = wsConnection.send(WsClientMessage.Delete(messageId = eventOrTransactionId))
-        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
-    }
+    override suspend fun redact(
+        eventOrTransactionId: String,
+        reason: String?,
+    ): Result<Unit> = sendOrFail(WsClientMessage.Delete(messageId = eventOrTransactionId), Unit)
 
-    override suspend fun toggleReaction(eventOrTransactionId: String, emoji: String): Result<Boolean> {
-        val sent = wsConnection.send(WsClientMessage.React(messageId = eventOrTransactionId, emoji = emoji))
-        return if (sent) Result.success(true) else Result.failure(IllegalStateException("Not connected"))
-    }
+    override suspend fun toggleReaction(
+        eventOrTransactionId: String,
+        emoji: String,
+    ): Result<Boolean> = sendOrFail(WsClientMessage.React(messageId = eventOrTransactionId, emoji = emoji), true)
 
     override suspend fun markAsRead(): Result<Unit> {
-        val lastEvent = _items.value
-            .filterIsInstance<TimelineItem.Event>()
-            .lastOrNull()
-            ?: return Result.success(Unit)
+        val lastEvent =
+            _items.value
+                .filterIsInstance<TimelineItem.Event>()
+                .lastOrNull()
+                ?: return Result.success(Unit)
         return sendReadReceipt(lastEvent.eventId ?: lastEvent.eventOrTransactionId)
     }
 
-    override suspend fun sendReadReceipt(eventId: String): Result<Unit> {
-        val sent = wsConnection.send(WsClientMessage.Read(conversationId = conversationId, messageId = eventId))
-        return if (sent) Result.success(Unit) else Result.failure(IllegalStateException("Not connected"))
-    }
+    override suspend fun sendReadReceipt(eventId: String): Result<Unit> =
+        sendOrFail(WsClientMessage.Read(conversationId = conversationId, messageId = eventId), Unit)
+
+    private suspend fun <T> sendOrFail(
+        msg: WsClientMessage,
+        value: T,
+    ): Result<T> =
+        if (wsConnection.send(msg)) {
+            Result.success(value)
+        } else {
+            Result.failure(IllegalStateException("Not connected"))
+        }
 
     override fun close() {
         scopeJob.cancel()
@@ -419,7 +450,10 @@ class WsTimeline(
         }
     }
 
-    private suspend fun addOptimisticItem(body: String, clientId: String) {
+    private suspend fun addOptimisticItem(
+        body: String,
+        clientId: String,
+    ) {
         itemsMutex.withLock {
             val current = _items.value.toMutableList()
             current.add(
@@ -455,8 +489,26 @@ class WsTimeline(
     }
 }
 
-private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): TimelineItem.Event {
-    val mine = currentUserId != null && senderId.toString() == currentUserId
+@Suppress("LongParameterList")
+private fun toTimelineEvent(
+    id: String,
+    senderId: Int,
+    senderPid: String?,
+    senderName: String?,
+    senderAvatar: String?,
+    isMine: Boolean,
+    body: String,
+    createdAt: String,
+    replyTo: WsReplyPayload?,
+    reactions: List<WsReactionPayload>,
+): TimelineItem.Event {
+    val replyDetails = replyTo?.let {
+        ReplyDetails(
+            eventId = it.messageId,
+            senderDisplayName = it.senderName,
+            body = it.body,
+        )
+    }
     return TimelineItem.Event(
         eventOrTransactionId = id,
         eventId = id,
@@ -464,57 +516,36 @@ private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): Time
         senderPid = senderPid,
         senderDisplayName = senderName,
         senderAvatarUrl = senderAvatar,
-        isMine = mine,
+        isMine = isMine,
         body = body,
         timestampMillis = parseTimestamp(createdAt),
-        inReplyTo = replyTo?.let {
-            ReplyDetails(
-                eventId = it.messageId,
-                senderDisplayName = it.senderName,
-                body = it.body,
-            )
-        },
+        inReplyTo = replyDetails,
         reactions = reactions.map { it.toReaction() },
-        isEditable = mine,
+        isEditable = isMine,
         sendStatus = EventSendStatus.Sent,
         readByCount = 0,
         canReply = true,
     )
 }
 
-private fun WsReactionPayload.toReaction(): Reaction =
-    Reaction(
+private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): TimelineItem.Event {
+    val mine = currentUserId != null && senderId.toString() == currentUserId
+    return toTimelineEvent(id, senderId, senderPid, senderName, senderAvatar, mine, body, createdAt, replyTo, reactions)
+}
+
+private fun WsReactionPayload.toReaction(): Reaction {
+    val reactionSenders = userIds.zip(senderNames).map { (uid, name) ->
+        ReactionSender(senderId = uid.toString(), displayName = name)
+    }
+    return Reaction(
         emoji = emoji,
         count = count,
         reactedByMe = reactedByMe,
-        senders = userIds.zip(senderNames).map { (uid, name) ->
-            ReactionSender(senderId = uid.toString(), displayName = name)
-        },
+        senders = reactionSenders,
     )
+}
 
 internal fun WsMessagePayload.toTimelineItem(currentUserId: String? = null): TimelineItem.Event {
     val mine = if (currentUserId != null) senderId.toString() == currentUserId else isMine
-    return TimelineItem.Event(
-        eventOrTransactionId = id,
-        eventId = id,
-        senderId = senderId.toString(),
-        senderPid = senderPid,
-        senderDisplayName = senderName,
-        senderAvatarUrl = senderAvatar,
-        isMine = mine,
-        body = body,
-        timestampMillis = parseTimestamp(createdAt),
-        inReplyTo = replyTo?.let {
-            ReplyDetails(
-                eventId = it.messageId,
-                senderDisplayName = it.senderName,
-                body = it.body,
-            )
-        },
-        reactions = reactions.map { it.toReaction() },
-        isEditable = mine,
-        sendStatus = EventSendStatus.Sent,
-        readByCount = 0,
-        canReply = true,
-    )
+    return toTimelineEvent(id, senderId, senderPid, senderName, senderAvatar, mine, body, createdAt, replyTo, reactions)
 }
