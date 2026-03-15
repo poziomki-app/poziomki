@@ -357,7 +357,7 @@ async fn batch_messages_to_payloads(
         .select((
             users::id,
             profiles::name,
-            users::pid,
+            profiles::id,
             profiles::profile_picture,
         ))
         .load(conn)

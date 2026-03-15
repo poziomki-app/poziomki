@@ -16,8 +16,7 @@ import kotlinx.coroutines.launch
 
 data class ProfileViewState(
     val profile: ProfileWithTags? = null,
-    val isLoading: Boolean = false,
-    val error: String? = null,
+    val isLoading: Boolean = true,
     val isOwnProfile: Boolean = false,
 )
 
@@ -59,7 +58,10 @@ class ProfileViewViewModel(
 
     private fun refreshProfile() {
         viewModelScope.launch {
-            profileRepository.refreshProfile(profileId)
+            val success = profileRepository.refreshProfile(profileId)
+            if (!success) {
+                _state.value = _state.value.copy(isLoading = false)
+            }
         }
     }
 }

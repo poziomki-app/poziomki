@@ -281,7 +281,7 @@ pub async fn list_for_user(
                 .filter(users::id.eq_any(&profile_user_ids))
                 .select((
                     users::id,
-                    users::pid,
+                    profiles::id,
                     profiles::name,
                     profiles::profile_picture,
                 ))

@@ -23,6 +23,7 @@ data class ChatUiState(
     val roomDisplayName: String = "",
     val roomAvatarUrl: String? = null,
     val isDirectRoom: Boolean = false,
+    val directProfileId: String? = null,
     val avatarOverrides: Map<String, String> = emptyMap(),
     val timelineMode: TimelineMode = TimelineMode.Live,
     val timelineItems: List<TimelineItem> = emptyList(),
