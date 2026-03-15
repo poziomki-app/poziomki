@@ -4,13 +4,16 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinxSerialization)
+    id("poziomki.detekt")
+    id("poziomki.ktlint")
+    id("poziomki.kotlin-warnings")
+}
+
+composeCompiler {
+    includeTraceMarkers.set(false)
 }
 
 kotlin {
-    compilerOptions {
-        allWarningsAsErrors.set(true)
-    }
-
     androidLibrary {
         namespace = "com.poziomki.app.ui"
         compileSdk = 36

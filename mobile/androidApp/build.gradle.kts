@@ -1,6 +1,13 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
+    id("poziomki.detekt")
+    id("poziomki.ktlint")
+    id("poziomki.kotlin-warnings")
+}
+
+composeCompiler {
+    includeTraceMarkers.set(false)
 }
 
 android {

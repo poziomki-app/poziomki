@@ -3,11 +3,13 @@ plugins {
     alias(libs.plugins.androidKmpLibrary)
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.sqldelight)
+    id("poziomki.detekt")
+    id("poziomki.ktlint")
+    id("poziomki.kotlin-warnings")
 }
 
 kotlin {
     compilerOptions {
-        allWarningsAsErrors.set(true)
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
