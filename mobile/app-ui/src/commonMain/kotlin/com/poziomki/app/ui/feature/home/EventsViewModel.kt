@@ -78,7 +78,8 @@ class EventsViewModel(
                 x.startsAt == y.startsAt &&
                 x.location == y.location &&
                 x.attendeesCount == y.attendeesCount &&
-                x.isAttending == y.isAttending
+                x.isAttending == y.isAttending &&
+                x.attendeesPreview == y.attendeesPreview
         }
     }
 
