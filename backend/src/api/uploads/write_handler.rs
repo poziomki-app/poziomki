@@ -66,6 +66,7 @@ pub(in crate::api) async fn file_upload(
 
         Ok(Json(DataResponse {
             data: UploadResponse {
+                id: upload_id.to_string(),
                 url,
                 filename,
                 size: parsed.bytes.len(),
@@ -178,6 +179,7 @@ pub(in crate::api) async fn file_upload_complete(
 
         Ok(Json(DataResponse {
             data: UploadResponse {
+                id: upload.id.to_string(),
                 url,
                 filename: upload.filename,
                 size: 0,

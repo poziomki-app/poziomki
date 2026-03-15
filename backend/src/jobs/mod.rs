@@ -4,8 +4,8 @@ use crate::app::AppContext;
 
 use crate::error::AppResult;
 pub(crate) use outbox::{
-    enqueue_matrix_event_membership_sync, enqueue_matrix_profile_avatar_sync, enqueue_otp_email,
-    enqueue_upload_variants_generation, outbox_stats_snapshot, OutboxStatsSnapshot,
+    enqueue_chat_membership_sync, enqueue_otp_email, enqueue_upload_variants_generation,
+    outbox_stats_snapshot, OutboxStatsSnapshot,
 };
 
 pub fn start_background_workers(ctx: &AppContext) -> AppResult<()> {

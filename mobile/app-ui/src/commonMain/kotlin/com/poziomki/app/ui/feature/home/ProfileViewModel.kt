@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.network.ApiService
@@ -27,6 +28,7 @@ class ProfileViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val cacheManager: CacheManager,
+    private val chatClient: ChatClient,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
@@ -92,7 +94,8 @@ class ProfileViewModel(
 
     fun signOut() {
         viewModelScope.launch {
-            apiService.signOut()
+            runCatching { chatClient.stop() }
+            runCatching { apiService.signOut() }
             cacheManager.clearAll()
             sessionManager.clearSession()
         }

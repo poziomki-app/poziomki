@@ -45,9 +45,9 @@ import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
 import com.adamglin.phosphoricons.bold.WarningCircle
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
-import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
+import com.poziomki.app.chat.api.EventSendStatus
+import com.poziomki.app.chat.api.ReplyDetails
+import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -68,7 +68,7 @@ private val AvatarSpacing = 6.dp
 
 @Composable
 internal fun MessageEventRow(
-    event: MatrixTimelineItem.Event,
+    event: TimelineItem.Event,
     groupedWithPrevious: Boolean,
     showSenderMeta: Boolean,
     onToggleReaction: (String) -> Unit,
@@ -202,11 +202,8 @@ internal fun MessageEventRow(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
                                     event.reactions.forEach { reaction ->
-                                        val reactionCount =
-                                            reaction.senders
-                                                .map { it.senderId }
-                                                .distinct()
-                                                .size
+                                        val senderCount = reaction.senders.distinctBy { it.senderId }.size
+                                        val reactionCount = if (senderCount > 0) senderCount else reaction.count
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceColor,
@@ -333,7 +330,7 @@ internal fun MessageEventRow(
 
 @Composable
 private fun BubbleContent(
-    event: MatrixTimelineItem.Event,
+    event: TimelineItem.Event,
     onFocusOnReply: () -> Unit,
     compactTimestamp: Boolean,
 ) {
@@ -379,9 +376,9 @@ private fun BubbleContent(
 }
 
 @Composable
-private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
+private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
     when {
-        event.sendStatus == MatrixEventSendStatus.Failed -> {
+        event.sendStatus == EventSendStatus.Failed -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.WarningCircle,
                 contentDescription = null,
@@ -390,7 +387,7 @@ private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
             )
         }
 
-        event.sendStatus == MatrixEventSendStatus.Sending -> {
+        event.sendStatus == EventSendStatus.Sending -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.Clock,
                 contentDescription = null,
@@ -421,7 +418,7 @@ private fun OutgoingMessageStatusIcon(event: MatrixTimelineItem.Event) {
 
 @Composable
 private fun ReplyReference(
-    reply: MatrixReplyDetails,
+    reply: ReplyDetails,
     onClick: () -> Unit,
     isMine: Boolean,
 ) {

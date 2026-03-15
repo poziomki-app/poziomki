@@ -2,6 +2,64 @@
 // Run `diesel print-schema` against the dev DB to regenerate.
 
 diesel::table! {
+    conversations (id) {
+        id -> Uuid,
+        kind -> Varchar,
+        title -> Nullable<Varchar>,
+        event_id -> Nullable<Uuid>,
+        user_low_id -> Nullable<Int4>,
+        user_high_id -> Nullable<Int4>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    conversation_members (conversation_id, user_id) {
+        conversation_id -> Uuid,
+        user_id -> Int4,
+        joined_at -> Timestamptz,
+        last_read_message_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    messages (id) {
+        id -> Uuid,
+        conversation_id -> Uuid,
+        sender_id -> Int4,
+        body -> Text,
+        kind -> Varchar,
+        attachment_upload_id -> Nullable<Uuid>,
+        reply_to_id -> Nullable<Uuid>,
+        client_id -> Nullable<Varchar>,
+        edited_at -> Nullable<Timestamptz>,
+        deleted_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    message_reactions (id) {
+        id -> Uuid,
+        message_id -> Uuid,
+        user_id -> Int4,
+        emoji -> Varchar,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    push_subscriptions (id) {
+        id -> Uuid,
+        user_id -> Int4,
+        device_id -> Varchar,
+        ntfy_topic -> Varchar,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     auth_rate_limits (id) {
         id -> Uuid,
         rate_key -> Varchar,
@@ -77,17 +135,6 @@ diesel::table! {
         processed_at -> Nullable<Timestamptz>,
         failed_at -> Nullable<Timestamptz>,
         last_error -> Nullable<Text>,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
-    }
-}
-
-diesel::table! {
-    matrix_dm_rooms (id) {
-        id -> Uuid,
-        user_low_pid -> Uuid,
-        user_high_pid -> Uuid,
-        room_id -> Varchar,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
     }
@@ -205,6 +252,11 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(conversation_members -> conversations (conversation_id));
+diesel::joinable!(conversations -> events (event_id));
+diesel::joinable!(messages -> conversations (conversation_id));
+diesel::joinable!(messages -> uploads (attachment_upload_id));
+diesel::joinable!(message_reactions -> messages (message_id));
 diesel::joinable!(event_attendees -> events (event_id));
 diesel::joinable!(event_attendees -> profiles (profile_id));
 diesel::joinable!(event_interactions -> events (event_id));
@@ -220,16 +272,20 @@ diesel::joinable!(user_settings -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     auth_rate_limits,
+    conversation_members,
+    conversations,
     degrees,
     event_attendees,
     event_interactions,
     event_tags,
     events,
     job_outbox,
-    matrix_dm_rooms,
+    message_reactions,
+    messages,
     otp_codes,
     profile_tags,
     profiles,
+    push_subscriptions,
     sessions,
     tags,
     uploads,
