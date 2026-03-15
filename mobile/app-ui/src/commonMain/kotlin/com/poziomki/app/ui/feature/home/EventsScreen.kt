@@ -88,9 +88,11 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun EventsScreen(
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToEventCreate: () -> Unit,
+    onNavigateToProfile: (String) -> Unit = {},
     profileAvatarAction: @Composable () -> Unit = {},
     viewModel: EventsViewModel = koinViewModel(),
 ) {
@@ -197,6 +199,7 @@ fun EventsScreen(
                                         EventCard(
                                             event = event,
                                             onClick = { onNavigateToEventDetail(event.id) },
+                                            onCreatorClick = event.creator?.let { c -> { onNavigateToProfile(c.id) } },
                                         )
                                     }
                                 }
@@ -250,9 +253,11 @@ private const val COVER_ASPECT_W = 16f
 private const val COVER_ASPECT_H = 9f
 
 @Composable
+@Suppress("LongMethod")
 private fun EventCard(
     event: Event,
     onClick: () -> Unit,
+    onCreatorClick: (() -> Unit)? = null,
 ) {
     val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
 
@@ -366,17 +371,6 @@ private fun EventCard(
                     }
                 }
 
-                // Creator
-                event.creator?.let { creator ->
-                    Text(
-                        text = "od ${creator.name}",
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 15.sp,
-                        color = TextMuted,
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Attendees row
@@ -386,6 +380,7 @@ private fun EventCard(
                             StackedAvatars(
                                 imageUrls = event.attendeesPreview.map { it.profilePicture },
                                 avatarSize = 36.dp,
+                                modifier = onCreatorClick?.let { Modifier.clickable(onClick = it) } ?: Modifier,
                             )
                             Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
                         }
