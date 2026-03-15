@@ -180,16 +180,18 @@ pub async fn is_member(
 }
 
 /// Load conversations for a user with latest message info for the room list.
-#[allow(clippy::similar_names)]
+///
+/// Uses batch queries instead of per-conversation loops to avoid N+1.
+#[allow(clippy::similar_names, clippy::too_many_lines)]
 pub async fn list_for_user(
     user_id: i32,
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
     use super::protocol::ConversationPayload;
-    use crate::db::schema::messages;
+    use std::collections::HashMap;
 
     let mut conn = crate::db::conn().await?;
 
-    // Get all conversation IDs the user is a member of
+    // 1. Get all conversation IDs the user is a member of
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
         .select(conversation_members::conversation_id)
@@ -200,127 +202,139 @@ pub async fn list_for_user(
         return Ok(Vec::new());
     }
 
-    // Load conversations
+    // 2. Load conversations
     let convs: Vec<Conversation> = conversations::table
         .filter(conversations::id.eq_any(&conv_ids))
         .load(&mut conn)
         .await?;
 
-    // Load read watermarks
-    let read_marks: Vec<(Uuid, Option<Uuid>)> = conversation_members::table
-        .filter(conversation_members::user_id.eq(user_id))
-        .filter(conversation_members::conversation_id.eq_any(&conv_ids))
-        .select((
-            conversation_members::conversation_id,
-            conversation_members::last_read_message_id,
-        ))
-        .load(&mut conn)
-        .await?;
+    // 3. Batch load latest message per conversation using DISTINCT ON
+    let latest_messages: Vec<crate::db::models::messages::Message> = diesel::sql_query(
+        "SELECT DISTINCT ON (conversation_id) \
+                 id, conversation_id, sender_id, body, kind, \
+                 attachment_upload_id, reply_to_id, client_id, \
+                 edited_at, deleted_at, created_at \
+             FROM messages \
+             WHERE conversation_id = ANY($1) AND deleted_at IS NULL \
+             ORDER BY conversation_id, created_at DESC, id DESC",
+    )
+    .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&conv_ids)
+    .load(&mut conn)
+    .await?;
 
-    let read_map: std::collections::HashMap<Uuid, Option<Uuid>> = read_marks.into_iter().collect();
+    let latest_map: HashMap<Uuid, &crate::db::models::messages::Message> = latest_messages
+        .iter()
+        .map(|m| (m.conversation_id, m))
+        .collect();
 
-    let mut payloads = Vec::with_capacity(convs.len());
+    // 5. Batch compute unread counts
+    //    For conversations with a read watermark: count messages after that timestamp
+    //    For conversations without: count all messages from others
+    let unread_counts: Vec<UnreadCountRow> = diesel::sql_query(
+        "SELECT m.conversation_id, COUNT(*) as cnt \
+             FROM messages m \
+             INNER JOIN conversation_members cm \
+                 ON cm.conversation_id = m.conversation_id AND cm.user_id = $1 \
+             LEFT JOIN messages rm ON rm.id = cm.last_read_message_id \
+             WHERE m.conversation_id = ANY($2) \
+               AND m.deleted_at IS NULL \
+               AND m.sender_id != $1 \
+               AND (rm.id IS NULL OR m.created_at > rm.created_at) \
+             GROUP BY m.conversation_id",
+    )
+    .bind::<diesel::sql_types::Integer, _>(user_id)
+    .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&conv_ids)
+    .load::<UnreadCountRow>(&mut conn)
+    .await?;
 
+    let unread_map: HashMap<Uuid, i64> = unread_counts
+        .into_iter()
+        .map(|r| (r.conversation_id, r.cnt))
+        .collect();
+
+    // 7. Collect all user IDs we need profiles for (DM partners + message senders)
+    let mut profile_user_ids: Vec<i32> = Vec::new();
     for conv in &convs {
-        // Latest non-deleted message
-        let latest: Option<crate::db::models::messages::Message> = messages::table
-            .filter(messages::conversation_id.eq(conv.id))
-            .filter(messages::deleted_at.is_null())
-            .order(messages::created_at.desc())
-            .first(&mut conn)
-            .await
-            .optional()?;
-
-        // Unread count
-        let unread_count = if let Some(Some(last_read_id)) = read_map.get(&conv.id) {
-            // Count messages after the last read message
-            let last_read_ts: Option<chrono::DateTime<chrono::Utc>> = messages::table
-                .filter(messages::id.eq(last_read_id))
-                .select(messages::created_at)
-                .first(&mut conn)
-                .await
-                .optional()?;
-
-            if let Some(ts) = last_read_ts {
-                messages::table
-                    .filter(messages::conversation_id.eq(conv.id))
-                    .filter(messages::deleted_at.is_null())
-                    .filter(messages::created_at.gt(ts))
-                    .filter(messages::sender_id.ne(user_id))
-                    .count()
-                    .get_result::<i64>(&mut conn)
-                    .await?
-            } else {
-                0
-            }
-        } else {
-            // No read watermark = all messages from others are unread
-            messages::table
-                .filter(messages::conversation_id.eq(conv.id))
-                .filter(messages::deleted_at.is_null())
-                .filter(messages::sender_id.ne(user_id))
-                .count()
-                .get_result::<i64>(&mut conn)
-                .await?
-        };
-
-        // For DMs, resolve the other user's profile
-        let (direct_user_id, direct_user_pid, direct_user_name, direct_user_avatar) = if conv.kind
-            == "dm"
-        {
-            let other_user_id = if conv.user_low_id == Some(user_id) {
+        if conv.kind == "dm" {
+            let other = if conv.user_low_id == Some(user_id) {
                 conv.user_high_id
             } else {
                 conv.user_low_id
             };
-            if let Some(other_id) = other_user_id {
-                let profile: Option<(i32, uuid::Uuid, String, Option<String>)> = profiles::table
-                    .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-                    .filter(users::id.eq(other_id))
-                    .select((
-                        users::id,
-                        users::pid,
-                        profiles::name,
-                        profiles::profile_picture,
-                    ))
-                    .first(&mut conn)
-                    .await
-                    .optional()?;
-                match profile {
-                    Some((uid, upid, name, avatar)) => {
-                        let avatar_url = avatar.as_ref().map(|filename| {
-                            crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
-                                .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
-                        });
-                        (
-                            Some(uid.to_string()),
-                            Some(upid.to_string()),
-                            Some(name),
-                            avatar_url,
-                        )
-                    }
-                    None => (None, None, None, None),
-                }
-            } else {
-                (None, None, None, None)
+            if let Some(id) = other {
+                profile_user_ids.push(id);
             }
+        }
+    }
+    for msg in &latest_messages {
+        profile_user_ids.push(msg.sender_id);
+    }
+    profile_user_ids.sort_unstable();
+    profile_user_ids.dedup();
+
+    // 8. Batch load all profiles
+    let profile_rows: Vec<(i32, uuid::Uuid, String, Option<String>)> =
+        if profile_user_ids.is_empty() {
+            Vec::new()
         } else {
-            (None, None, None, None)
+            profiles::table
+                .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+                .filter(users::id.eq_any(&profile_user_ids))
+                .select((
+                    users::id,
+                    users::pid,
+                    profiles::name,
+                    profiles::profile_picture,
+                ))
+                .load(&mut conn)
+                .await?
         };
 
-        // Resolve latest message sender name
-        let latest_sender_name = if let Some(ref msg) = latest {
-            let name: Option<String> = profiles::table
-                .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-                .filter(users::id.eq(msg.sender_id))
-                .select(profiles::name)
-                .first(&mut conn)
-                .await
-                .optional()?;
-            name
-        } else {
-            None
-        };
+    let profile_map: HashMap<i32, (uuid::Uuid, String, Option<String>)> = profile_rows
+        .into_iter()
+        .map(|(uid, pid, name, avatar)| (uid, (pid, name, avatar)))
+        .collect();
+
+    // 9. Assemble payloads
+    let mut payloads = Vec::with_capacity(convs.len());
+    for conv in &convs {
+        let latest = latest_map.get(&conv.id).copied();
+        let unread_count = unread_map.get(&conv.id).copied().unwrap_or(0);
+
+        // DM profile
+        let (direct_user_id, direct_user_pid, direct_user_name, direct_user_avatar) =
+            if conv.kind == "dm" {
+                let other_id = if conv.user_low_id == Some(user_id) {
+                    conv.user_high_id
+                } else {
+                    conv.user_low_id
+                };
+                other_id
+                    .and_then(|oid| {
+                        profile_map.get(&oid).map(|(pid, name, avatar)| {
+                            let avatar_url = avatar.as_ref().map(|filename| {
+                                crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
+                                    .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
+                            });
+                            (
+                                Some(oid.to_string()),
+                                Some(pid.to_string()),
+                                Some(name.clone()),
+                                avatar_url,
+                            )
+                        })
+                    })
+                    .unwrap_or((None, None, None, None))
+            } else {
+                (None, None, None, None)
+            };
+
+        // Latest message sender name
+        let latest_sender_name = latest.and_then(|msg| {
+            profile_map
+                .get(&msg.sender_id)
+                .map(|(_, name, _)| name.clone())
+        });
 
         payloads.push(ConversationPayload {
             id: conv.id,
@@ -332,9 +346,9 @@ pub async fn list_for_user(
             direct_user_name,
             direct_user_avatar,
             unread_count,
-            latest_message: latest.as_ref().map(|m| m.body.clone()),
-            latest_timestamp: latest.as_ref().map(|m| m.created_at.to_rfc3339()),
-            latest_message_is_mine: latest.as_ref().is_some_and(|m| m.sender_id == user_id),
+            latest_message: latest.map(|m| m.body.clone()),
+            latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),
+            latest_message_is_mine: latest.is_some_and(|m| m.sender_id == user_id),
             latest_sender_name,
         });
     }
@@ -343,6 +357,15 @@ pub async fn list_for_user(
     payloads.sort_by(|a, b| b.latest_timestamp.cmp(&a.latest_timestamp));
 
     Ok(payloads)
+}
+
+/// Helper struct for raw SQL unread count query.
+#[derive(diesel::QueryableByName)]
+struct UnreadCountRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    conversation_id: Uuid,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    cnt: i64,
 }
 
 /// Sync event membership: add or remove a user from the event conversation.

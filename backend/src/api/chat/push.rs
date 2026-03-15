@@ -4,6 +4,12 @@ use uuid::Uuid;
 
 use crate::db::schema::{profiles, push_subscriptions, users};
 
+fn push_client() -> &'static reqwest::Client {
+    use std::sync::OnceLock;
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
+
 /// Send push notifications to conversation members for a new message.
 pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i32, body: &str) {
     // Resolve sender name + avatar
@@ -20,7 +26,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
         }
     };
 
-    let client = reqwest::Client::new();
+    let client = push_client();
 
     // Truncate body for push
     let push_body = if body.chars().count() > 200 {
