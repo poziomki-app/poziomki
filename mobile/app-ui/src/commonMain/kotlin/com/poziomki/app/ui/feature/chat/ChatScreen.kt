@@ -40,10 +40,12 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
+@Suppress("LongParameterList")
 fun ChatScreen(
     chatId: String,
     initialTitle: String? = null,
     initialDirectUserId: String? = null,
+    initialDirectProfileId: String? = null,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
@@ -55,6 +57,7 @@ fun ChatScreen(
             roomId = chatId,
             fallbackDisplayName = initialTitle,
             fallbackDirectUserId = initialDirectUserId,
+            fallbackProfileId = initialDirectProfileId,
         )
     }
 
@@ -73,7 +76,9 @@ fun ChatScreen(
                     },
                 avatarUrl = state.roomAvatarUrl,
                 onBack = onBack,
-                onProfileClick = state.directProfileId?.let { id -> { onNavigateToProfile(id) } },
+                onProfileClick =
+                    (initialDirectProfileId ?: state.directProfileId)
+                        ?.let { id -> { onNavigateToProfile(id) } },
             )
         },
     ) { padding ->
