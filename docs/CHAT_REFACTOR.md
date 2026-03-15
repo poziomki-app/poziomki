@@ -8,12 +8,16 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **Session expiry not checked in WS auth** — `ws.rs:authenticate()` never checked `sessions.expires_at`, allowing expired tokens to connect
 - [x] **Missing membership checks on react/read/typing** — `ws.rs` handlers let any authenticated user react/read-receipt/type in any conversation
 - [x] **History pagination same-timestamp gaps** — `messages.rs:load_history()` used `created_at < before_ts`, skipping messages with identical timestamps forever
+- [x] **Inconsistent initial page ordering** — initial history page used `created_at DESC` only while paginated pages used `(created_at DESC, id DESC)`, causing duplicates/gaps at timestamp boundaries
 - [x] **Event conversation seeded with wrong creator** — `mod.rs:resolve_event_conversation()` passed requesting user's ID instead of event creator's user_id
 - [x] **"Interested" attendees get chat membership** — `write_handler.rs:event_attend()` synced chat membership for all non-pending statuses including "interested"
+- [x] **`mark_read` cross-conversation vulnerability** — accepted any valid message UUID without checking it belonged to the target conversation, corrupting unread counts and leaking message IDs
 - [x] **Silent write failures (mobile)** — `WsConnection.send()` was a no-op when disconnected; optimistic UI showed sent messages that never transmitted
 - [x] **Read receipt count drift (mobile)** — `WsTimeline.onReadReceipt()` blindly incremented count without deduplicating by userId
 - [x] **Push device ID collision (mobile)** — `WsChatClient.deviceId()` returned `hashCode()` of userId, identical across all devices for same user
 - [x] **No reconnect backfill (mobile)** — after WS drop/reconnect, missed messages were never fetched for opened rooms
+- [x] **`sendReply` missing optimistic UI** — reply messages had no optimistic item, causing visible delay compared to `sendMessage`
+- [x] **`paginateBackwards` hangs indefinitely** — `deferred.await()` had no timeout; if the server never responded, pagination blocked forever
 - [ ] **No client_id idempotency** — no unique index on `client_id`, retried sends can create duplicates (low risk, client deduplicates via matching)
 
 ## Dead Matrix Code
@@ -40,13 +44,14 @@ Ordered by priority. Checked items are done in this PR.
 
 ## Performance
 
-- [ ] **N+1 queries in `list_for_user`** — per-conversation queries for latest message, unread count, DM profile, sender name
+- [x] **N+1 queries in `list_for_user`** — replaced per-conversation loop with batch queries (DISTINCT ON, raw SQL unread counts, batch profile load)
+- [x] **`reqwest::Client` created per push** — shared a static `OnceLock<Client>` for connection reuse
+- [x] **`send_to_user` hub memory leak** — empty entries left in DashMap after all senders disconnected; added cleanup matching broadcast/is_online
 - [ ] **Avatar URL resolution repeated** — same `signed_url(filename, "thumb", "webp")` pattern duplicated across multiple files
 - [ ] **Hub broadcast copies** — every broadcast clones the entire member vec; could use iterator
 
 ## Code Organization
 
-- [ ] **`list_for_user` is 164 lines** — nested queries and transformations should be broken into helpers
 - [ ] **`message_to_payload` does 4 queries** — sender profile, attachment URL, reply, reactions — could batch
 - [ ] **Writer task cleanup** — `let _ = (writer_hub, writer_user_id)` at ws.rs:61 is a no-op; variables captured but discarded
 - [ ] **Heartbeat without pong timeout** — client sends ping every 30s but never validates pong response
