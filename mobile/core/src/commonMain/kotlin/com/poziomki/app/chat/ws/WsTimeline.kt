@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
+import kotlin.random.Random
 
 @Suppress("TooManyFunctions")
 class WsTimeline(
@@ -328,7 +329,7 @@ class WsTimeline(
     }
 
     override suspend fun sendMessage(body: String): Result<Unit> {
-        val clientId = "local_${Clock.System.now().toEpochMilliseconds()}"
+        val clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}"
         addOptimisticItem(body, clientId)
         val sent = wsConnection.send(
             WsClientMessage.Send(
@@ -345,7 +346,7 @@ class WsTimeline(
     }
 
     override suspend fun sendReply(repliedToEventId: String, body: String): Result<Unit> {
-        val clientId = "local_${Clock.System.now().toEpochMilliseconds()}"
+        val clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}"
         addOptimisticItem(body, clientId)
         val sent = wsConnection.send(
             WsClientMessage.Send(
@@ -380,7 +381,7 @@ class WsTimeline(
                 body = caption ?: fileName,
                 attachmentUploadId = upload.id,
                 replyToId = inReplyToEventId,
-                clientId = "local_${Clock.System.now().toEpochMilliseconds()}",
+                clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}",
             ),
         )
         return Result.success(Unit)

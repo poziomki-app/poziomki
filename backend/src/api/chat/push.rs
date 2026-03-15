@@ -11,7 +11,10 @@ fn push_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new())
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "push client builder failed, using default");
+                reqwest::Client::new()
+            })
     })
 }
 
@@ -32,6 +35,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
     };
 
     let client = push_client();
+    let ntfy_token = crate::api::common::env_non_empty("NTFY_TOKEN");
 
     // Truncate body for push
     let push_body = if body.chars().count() > 200 {
@@ -54,19 +58,24 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
 
     for (ntfy_topic, ntfy_server) in &topics {
         let url = format!("{ntfy_server}/{ntfy_topic}");
-        let result = client
+        let mut req = client
             .post(&url)
             .header("Title", &sender_name)
-            .json(&push_data)
-            .send()
-            .await;
+            .json(&push_data);
+        if let Some(ref token) = ntfy_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        let result = req.send().await;
 
-        if let Err(e) = result {
-            tracing::warn!(
-                topic = ntfy_topic,
-                error = %e,
-                "push notification failed"
-            );
+        match result {
+            Ok(resp) => {
+                if let Err(e) = resp.error_for_status() {
+                    tracing::warn!(topic = ntfy_topic, error = %e, "push notification rejected");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(topic = ntfy_topic, error = %e, "push notification failed");
+            }
         }
     }
 }
