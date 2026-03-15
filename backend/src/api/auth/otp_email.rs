@@ -58,31 +58,41 @@ fn resolver() -> Result<&'static hickory_resolver::TokioResolver, String> {
     .map_err(std::clone::Clone::clone)
 }
 
+fn normalize_mx_host(host: &str) -> String {
+    host.strip_suffix('.').unwrap_or(host).to_string()
+}
+
+fn select_mx_hosts(domain: &str, records: Vec<(u16, String)>) -> Result<Vec<String>, String> {
+    let mut records = records;
+    records.sort_by_key(|(preference, _)| *preference);
+
+    let hosts: Vec<String> = records
+        .iter()
+        .filter(|(_, host)| host != ".")
+        .map(|(_, host)| normalize_mx_host(host))
+        .collect();
+
+    if hosts.is_empty() {
+        return Err(format!("Domain {domain} does not accept email (null MX)"));
+    }
+
+    Ok(hosts)
+}
+
 async fn resolve_mx(domain: &str) -> Result<Vec<String>, String> {
     let r = resolver()?;
-    let hosts: Vec<String> = r.mx_lookup(domain).await.map_or_else(
-        |_| vec![],
-        |response| {
-            let mut records: Vec<_> = response.iter().collect();
-            records.sort_by_key(|mx| mx.preference());
-            records
+    match r.mx_lookup(domain).await {
+        Ok(response) => {
+            let records = response
                 .iter()
-                .filter(|mx| mx.exchange().to_ascii() != ".")
-                .map(|mx| {
-                    let mut h = mx.exchange().to_ascii();
-                    if h.ends_with('.') {
-                        h.pop();
-                    }
-                    h
-                })
-                .collect()
-        },
-    );
-    // RFC 5321 §5: fall back to A/AAAA when no MX records exist
-    if hosts.is_empty() {
-        return Ok(vec![domain.to_string()]);
+                .map(|mx| (mx.preference(), mx.exchange().to_ascii()))
+                .collect();
+            select_mx_hosts(domain, records)
+        }
+        // RFC 5321 §5: fall back to A/AAAA when the domain has no MX records.
+        Err(error) if error.is_no_records_found() => Ok(vec![domain.to_string()]),
+        Err(error) => Err(format!("MX lookup failed for {domain}: {error}")),
     }
-    Ok(hosts)
 }
 
 fn parse_from_mailbox(from: &str) -> Option<Mailbox> {
@@ -192,4 +202,34 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
         }
     }
     Err(format!("All MX hosts failed for {to}: {last_err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_mx_hosts;
+
+    #[test]
+    fn select_mx_hosts_orders_and_normalizes_records() {
+        let hosts = select_mx_hosts(
+            "example.com",
+            vec![
+                (20, "mx2.example.com.".to_string()),
+                (10, "mx1.example.com.".to_string()),
+            ],
+        );
+
+        assert_eq!(
+            hosts.ok(),
+            Some(vec![
+                "mx1.example.com".to_string(),
+                "mx2.example.com".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn select_mx_hosts_rejects_null_mx() {
+        let error = select_mx_hosts("example.com", vec![(0, ".".to_string())]).err();
+        assert!(matches!(error, Some(error) if error.contains("does not accept email")));
+    }
 }
