@@ -51,7 +51,7 @@ class EventDetailViewModel(
             eventRepository
                 .observeEvent(eventId)
                 .combine(profileRepository.observeOwnProfile()) { event, profile ->
-                    val isCreator = event?.creator?.id?.let { it == profile?.id } == true
+                    val isCreator = event?.creator?.id != null && event.creator?.id == profile?.id
                     _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
                 }.collect {}
         }

@@ -18,7 +18,6 @@ import com.poziomki.app.ui.feature.chat.ChatViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun EventChatScreen(
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
