@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 
 @Suppress("TooManyFunctions")
@@ -302,7 +303,11 @@ class WsTimeline(
         )
 
         return try {
-            val hasMore = deferred.await()
+            val hasMore = withTimeoutOrNull(10_000L) { deferred.await() }
+                ?: run {
+                    _isPaginatingBackwards.value = false
+                    return Result.failure(IllegalStateException("History request timed out"))
+                }
             Result.success(hasMore)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             _isPaginatingBackwards.value = false
@@ -329,7 +334,8 @@ class WsTimeline(
 
     override suspend fun sendReply(repliedToEventId: String, body: String): Result<Unit> {
         val clientId = "local_${Clock.System.now().toEpochMilliseconds()}"
-        wsConnection.send(
+        addOptimisticItem(body, clientId)
+        val sent = wsConnection.send(
             WsClientMessage.Send(
                 conversationId = conversationId,
                 body = body,
@@ -337,6 +343,10 @@ class WsTimeline(
                 clientId = clientId,
             ),
         )
+        if (!sent) {
+            removeOptimisticItem(clientId)
+            return Result.failure(IllegalStateException("Not connected"))
+        }
         return Result.success(Unit)
     }
 

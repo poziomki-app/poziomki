@@ -72,6 +72,10 @@ impl ChatHub {
             for sender in senders.value() {
                 let _ = sender.send(msg.clone());
             }
+            if senders.is_empty() {
+                drop(senders);
+                self.connections.remove(&user_id);
+            }
         }
     }
 

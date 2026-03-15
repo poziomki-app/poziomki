@@ -147,6 +147,22 @@ pub async fn mark_read(
     use crate::db::schema::conversation_members;
 
     let mut conn = crate::db::conn().await?;
+
+    // Verify message belongs to this conversation
+    let belongs = messages::table
+        .filter(messages::id.eq(message_id))
+        .filter(messages::conversation_id.eq(conversation_id))
+        .count()
+        .get_result::<i64>(&mut conn)
+        .await?
+        > 0;
+
+    if !belongs {
+        return Err(crate::error::AppError::message(
+            "message does not belong to this conversation",
+        ));
+    }
+
     diesel::update(
         conversation_members::table
             .filter(conversation_members::conversation_id.eq(conversation_id))
@@ -207,7 +223,7 @@ pub async fn load_history(
         messages::table
             .filter(messages::conversation_id.eq(conversation_id))
             .filter(messages::deleted_at.is_null())
-            .order(messages::created_at.desc())
+            .order((messages::created_at.desc(), messages::id.desc()))
             .limit(query_limit)
             .load(&mut conn)
             .await?
