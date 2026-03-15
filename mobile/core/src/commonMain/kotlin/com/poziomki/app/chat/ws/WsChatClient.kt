@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Suppress("TooManyFunctions")
@@ -37,6 +39,7 @@ class WsChatClient(
     private val _rooms = MutableStateFlow<List<RoomSummary>>(emptyList())
     override val rooms: StateFlow<List<RoomSummary>> = _rooms
 
+    private val openedRoomsMutex = Mutex()
     private val openedRooms = mutableMapOf<String, WsJoinedRoom>()
 
     /** Cache conversation metadata for populating member caches on room open */
@@ -60,7 +63,8 @@ class WsChatClient(
                     wasReady = true
                     if (isReconnect) {
                         // Backfill all opened rooms after reconnect
-                        openedRooms.values.forEach { room ->
+                        val rooms = openedRoomsMutex.withLock { openedRooms.values.toList() }
+                        rooms.forEach { room ->
                             room.liveTimeline.backfillOnReconnect()
                         }
                     }
@@ -78,7 +82,7 @@ class WsChatClient(
         }
     }
 
-    private fun handleServerMessage(msg: WsServerMessage) {
+    private suspend fun handleServerMessage(msg: WsServerMessage) {
         if (_state.value is ChatClientState.Idle) return
         when (msg) {
             is WsServerMessage.Conversations -> {
@@ -89,19 +93,19 @@ class WsChatClient(
                 // Update room list (latest message)
                 updateRoomLatestMessage(msg)
                 // Dispatch to opened room timeline
-                openedRooms[msg.conversationId]?.onMessage(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onMessage(msg)
             }
             is WsServerMessage.Edited -> {
-                openedRooms[msg.conversationId]?.onEdited(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onEdited(msg)
             }
             is WsServerMessage.Deleted -> {
-                openedRooms[msg.conversationId]?.onDeleted(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onDeleted(msg)
             }
             is WsServerMessage.Reaction -> {
-                openedRooms[msg.conversationId]?.onReaction(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onReaction(msg)
             }
             is WsServerMessage.ReadReceipt -> {
-                openedRooms[msg.conversationId]?.onReadReceipt(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onReadReceipt(msg)
                 if (msg.userId.toString() == wsConnection.userId.value) {
                     clearRoomUnreadCount(msg.conversationId)
                 } else {
@@ -109,10 +113,10 @@ class WsChatClient(
                 }
             }
             is WsServerMessage.Typing -> {
-                openedRooms[msg.conversationId]?.onTyping(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onTyping(msg)
             }
             is WsServerMessage.HistoryResponse -> {
-                openedRooms[msg.conversationId]?.onHistoryResponse(msg)
+                openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onHistoryResponse(msg)
             }
             else -> {}
         }
@@ -168,8 +172,10 @@ class WsChatClient(
 
         _state.value = ChatClientState.Connecting
 
-        openedRooms.values.forEach { it.liveTimeline.close() }
-        openedRooms.clear()
+        openedRoomsMutex.withLock {
+            openedRooms.values.forEach { it.liveTimeline.close() }
+            openedRooms.clear()
+        }
         latestConversations = emptyList()
         _rooms.value = emptyList()
 
@@ -196,7 +202,7 @@ class WsChatClient(
     }
 
     override suspend fun getJoinedRoom(roomId: String): JoinedRoom? {
-        openedRooms[roomId]?.let { return it }
+        openedRoomsMutex.withLock { openedRooms[roomId] }?.let { return it }
 
         val summary = _rooms.value.find { it.roomId == roomId }
         val displayName = summary?.displayName ?: ""
@@ -211,7 +217,7 @@ class WsChatClient(
             directUserName = conversation?.directUserName,
             directUserAvatar = conversation?.directUserAvatar,
         )
-        openedRooms[roomId] = room
+        openedRoomsMutex.withLock { openedRooms[roomId] = room }
         return room
     }
 
@@ -226,7 +232,8 @@ class WsChatClient(
     }
 
     override suspend fun requestRoomTimelineBackfill(roomId: String): Result<Unit> {
-        val room = openedRooms[roomId] ?: return Result.failure(IllegalStateException("Room not opened"))
+        val room = openedRoomsMutex.withLock { openedRooms[roomId] }
+            ?: return Result.failure(IllegalStateException("Room not opened"))
         room.liveTimeline.paginateBackwards(200u)
         return Result.success(Unit)
     }
@@ -262,8 +269,10 @@ class WsChatClient(
     override suspend fun stop() {
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
-        openedRooms.values.forEach { it.liveTimeline.close() }
-        openedRooms.clear()
+        openedRoomsMutex.withLock {
+            openedRooms.values.forEach { it.liveTimeline.close() }
+            openedRooms.clear()
+        }
         latestConversations = emptyList()
         _rooms.value = emptyList()
         roomTimelineCacheStore.clearAll()

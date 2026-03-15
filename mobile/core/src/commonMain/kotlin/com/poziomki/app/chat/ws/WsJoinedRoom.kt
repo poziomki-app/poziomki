@@ -4,8 +4,15 @@ import com.poziomki.app.chat.api.JoinedRoom
 import com.poziomki.app.chat.api.Timeline
 import com.poziomki.app.chat.api.TimelineMode
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class MemberCache internal constructor() {
     private val names = mutableMapOf<String, String>()
@@ -36,6 +43,9 @@ class WsJoinedRoom(
 
     private val _typingUserIds = MutableStateFlow<List<String>>(emptyList())
     override val typingUserIds: StateFlow<List<String>> = _typingUserIds
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val typingTimeoutJobs = mutableMapOf<String, Job>()
 
     internal val memberCache = MemberCache()
 
@@ -74,16 +84,24 @@ class WsJoinedRoom(
 
     internal fun onTyping(msg: WsServerMessage.Typing) {
         val userId = msg.userId.toString()
-        _typingUserIds.update { current ->
-            if (msg.isTyping) {
+        if (msg.isTyping) {
+            typingTimeoutJobs[userId]?.cancel()
+            typingTimeoutJobs[userId] = scope.launch {
+                delay(5_000L)
+                _typingUserIds.update { current -> current - userId }
+                typingTimeoutJobs.remove(userId)
+            }
+            _typingUserIds.update { current ->
                 if (userId !in current && userId != wsConnection.userId.value) {
                     current + userId
                 } else {
                     current
                 }
-            } else {
-                current - userId
             }
+        } else {
+            typingTimeoutJobs[userId]?.cancel()
+            typingTimeoutJobs.remove(userId)
+            _typingUserIds.update { current -> current - userId }
         }
     }
 
