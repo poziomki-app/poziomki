@@ -24,6 +24,7 @@ async fn single_message_payload(
 /// Insert a new message and return a serializable payload.
 /// If `client_id` is set and a message already exists with the same
 /// `(conversation_id, client_id)`, return the existing message (idempotent).
+/// Returns `(message, payload, created)` where `created` is `false` on dedup hit.
 pub async fn create_message(
     conversation_id: Uuid,
     sender_id: i32,
@@ -31,7 +32,7 @@ pub async fn create_message(
     kind: &str,
     reply_to_id: Option<Uuid>,
     client_id: Option<String>,
-) -> Result<(Message, MessagePayload), crate::error::AppError> {
+) -> Result<(Message, MessagePayload, bool), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
 
     // Dedup: if client_id is set, check for an existing message first
@@ -45,7 +46,7 @@ pub async fn create_message(
             .optional()?;
         if let Some(msg) = existing {
             let payload = single_message_payload(&msg, 0, &mut conn).await?;
-            return Ok((msg, payload));
+            return Ok((msg, payload, false));
         }
     }
 
@@ -101,7 +102,7 @@ pub async fn create_message(
                 .first(&mut conn)
                 .await?;
             let payload = single_message_payload(&msg, 0, &mut conn).await?;
-            return Ok((msg, payload));
+            return Ok((msg, payload, false));
         }
         Err(e) => return Err(e.into()),
     };
@@ -109,7 +110,7 @@ pub async fn create_message(
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
     let payload = single_message_payload(&msg, 0, &mut conn).await?;
-    Ok((msg, payload))
+    Ok((msg, payload, true))
 }
 
 /// Edit a message body. Returns the updated message.
@@ -284,12 +285,16 @@ pub async fn load_history(
     let query_limit = limit + 1; // fetch one extra to determine has_more
 
     let msgs: Vec<Message> = if let Some(before_id) = before {
-        let before_ts: chrono::DateTime<chrono::Utc> = messages::table
+        let before_ts: Option<chrono::DateTime<chrono::Utc>> = messages::table
             .filter(messages::id.eq(before_id))
             .filter(messages::conversation_id.eq(conversation_id))
             .select(messages::created_at)
             .first(&mut conn)
-            .await?;
+            .await
+            .optional()?;
+        let Some(before_ts) = before_ts else {
+            return Ok((Vec::new(), false));
+        };
 
         messages::table
             .filter(messages::conversation_id.eq(conversation_id))

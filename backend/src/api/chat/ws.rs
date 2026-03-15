@@ -238,7 +238,7 @@ async fn handle_client_message(
             handle_delete(user_id, message_id, hub, outbound_tx).await;
         }
         ClientMessage::React { message_id, emoji } => {
-            if emoji.len() > 32 {
+            if emoji.chars().count() > 32 {
                 let _ = outbound_tx.send(ServerMessage::Error {
                     message: "emoji too long".to_string(),
                 });
@@ -334,31 +334,37 @@ async fn handle_send(
     )
     .await
     {
-        Ok((_msg, payload)) => {
-            let members = conversations::member_user_ids(conversation_id)
-                .await
-                .unwrap_or_default();
-
-            // Broadcast to all members (including sender for confirmation)
+        Ok((_msg, payload, created)) => {
             let server_msg = ServerMessage::Message {
                 msg: Box::new(payload),
             };
-            hub.broadcast(&members, &server_msg);
 
-            // Push only to offline members; online users see unread via WS.
-            // Client-side ActiveChat check additionally suppresses when viewing this chat.
-            let non_sender: Vec<i32> = members
-                .iter()
-                .copied()
-                .filter(|&id| id != user_id)
-                .collect();
-            let push_targets = hub.offline_users(&non_sender);
-            if !push_targets.is_empty() {
-                let msg_body = body.to_string();
-                tokio::spawn(async move {
-                    super::push::notify_push(push_targets, conversation_id, user_id, &msg_body)
-                        .await;
-                });
+            if created {
+                let members = conversations::member_user_ids(conversation_id)
+                    .await
+                    .unwrap_or_default();
+
+                // Broadcast to all members (including sender for confirmation)
+                hub.broadcast(&members, &server_msg);
+
+                // Push only to offline members; online users see unread via WS.
+                // Client-side ActiveChat check additionally suppresses when viewing this chat.
+                let non_sender: Vec<i32> = members
+                    .iter()
+                    .copied()
+                    .filter(|&id| id != user_id)
+                    .collect();
+                let push_targets = hub.offline_users(&non_sender);
+                if !push_targets.is_empty() {
+                    let msg_body = body.to_string();
+                    tokio::spawn(async move {
+                        super::push::notify_push(push_targets, conversation_id, user_id, &msg_body)
+                            .await;
+                    });
+                }
+            } else {
+                // Dedup retry — confirm to sender only, no broadcast/push
+                let _ = outbound_tx.send(server_msg);
             }
         }
         Err(e) => {
