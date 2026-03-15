@@ -1,9 +1,9 @@
 package com.poziomki.app.chat.cache
 
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
+import com.poziomki.app.chat.api.TimelineItem
 
 data class RoomTimelineCacheSnapshotData(
-    val items: List<MatrixTimelineItem>,
+    val items: List<TimelineItem>,
     val isHydrated: Boolean,
     val cachedItemCount: Int,
     val updatedAtMillis: Long,
@@ -17,11 +17,13 @@ interface RoomTimelineCacheStore {
 
     fun saveSnapshot(
         roomId: String,
-        items: List<MatrixTimelineItem>,
+        items: List<TimelineItem>,
         isHydrated: Boolean,
     )
 
     fun markHydrated(roomId: String)
 
     fun clear(roomId: String)
+
+    fun clearAll()
 }

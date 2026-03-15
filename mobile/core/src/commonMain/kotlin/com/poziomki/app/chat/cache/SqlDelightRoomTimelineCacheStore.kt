@@ -1,10 +1,10 @@
 package com.poziomki.app.chat.cache
 
-import com.poziomki.app.chat.matrix.api.MatrixEventSendStatus
-import com.poziomki.app.chat.matrix.api.MatrixReaction
-import com.poziomki.app.chat.matrix.api.MatrixReactionSender
-import com.poziomki.app.chat.matrix.api.MatrixReplyDetails
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
+import com.poziomki.app.chat.api.EventSendStatus
+import com.poziomki.app.chat.api.Reaction
+import com.poziomki.app.chat.api.ReactionSender
+import com.poziomki.app.chat.api.ReplyDetails
+import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.db.PoziomkiDatabase
 import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
@@ -52,6 +52,7 @@ class SqlDelightRoomTimelineCacheStore(
                     .decodeFromString(ListSerializer(CachedTimelineItem.serializer()), row.payload_json)
                     .map(CachedTimelineItem::toDomain)
             }.getOrElse {
+                println("[TimelineCache] WARN: timeline cache corrupted for $roomId, clearing")
                 runCatching { db.roomTimelineCacheQueries.deleteByRoomId(roomId) }
                 emptyList()
             }
@@ -59,7 +60,7 @@ class SqlDelightRoomTimelineCacheStore(
         val snapshot = decodedItems.takeLast(limit)
         return RoomTimelineCacheSnapshotData(
             items = snapshot,
-            isHydrated = decodedItems.any { it is MatrixTimelineItem.TimelineStart },
+            isHydrated = decodedItems.any { it is TimelineItem.TimelineStart },
             cachedItemCount = decodedItems.size,
             updatedAtMillis = row.updated_at,
         )
@@ -67,13 +68,13 @@ class SqlDelightRoomTimelineCacheStore(
 
     override fun saveSnapshot(
         roomId: String,
-        items: List<MatrixTimelineItem>,
+        items: List<TimelineItem>,
         isHydrated: Boolean,
     ) {
         if (roomId.isBlank() || items.isEmpty()) return
         val snapshotItems =
-            if (isHydrated && items.none { it is MatrixTimelineItem.TimelineStart }) {
-                items + MatrixTimelineItem.TimelineStart
+            if (isHydrated && items.none { it is TimelineItem.TimelineStart }) {
+                items + TimelineItem.TimelineStart
             } else {
                 items
             }
@@ -104,17 +105,22 @@ class SqlDelightRoomTimelineCacheStore(
         if (roomId.isBlank()) return
         runCatching { db.roomTimelineCacheQueries.deleteByRoomId(roomId) }
     }
+
+    override fun clearAll() {
+        runCatching { db.roomTimelineCacheQueries.deleteAll() }
+    }
 }
 
 @Serializable
 private sealed interface CachedTimelineItem {
-    fun toDomain(): MatrixTimelineItem
+    fun toDomain(): TimelineItem
 
     @Serializable
     data class Event(
         val eventOrTransactionId: String,
         val eventId: String?,
         val senderId: String,
+        val senderPid: String? = null,
         val senderDisplayName: String?,
         val senderAvatarUrl: String?,
         val isMine: Boolean,
@@ -127,11 +133,12 @@ private sealed interface CachedTimelineItem {
         val readByCount: Int,
         val canReply: Boolean,
     ) : CachedTimelineItem {
-        override fun toDomain(): MatrixTimelineItem =
-            MatrixTimelineItem.Event(
+        override fun toDomain(): TimelineItem =
+            TimelineItem.Event(
                 eventOrTransactionId = eventOrTransactionId,
                 eventId = eventId,
                 senderId = senderId,
+                senderPid = senderPid,
                 senderDisplayName = senderDisplayName,
                 senderAvatarUrl = senderAvatarUrl,
                 isMine = isMine,
@@ -150,34 +157,35 @@ private sealed interface CachedTimelineItem {
     data class DateDivider(
         val timestampMillis: Long,
     ) : CachedTimelineItem {
-        override fun toDomain(): MatrixTimelineItem = MatrixTimelineItem.DateDivider(timestampMillis = timestampMillis)
+        override fun toDomain(): TimelineItem = TimelineItem.DateDivider(timestampMillis = timestampMillis)
     }
 
     @Serializable
     data object ReadMarker : CachedTimelineItem {
-        override fun toDomain(): MatrixTimelineItem = MatrixTimelineItem.ReadMarker
+        override fun toDomain(): TimelineItem = TimelineItem.ReadMarker
     }
 
     @Serializable
     data object TimelineStart : CachedTimelineItem {
-        override fun toDomain(): MatrixTimelineItem = MatrixTimelineItem.TimelineStart
+        override fun toDomain(): TimelineItem = TimelineItem.TimelineStart
     }
 
     companion object {
-        fun fromDomain(item: MatrixTimelineItem): CachedTimelineItem =
+        fun fromDomain(item: TimelineItem): CachedTimelineItem =
             when (item) {
-                is MatrixTimelineItem.Event -> {
+                is TimelineItem.Event -> {
                     Event(
                         eventOrTransactionId = item.eventOrTransactionId,
                         eventId = item.eventId,
                         senderId = item.senderId,
+                        senderPid = item.senderPid,
                         senderDisplayName = item.senderDisplayName,
                         senderAvatarUrl = item.senderAvatarUrl,
                         isMine = item.isMine,
                         body = item.body,
                         timestampMillis = item.timestampMillis,
                         inReplyTo = item.inReplyTo?.toCached(),
-                        reactions = item.reactions.map(MatrixReaction::toCached),
+                        reactions = item.reactions.map(Reaction::toCached),
                         isEditable = item.isEditable,
                         sendStatus = item.sendStatus?.toCached(),
                         readByCount = item.readByCount,
@@ -185,15 +193,15 @@ private sealed interface CachedTimelineItem {
                     )
                 }
 
-                is MatrixTimelineItem.DateDivider -> {
+                is TimelineItem.DateDivider -> {
                     DateDivider(timestampMillis = item.timestampMillis)
                 }
 
-                MatrixTimelineItem.ReadMarker -> {
+                TimelineItem.ReadMarker -> {
                     ReadMarker
                 }
 
-                MatrixTimelineItem.TimelineStart -> {
+                TimelineItem.TimelineStart -> {
                     TimelineStart
                 }
             }
@@ -207,8 +215,8 @@ private data class CachedReaction(
     val reactedByMe: Boolean,
     val senders: List<CachedReactionSender>,
 ) {
-    fun toDomain(): MatrixReaction =
-        MatrixReaction(
+    fun toDomain(): Reaction =
+        Reaction(
             emoji = emoji,
             count = count,
             reactedByMe = reactedByMe,
@@ -216,12 +224,12 @@ private data class CachedReaction(
         )
 }
 
-private fun MatrixReaction.toCached(): CachedReaction =
+private fun Reaction.toCached(): CachedReaction =
     CachedReaction(
         emoji = emoji,
         count = count,
         reactedByMe = reactedByMe,
-        senders = senders.map(MatrixReactionSender::toCached),
+        senders = senders.map(ReactionSender::toCached),
     )
 
 @Serializable
@@ -229,14 +237,14 @@ private data class CachedReactionSender(
     val senderId: String,
     val displayName: String?,
 ) {
-    fun toDomain(): MatrixReactionSender =
-        MatrixReactionSender(
+    fun toDomain(): ReactionSender =
+        ReactionSender(
             senderId = senderId,
             displayName = displayName,
         )
 }
 
-private fun MatrixReactionSender.toCached(): CachedReactionSender =
+private fun ReactionSender.toCached(): CachedReactionSender =
     CachedReactionSender(
         senderId = senderId,
         displayName = displayName,
@@ -248,15 +256,15 @@ private data class CachedReplyDetails(
     val senderDisplayName: String?,
     val body: String?,
 ) {
-    fun toDomain(): MatrixReplyDetails =
-        MatrixReplyDetails(
+    fun toDomain(): ReplyDetails =
+        ReplyDetails(
             eventId = eventId,
             senderDisplayName = senderDisplayName,
             body = body,
         )
 }
 
-private fun MatrixReplyDetails.toCached(): CachedReplyDetails =
+private fun ReplyDetails.toCached(): CachedReplyDetails =
     CachedReplyDetails(
         eventId = eventId,
         senderDisplayName = senderDisplayName,
@@ -270,16 +278,16 @@ private enum class CachedEventSendStatus {
     Failed,
 }
 
-private fun CachedEventSendStatus.toDomain(): MatrixEventSendStatus =
+private fun CachedEventSendStatus.toDomain(): EventSendStatus =
     when (this) {
-        CachedEventSendStatus.Sending -> MatrixEventSendStatus.Sending
-        CachedEventSendStatus.Sent -> MatrixEventSendStatus.Sent
-        CachedEventSendStatus.Failed -> MatrixEventSendStatus.Failed
+        CachedEventSendStatus.Sending -> EventSendStatus.Sending
+        CachedEventSendStatus.Sent -> EventSendStatus.Sent
+        CachedEventSendStatus.Failed -> EventSendStatus.Failed
     }
 
-private fun MatrixEventSendStatus.toCached(): CachedEventSendStatus =
+private fun EventSendStatus.toCached(): CachedEventSendStatus =
     when (this) {
-        MatrixEventSendStatus.Sending -> CachedEventSendStatus.Sending
-        MatrixEventSendStatus.Sent -> CachedEventSendStatus.Sent
-        MatrixEventSendStatus.Failed -> CachedEventSendStatus.Failed
+        EventSendStatus.Sending -> CachedEventSendStatus.Sending
+        EventSendStatus.Sent -> CachedEventSendStatus.Sent
+        EventSendStatus.Failed -> CachedEventSendStatus.Failed
     }

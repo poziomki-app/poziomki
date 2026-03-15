@@ -18,7 +18,7 @@ pub(super) async fn fallback_variant_urls(
     original_filename: &str,
 ) -> (Option<String>, Option<String>) {
     if crate::api::imgproxy_signing::is_configured() {
-        let thumb = crate::api::imgproxy_signing::signed_url(original_filename, "thumb", "webp");
+        let thumb = crate::api::imgproxy_signing::signed_avatar_url(original_filename);
         let feed = crate::api::imgproxy_signing::signed_url(original_filename, "feed", "webp");
         return (thumb, feed);
     }

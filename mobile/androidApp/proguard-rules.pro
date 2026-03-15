@@ -37,28 +37,6 @@
 -keep class app.cash.sqldelight.** { *; }
 -keep class com.poziomki.app.db.** { *; }
 
-# Matrix SDK (Android only, large — keep public API)
--keep class org.matrix.rustcomponents.** { *; }
--keep class uniffi.** { *; }
--dontwarn org.matrix.**
-
-# JNA — required by Matrix SDK Rust FFI (JNI accesses fields/methods by name)
--keep class com.sun.jna.** { *; }
--keep class net.java.dev.jna.** { *; }
--keepclassmembers class com.sun.jna.** { *; }
--keepclassmembers class net.java.dev.jna.** { *; }
--keep class * implements com.sun.jna.Library { *; }
--keep class * implements com.sun.jna.Callback { *; }
--keep class * extends com.sun.jna.Structure { *; }
--keepclassmembers class * extends com.sun.jna.Structure { *; }
--keepclasseswithmembers class * { native <methods>; }
--dontwarn com.sun.jna.**
--dontwarn net.java.dev.jna.**
-
-# uniffi FFI structures (JNA field access by name)
--keep class uniffi.** { *; }
--keepclassmembers class uniffi.** { *; }
-
 # Compose — keep runtime stability
 -dontwarn androidx.compose.**
 

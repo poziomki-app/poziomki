@@ -4,6 +4,7 @@ import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.chat.cache.SqlDelightRoomTimelineCacheStore
 import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.chat.draft.SqlDelightRoomComposerDraftStore
+import com.poziomki.app.chat.ws.WsConnection
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.data.repository.DegreeRepository
@@ -41,6 +42,14 @@ val sharedModule =
             )
         }
         single { ApiService(get()) }
+        single {
+            val sessionManager = get<SessionManager>()
+            WsConnection(
+                baseUrl = getProperty("API_BASE_URL", "http://localhost:5150"),
+                tokenProvider = { sessionManager.getToken() },
+                engine = get(),
+            )
+        }
         single { GeocodingService(get()) }
         single { PoziomkiDatabase(get()) }
         single { CacheManager(get()) }

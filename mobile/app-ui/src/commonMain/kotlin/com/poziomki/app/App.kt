@@ -14,7 +14,7 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
-import com.poziomki.app.chat.matrix.api.MatrixClient
+import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
@@ -22,7 +22,6 @@ import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
 import com.poziomki.app.ui.shared.ImgproxyCacheInterceptor
-import com.poziomki.app.ui.shared.MxcMediaFetcher
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import okio.Path.Companion.toOkioPath
@@ -34,10 +33,10 @@ private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
 @Composable
 fun App() {
     val engine = koinInject<HttpClientEngine>()
-    val matrixClient = koinInject<MatrixClient>()
+    val chatClient = koinInject<ChatClient>()
     val imageHttpClient = remember(engine) { HttpClient(engine) }
     val imageLoaderFactory: (PlatformContext) -> ImageLoader =
-        remember(matrixClient, imageHttpClient) { buildImageLoaderFactory(matrixClient, imageHttpClient) }
+        remember(imageHttpClient) { buildImageLoaderFactory(imageHttpClient) }
 
     setSingletonImageLoaderFactory(imageLoaderFactory)
 
@@ -70,10 +69,10 @@ fun App() {
         }
     }
 
-    // Warm up Matrix client (E2EE init) in background so first chat open is fast.
+    // Warm up chat client in background so first chat open is fast.
     LaunchedEffect(startDestination) {
         if (startDestination == Route.MainGraph) {
-            matrixClient.ensureStarted()
+            chatClient.ensureStarted()
         }
     }
 
@@ -84,10 +83,7 @@ fun App() {
     }
 }
 
-private fun buildImageLoaderFactory(
-    matrixClient: MatrixClient,
-    imageHttpClient: HttpClient,
-): (PlatformContext) -> ImageLoader =
+private fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformContext) -> ImageLoader =
     { context: PlatformContext ->
         ImageLoader
             .Builder(context)
@@ -104,7 +100,6 @@ private fun buildImageLoaderFactory(
                     .build()
             }.components {
                 add(ImgproxyCacheInterceptor())
-                add(MxcMediaFetcher.Factory(matrixClient))
                 @OptIn(ExperimentalCoilApi::class)
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()

@@ -1,7 +1,7 @@
 package com.poziomki.app.ui.feature.chat.model
 
-import com.poziomki.app.chat.matrix.api.MatrixTimelineItem
-import com.poziomki.app.chat.matrix.api.MatrixTimelineMode
+import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.chat.api.TimelineMode
 
 sealed interface ComposerMode {
     data object NewMessage : ComposerMode
@@ -24,8 +24,8 @@ data class ChatUiState(
     val roomAvatarUrl: String? = null,
     val isDirectRoom: Boolean = false,
     val avatarOverrides: Map<String, String> = emptyMap(),
-    val timelineMode: MatrixTimelineMode = MatrixTimelineMode.Live,
-    val timelineItems: List<MatrixTimelineItem> = emptyList(),
+    val timelineMode: TimelineMode = TimelineMode.Live,
+    val timelineItems: List<TimelineItem> = emptyList(),
     val isPaginatingBackwards: Boolean = false,
     val hasMoreBackwards: Boolean = true,
     val isAwayFromLatest: Boolean = false,

@@ -19,7 +19,7 @@ use crate::api::state::{
 };
 use crate::db::models::events::{Event, NewEvent};
 use crate::db::models::profiles::Profile;
-use crate::jobs::enqueue_matrix_event_membership_sync;
+use crate::jobs::enqueue_chat_membership_sync;
 
 use super::events_interactions_repo::{
     delete_event_interaction, delete_event_interaction_with_conn, upsert_event_interaction,
@@ -238,12 +238,12 @@ pub(in crate::api) async fn event_update(
     };
 
     for pid in &auto_approved {
-        if let Err(error) = enqueue_matrix_event_membership_sync(&updated.id, pid, false).await {
+        if let Err(error) = enqueue_chat_membership_sync(&updated.id, pid, false).await {
             tracing::warn!(
                 %error,
                 event_id = %updated.id,
                 profile_id = %pid,
-                "failed to enqueue matrix membership sync for auto-approved attendee"
+                "failed to enqueue chat membership sync for auto-approved attendee"
             );
         }
     }
@@ -325,7 +325,7 @@ pub(in crate::api) async fn event_attend(
     // Approval gate only applies to "going" — "interested" is a soft signal that
     // intentionally bypasses approval so users can bookmark events without creator action.
     let requires_approval =
-        event.requires_approval && status_str == "going" && event.creator_id != profile.id;
+        event.requires_approval && status_str == ATTENDEE_GOING && event.creator_id != profile.id;
 
     let outcome = events_write_repo::check_capacity_and_upsert(
         event_uuid,
@@ -347,15 +347,13 @@ pub(in crate::api) async fn event_attend(
         }
     };
 
-    if written_status != "pending" {
-        if let Err(error) =
-            enqueue_matrix_event_membership_sync(&event.id, &profile.id, false).await
-        {
+    if written_status == ATTENDEE_GOING {
+        if let Err(error) = enqueue_chat_membership_sync(&event.id, &profile.id, false).await {
             tracing::warn!(
                 %error,
                 event_id = %event.id,
                 profile_id = %profile.id,
-                "failed to enqueue matrix membership sync after attend"
+                "failed to enqueue chat membership sync after attend"
             );
         }
     }
@@ -427,14 +425,12 @@ pub(in crate::api) async fn event_approve_attendee(
         events_write_repo::UpsertOutcome::Accepted(_) => {}
     }
 
-    if let Err(error) =
-        enqueue_matrix_event_membership_sync(&event.id, &target_profile_id, false).await
-    {
+    if let Err(error) = enqueue_chat_membership_sync(&event.id, &target_profile_id, false).await {
         tracing::warn!(
             %error,
             event_id = %event.id,
             profile_id = %target_profile_id,
-            "failed to enqueue matrix membership sync after approve"
+            "failed to enqueue chat membership sync after approve"
         );
     }
 
@@ -522,12 +518,12 @@ pub(in crate::api) async fn event_leave(
     })
     .await?;
 
-    if let Err(error) = enqueue_matrix_event_membership_sync(&event.id, &profile.id, true).await {
+    if let Err(error) = enqueue_chat_membership_sync(&event.id, &profile.id, true).await {
         tracing::warn!(
             %error,
             event_id = %event.id,
             profile_id = %profile.id,
-            "failed to enqueue matrix membership sync after leave"
+            "failed to enqueue chat membership sync after leave"
         );
     }
 

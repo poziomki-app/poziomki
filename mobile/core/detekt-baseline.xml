@@ -2,72 +2,37 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ArgumentListWrapping:ApiService.kt$(targetUserId = targetUserId)</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/auth/resend-otp", ResendOtpRequest(email))</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/events/$id/attendees")</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles", request)</ID>
+    <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/settings", request)</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$(email)</ID>
-    <ID>ArgumentListWrapping:ApiService.kt$ApiService$(eventId)</ID>
-    <ID>ArgumentListWrapping:ApiService.kt$ApiService$(matrixEventRoomPath(eventId))</ID>
-    <ID>ArgumentListWrapping:JoinedRustRoom.kt$JoinedRustRoom$(userId)</ID>
-    <ID>ArgumentListWrapping:RustMatrixClient.kt$RustMatrixClient$((_state.value as? MatrixClientState.Error)?.message ?: STARTUP_ERROR_MESSAGE)</ID>
-    <ID>ArgumentListWrapping:RustMatrixClient.kt$RustMatrixClient$(IllegalStateException((_state.value as? MatrixClientState.Error)?.message ?: STARTUP_ERROR_MESSAGE))</ID>
-    <ID>ArgumentListWrapping:RustMatrixClient.kt$RustMatrixClient$(appContext.filesDir, "matrix-sdk/$storeNamespace/device_id.txt")</ID>
-    <ID>ArgumentListWrapping:RustMatrixClient.kt$RustMatrixClient$(org.matrix.rustcomponents.sdk.RoomListEntriesDynamicFilterKind.NonLeft)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$("update_settings", userId, json.encodeToString(UpdateSettingsRequest(language = language)))</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$("update_settings", userId, json.encodeToString(UpdateSettingsRequest(notificationsEnabled = enabled)))</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(UpdateSettingsRequest(language = language))</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(UpdateSettingsRequest(notificationsEnabled = enabled))</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(language = language)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(notificationsEnabled = enabled)</ID>
-    <ID>ComplexCondition:RustMatrixClient.kt$RustMatrixClient$accessToken.isNullOrBlank() || refreshToken.isNullOrBlank() || userId.isNullOrBlank() || deviceId.isNullOrBlank()</ID>
-    <ID>CyclomaticComplexMethod:ChatTimeline.kt$ChatTimeline$private fun applyDiffs(diff: List&lt;TimelineDiff&gt;)</ID>
-    <ID>CyclomaticComplexMethod:ChatTimeline.kt$ChatTimeline$private fun resolveUnfilledReplyDetails(items: List&lt;MatrixTimelineItem&gt;): List&lt;MatrixTimelineItem&gt;</ID>
-    <ID>CyclomaticComplexMethod:ChatTimeline.kt$private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem?</ID>
-    <ID>CyclomaticComplexMethod:ChatTimeline.kt$private fun timelineContentToText(content: TimelineItemContent): String</ID>
     <ID>CyclomaticComplexMethod:ProfileRepository.kt$ProfileRepository$suspend fun updateProfile( id: String, request: UpdateProfileRequest, ): ApiResult&lt;Profile&gt;</ID>
-    <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun ensureStarted(): Result&lt;Unit&gt;</ID>
-    <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun getJoinedRoom(roomId: String): JoinedRoom?</ID>
-    <ID>CyclomaticComplexMethod:RustMatrixClient.kt$RustMatrixClient$private suspend fun publishOpenedRoomSummary(room: Room)</ID>
-    <ID>CyclomaticComplexMethod:RustMatrixClient.kt$private fun applyRoomListUpdates( roomBuffer: MutableList&lt;Room&gt;, updates: List&lt;RoomListEntriesUpdate&gt;, )</ID>
-    <ID>Indentation:ChatTimeline.kt$ </ID>
-    <ID>Indentation:ChatTimeline.kt$ChatTimeline$ </ID>
+    <ID>CyclomaticComplexMethod:WsConnection.kt$WsConnection$private suspend fun connectOnce()</ID>
     <ID>Indentation:EventMapper.kt$ </ID>
-    <ID>Indentation:JoinedRustRoom.kt$JoinedRustRoom$ </ID>
     <ID>Indentation:ProfileRepository.kt$ProfileRepository$ </ID>
-    <ID>Indentation:RustMatrixClient.kt$RustMatrixClient$ </ID>
     <ID>Indentation:SyncEngine.kt$SyncEngine$ </ID>
-    <ID>LargeClass:RustMatrixClient.kt$RustMatrixClient : MatrixClient</ID>
-    <ID>LongMethod:ChatTimeline.kt$private fun TimelineItem.toUiTimelineItem(ownUserId: String): MatrixTimelineItem?</ID>
-    <ID>LongMethod:RustMatrixClient.kt$RustMatrixClient$override suspend fun getJoinedRoom(roomId: String): JoinedRoom?</ID>
-    <ID>LongMethod:RustMatrixClient.kt$RustMatrixClient$private suspend fun publishOpenedRoomSummary(room: Room)</ID>
-    <ID>LongMethod:RustMatrixClient.kt$RustMatrixClient$suspend fun attemptConnect(retried: Boolean = false): Result&lt;Unit&gt;</ID>
-    <ID>LongParameterList:ChatTimeline.kt$ChatTimeline$( private val inner: org.matrix.rustcomponents.sdk.Timeline, override val mode: MatrixTimelineMode, private val ownUserId: String, private val coroutineScope: CoroutineScope, private val roomId: String? = null, private val timelineCacheStore: RoomTimelineCacheStore? = null, initialItems: List&lt;MatrixTimelineItem&gt; = emptyList(), )</ID>
-    <ID>LoopWithTooManyJumpStatements:ChatTimeline.kt$ChatTimeline$while</ID>
+    <ID>LongMethod:WsConnection.kt$WsConnection$private suspend fun connectOnce()</ID>
     <ID>LoopWithTooManyJumpStatements:NtfyPushService.kt$NtfyPushService$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WsConnection.kt$WsConnection$while</ID>
     <ID>MaximumLineLength:ApiService.kt$ApiService$ </ID>
-    <ID>MaximumLineLength:ApiService.kt$private</ID>
-    <ID>MaximumLineLength:JoinedRustRoom.kt$JoinedRustRoom$ </ID>
-    <ID>MaximumLineLength:RustMatrixClient.kt$RustMatrixClient$ </ID>
     <ID>MaximumLineLength:SettingsRepository.kt$SettingsRepository$ </ID>
-    <ID>MayBeConst:RustMatrixClient.kt$RustMatrixClient.Companion$val BACKFILL_BATCH_SIZE: UShort = 200u</ID>
     <ID>NoUnusedImports:PendingOperationsManager.kt$com.poziomki.app.data.sync.PendingOperationsManager.kt</ID>
     <ID>NoUnusedImports:ProfileRepository.kt$com.poziomki.app.data.repository.ProfileRepository.kt</ID>
     <ID>NoUnusedImports:SettingsRepository.kt$com.poziomki.app.data.repository.SettingsRepository.kt</ID>
     <ID>SwallowedException:ApiClient.kt$ApiClient$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ApiClient.kt$ApiClient$e: Exception</ID>
     <ID>TooManyFunctions:ApiService.kt$ApiService</ID>
-    <ID>TooManyFunctions:ChatTimeline.kt$ChatTimeline : Timeline</ID>
     <ID>TooManyFunctions:EventRepository.kt$EventRepository</ID>
-    <ID>TooManyFunctions:MatrixClient.kt$MatrixClient</ID>
-    <ID>TooManyFunctions:NoopMatrixClient.kt$NoopMatrixClient : MatrixClient</ID>
-    <ID>TooManyFunctions:RustMatrixClient.kt$RustMatrixClient : MatrixClient</ID>
-    <ID>TooManyFunctions:RustMatrixClient.kt$com.poziomki.app.chat.matrix.impl.RustMatrixClient.kt</ID>
     <ID>TooManyFunctions:SyncEngine.kt$SyncEngine</ID>
     <ID>TooManyFunctions:Timeline.kt$Timeline : AutoCloseable</ID>
     <ID>UnusedParameter:ProfileRepository.kt$ProfileRepository$bytes: ByteArray</ID>
     <ID>UnusedPrivateProperty:SettingsRepository.kt$SettingsRepository$private val connectivityMonitor: ConnectivityMonitor</ID>
-    <ID>Wrapping:JoinedRustRoom.kt$JoinedRustRoom$innerRoom.memberAvatarUrl(userId)</ID>
-    <ID>Wrapping:JoinedRustRoom.kt$JoinedRustRoom$innerRoom.memberDisplayName(userId)</ID>
   </CurrentIssues>
 </SmellBaseline>

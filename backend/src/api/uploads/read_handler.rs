@@ -105,7 +105,7 @@ pub(in crate::api) async fn file_status(
         let url = public_upload_url(&headers, &upload.filename).await;
         let (thumbnail_url, standard_url) = if imgproxy {
             (
-                crate::api::imgproxy_signing::signed_url(&upload.filename, "thumb", "webp"),
+                crate::api::imgproxy_signing::signed_avatar_url(&upload.filename),
                 crate::api::imgproxy_signing::signed_url(&upload.filename, "feed", "webp"),
             )
         } else if upload.has_variants {
