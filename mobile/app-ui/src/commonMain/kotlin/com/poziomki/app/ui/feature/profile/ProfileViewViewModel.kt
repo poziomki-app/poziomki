@@ -59,7 +59,10 @@ class ProfileViewViewModel(
 
     private fun refreshProfile() {
         viewModelScope.launch {
-            profileRepository.refreshProfile(profileId)
+            val success = profileRepository.refreshProfile(profileId)
+            if (!success) {
+                _state.value = _state.value.copy(isLoading = false)
+            }
         }
     }
 }
