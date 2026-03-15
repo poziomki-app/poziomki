@@ -385,6 +385,7 @@ class ChatViewModel(
                     knownSummary?.avatarUrl
                         ?: inferredDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
                 isDirectRoom = inferredIsDirect,
+                directProfileId = activeDirectUserId,
                 avatarOverrides = avatarOverrides,
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isLoading = cachedTimeline?.items.isNullOrEmpty(),
@@ -427,6 +428,7 @@ class ChatViewModel(
                             roomDisplayName = seededDisplayName,
                             roomAvatarUrl =
                                 fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) },
+                            directProfileId = activeDirectUserId,
                             avatarOverrides = currentOverrides,
                             isLoading = false,
                             error = null,
@@ -550,6 +552,7 @@ class ChatViewModel(
                         current.copy(
                             roomDisplayName = resolvedName,
                             isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
+                            directProfileId = current.directProfileId ?: activeDirectUserId,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
                                     summary = summary,
