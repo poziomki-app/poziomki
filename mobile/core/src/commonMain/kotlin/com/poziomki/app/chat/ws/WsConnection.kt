@@ -110,8 +110,6 @@ class WsConnection(
                 url.protocol = if (useTls) URLProtocol.WSS else URLProtocol.WS
             },
         ) {
-            sendChannel = { text -> send(Frame.Text(text)) }
-
             // Authenticate
             val token = checkNotNull(tokenProvider()) { "No auth token" }
             val authMsg = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Auth(token))
@@ -125,6 +123,7 @@ class WsConnection(
                 is WsServerMessage.AuthOk -> {
                     _userId.value = authResponse.userId
                     _isConnected.value = true
+                    sendChannel = { text -> send(Frame.Text(text)) }
                 }
 
                 is WsServerMessage.AuthError -> {
