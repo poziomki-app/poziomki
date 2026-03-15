@@ -144,8 +144,8 @@ pub(super) async fn resend_otp(
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
-pub(super) async fn deliver_otp_email_job(to: &str, code: &str) {
-    send_otp_email(to, code).await;
+pub(super) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {
+    send_otp_email(to, code).await
 }
 
 pub(super) async fn sign_out(
