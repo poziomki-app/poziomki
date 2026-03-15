@@ -155,7 +155,7 @@ async fn authenticate(
         return None;
     };
 
-    let row: Option<(i32, uuid::Uuid)> = sessions::table
+    let row: Option<(i32, uuid::Uuid)> = if let Ok(row) = sessions::table
         .inner_join(users::table.on(users::id.eq(sessions::user_id)))
         .filter(sessions::token.eq(&hashed))
         .filter(sessions::expires_at.gt(chrono::Utc::now()))
@@ -163,8 +163,19 @@ async fn authenticate(
         .first::<(i32, uuid::Uuid)>(&mut conn)
         .await
         .optional()
-        .ok()
-        .flatten();
+    {
+        row
+    } else {
+        tracing::warn!("WS auth failed: database query error");
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "internal error".to_string(),
+            },
+        )
+        .await;
+        return None;
+    };
 
     if let Some((uid, pid)) = row {
         let _ = send_json(
@@ -229,7 +240,13 @@ async fn handle_client_message(
             handle_delete(user_id, message_id, hub, outbound_tx).await;
         }
         ClientMessage::React { message_id, emoji } => {
-            handle_react(user_id, message_id, &emoji, hub, outbound_tx).await;
+            if emoji.len() > 32 {
+                let _ = outbound_tx.send(ServerMessage::Error {
+                    message: "emoji too long".to_string(),
+                });
+            } else {
+                handle_react(user_id, message_id, &emoji, hub, outbound_tx).await;
+            }
         }
         ClientMessage::Read {
             conversation_id,

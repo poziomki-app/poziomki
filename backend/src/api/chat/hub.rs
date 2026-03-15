@@ -55,17 +55,6 @@ impl ChatHub {
         }
     }
 
-    /// Send a message to a single user (all their connections).
-    pub fn send_to_user(&self, user_id: i32, msg: &ServerMessage) {
-        self.connections.remove_if_mut(&user_id, |_, senders| {
-            senders.retain(|s| !s.is_closed());
-            for sender in senders.iter() {
-                let _ = sender.send(msg.clone());
-            }
-            senders.is_empty()
-        });
-    }
-
     /// Check whether a user has at least one active connection.
     /// Prunes closed senders before checking.
     pub fn is_online(&self, user_id: i32) -> bool {

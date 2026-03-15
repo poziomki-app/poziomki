@@ -27,6 +27,7 @@ pub async fn create_message(
         let existing: Option<Message> = messages::table
             .filter(messages::conversation_id.eq(conversation_id))
             .filter(messages::client_id.eq(cid))
+            .filter(messages::deleted_at.is_null())
             .first(&mut conn)
             .await
             .optional()?;
@@ -85,6 +86,7 @@ pub async fn create_message(
             let msg = messages::table
                 .filter(messages::conversation_id.eq(conversation_id))
                 .filter(messages::client_id.eq(cid))
+                .filter(messages::deleted_at.is_null())
                 .first(&mut conn)
                 .await?;
             let payload = message_to_payload(&msg, 0, &mut conn).await?;
@@ -105,6 +107,15 @@ pub async fn edit_message(
     sender_id: i32,
     new_body: &str,
 ) -> Result<Message, crate::error::AppError> {
+    if new_body.trim().is_empty() {
+        return Err(crate::error::AppError::message(
+            "message body cannot be empty",
+        ));
+    }
+    if new_body.len() > 10_000 {
+        return Err(crate::error::AppError::message("message body too long"));
+    }
+
     let mut conn = crate::db::conn().await?;
     let now = Utc::now();
 

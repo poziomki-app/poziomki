@@ -19,6 +19,9 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **`sendReply` missing optimistic UI** — reply messages had no optimistic item, causing visible delay compared to `sendMessage`
 - [x] **`paginateBackwards` hangs indefinitely** — `deferred.await()` had no timeout; if the server never responded, pagination blocked forever
 - [x] **No client_id idempotency** — partial unique index added in migration `2026-03-15-000000`
+- [x] **Idempotency dedup returns deleted messages** — dedup queries now filter `deleted_at IS NULL`
+- [x] **clientId collision on same-ms sends (mobile)** — appended random suffix to all clientId generation sites
+- [x] **edit_message missing body validation** — added empty/whitespace and length checks
 
 ## Dead Matrix Code
 
@@ -32,7 +35,7 @@ Ordered by priority. Checked items are done in this PR.
 ## Validation & Input Safety
 
 - [x] **Empty message body** — added validation rejecting empty/whitespace-only bodies (unless attachment present)
-- [ ] **Emoji validation in reactions** — no validation that `emoji` is actually a valid emoji string
+- [x] **Emoji length validation in reactions** — added 32-char length check before DB call
 - [x] **Message body length limit** — 10KB server-side cap on message body
 - [x] **Message kind validation** — only `text`, `image`, `file` accepted
 
@@ -47,7 +50,7 @@ Ordered by priority. Checked items are done in this PR.
 
 - [x] **N+1 queries in `list_for_user`** — replaced per-conversation loop with batch queries (DISTINCT ON, raw SQL unread counts, batch profile load)
 - [x] **`reqwest::Client` created per push** — shared a static `OnceLock<Client>` for connection reuse
-- [x] **`send_to_user` hub memory leak** — empty entries left in DashMap after all senders disconnected; added cleanup matching broadcast/is_online
+- [x] **`send_to_user` hub memory leak** — dead code removed entirely (zero call sites)
 - [ ] **Avatar URL resolution repeated** — same `signed_url(filename, "thumb", "webp")` pattern duplicated across multiple files
 - [ ] **Hub broadcast copies** — every broadcast clones the entire member vec; could use iterator
 
@@ -86,6 +89,10 @@ Ordered by priority. Checked items are done in this PR.
 ## Reliability
 
 - [x] **Push HTTP timeout** — ntfy HTTP client had no timeout; added 10s timeout via `Client::builder()`
+- [x] **Push response status not checked** — HTTP 4xx/5xx now logged as warnings
+- [x] **Push client fallback silent** — builder failure now logged before falling back to default
+- [x] **ntfy auth token support** — optional `NTFY_TOKEN` env var for self-hosted ntfy
+- [x] **WS auth swallows DB errors** — DB query errors now logged and returned as "internal error" instead of "invalid token"
 - [ ] **Non-atomic conversation creation** — self-healing via `on_conflict`, low priority
 - [x] **WS send rate limiting** — 10 sends/second per connection; token bucket in reader loop
 
