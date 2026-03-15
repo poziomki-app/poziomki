@@ -1,8 +1,13 @@
 use lettre::{
-    message::{header, Mailbox, MultiPart},
-    transport::smtp::{authentication::Credentials, client::TlsParameters},
+    message::{
+        dkim::{dkim_sign, DkimConfig, DkimSigningAlgorithm, DkimSigningKey},
+        header, Mailbox, MultiPart,
+    },
+    transport::smtp::client::TlsParameters,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
+use std::sync::OnceLock;
+use std::time::Duration;
 
 fn otp_email_html(code: &str) -> String {
     format!(
@@ -19,33 +24,65 @@ fn otp_email_html(code: &str) -> String {
     )
 }
 
-struct SmtpSettings {
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
-    from: String,
-    tls_name: String,
+// DKIM signing config, loaded once from DKIM_PRIVATE_KEY_PATH.
+// Ok(None) = not configured (dev), Ok(Some) = ready, Err = configured but broken.
+static DKIM: OnceLock<Result<Option<DkimConfig>, String>> = OnceLock::new();
+
+fn dkim_config() -> Result<Option<&'static DkimConfig>, String> {
+    DKIM.get_or_init(|| {
+        let Ok(path) = std::env::var("DKIM_PRIVATE_KEY_PATH") else {
+            return Ok(None);
+        };
+        let pem = std::fs::read_to_string(&path).map_err(|e| format!("DKIM key {path}: {e}"))?;
+        let key = DkimSigningKey::new(&pem, DkimSigningAlgorithm::Rsa)
+            .map_err(|e| format!("DKIM key parse: {e}"))?;
+        let domain = std::env::var("DKIM_DOMAIN").unwrap_or_else(|_| "poziomki.app".into());
+        let selector = std::env::var("DKIM_SELECTOR").unwrap_or_else(|_| "mail".into());
+        Ok(Some(DkimConfig::default_config(selector, domain, key)))
+    })
+    .as_ref()
+    .map(Option::as_ref)
+    .map_err(std::clone::Clone::clone)
 }
 
-fn smtp_settings() -> SmtpSettings {
-    let host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".into());
-    let port = std::env::var("SMTP_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(587);
-    let user = std::env::var("SMTP_USER").unwrap_or_default();
-    let password = std::env::var("SMTP_PASSWORD").unwrap_or_default();
-    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
-    let tls_name = std::env::var("SMTP_TLS_NAME").unwrap_or_else(|_| host.clone());
-    SmtpSettings {
-        host,
-        port,
-        user,
-        password,
-        from,
-        tls_name,
+// DNS resolver, initialized once from system config (/etc/resolv.conf).
+static DNS: OnceLock<Result<hickory_resolver::TokioResolver, String>> = OnceLock::new();
+
+fn resolver() -> Result<&'static hickory_resolver::TokioResolver, String> {
+    DNS.get_or_init(|| {
+        hickory_resolver::Resolver::builder_tokio()
+            .map(hickory_resolver::ResolverBuilder::build)
+            .map_err(|e| format!("DNS resolver: {e}"))
+    })
+    .as_ref()
+    .map_err(std::clone::Clone::clone)
+}
+
+async fn resolve_mx(domain: &str) -> Result<Vec<String>, String> {
+    let r = resolver()?;
+    let hosts: Vec<String> = r.mx_lookup(domain).await.map_or_else(
+        |_| vec![],
+        |response| {
+            let mut records: Vec<_> = response.iter().collect();
+            records.sort_by_key(|mx| mx.preference());
+            records
+                .iter()
+                .filter(|mx| mx.exchange().to_ascii() != ".")
+                .map(|mx| {
+                    let mut h = mx.exchange().to_ascii();
+                    if h.ends_with('.') {
+                        h.pop();
+                    }
+                    h
+                })
+                .collect()
+        },
+    );
+    // RFC 5321 §5: fall back to A/AAAA when no MX records exist
+    if hosts.is_empty() {
+        return Ok(vec![domain.to_string()]);
     }
+    Ok(hosts)
 }
 
 fn parse_from_mailbox(from: &str) -> Option<Mailbox> {
@@ -67,7 +104,7 @@ fn parse_recipient_mailbox(to: &str) -> Option<Mailbox> {
     Some(to_addr)
 }
 
-fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str, to: &str) -> Option<Message> {
+fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str) -> Option<Message> {
     let html_body = otp_email_html(code);
     let plain_body = format!(
         "Twój kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzić swoje konto.\nKod wygasa za 10 minut.\n\n2026 poziomki 🩵"
@@ -97,10 +134,7 @@ fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str, to: &str) -
         ))
         .multipart(MultiPart::alternative_plain_html(plain_body, html_body))
     {
-        Ok(msg) => {
-            tracing::info!("OTP email prepared for delivery to {to}");
-            Some(msg)
-        }
+        Ok(msg) => Some(msg),
         Err(error) => {
             tracing::error!("Failed to build OTP email: {error}");
             None
@@ -108,51 +142,54 @@ fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str, to: &str) -
     }
 }
 
-fn smtp_tls_params(tls_name: &str) -> Option<TlsParameters> {
-    match TlsParameters::new(tls_name.to_string()) {
-        Ok(params) => Some(params),
-        Err(error) => {
-            tracing::error!("Failed to create TLS parameters for {tls_name}: {error}");
-            None
+pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), String> {
+    if !super::env_truthy("SMTP_ENABLE") {
+        tracing::debug!("Mail disabled, skipping OTP email to {to}");
+        return Ok(());
+    }
+
+    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
+    let from_mbox = parse_from_mailbox(&from).ok_or("Invalid SMTP_FROM")?;
+    let to_mbox = parse_recipient_mailbox(to).ok_or_else(|| format!("Invalid recipient: {to}"))?;
+    let mut email = build_otp_email(from_mbox, to_mbox, code).ok_or("Failed to build email")?;
+
+    if let Some(dkim) = dkim_config()? {
+        dkim_sign(&mut email, dkim);
+    }
+
+    let envelope = email.envelope().clone();
+    let body = email.formatted();
+    let domain = to
+        .rsplit_once('@')
+        .map(|(_, d)| d)
+        .ok_or_else(|| format!("No domain in {to}"))?;
+    let mx_hosts = resolve_mx(domain).await?;
+
+    let mut last_err = String::new();
+    for mx_host in &mx_hosts {
+        let tls_params = match TlsParameters::new(mx_host.clone()) {
+            Ok(p) => p,
+            Err(e) => {
+                last_err = format!("TLS {mx_host}: {e}");
+                continue;
+            }
+        };
+        // Opportunistic STARTTLS: maximizes deliverability. OTP has short expiry (10 min)
+        // and is rate-limited, so cleartext fallback is an acceptable tradeoff.
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(mx_host)
+            .port(25)
+            .timeout(Some(Duration::from_secs(30)))
+            .tls(lettre::transport::smtp::client::Tls::Opportunistic(
+                tls_params,
+            ))
+            .build();
+        match mailer.send_raw(&envelope, &body).await {
+            Ok(_) => {
+                tracing::info!("OTP email delivered to {to} via {mx_host}");
+                return Ok(());
+            }
+            Err(e) => last_err = format!("{mx_host}: {e}"),
         }
     }
-}
-
-fn build_smtp_mailer(
-    settings: &SmtpSettings,
-    tls_params: TlsParameters,
-) -> AsyncSmtpTransport<Tokio1Executor> {
-    let creds = Credentials::new(settings.user.clone(), settings.password.clone());
-    AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&settings.host)
-        .port(settings.port)
-        .tls(lettre::transport::smtp::client::Tls::Required(tls_params))
-        .credentials(creds)
-        .build()
-}
-
-fn prepare_otp_delivery(to: &str, code: &str) -> Option<(Message, SmtpSettings, TlsParameters)> {
-    let settings = smtp_settings();
-    let from_mbox = parse_from_mailbox(&settings.from)?;
-    let to_mbox = parse_recipient_mailbox(to)?;
-    let email = build_otp_email(from_mbox, to_mbox, code, to)?;
-    let tls_params = smtp_tls_params(&settings.tls_name)?;
-    Some((email, settings, tls_params))
-}
-
-pub(in crate::api) async fn send_otp_email(to: &str, code: &str) {
-    if !super::env_truthy("SMTP_ENABLE") {
-        tracing::debug!("SMTP disabled, skipping OTP email to {to}");
-        return;
-    }
-
-    let Some((email, settings, tls_params)) = prepare_otp_delivery(to, code) else {
-        return;
-    };
-    let mailer = build_smtp_mailer(&settings, tls_params);
-
-    if let Err(error) = mailer.send(email).await {
-        tracing::error!("Failed to send OTP email to {to}: {error}");
-    } else {
-        tracing::info!("OTP email sent to {to}");
-    }
+    Err(format!("All MX hosts failed for {to}: {last_err}"))
 }
