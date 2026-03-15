@@ -239,7 +239,9 @@ pub async fn list_for_user(
              WHERE m.conversation_id = ANY($2) \
                AND m.deleted_at IS NULL \
                AND m.sender_id != $1 \
-               AND (rm.id IS NULL OR m.created_at > rm.created_at) \
+               AND (rm.id IS NULL OR m.created_at > rm.created_at \
+                    OR (m.created_at = rm.created_at AND m.id > rm.id)) \
+               AND (rm.id IS NULL OR m.id != cm.last_read_message_id) \
              GROUP BY m.conversation_id",
     )
     .bind::<diesel::sql_types::Integer, _>(user_id)

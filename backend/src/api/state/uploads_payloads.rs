@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
 pub(in crate::api) struct UploadResponse {
+    pub(in crate::api) id: String,
     pub(in crate::api) url: String,
     pub(in crate::api) filename: String,
     pub(in crate::api) size: usize,

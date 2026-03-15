@@ -78,8 +78,9 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         }
     }
 
-    // Cleanup: abort writer first so hub_rx is dropped, marking hub_tx as closed
+    // Cleanup: abort writer and await so hub_rx is dropped, marking hub_tx as closed
     writer_task.abort();
+    let _ = writer_task.await;
     hub.unregister(user_id);
 }
 
@@ -98,6 +99,7 @@ async fn authenticate(
     );
 
     let Ok(Some(Ok(Message::Text(frame)))) = timeout.await else {
+        tracing::warn!("WS auth failed: timeout or invalid frame");
         let _ = send_json(
             ws_tx,
             &ServerMessage::AuthError {
@@ -110,6 +112,7 @@ async fn authenticate(
 
     let parsed: Result<ClientMessage, _> = serde_json::from_str(&frame);
     let Ok(ClientMessage::Auth { token }) = parsed else {
+        tracing::warn!("WS auth failed: first message was not auth");
         let _ = send_json(
             ws_tx,
             &ServerMessage::AuthError {
@@ -155,6 +158,7 @@ async fn authenticate(
         .await;
         Some((uid, pid))
     } else {
+        tracing::warn!("WS auth failed: invalid or expired token");
         let _ = send_json(
             ws_tx,
             &ServerMessage::AuthError {
@@ -262,6 +266,21 @@ async fn handle_send(
         return;
     }
 
+    if body.len() > 10_000 {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "message body too long (max 10KB)".to_string(),
+        });
+        return;
+    }
+
+    // Validate kind
+    if !matches!(kind, "text" | "image" | "file") {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "invalid message kind".to_string(),
+        });
+        return;
+    }
+
     // Verify membership
     if !conversations::is_member(conversation_id, user_id)
         .await
@@ -295,13 +314,13 @@ async fn handle_send(
             };
             hub.broadcast(&members, &server_msg);
 
-            // Push notifications only to offline members (skip sender + online users)
-            let non_sender: Vec<i32> = members
+            // Push notifications to all non-sender members.
+            // Client-side ActiveChat check suppresses when chat is in foreground.
+            let push_targets: Vec<i32> = members
                 .iter()
                 .copied()
                 .filter(|&id| id != user_id)
                 .collect();
-            let push_targets = hub.offline_users(&non_sender);
             if !push_targets.is_empty() {
                 let msg_body = body.to_string();
                 tokio::spawn(async move {
@@ -325,6 +344,33 @@ async fn handle_edit(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
+    // Verify membership via message's conversation
+    match chat_messages::message_conversation_id(message_id).await {
+        Ok(Some(cid)) => {
+            if !conversations::is_member(cid, user_id)
+                .await
+                .unwrap_or(false)
+            {
+                let _ = outbound_tx.send(ServerMessage::Error {
+                    message: "not a member of this conversation".to_string(),
+                });
+                return;
+            }
+        }
+        Ok(None) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".to_string(),
+            });
+            return;
+        }
+        Err(_) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "internal error".to_string(),
+            });
+            return;
+        }
+    }
+
     match chat_messages::edit_message(message_id, user_id, body).await {
         Ok(msg) => {
             let members = conversations::member_user_ids(msg.conversation_id)
@@ -352,6 +398,33 @@ async fn handle_delete(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
+    // Verify membership via message's conversation
+    match chat_messages::message_conversation_id(message_id).await {
+        Ok(Some(cid)) => {
+            if !conversations::is_member(cid, user_id)
+                .await
+                .unwrap_or(false)
+            {
+                let _ = outbound_tx.send(ServerMessage::Error {
+                    message: "not a member of this conversation".to_string(),
+                });
+                return;
+            }
+        }
+        Ok(None) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".to_string(),
+            });
+            return;
+        }
+        Err(_) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "internal error".to_string(),
+            });
+            return;
+        }
+    }
+
     match chat_messages::delete_message(message_id, user_id).await {
         Ok(msg) => {
             let members = conversations::member_user_ids(msg.conversation_id)

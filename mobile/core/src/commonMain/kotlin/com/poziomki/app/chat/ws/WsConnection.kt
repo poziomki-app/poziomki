@@ -112,21 +112,20 @@ class WsConnection(
 
             // Wait for auth response
             val authFrame = incoming.receive()
-            if (authFrame is Frame.Text) {
-                val authResponse = wsJson.decodeFromString<WsServerMessage>(authFrame.readText())
-                when (authResponse) {
-                    is WsServerMessage.AuthOk -> {
-                        _userId.value = authResponse.userId
-                        _isConnected.value = true
-                    }
-                    is WsServerMessage.AuthError -> {
-                        error("Auth failed: ${authResponse.message}")
-                    }
-                    else -> {}
+            check(authFrame is Frame.Text) { "Expected text auth response" }
+            val authResponse = wsJson.decodeFromString<WsServerMessage>(authFrame.readText())
+            when (authResponse) {
+                is WsServerMessage.AuthOk -> {
+                    _userId.value = authResponse.userId
+                    _isConnected.value = true
                 }
+                is WsServerMessage.AuthError -> {
+                    error("Auth failed: ${authResponse.message}")
+                }
+                else -> error("Unexpected auth response: $authResponse")
             }
 
-            // Start heartbeat
+            // Start heartbeat only after successful auth
             heartbeatJob = scope.launch {
                 while (isActive) {
                     delay(30_000L)

@@ -39,6 +39,22 @@ pub async fn create_message(
     let now = Utc::now();
     let msg_id = Uuid::new_v4();
 
+    // Validate reply_to_id belongs to same conversation
+    if let Some(reply_id) = reply_to_id {
+        let reply_in_conv = messages::table
+            .filter(messages::id.eq(reply_id))
+            .filter(messages::conversation_id.eq(conversation_id))
+            .count()
+            .get_result::<i64>(&mut conn)
+            .await?
+            > 0;
+        if !reply_in_conv {
+            return Err(crate::error::AppError::message(
+                "reply_to message does not belong to this conversation",
+            ));
+        }
+    }
+
     let new = NewMessage {
         id: msg_id,
         conversation_id,
@@ -47,14 +63,35 @@ pub async fn create_message(
         kind: kind.to_string(),
         attachment_upload_id,
         reply_to_id,
-        client_id,
+        client_id: client_id.clone(),
         created_at: now,
     };
 
-    let msg = diesel::insert_into(messages::table)
+    let msg = match diesel::insert_into(messages::table)
         .values(&new)
         .get_result::<Message>(&mut conn)
-        .await?;
+        .await
+    {
+        Ok(msg) => msg,
+        Err(diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::UniqueViolation,
+            _,
+        )) if client_id.is_some() => {
+            // Race: another insert won, fetch the existing message
+            // SAFETY: guard ensures client_id is Some
+            let cid = client_id
+                .as_ref()
+                .ok_or_else(|| crate::error::AppError::message("client_id disappeared"))?;
+            let msg = messages::table
+                .filter(messages::conversation_id.eq(conversation_id))
+                .filter(messages::client_id.eq(cid))
+                .first(&mut conn)
+                .await?;
+            let payload = message_to_payload(&msg, 0, &mut conn).await?;
+            return Ok((msg, payload));
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
@@ -161,8 +198,6 @@ pub async fn mark_read(
     user_id: i32,
     message_id: Uuid,
 ) -> Result<(), crate::error::AppError> {
-    use crate::db::schema::conversation_members;
-
     let mut conn = crate::db::conn().await?;
 
     // Verify message belongs to this conversation
@@ -180,12 +215,17 @@ pub async fn mark_read(
         ));
     }
 
-    diesel::update(
-        conversation_members::table
-            .filter(conversation_members::conversation_id.eq(conversation_id))
-            .filter(conversation_members::user_id.eq(user_id)),
+    // Only advance watermark forward (never move backwards)
+    diesel::sql_query(
+        "UPDATE conversation_members SET last_read_message_id = $1 \
+         WHERE conversation_id = $2 AND user_id = $3 \
+           AND (last_read_message_id IS NULL \
+                OR (SELECT created_at FROM messages WHERE id = $1) \
+                 > (SELECT created_at FROM messages WHERE id = last_read_message_id))",
     )
-    .set(conversation_members::last_read_message_id.eq(Some(message_id)))
+    .bind::<diesel::sql_types::Uuid, _>(message_id)
+    .bind::<diesel::sql_types::Uuid, _>(conversation_id)
+    .bind::<diesel::sql_types::Integer, _>(user_id)
     .execute(&mut conn)
     .await?;
 
@@ -390,14 +430,20 @@ async fn batch_messages_to_payloads(
         });
 
         let reply_to = msg.reply_to_id.and_then(|rid| {
-            reply_msgs.get(&rid).map(|rm| ReplyPayload {
-                message_id: rm.id,
-                sender_name: reply_sender_names.get(&rm.sender_id).cloned(),
-                body: if rm.deleted_at.is_some() {
-                    None
-                } else {
-                    Some(rm.body.clone())
-                },
+            reply_msgs.get(&rid).and_then(|rm| {
+                // Only resolve replies within the same conversation
+                if rm.conversation_id != msg.conversation_id {
+                    return None;
+                }
+                Some(ReplyPayload {
+                    message_id: rm.id,
+                    sender_name: reply_sender_names.get(&rm.sender_id).cloned(),
+                    body: if rm.deleted_at.is_some() {
+                        None
+                    } else {
+                        Some(rm.body.clone())
+                    },
+                })
             })
         });
 
@@ -494,10 +540,11 @@ async fn message_to_payload(
         None
     };
 
-    // Resolve reply
+    // Resolve reply (scoped to same conversation)
     let reply_to = if let Some(reply_id) = msg.reply_to_id {
         let reply_msg: Option<Message> = messages::table
             .filter(messages::id.eq(reply_id))
+            .filter(messages::conversation_id.eq(msg.conversation_id))
             .first(conn)
             .await
             .optional()?;

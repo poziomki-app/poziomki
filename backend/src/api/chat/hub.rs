@@ -73,13 +73,13 @@ impl ChatHub {
     /// Check whether a user has at least one active connection.
     /// Prunes closed senders before checking.
     pub fn is_online(&self, user_id: i32) -> bool {
-        // remove_if_mut returns Some if entry was removed (i.e. empty after prune)
-        let removed = self.connections.remove_if_mut(&user_id, |_, senders| {
+        let mut online = false;
+        self.connections.remove_if_mut(&user_id, |_, senders| {
             senders.retain(|s| !s.is_closed());
+            online = !senders.is_empty();
             senders.is_empty()
         });
-        // Online if the entry exists and was NOT removed
-        removed.is_none() && self.connections.contains_key(&user_id)
+        online
     }
 
     /// Return the list of user IDs that have NO active connections

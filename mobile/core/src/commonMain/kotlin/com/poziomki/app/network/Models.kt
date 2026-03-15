@@ -263,6 +263,7 @@ data class TagSuggestionsRequest(
 
 @Serializable
 data class UploadResponse(
+    val id: String,
     val url: String,
     val filename: String,
     val size: Long,
