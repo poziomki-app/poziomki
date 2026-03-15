@@ -80,14 +80,14 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **Reconnect backfill prepends in wrong order** — `backfillOnReconnect` appended new messages on top of stale items; now clears items before requesting fresh history
 - [x] **Offline startup clears cache before connection** — `ensureStarted` called `clearAll()` before connecting; moved to after successful connection
 - [x] **Client actions falsely report success** — `edit`/`redact`/`toggleReaction`/`sendReadReceipt` ignored `send()` return value; now return `Result.failure` when disconnected
-- [x] **Push suppression too broad** — only pushed to offline users, missing users with app backgrounded; now pushes to all non-sender members (client suppresses when chat is in foreground)
-- [x] **WsChatClient scope never cancelled on stop** — `SupervisorJob` not cancelled in `stop()`; added `scopeJob.cancel()`
+- [x] **Push targeting** — push only to offline users via `hub.offline_users()`; online users see unread badge via WS, client-side `ActiveChat.roomId` suppresses when viewing the chat
+- [x] **WsChatClient singleton scope** — scope lives as long as the singleton; `Idle` state guard in `handleServerMessage` handles stop/restart without cancelling collectors
 
 ## Reliability
 
 - [x] **Push HTTP timeout** — ntfy HTTP client had no timeout; added 10s timeout via `Client::builder()`
 - [ ] **Non-atomic conversation creation** — self-healing via `on_conflict`, low priority
-- [ ] **No WS message rate limiting** — no server-side throttle on incoming WS messages
+- [x] **WS send rate limiting** — 10 sends/second per connection; token bucket in reader loop
 
 ## Known Limitations
 

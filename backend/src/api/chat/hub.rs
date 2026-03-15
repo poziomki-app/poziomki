@@ -25,15 +25,11 @@ impl ChatHub {
     }
 
     /// Register a new connection for the given user.
-    /// Returns the `(Sender, Receiver)` pair. The caller must pass the `Sender`
-    /// back to [`unregister`] so the connection can be cleaned up.
-    pub fn register(&self, user_id: i32) -> (Sender, mpsc::UnboundedReceiver<ServerMessage>) {
+    /// Returns a receiver for hub-dispatched messages.
+    pub fn register(&self, user_id: i32) -> mpsc::UnboundedReceiver<ServerMessage> {
         let (tx, rx) = mpsc::unbounded_channel();
-        self.connections
-            .entry(user_id)
-            .or_default()
-            .push(tx.clone());
-        (tx, rx)
+        self.connections.entry(user_id).or_default().push(tx);
+        rx
     }
 
     /// Remove closed senders for the given user.
