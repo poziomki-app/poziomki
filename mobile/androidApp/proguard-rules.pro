@@ -1,5 +1,5 @@
 # kotlinx-serialization — keep @Serializable classes and their generated serializers
--keepattributes *Annotation*, InnerClasses
+-keepattributes RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault
 -dontnote kotlinx.serialization.AnnotationsKt
 
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
@@ -16,8 +16,11 @@
 }
 -keep,includedescriptorclasses class com.poziomki.app.**$$serializer { *; }
 
-# Ktor — uses reflection and service loading
--keep class io.ktor.** { *; }
+# Ktor — engine/plugin discovery via ServiceLoader + WebSocket internals
+-keep class io.ktor.client.engine.okhttp.OkHttpEngineContainer { *; }
+-keep class io.ktor.client.plugins.websocket.WebSocketCapability { *; }
+-keep class io.ktor.serialization.kotlinx.json.KotlinxSerializationJsonExtensionProvider { *; }
+-keep class io.ktor.client.plugins.contentnegotiation.ContentNegotiationCapability { *; }
 -keepclassmembers class io.ktor.** { volatile <fields>; }
 -dontwarn io.ktor.**
 
@@ -27,34 +30,17 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
-# Koin
--keep class org.koin.** { *; }
-
-# Coil
--keep class coil3.** { *; }
-
-# SQLDelight — keep library and generated DB classes
--keep class app.cash.sqldelight.** { *; }
--keep class com.poziomki.app.db.** { *; }
-
-# Compose — keep runtime stability
+# Compose
 -dontwarn androidx.compose.**
 
-# DataStore
--keep class androidx.datastore.** { *; }
-
-# Keep all app data/API/mapper classes (repositories, models, mappers)
--keep class com.poziomki.app.network.** { *; }
--keep class com.poziomki.app.data.** { *; }
--keep class com.poziomki.app.session.** { *; }
--keep class com.poziomki.app.di.** { *; }
+# Keep generated SQLDelight DB classes
+-keep class com.poziomki.app.db.** { *; }
 
 # Keep Kotlin metadata for reflection-based libraries
 -keep class kotlin.Metadata { *; }
 -dontwarn kotlin.**
 
 # MapLibre
--keep class org.maplibre.** { *; }
 -dontwarn org.maplibre.**
 
 # Google Tink / errorprone annotations (used by AndroidX security-crypto)
@@ -62,3 +48,9 @@
 -dontwarn com.google.errorprone.annotations.CheckReturnValue
 -dontwarn com.google.errorprone.annotations.Immutable
 -dontwarn com.google.errorprone.annotations.RestrictedApi
+
+# Repackage classes into unnamed package for smaller DEX (default in AGP 9.1)
+-repackageclasses
+
+# Remove Kotlin null-check intrinsics entirely
+-processkotlinnullchecks remove
