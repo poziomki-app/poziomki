@@ -11,6 +11,7 @@ use crate::api::state::hash_session_token;
 const AUTH_TIMEOUT_SECS: u64 = 5;
 const DEFAULT_HISTORY_LIMIT: i64 = 50;
 const MAX_HISTORY_LIMIT: i64 = 200;
+const SEND_RATE_LIMIT: u32 = 10;
 
 /// Handle a WebSocket connection after Axum upgrade.
 pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
@@ -22,7 +23,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     };
 
     // --- Step 2: Register in hub ---
-    let (_hub_tx, mut hub_rx) = hub.register(user_id);
+    let mut hub_rx = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
 
     // Send initial conversation list
@@ -58,12 +59,29 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     });
 
     // Reader loop: process incoming client messages
+    let mut send_count: u32 = 0;
+    let mut send_window = tokio::time::Instant::now();
+
     while let Some(Ok(frame)) = ws_rx.next().await {
         match frame {
             Message::Text(text) => {
                 let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
                 match parsed {
                     Ok(client_msg) => {
+                        // Rate-limit Send messages (10/sec)
+                        if matches!(&client_msg, ClientMessage::Send { .. }) {
+                            if send_window.elapsed() >= std::time::Duration::from_secs(1) {
+                                send_count = 0;
+                                send_window = tokio::time::Instant::now();
+                            }
+                            send_count += 1;
+                            if send_count > SEND_RATE_LIMIT {
+                                let _ = outbound_tx.send(ServerMessage::Error {
+                                    message: "rate limited: too many messages".to_string(),
+                                });
+                                continue;
+                            }
+                        }
                         handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
                     }
                     Err(e) => {
@@ -314,13 +332,14 @@ async fn handle_send(
             };
             hub.broadcast(&members, &server_msg);
 
-            // Push notifications to all non-sender members.
-            // Client-side ActiveChat check suppresses when chat is in foreground.
-            let push_targets: Vec<i32> = members
+            // Push only to offline members; online users see unread via WS.
+            // Client-side ActiveChat check additionally suppresses when viewing this chat.
+            let non_sender: Vec<i32> = members
                 .iter()
                 .copied()
                 .filter(|&id| id != user_id)
                 .collect();
+            let push_targets = hub.offline_users(&non_sender);
             if !push_targets.is_empty() {
                 let msg_body = body.to_string();
                 tokio::spawn(async move {

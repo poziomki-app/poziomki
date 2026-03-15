@@ -57,7 +57,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
         let result = client
             .post(&url)
             .header("Title", &sender_name)
-            .body(push_data.to_string())
+            .json(&push_data)
             .send()
             .await;
 

@@ -215,13 +215,17 @@ pub async fn mark_read(
         ));
     }
 
-    // Only advance watermark forward (never move backwards)
+    // Only advance watermark forward (never move backwards).
+    // Uses (created_at, id) compound comparison to match unread count query.
     diesel::sql_query(
         "UPDATE conversation_members SET last_read_message_id = $1 \
          WHERE conversation_id = $2 AND user_id = $3 \
            AND (last_read_message_id IS NULL \
                 OR (SELECT created_at FROM messages WHERE id = $1) \
-                 > (SELECT created_at FROM messages WHERE id = last_read_message_id))",
+                 > (SELECT created_at FROM messages WHERE id = last_read_message_id) \
+                OR ((SELECT created_at FROM messages WHERE id = $1) \
+                  = (SELECT created_at FROM messages WHERE id = last_read_message_id) \
+                 AND $1 > last_read_message_id))",
     )
     .bind::<diesel::sql_types::Uuid, _>(message_id)
     .bind::<diesel::sql_types::Uuid, _>(conversation_id)

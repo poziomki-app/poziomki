@@ -260,7 +260,6 @@ class WsChatClient(
     }
 
     override suspend fun stop() {
-        scopeJob.cancel()
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
         openedRooms.values.forEach { it.liveTimeline.close() }
