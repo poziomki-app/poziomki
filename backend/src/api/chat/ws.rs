@@ -356,14 +356,13 @@ async fn handle_send(
                 // Broadcast to all members (including sender for confirmation)
                 hub.broadcast(&members, &server_msg);
 
-                // Push only to offline members; online users see unread via WS.
-                // Client-side ActiveChat check additionally suppresses when viewing this chat.
-                let non_sender: Vec<i32> = members
+                // Push to all non-sender members; client-side ActiveChat check
+                // suppresses the notification when the user is viewing this chat.
+                let push_targets: Vec<i32> = members
                     .iter()
                     .copied()
                     .filter(|&id| id != user_id)
                     .collect();
-                let push_targets = hub.offline_users(&non_sender);
                 if !push_targets.is_empty() {
                     let msg_body = body.to_string();
                     tokio::spawn(async move {
