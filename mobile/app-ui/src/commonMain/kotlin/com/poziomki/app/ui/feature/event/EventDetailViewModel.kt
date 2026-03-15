@@ -83,6 +83,7 @@ class EventDetailViewModel(
             _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.attendEvent(eventId)) {
                 is ApiResult.Success -> {
+                    eventRepository.refreshEvent(eventId)
                     eventRepository.refreshAttendees(eventId)
                 }
 
@@ -104,6 +105,7 @@ class EventDetailViewModel(
             _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.leaveEvent(eventId)) {
                 is ApiResult.Success -> {
+                    eventRepository.refreshEvent(eventId)
                     eventRepository.refreshAttendees(eventId)
                 }
 
@@ -159,7 +161,10 @@ class EventDetailViewModel(
     fun deleteEvent(onDeleted: () -> Unit) {
         viewModelScope.launch {
             when (eventRepository.deleteEvent(eventId)) {
-                is ApiResult.Success -> onDeleted()
+                is ApiResult.Success -> {
+                    onDeleted()
+                }
+
                 is ApiResult.Error -> {
                     _state.value =
                         _state.value.copy(

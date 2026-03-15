@@ -43,7 +43,7 @@ fun EventChatScreen(
         onDispose { ActiveChat.roomId = null }
     }
 
-    LaunchedEffect(eventState.event?.id, eventState.event?.isAttending, eventState.event?.conversationId, eventState.isOpeningChat) {
+    LaunchedEffect(eventState.event?.id, eventState.event?.isAttending, eventState.event?.conversationId) {
         val event = eventState.event ?: return@LaunchedEffect
         if (event.isAttending && event.conversationId == null && !eventState.isOpeningChat) {
             eventDetailViewModel.openEventChat { }
