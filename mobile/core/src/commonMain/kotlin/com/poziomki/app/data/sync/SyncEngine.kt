@@ -301,7 +301,9 @@ class SyncEngine(
                 true
             }
 
-            is ApiResult.Error -> false
+            is ApiResult.Error -> {
+                false
+            }
         }
     }
 

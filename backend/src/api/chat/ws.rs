@@ -369,6 +369,42 @@ async fn handle_send(
     }
 }
 
+/// Check that a message exists and the user is a member of its conversation.
+/// Returns the conversation ID on success, or sends an error and returns None.
+async fn verify_message_membership(
+    message_id: uuid::Uuid,
+    user_id: i32,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) -> Option<uuid::Uuid> {
+    match chat_messages::message_conversation_id(message_id).await {
+        Ok(Some(cid))
+            if conversations::is_member(cid, user_id)
+                .await
+                .unwrap_or(false) =>
+        {
+            Some(cid)
+        }
+        Ok(Some(_)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".into(),
+            });
+            None
+        }
+        Ok(None) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".into(),
+            });
+            None
+        }
+        Err(_) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "internal error".into(),
+            });
+            None
+        }
+    }
+}
+
 async fn handle_edit(
     user_id: i32,
     message_id: uuid::Uuid,
@@ -376,32 +412,9 @@ async fn handle_edit(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    // Verify membership via message's conversation
-    match chat_messages::message_conversation_id(message_id).await {
-        Ok(Some(cid)) => {
-            if !conversations::is_member(cid, user_id)
-                .await
-                .unwrap_or(false)
-            {
-                let _ = outbound_tx.send(ServerMessage::Error {
-                    message: "not a member of this conversation".to_string(),
-                });
-                return;
-            }
-        }
-        Ok(None) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "message not found".to_string(),
-            });
-            return;
-        }
-        Err(_) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "internal error".to_string(),
-            });
-            return;
-        }
-    }
+    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
+        return;
+    };
 
     match chat_messages::edit_message(message_id, user_id, body).await {
         Ok(msg) => {
@@ -430,32 +443,9 @@ async fn handle_delete(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    // Verify membership via message's conversation
-    match chat_messages::message_conversation_id(message_id).await {
-        Ok(Some(cid)) => {
-            if !conversations::is_member(cid, user_id)
-                .await
-                .unwrap_or(false)
-            {
-                let _ = outbound_tx.send(ServerMessage::Error {
-                    message: "not a member of this conversation".to_string(),
-                });
-                return;
-            }
-        }
-        Ok(None) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "message not found".to_string(),
-            });
-            return;
-        }
-        Err(_) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "internal error".to_string(),
-            });
-            return;
-        }
-    }
+    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
+        return;
+    };
 
     match chat_messages::delete_message(message_id, user_id).await {
         Ok(msg) => {
@@ -483,33 +473,9 @@ async fn handle_react(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    // Resolve conversation_id from message and check membership
-    let conversation_id = chat_messages::message_conversation_id(message_id).await;
-    match conversation_id {
-        Ok(Some(cid)) => {
-            if !conversations::is_member(cid, user_id)
-                .await
-                .unwrap_or(false)
-            {
-                let _ = outbound_tx.send(ServerMessage::Error {
-                    message: "not a member of this conversation".to_string(),
-                });
-                return;
-            }
-        }
-        Ok(None) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "message not found".to_string(),
-            });
-            return;
-        }
-        Err(_) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "internal error".to_string(),
-            });
-            return;
-        }
-    }
+    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
+        return;
+    };
 
     match chat_messages::toggle_reaction(message_id, user_id, emoji).await {
         Ok((added, msg)) => {
@@ -542,27 +508,22 @@ async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
     use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
 
-    let result: Option<(String, Option<String>)> = async {
-        let mut conn = crate::db::conn().await.ok()?;
-        profiles::table
-            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-            .filter(users::id.eq(user_id))
-            .select((profiles::name, profiles::profile_picture))
-            .first::<(String, Option<String>)>(&mut conn)
-            .await
-            .ok()
-    }
-    .await;
-
-    match result {
-        Some((name, avatar)) => {
-            let avatar_url = avatar
-                .as_ref()
-                .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(filename));
-            (name, avatar_url)
-        }
-        None => ("Unknown".to_string(), None),
-    }
+    let Ok(mut conn) = crate::db::conn().await else {
+        return ("Unknown".into(), None);
+    };
+    let Ok((name, avatar)) = profiles::table
+        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+        .filter(users::id.eq(user_id))
+        .select((profiles::name, profiles::profile_picture))
+        .first::<(String, Option<String>)>(&mut conn)
+        .await
+    else {
+        return ("Unknown".into(), None);
+    };
+    let avatar_url = avatar
+        .as_ref()
+        .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
+    (name, avatar_url)
 }
 
 async fn handle_read(

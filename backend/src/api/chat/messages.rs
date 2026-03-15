@@ -8,6 +8,19 @@ use crate::db::models::message_reactions::NewMessageReaction;
 use crate::db::models::messages::{Message, NewMessage};
 use crate::db::schema::{message_reactions, messages, profiles, users};
 
+/// Convert a single message to a payload via the batch path.
+async fn single_message_payload(
+    msg: &Message,
+    viewer_user_id: i32,
+    conn: &mut crate::db::DbConn,
+) -> Result<MessagePayload, crate::error::AppError> {
+    batch_messages_to_payloads(std::slice::from_ref(msg), viewer_user_id, conn)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| crate::error::AppError::message("payload conversion failed"))
+}
+
 /// Insert a new message and return a serializable payload.
 /// If `client_id` is set and a message already exists with the same
 /// `(conversation_id, client_id)`, return the existing message (idempotent).
@@ -31,7 +44,7 @@ pub async fn create_message(
             .await
             .optional()?;
         if let Some(msg) = existing {
-            let payload = message_to_payload(&msg, 0, &mut conn).await?;
+            let payload = single_message_payload(&msg, 0, &mut conn).await?;
             return Ok((msg, payload));
         }
     }
@@ -87,7 +100,7 @@ pub async fn create_message(
                 .filter(messages::deleted_at.is_null())
                 .first(&mut conn)
                 .await?;
-            let payload = message_to_payload(&msg, 0, &mut conn).await?;
+            let payload = single_message_payload(&msg, 0, &mut conn).await?;
             return Ok((msg, payload));
         }
         Err(e) => return Err(e.into()),
@@ -95,7 +108,7 @@ pub async fn create_message(
 
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
-    let payload = message_to_payload(&msg, 0, &mut conn).await?;
+    let payload = single_message_payload(&msg, 0, &mut conn).await?;
     Ok((msg, payload))
 }
 
@@ -330,7 +343,7 @@ async fn batch_messages_to_payloads(
     let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
     let reply_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.reply_to_id).collect();
 
-    // 1. Batch-load sender profiles
+    // Batch-load sender profiles
     let sender_rows: Vec<(i32, String, Uuid, Option<String>)> = profiles::table
         .inner_join(users::table.on(users::id.eq(profiles::user_id)))
         .filter(users::id.eq_any(&sender_ids))
@@ -347,7 +360,7 @@ async fn batch_messages_to_payloads(
         .map(|(id, name, pid, avatar)| (id, (name, pid, avatar)))
         .collect();
 
-    // 2. Batch-load reply messages
+    // Batch-load reply messages
     let reply_msgs: HashMap<Uuid, Message> = if reply_ids.is_empty() {
         HashMap::new()
     } else {
@@ -375,7 +388,7 @@ async fn batch_messages_to_payloads(
             .collect()
     };
 
-    // 4. Batch-load reactions
+    // Batch-load reactions
     let raw_reactions: Vec<(Uuid, String, i32)> = message_reactions::table
         .filter(message_reactions::message_id.eq_any(&msg_ids))
         .select((
@@ -386,7 +399,7 @@ async fn batch_messages_to_payloads(
         .load(conn)
         .await?;
 
-    // 5. Batch-load reaction user names
+    // Batch-load reaction user names
     let reaction_user_ids: Vec<i32> = raw_reactions.iter().map(|(_, _, uid)| *uid).collect();
     let reaction_user_names: HashMap<i32, String> = if reaction_user_ids.is_empty() {
         HashMap::new()
@@ -490,125 +503,4 @@ async fn batch_messages_to_payloads(
     }
 
     Ok(payloads)
-}
-
-/// Convert a Message model to a `MessagePayload`, resolving sender info and reactions.
-async fn message_to_payload(
-    msg: &Message,
-    viewer_user_id: i32,
-    conn: &mut crate::db::DbConn,
-) -> Result<MessagePayload, crate::error::AppError> {
-    // Resolve sender profile
-    let (sender_name, sender_pid, sender_avatar) = profiles::table
-        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-        .filter(users::id.eq(msg.sender_id))
-        .select((profiles::name, users::pid, profiles::profile_picture))
-        .first::<(String, uuid::Uuid, Option<String>)>(conn)
-        .await
-        .map_or_else(
-            |_| ("Unknown".to_string(), None, None),
-            |(name, pid, avatar)| (name, Some(pid.to_string()), avatar),
-        );
-
-    let sender_avatar = sender_avatar
-        .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(&filename));
-
-    // Resolve reply (scoped to same conversation)
-    let reply_to = if let Some(reply_id) = msg.reply_to_id {
-        let reply_msg: Option<Message> = messages::table
-            .filter(messages::id.eq(reply_id))
-            .filter(messages::conversation_id.eq(msg.conversation_id))
-            .first(conn)
-            .await
-            .optional()?;
-        if let Some(rm) = reply_msg {
-            let reply_sender_name: Option<String> = profiles::table
-                .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-                .filter(users::id.eq(rm.sender_id))
-                .select(profiles::name)
-                .first(conn)
-                .await
-                .optional()?;
-            Some(ReplyPayload {
-                message_id: rm.id,
-                sender_name: reply_sender_name,
-                body: if rm.deleted_at.is_some() {
-                    None
-                } else {
-                    Some(rm.body)
-                },
-            })
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    // Resolve reactions
-    let raw_reactions: Vec<(String, i32)> = message_reactions::table
-        .filter(message_reactions::message_id.eq(msg.id))
-        .select((message_reactions::emoji, message_reactions::user_id))
-        .load(conn)
-        .await?;
-
-    // Collect unique user IDs for name resolution
-    let reaction_user_ids: Vec<i32> = raw_reactions.iter().map(|(_, uid)| *uid).collect();
-    let user_names: std::collections::HashMap<i32, String> = if reaction_user_ids.is_empty() {
-        std::collections::HashMap::new()
-    } else {
-        profiles::table
-            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-            .filter(users::id.eq_any(&reaction_user_ids))
-            .select((users::id, profiles::name))
-            .load::<(i32, String)>(conn)
-            .await?
-            .into_iter()
-            .collect()
-    };
-
-    let mut reaction_map: std::collections::HashMap<String, (Vec<i32>, Vec<String>, bool)> =
-        std::collections::HashMap::new();
-    for (emoji, uid) in &raw_reactions {
-        let entry = reaction_map.entry(emoji.clone()).or_default();
-        entry.0.push(*uid);
-        entry.1.push(
-            user_names
-                .get(uid)
-                .cloned()
-                .unwrap_or_else(|| "Unknown".to_string()),
-        );
-        if *uid == viewer_user_id {
-            entry.2 = true;
-        }
-    }
-    let reactions: Vec<ReactionPayload> = reaction_map
-        .into_iter()
-        .map(
-            |(emoji, (user_ids, sender_names, reacted_by_me))| ReactionPayload {
-                count: i64::try_from(user_ids.len()).unwrap_or(0),
-                emoji,
-                reacted_by_me,
-                user_ids,
-                sender_names,
-            },
-        )
-        .collect();
-
-    Ok(MessagePayload {
-        id: msg.id,
-        conversation_id: msg.conversation_id,
-        sender_id: msg.sender_id,
-        sender_pid,
-        sender_name,
-        sender_avatar,
-        body: msg.body.clone(),
-        kind: msg.kind.clone(),
-        reply_to,
-        reactions,
-        client_id: msg.client_id.clone(),
-        is_mine: msg.sender_id == viewer_user_id,
-        is_edited: msg.edited_at.is_some(),
-        created_at: msg.created_at.to_rfc3339(),
-    })
 }

@@ -4,12 +4,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-val wsJson = Json {
-    ignoreUnknownKeys = true
-    classDiscriminator = "type"
-    encodeDefaults = true
-    explicitNulls = false
-}
+val wsJson =
+    Json {
+        ignoreUnknownKeys = true
+        classDiscriminator = "type"
+        encodeDefaults = true
+        explicitNulls = false
+    }
 
 // Client → Server
 
@@ -17,7 +18,9 @@ val wsJson = Json {
 sealed interface WsClientMessage {
     @Serializable
     @SerialName("auth")
-    data class Auth(val token: String) : WsClientMessage
+    data class Auth(
+        val token: String,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("send")
@@ -31,23 +34,37 @@ sealed interface WsClientMessage {
 
     @Serializable
     @SerialName("edit")
-    data class Edit(val messageId: String, val body: String) : WsClientMessage
+    data class Edit(
+        val messageId: String,
+        val body: String,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("delete")
-    data class Delete(val messageId: String) : WsClientMessage
+    data class Delete(
+        val messageId: String,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("react")
-    data class React(val messageId: String, val emoji: String) : WsClientMessage
+    data class React(
+        val messageId: String,
+        val emoji: String,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("read")
-    data class Read(val conversationId: String, val messageId: String) : WsClientMessage
+    data class Read(
+        val conversationId: String,
+        val messageId: String,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("typing")
-    data class Typing(val conversationId: String, val isTyping: Boolean) : WsClientMessage
+    data class Typing(
+        val conversationId: String,
+        val isTyping: Boolean,
+    ) : WsClientMessage
 
     @Serializable
     @SerialName("history")
@@ -72,11 +89,15 @@ sealed interface WsClientMessage {
 sealed interface WsServerMessage {
     @Serializable
     @SerialName("authOk")
-    data class AuthOk(val userId: String) : WsServerMessage
+    data class AuthOk(
+        val userId: String,
+    ) : WsServerMessage
 
     @Serializable
     @SerialName("authError")
-    data class AuthError(val message: String) : WsServerMessage
+    data class AuthError(
+        val message: String,
+    ) : WsServerMessage
 
     @Serializable
     @SerialName("message")
@@ -161,7 +182,9 @@ sealed interface WsServerMessage {
 
     @Serializable
     @SerialName("error")
-    data class Error(val message: String) : WsServerMessage
+    data class Error(
+        val message: String,
+    ) : WsServerMessage
 }
 
 @Serializable

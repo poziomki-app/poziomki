@@ -48,7 +48,9 @@ internal class EventRoomRepository(
 
     private suspend fun resolveEventConversationViaBackend(eventId: String): String =
         when (val result = api.getChatEventConversation(eventId)) {
-            is ApiResult.Success -> result.data.conversationId
+            is ApiResult.Success -> {
+                result.data.conversationId
+            }
 
             is ApiResult.Error -> {
                 if (

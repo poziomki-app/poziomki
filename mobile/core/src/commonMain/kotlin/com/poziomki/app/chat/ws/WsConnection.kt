@@ -41,12 +41,13 @@ class WsConnection(
     private var connectionJob: Job? = null
     private var heartbeatJob: Job? = null
 
-    private val wsClient = HttpClient(engine) {
-        install(WebSockets)
-        defaultRequest {
-            headers.append("Origin", baseUrl.trimEnd('/'))
+    private val wsClient =
+        HttpClient(engine) {
+            install(WebSockets)
+            defaultRequest {
+                headers.append("Origin", baseUrl.trimEnd('/'))
+            }
         }
-    }
 
     private var sendChannel: (suspend (String) -> Unit)? = null
 
@@ -56,31 +57,36 @@ class WsConnection(
         return try {
             channel.invoke(text)
             true
-        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught") _: Exception,
+        ) {
             false
         }
     }
 
     fun connect() {
         if (connectionJob?.isActive == true) return
-        connectionJob = scope.launch {
-            var backoffMs = 1_000L
-            while (isActive) {
-                try {
-                    connectOnce()
-                    backoffMs = 1_000L
-                } catch (_: CancellationException) {
-                    break
-                } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    println("[WsConnection] error: ${e.message}")
+        connectionJob =
+            scope.launch {
+                var backoffMs = 1_000L
+                while (isActive) {
+                    try {
+                        connectOnce()
+                        backoffMs = 1_000L
+                    } catch (_: CancellationException) {
+                        break
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") e: Exception,
+                    ) {
+                        println("[WsConnection] error: ${e.message}")
+                    }
+                    _isConnected.value = false
+                    sendChannel = null
+                    heartbeatJob?.cancel()
+                    delay(backoffMs)
+                    backoffMs = (backoffMs * 2).coerceAtMost(60_000L)
                 }
-                _isConnected.value = false
-                sendChannel = null
-                heartbeatJob?.cancel()
-                delay(backoffMs)
-                backoffMs = (backoffMs * 2).coerceAtMost(60_000L)
             }
-        }
     }
 
     fun disconnect() {
@@ -120,32 +126,37 @@ class WsConnection(
                     _userId.value = authResponse.userId
                     _isConnected.value = true
                 }
+
                 is WsServerMessage.AuthError -> {
                     error("Auth failed: ${authResponse.message}")
                 }
-                else -> error("Unexpected auth response: $authResponse")
+
+                else -> {
+                    error("Unexpected auth response: $authResponse")
+                }
             }
 
             // Start heartbeat only after successful auth
             val pongReceived = MutableStateFlow(true)
-            heartbeatJob = launch {
-                while (isActive) {
-                    delay(30_000L)
-                    pongReceived.value = false
-                    try {
-                        val pingText = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Ping)
-                        send(Frame.Text(pingText))
-                    } catch (_: Exception) {
-                        break
-                    }
-                    delay(10_000L)
-                    if (!pongReceived.value) {
-                        println("[WsConnection] pong timeout, reconnecting")
-                        close()
-                        break
+            heartbeatJob =
+                launch {
+                    while (isActive) {
+                        delay(30_000L)
+                        pongReceived.value = false
+                        try {
+                            val pingText = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Ping)
+                            send(Frame.Text(pingText))
+                        } catch (_: Exception) {
+                            break
+                        }
+                        delay(10_000L)
+                        if (!pongReceived.value) {
+                            println("[WsConnection] pong timeout, reconnecting")
+                            close()
+                            break
+                        }
                     }
                 }
-            }
 
             // Read loop
             try {
@@ -163,13 +174,16 @@ class WsConnection(
                                 // Skip malformed frames
                             }
                         }
+
                         is Frame.Close -> {
                             println("[WsConnection] received close frame")
                             break
                         }
+
                         is Frame.Binary -> {
                             println("[WsConnection] unexpected binary frame, ignoring")
                         }
+
                         else -> {}
                     }
                 }
@@ -182,17 +196,18 @@ class WsConnection(
     }
 }
 
-private data class HostConfig(val host: String, val port: Int, val useTls: Boolean)
+private data class HostConfig(
+    val host: String,
+    val port: Int,
+    val useTls: Boolean,
+)
 
 private fun parseBaseUrl(baseUrl: String): HostConfig {
     val stripped = baseUrl.removePrefix("https://").removePrefix("http://").trimEnd('/')
     val useTls = baseUrl.startsWith("https://")
     val parts = stripped.split(":", limit = 2)
     val host = parts[0]
-    val port = if (parts.size > 1) {
-        parts[1].trimEnd('/').toIntOrNull() ?: if (useTls) 443 else 80
-    } else {
-        if (useTls) 443 else 80
-    }
+    val defaultPort = if (useTls) 443 else 80
+    val port = parts.getOrNull(1)?.trimEnd('/')?.toIntOrNull() ?: defaultPort
     return HostConfig(host, port, useTls)
 }

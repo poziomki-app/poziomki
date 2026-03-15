@@ -191,7 +191,6 @@ pub async fn list_for_user(
 
     let mut conn = crate::db::conn().await?;
 
-    // 1. Get all conversation IDs the user is a member of
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
         .select(conversation_members::conversation_id)
@@ -202,13 +201,12 @@ pub async fn list_for_user(
         return Ok(Vec::new());
     }
 
-    // 2. Load conversations
     let convs: Vec<Conversation> = conversations::table
         .filter(conversations::id.eq_any(&conv_ids))
         .load(&mut conn)
         .await?;
 
-    // 3. Batch load latest message per conversation using DISTINCT ON
+    // Batch-load latest message per conversation (DISTINCT ON)
     let latest_messages: Vec<crate::db::models::messages::Message> = diesel::sql_query(
         "SELECT DISTINCT ON (conversation_id) \
                  id, conversation_id, sender_id, body, kind, \
@@ -227,7 +225,7 @@ pub async fn list_for_user(
         .map(|m| (m.conversation_id, m))
         .collect();
 
-    // 5. Batch compute unread counts
+    // Unread counts
     //    For conversations with a read watermark: count messages after that timestamp
     //    For conversations without: count all messages from others
     let unread_counts: Vec<UnreadCountRow> = diesel::sql_query(
@@ -254,7 +252,6 @@ pub async fn list_for_user(
         .map(|r| (r.conversation_id, r.cnt))
         .collect();
 
-    // 7. Collect all user IDs we need profiles for (DM partners + message senders)
     let mut profile_user_ids: Vec<i32> = Vec::new();
     for conv in &convs {
         if conv.kind == "dm" {
@@ -274,7 +271,7 @@ pub async fn list_for_user(
     profile_user_ids.sort_unstable();
     profile_user_ids.dedup();
 
-    // 8. Batch load all profiles
+    // Batch-load profiles
     let profile_rows: Vec<(i32, uuid::Uuid, String, Option<String>)> =
         if profile_user_ids.is_empty() {
             Vec::new()
@@ -297,7 +294,6 @@ pub async fn list_for_user(
         .map(|(uid, pid, name, avatar)| (uid, (pid, name, avatar)))
         .collect();
 
-    // 9. Assemble payloads
     let mut payloads = Vec::with_capacity(convs.len());
     for conv in &convs {
         let latest = latest_map.get(&conv.id).copied();

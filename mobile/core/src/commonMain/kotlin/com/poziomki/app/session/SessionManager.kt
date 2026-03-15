@@ -90,11 +90,12 @@ class SessionManager(
 
     @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     suspend fun getOrCreateDeviceId(): String {
-        val prefs = dataStore.edit { mutablePrefs ->
-            if (mutablePrefs[DEVICE_ID] == null) {
-                mutablePrefs[DEVICE_ID] = "android_${kotlin.uuid.Uuid.random()}"
+        val prefs =
+            dataStore.edit { mutablePrefs ->
+                if (mutablePrefs[DEVICE_ID] == null) {
+                    mutablePrefs[DEVICE_ID] = "android_${kotlin.uuid.Uuid.random()}"
+                }
             }
-        }
         return prefs[DEVICE_ID]!!
     }
 

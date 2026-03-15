@@ -18,7 +18,11 @@ class MemberCache internal constructor() {
     private val names = mutableMapOf<String, String>()
     private val avatars = mutableMapOf<String, String>()
 
-    fun put(userId: String, name: String?, avatar: String?) {
+    fun put(
+        userId: String,
+        name: String?,
+        avatar: String?,
+    ) {
         if (!name.isNullOrBlank()) names[userId] = name
         if (!avatar.isNullOrBlank()) avatars[userId] = avatar
     }
@@ -55,12 +59,13 @@ class WsJoinedRoom(
         }
     }
 
-    override val liveTimeline: WsTimeline = WsTimeline(
-        conversationId = roomId,
-        wsConnection = wsConnection,
-        roomTimelineCacheStore = roomTimelineCacheStore,
-        memberCache = memberCache,
-    )
+    override val liveTimeline: WsTimeline =
+        WsTimeline(
+            conversationId = roomId,
+            wsConnection = wsConnection,
+            roomTimelineCacheStore = roomTimelineCacheStore,
+            memberCache = memberCache,
+        )
 
     internal fun onMessage(msg: WsServerMessage.Message) {
         liveTimeline.onMessage(msg)
@@ -86,11 +91,12 @@ class WsJoinedRoom(
         val userId = msg.userId.toString()
         if (msg.isTyping) {
             typingTimeoutJobs[userId]?.cancel()
-            typingTimeoutJobs[userId] = scope.launch {
-                delay(5_000L)
-                _typingUserIds.update { current -> current - userId }
-                typingTimeoutJobs.remove(userId)
-            }
+            typingTimeoutJobs[userId] =
+                scope.launch {
+                    delay(5_000L)
+                    _typingUserIds.update { current -> current - userId }
+                    typingTimeoutJobs.remove(userId)
+                }
             _typingUserIds.update { current ->
                 if (userId !in current && userId != wsConnection.userId.value) {
                     current + userId
@@ -110,13 +116,14 @@ class WsJoinedRoom(
     }
 
     override suspend fun createFocusedTimeline(eventId: String): Result<Timeline> {
-        val timeline = WsTimeline(
-            conversationId = roomId,
-            wsConnection = wsConnection,
-            roomTimelineCacheStore = roomTimelineCacheStore,
-            mode = TimelineMode.FocusedOnEvent(eventId),
-            memberCache = memberCache,
-        )
+        val timeline =
+            WsTimeline(
+                conversationId = roomId,
+                wsConnection = wsConnection,
+                roomTimelineCacheStore = roomTimelineCacheStore,
+                mode = TimelineMode.FocusedOnEvent(eventId),
+                memberCache = memberCache,
+            )
         return Result.success(timeline)
     }
 
@@ -127,12 +134,10 @@ class WsJoinedRoom(
 
     override suspend fun markAsRead(): Result<Unit> = liveTimeline.markAsRead()
 
-    override suspend fun inviteUserById(userId: String): Result<Unit> =
-        Result.success(Unit) // Event rooms auto-manage membership
+    // Event rooms auto-manage membership
+    override suspend fun inviteUserById(userId: String): Result<Unit> = Result.success(Unit)
 
-    override suspend fun getMemberDisplayName(userId: String): String? =
-        memberCache.getDisplayName(userId)
+    override suspend fun getMemberDisplayName(userId: String): String? = memberCache.getDisplayName(userId)
 
-    override suspend fun getMemberAvatarUrl(userId: String): String? =
-        memberCache.getAvatarUrl(userId)
+    override suspend fun getMemberAvatarUrl(userId: String): String? = memberCache.getAvatarUrl(userId)
 }

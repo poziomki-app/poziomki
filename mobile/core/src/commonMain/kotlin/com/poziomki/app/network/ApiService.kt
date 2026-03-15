@@ -188,8 +188,10 @@ class ApiService(
     suspend fun registerChatPush(
         deviceId: String,
         ntfyTopic: String,
-    ): ApiResult<SuccessResponse> =
-        client.post("/api/v1/chat/push/register", ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic))
+    ): ApiResult<SuccessResponse> = client.post(
+        "/api/v1/chat/push/register",
+        ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic),
+    )
 
     suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =
         client.post("/api/v1/chat/push/unregister", ChatPushUnregisterRequest(deviceId = deviceId))
