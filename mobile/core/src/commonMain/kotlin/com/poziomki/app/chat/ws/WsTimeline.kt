@@ -36,6 +36,9 @@ class WsTimeline(
     private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
     private val itemsMutex = Mutex()
 
+    /** Tracks which users have sent read receipts per message to prevent duplicate counting. */
+    private val readReceiptUsers = mutableMapOf<String, MutableSet<String>>()
+
     private val _items = MutableStateFlow<List<TimelineItem>>(emptyList())
     override val items: StateFlow<List<TimelineItem>> = _items
 
@@ -83,6 +86,12 @@ class WsTimeline(
                 limit = 50,
             ),
         )
+    }
+
+    internal fun backfillOnReconnect() {
+        scope.launch {
+            requestInitialHistory()
+        }
     }
 
     internal fun onMessage(msg: WsServerMessage.Message) {
@@ -205,13 +214,17 @@ class WsTimeline(
         if (receiptUserId == wsConnection.userId.value) return
         scope.launch {
             itemsMutex.withLock {
+                val messageId = msg.messageId
+                val seenUsers = readReceiptUsers.getOrPut(messageId) { mutableSetOf() }
+                if (!seenUsers.add(receiptUserId)) return@withLock // duplicate
+
                 val current = _items.value.toMutableList()
                 val idx = current.indexOfFirst {
-                    it is TimelineItem.Event && it.eventId == msg.messageId
+                    it is TimelineItem.Event && it.eventId == messageId
                 }
                 if (idx >= 0) {
                     val event = current[idx] as TimelineItem.Event
-                    current[idx] = event.copy(readByCount = event.readByCount + 1)
+                    current[idx] = event.copy(readByCount = seenUsers.size)
                     emitAndPersist(current)
                 }
             }
@@ -300,13 +313,17 @@ class WsTimeline(
     override suspend fun sendMessage(body: String): Result<Unit> {
         val clientId = "local_${Clock.System.now().toEpochMilliseconds()}"
         addOptimisticItem(body, clientId)
-        wsConnection.send(
+        val sent = wsConnection.send(
             WsClientMessage.Send(
                 conversationId = conversationId,
                 body = body,
                 clientId = clientId,
             ),
         )
+        if (!sent) {
+            removeOptimisticItem(clientId)
+            return Result.failure(IllegalStateException("Not connected"))
+        }
         return Result.success(Unit)
     }
 
@@ -386,6 +403,16 @@ class WsTimeline(
     override fun close() {
         scopeJob.cancel()
         pendingHistoryDeferred?.cancel()
+    }
+
+    private suspend fun removeOptimisticItem(clientId: String) {
+        itemsMutex.withLock {
+            val current = _items.value.toMutableList()
+            current.removeAll {
+                it is TimelineItem.Event && it.eventOrTransactionId == clientId
+            }
+            _items.value = current
+        }
     }
 
     private suspend fun addOptimisticItem(body: String, clientId: String) {

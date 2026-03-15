@@ -159,6 +159,20 @@ pub async fn mark_read(
     Ok(())
 }
 
+/// Look up the `conversation_id` for a given message.
+pub async fn message_conversation_id(
+    message_id: Uuid,
+) -> Result<Option<Uuid>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let cid = messages::table
+        .filter(messages::id.eq(message_id))
+        .select(messages::conversation_id)
+        .first::<Uuid>(&mut conn)
+        .await
+        .optional()?;
+    Ok(cid)
+}
+
 /// Load message history for a conversation, paginated backwards.
 pub async fn load_history(
     conversation_id: Uuid,
@@ -180,8 +194,12 @@ pub async fn load_history(
         messages::table
             .filter(messages::conversation_id.eq(conversation_id))
             .filter(messages::deleted_at.is_null())
-            .filter(messages::created_at.lt(before_ts))
-            .order(messages::created_at.desc())
+            .filter(
+                messages::created_at.lt(before_ts).or(messages::created_at
+                    .eq(before_ts)
+                    .and(messages::id.lt(before_id))),
+            )
+            .order((messages::created_at.desc(), messages::id.desc()))
             .limit(query_limit)
             .load(&mut conn)
             .await?

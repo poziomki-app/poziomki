@@ -22,7 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 @Suppress("TooManyFunctions")
 class WsChatClient(
     private val apiService: ApiService,
-    @Suppress("UnusedPrivateProperty") private val sessionManager: SessionManager,
+    private val sessionManager: SessionManager,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
 ) : ChatClient {
@@ -42,14 +42,22 @@ class WsChatClient(
     init {
         // Observe connection state
         scope.launch {
+            var wasReady = false
             wsConnection.isConnected.collect { connected ->
                 if (connected) {
+                    val isReconnect = wasReady
                     val userId = wsConnection.userId.value ?: ""
                     _state.value = ChatClientState.Ready(
                         userId = userId,
-                        homeserver = "",
                         deviceId = deviceId(),
                     )
+                    wasReady = true
+                    if (isReconnect) {
+                        // Backfill all opened rooms after reconnect
+                        openedRooms.values.forEach { room ->
+                            room.liveTimeline.backfillOnReconnect()
+                        }
+                    }
                 } else if (_state.value is ChatClientState.Ready) {
                     _state.value = ChatClientState.Connecting
                 }
@@ -238,10 +246,6 @@ class WsChatClient(
         }
     }
 
-    override suspend fun getMediaThumbnail(mxcUrl: String, width: Long, height: Long): ByteArray? = null
-
-    override suspend fun getMediaContent(mxcUrl: String): ByteArray? = null
-
     override suspend fun stop() {
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
@@ -252,9 +256,8 @@ class WsChatClient(
         roomTimelineCacheStore.clearAll()
     }
 
-    private fun deviceId(): String {
-        // Use a stable device identifier derived from session
-        return "android_${wsConnection.userId.value?.hashCode()?.toString(16) ?: "unknown"}"
+    private suspend fun deviceId(): String {
+        return sessionManager.getOrCreateDeviceId()
     }
 }
 

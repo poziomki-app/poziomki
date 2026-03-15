@@ -347,7 +347,7 @@ pub(in crate::api) async fn event_attend(
         }
     };
 
-    if written_status != "pending" {
+    if written_status == "going" {
         if let Err(error) = enqueue_chat_membership_sync(&event.id, &profile.id, false).await {
             tracing::warn!(
                 %error,

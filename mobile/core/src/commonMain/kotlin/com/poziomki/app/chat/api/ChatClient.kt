@@ -15,7 +15,6 @@ sealed interface ChatClientState {
 
     data class Ready(
         val userId: String,
-        val homeserver: String,
         val deviceId: String,
     ) : ChatClientState
 
@@ -78,14 +77,6 @@ interface ChatClient {
     ): Result<Unit>
 
     suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>
-
-    suspend fun getMediaThumbnail(
-        mxcUrl: String,
-        width: Long,
-        height: Long,
-    ): ByteArray?
-
-    suspend fun getMediaContent(mxcUrl: String): ByteArray?
 
     suspend fun stop()
 }
