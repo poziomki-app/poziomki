@@ -9,6 +9,8 @@ use crate::db::models::messages::{Message, NewMessage};
 use crate::db::schema::{message_reactions, messages, profiles, users};
 
 /// Insert a new message and return a serializable payload.
+/// If `client_id` is set and a message already exists with the same
+/// `(conversation_id, client_id)`, return the existing message (idempotent).
 pub async fn create_message(
     conversation_id: Uuid,
     sender_id: i32,
@@ -19,6 +21,21 @@ pub async fn create_message(
     client_id: Option<String>,
 ) -> Result<(Message, MessagePayload), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
+
+    // Dedup: if client_id is set, check for an existing message first
+    if let Some(ref cid) = client_id {
+        let existing: Option<Message> = messages::table
+            .filter(messages::conversation_id.eq(conversation_id))
+            .filter(messages::client_id.eq(cid))
+            .first(&mut conn)
+            .await
+            .optional()?;
+        if let Some(msg) = existing {
+            let payload = message_to_payload(&msg, 0, &mut conn).await?;
+            return Ok((msg, payload));
+        }
+    }
+
     let now = Utc::now();
     let msg_id = Uuid::new_v4();
 
@@ -234,15 +251,209 @@ pub async fn load_history(
     let has_more = msgs.len() > limit_usize;
     let msgs: Vec<Message> = msgs.into_iter().take(limit_usize).collect();
 
-    let mut payloads = Vec::with_capacity(msgs.len());
-    for msg in &msgs {
-        payloads.push(message_to_payload(msg, viewer_user_id, &mut conn).await?);
-    }
+    let mut payloads = batch_messages_to_payloads(&msgs, viewer_user_id, &mut conn).await?;
 
     // Return in chronological order (oldest first)
     payloads.reverse();
 
     Ok((payloads, has_more))
+}
+
+/// Batch-convert messages to payloads, resolving all related data upfront
+/// instead of N+1 per-message queries.
+async fn batch_messages_to_payloads(
+    msgs: &[Message],
+    viewer_user_id: i32,
+    conn: &mut crate::db::DbConn,
+) -> Result<Vec<MessagePayload>, crate::error::AppError> {
+    use crate::db::schema::uploads;
+    use std::collections::HashMap;
+
+    if msgs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Collect all IDs we need to resolve
+    let sender_ids: Vec<i32> = msgs.iter().map(|m| m.sender_id).collect();
+    let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
+    let upload_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.attachment_upload_id).collect();
+    let reply_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.reply_to_id).collect();
+
+    // 1. Batch-load sender profiles
+    let sender_rows: Vec<(i32, String, Uuid, Option<String>)> = profiles::table
+        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+        .filter(users::id.eq_any(&sender_ids))
+        .select((
+            users::id,
+            profiles::name,
+            users::pid,
+            profiles::profile_picture,
+        ))
+        .load(conn)
+        .await?;
+    let sender_map: HashMap<i32, (String, Uuid, Option<String>)> = sender_rows
+        .into_iter()
+        .map(|(id, name, pid, avatar)| (id, (name, pid, avatar)))
+        .collect();
+
+    // 2. Batch-load uploads
+    let upload_map: HashMap<Uuid, String> = if upload_ids.is_empty() {
+        HashMap::new()
+    } else {
+        uploads::table
+            .filter(uploads::id.eq_any(&upload_ids))
+            .select((uploads::id, uploads::filename))
+            .load::<(Uuid, String)>(conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
+    // 3. Batch-load reply messages
+    let reply_msgs: HashMap<Uuid, Message> = if reply_ids.is_empty() {
+        HashMap::new()
+    } else {
+        messages::table
+            .filter(messages::id.eq_any(&reply_ids))
+            .load::<Message>(conn)
+            .await?
+            .into_iter()
+            .map(|m| (m.id, m))
+            .collect()
+    };
+
+    // Collect reply sender IDs for name resolution
+    let reply_sender_ids: Vec<i32> = reply_msgs.values().map(|m| m.sender_id).collect();
+    let reply_sender_names: HashMap<i32, String> = if reply_sender_ids.is_empty() {
+        HashMap::new()
+    } else {
+        profiles::table
+            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+            .filter(users::id.eq_any(&reply_sender_ids))
+            .select((users::id, profiles::name))
+            .load::<(i32, String)>(conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
+    // 4. Batch-load reactions
+    let raw_reactions: Vec<(Uuid, String, i32)> = message_reactions::table
+        .filter(message_reactions::message_id.eq_any(&msg_ids))
+        .select((
+            message_reactions::message_id,
+            message_reactions::emoji,
+            message_reactions::user_id,
+        ))
+        .load(conn)
+        .await?;
+
+    // 5. Batch-load reaction user names
+    let reaction_user_ids: Vec<i32> = raw_reactions.iter().map(|(_, _, uid)| *uid).collect();
+    let reaction_user_names: HashMap<i32, String> = if reaction_user_ids.is_empty() {
+        HashMap::new()
+    } else {
+        profiles::table
+            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
+            .filter(users::id.eq_any(&reaction_user_ids))
+            .select((users::id, profiles::name))
+            .load::<(i32, String)>(conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
+    // Group reactions by message_id
+    let mut reactions_by_msg: HashMap<Uuid, Vec<(String, i32)>> = HashMap::new();
+    for (mid, emoji, uid) in raw_reactions {
+        reactions_by_msg.entry(mid).or_default().push((emoji, uid));
+    }
+
+    // Assemble payloads
+    let mut payloads = Vec::with_capacity(msgs.len());
+    for msg in msgs {
+        let (sender_name, sender_pid, sender_avatar) = sender_map.get(&msg.sender_id).map_or_else(
+            || ("Unknown".to_string(), None, None),
+            |(name, pid, avatar)| {
+                let avatar_url = avatar
+                    .as_ref()
+                    .and_then(|f| crate::api::imgproxy_signing::signed_url(f, "thumb", "webp"));
+                (name.clone(), Some(pid.to_string()), avatar_url)
+            },
+        );
+
+        let attachment_url = msg.attachment_upload_id.and_then(|uid| {
+            upload_map.get(&uid).and_then(|f| {
+                crate::api::imgproxy_signing::signed_url(f, "feed", "webp")
+                    .or_else(|| Some(format!("/api/v1/uploads/{f}")))
+            })
+        });
+
+        let reply_to = msg.reply_to_id.and_then(|rid| {
+            reply_msgs.get(&rid).map(|rm| ReplyPayload {
+                message_id: rm.id,
+                sender_name: reply_sender_names.get(&rm.sender_id).cloned(),
+                body: if rm.deleted_at.is_some() {
+                    None
+                } else {
+                    Some(rm.body.clone())
+                },
+            })
+        });
+
+        // Build reactions for this message
+        let reactions = reactions_by_msg
+            .get(&msg.id)
+            .map_or_else(Vec::new, |msg_reactions| {
+                let mut reaction_map: HashMap<String, (Vec<i32>, Vec<String>, bool)> =
+                    HashMap::new();
+                for (emoji, uid) in msg_reactions {
+                    let entry = reaction_map.entry(emoji.clone()).or_default();
+                    entry.0.push(*uid);
+                    entry.1.push(
+                        reaction_user_names
+                            .get(uid)
+                            .cloned()
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                    );
+                    if *uid == viewer_user_id {
+                        entry.2 = true;
+                    }
+                }
+                reaction_map
+                    .into_iter()
+                    .map(
+                        |(emoji, (user_ids, sender_names, reacted_by_me))| ReactionPayload {
+                            count: i64::try_from(user_ids.len()).unwrap_or(0),
+                            emoji,
+                            reacted_by_me,
+                            user_ids,
+                            sender_names,
+                        },
+                    )
+                    .collect()
+            });
+
+        payloads.push(MessagePayload {
+            id: msg.id,
+            conversation_id: msg.conversation_id,
+            sender_id: msg.sender_id,
+            sender_pid,
+            sender_name,
+            sender_avatar,
+            body: msg.body.clone(),
+            kind: msg.kind.clone(),
+            attachment_url,
+            reply_to,
+            reactions,
+            client_id: msg.client_id.clone(),
+            is_mine: msg.sender_id == viewer_user_id,
+            is_edited: msg.edited_at.is_some(),
+            created_at: msg.created_at.to_rfc3339(),
+        });
+    }
+
+    Ok(payloads)
 }
 
 /// Convert a Message model to a `MessagePayload`, resolving sender info and reactions.

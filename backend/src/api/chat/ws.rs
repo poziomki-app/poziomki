@@ -295,12 +295,13 @@ async fn handle_send(
             };
             hub.broadcast(&members, &server_msg);
 
-            // Push notifications to all members except sender
-            let push_targets: Vec<i32> = members
+            // Push notifications only to offline members (skip sender + online users)
+            let non_sender: Vec<i32> = members
                 .iter()
                 .copied()
                 .filter(|&id| id != user_id)
                 .collect();
+            let push_targets = hub.offline_users(&non_sender);
             if !push_targets.is_empty() {
                 let msg_body = body.to_string();
                 tokio::spawn(async move {

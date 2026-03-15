@@ -37,61 +37,49 @@ impl ChatHub {
     }
 
     /// Remove closed senders for the given user.
+    /// Uses `remove_if_mut` for atomic retain-and-remove (no race with `register`).
     pub fn unregister(&self, user_id: i32) {
-        if let Some(mut entry) = self.connections.get_mut(&user_id) {
-            entry.retain(|s| !s.is_closed());
-            if entry.is_empty() {
-                drop(entry);
-                self.connections.remove(&user_id);
-            }
-        }
+        self.connections.remove_if_mut(&user_id, |_, senders| {
+            senders.retain(|s| !s.is_closed());
+            senders.is_empty()
+        });
     }
 
     /// Send a message to all connections of the listed user IDs.
     /// Prunes closed senders on the fly.
     pub fn broadcast(&self, user_ids: &[i32], msg: &ServerMessage) {
         for uid in user_ids {
-            if let Some(mut senders) = self.connections.get_mut(uid) {
+            self.connections.remove_if_mut(uid, |_, senders| {
                 senders.retain(|s| !s.is_closed());
-                for sender in senders.value() {
+                for sender in senders.iter() {
                     let _ = sender.send(msg.clone());
                 }
-                if senders.is_empty() {
-                    drop(senders);
-                    self.connections.remove(uid);
-                }
-            }
+                senders.is_empty()
+            });
         }
     }
 
     /// Send a message to a single user (all their connections).
     pub fn send_to_user(&self, user_id: i32, msg: &ServerMessage) {
-        if let Some(mut senders) = self.connections.get_mut(&user_id) {
+        self.connections.remove_if_mut(&user_id, |_, senders| {
             senders.retain(|s| !s.is_closed());
-            for sender in senders.value() {
+            for sender in senders.iter() {
                 let _ = sender.send(msg.clone());
             }
-            if senders.is_empty() {
-                drop(senders);
-                self.connections.remove(&user_id);
-            }
-        }
+            senders.is_empty()
+        });
     }
 
     /// Check whether a user has at least one active connection.
     /// Prunes closed senders before checking.
     pub fn is_online(&self, user_id: i32) -> bool {
-        if let Some(mut entry) = self.connections.get_mut(&user_id) {
-            entry.retain(|s| !s.is_closed());
-            if entry.is_empty() {
-                drop(entry);
-                self.connections.remove(&user_id);
-                return false;
-            }
-            true
-        } else {
-            false
-        }
+        // remove_if_mut returns Some if entry was removed (i.e. empty after prune)
+        let removed = self.connections.remove_if_mut(&user_id, |_, senders| {
+            senders.retain(|s| !s.is_closed());
+            senders.is_empty()
+        });
+        // Online if the entry exists and was NOT removed
+        removed.is_none() && self.connections.contains_key(&user_id)
     }
 
     /// Return the list of user IDs that have NO active connections
