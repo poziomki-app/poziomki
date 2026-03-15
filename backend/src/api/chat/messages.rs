@@ -432,7 +432,7 @@ async fn batch_messages_to_payloads(
             |(name, pid, avatar)| {
                 let avatar_url = avatar
                     .as_ref()
-                    .and_then(|f| crate::api::imgproxy_signing::signed_url(f, "thumb", "webp"));
+                    .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
                 (name.clone(), Some(pid.to_string()), avatar_url)
             },
         );
@@ -536,7 +536,7 @@ async fn message_to_payload(
         );
 
     let sender_avatar = sender_avatar
-        .and_then(|filename| crate::api::imgproxy_signing::signed_url(&filename, "thumb", "webp"));
+        .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(&filename));
 
     // Resolve attachment URL
     let attachment_url = if let Some(upload_id) = msg.attachment_upload_id {

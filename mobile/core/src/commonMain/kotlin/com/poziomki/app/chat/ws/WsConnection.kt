@@ -7,6 +7,7 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.http.URLProtocol
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -71,7 +72,7 @@ class WsConnection(
                 } catch (_: CancellationException) {
                     break
                 } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                    println("WsConnection error: ${e.message}")
+                    println("[WsConnection] error: ${e.message}")
                 }
                 _isConnected.value = false
                 sendChannel = null
@@ -126,13 +127,21 @@ class WsConnection(
             }
 
             // Start heartbeat only after successful auth
-            heartbeatJob = scope.launch {
+            val pongReceived = MutableStateFlow(true)
+            heartbeatJob = launch {
                 while (isActive) {
                     delay(30_000L)
+                    pongReceived.value = false
                     try {
                         val pingText = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Ping)
                         send(Frame.Text(pingText))
                     } catch (_: Exception) {
+                        break
+                    }
+                    delay(10_000L)
+                    if (!pongReceived.value) {
+                        println("[WsConnection] pong timeout, reconnecting")
+                        close()
                         break
                     }
                 }
@@ -141,15 +150,27 @@ class WsConnection(
             // Read loop
             try {
                 for (frame in this.incoming) {
-                    if (frame is Frame.Text) {
-                        try {
-                            val msg = wsJson.decodeFromString<WsServerMessage>(frame.readText())
-                            if (msg !is WsServerMessage.Pong) {
-                                _incoming.emit(msg)
+                    when (frame) {
+                        is Frame.Text -> {
+                            try {
+                                val msg = wsJson.decodeFromString<WsServerMessage>(frame.readText())
+                                if (msg is WsServerMessage.Pong) {
+                                    pongReceived.value = true
+                                } else {
+                                    _incoming.emit(msg)
+                                }
+                            } catch (_: Exception) {
+                                // Skip malformed frames
                             }
-                        } catch (_: Exception) {
-                            // Skip malformed frames
                         }
+                        is Frame.Close -> {
+                            println("[WsConnection] received close frame")
+                            break
+                        }
+                        is Frame.Binary -> {
+                            println("[WsConnection] unexpected binary frame, ignoring")
+                        }
+                        else -> {}
                     }
                 }
             } finally {

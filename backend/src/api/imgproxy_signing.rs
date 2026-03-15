@@ -76,6 +76,11 @@ pub fn signed_url(filename: &str, variant: &str, format: &str) -> Option<String>
     Some(format!("{}/img/{sig}/{path}", cfg.base_url))
 }
 
+/// Generate a signed imgproxy URL for a user's avatar thumbnail.
+pub fn signed_avatar_url(filename: &str) -> Option<String> {
+    signed_url(filename, "thumb", "webp")
+}
+
 fn sign(key: &[u8], salt: &[u8], path: &str) -> Result<String, String> {
     let mut mac = HmacSha256::new_from_slice(key).map_err(|e| format!("HMAC key error: {e}"))?;
     mac.update(salt);

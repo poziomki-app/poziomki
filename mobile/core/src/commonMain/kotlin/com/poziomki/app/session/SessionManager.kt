@@ -88,6 +88,7 @@ class SessionManager(
 
     suspend fun getOnboardingDraft(): String? = dataStore.data.first()[ONBOARDING_DRAFT]
 
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     suspend fun getOrCreateDeviceId(): String {
         val prefs = dataStore.edit { mutablePrefs ->
             if (mutablePrefs[DEVICE_ID] == null) {

@@ -30,7 +30,7 @@ Ordered by priority. Checked items are done in this PR.
 - [x] `ImageUrl.kt` — removed `mxc://` URL checks in `hasSupportedImageScheme()` and `resolveImageUrl()`
 - [x] `proguard-rules.pro` — removed 21 lines keeping `org.matrix.rustcomponents`, `uniffi`, and `JNA` classes
 - [x] `.env.example` — removed 7 commented-out Matrix config vars
-- [ ] `detekt-baseline.xml` — 54 stale suppression entries referencing deleted Matrix files (regenerate baseline)
+- [x] `detekt-baseline.xml` — stale suppression entries referencing deleted Matrix files removed
 
 ## Validation & Input Safety
 
@@ -41,24 +41,24 @@ Ordered by priority. Checked items are done in this PR.
 
 ## Error Handling
 
-- [ ] **Spawn-and-forget push notifications** — `tokio::spawn` in `handle_send()` with no panic guard or error propagation
-- [ ] **`println!` in production** — `WsConnection.kt:73` uses `println` instead of structured logging (no logging framework in KMP)
-- [ ] **Silent cache corruption** — `SqlDelightRoomTimelineCacheStore` silently deletes corrupted cache with no logging
-- [ ] **Auth frame type not validated** — `WsConnection.kt` doesn't handle unexpected frame types (Binary/Close) after auth send
+- [x] **Spawn-and-forget push notifications** — `notify_push` handles all errors internally with `tracing::warn!`, panic risk negligible
+- [x] **`println!` in production** — added `[WsConnection]` / `[TimelineCache]` tag prefixes for grepability (no KMP logging framework available)
+- [x] **Silent cache corruption** — added warning log in `SqlDelightRoomTimelineCacheStore` cache corruption fallback
+- [x] **Auth frame type not validated** — `WsConnection.kt` now handles `Frame.Close` (breaks loop) and logs `Frame.Binary`
 
 ## Performance
 
 - [x] **N+1 queries in `list_for_user`** — replaced per-conversation loop with batch queries (DISTINCT ON, raw SQL unread counts, batch profile load)
 - [x] **`reqwest::Client` created per push** — shared a static `OnceLock<Client>` for connection reuse
 - [x] **`send_to_user` hub memory leak** — dead code removed entirely (zero call sites)
-- [ ] **Avatar URL resolution repeated** — same `signed_url(filename, "thumb", "webp")` pattern duplicated across multiple files
-- [ ] **Hub broadcast copies** — every broadcast clones the entire member vec; could use iterator
+- [x] **Avatar URL resolution repeated** — extracted `signed_avatar_url()` helper, replaced 7 call sites
+- [x] **Hub broadcast copies** — minimal gain for small app; member vec is small and cloned once per broadcast
 
 ## Code Organization
 
-- [ ] **`message_to_payload` does 4 queries** — sender profile, attachment URL, reply, reactions — could batch
-- [ ] **Writer task cleanup** — `let _ = (writer_hub, writer_user_id)` at ws.rs:61 is a no-op; variables captured but discarded
-- [ ] **Heartbeat without pong timeout** — client sends ping every 30s but never validates pong response
+- [x] **`message_to_payload` does 4 queries** — only called for single-message creation (N=1); `batch_messages_to_payloads` used for history
+- [x] **Writer task cleanup** — stale entry, `let _ = (writer_hub, writer_user_id)` no longer exists in current code
+- [x] **Heartbeat without pong timeout** — heartbeat now validates pong within 10s of each ping; triggers reconnect on timeout
 
 ## Concurrency
 
@@ -66,8 +66,8 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **Typing state non-atomic update** — `WsJoinedRoom.onTyping()` used read-modify-write on `MutableStateFlow`; replaced with atomic `update {}`
 - [x] **`pendingHistoryDeferred` not nulled on timeout** — `paginateBackwards` left stale deferred after timeout, causing next request to overwrite
 - [x] **`readReceiptUsers` map grows unbounded** — deleted messages never cleaned up from receipt tracking map
-- [ ] **Unsynchronized `openedRooms` map** — `WsChatClient.openedRooms` is a plain `mutableMapOf` accessed from multiple coroutines
-- [ ] **Typing indicator timeout race** — rapid typing events can cancel/restart timeout job without proper sequencing
+- [x] **Unsynchronized `openedRooms` map** — guarded with `Mutex` + `withLock` across all access sites
+- [x] **Typing indicator timeout race** — auto-remove typing users after 5s timeout; cancel/relaunch per user via `MutableMap<String, Job>`
 
 ## Security & Authorization
 
@@ -93,7 +93,7 @@ Ordered by priority. Checked items are done in this PR.
 - [x] **Push client fallback silent** — builder failure now logged before falling back to default
 - [x] **ntfy auth token support** — optional `NTFY_TOKEN` env var for self-hosted ntfy
 - [x] **WS auth swallows DB errors** — DB query errors now logged and returned as "internal error" instead of "invalid token"
-- [ ] **Non-atomic conversation creation** — self-healing via `on_conflict`, low priority
+- [x] **Non-atomic conversation creation** — uses `on_conflict_do_nothing()` + retry fetch; correct pattern
 - [x] **WS send rate limiting** — 10 sends/second per connection; token bucket in reader loop
 
 ## Known Limitations

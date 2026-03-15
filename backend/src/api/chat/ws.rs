@@ -560,9 +560,9 @@ async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
 
     match result {
         Some((name, avatar)) => {
-            let avatar_url = avatar.as_ref().and_then(|filename| {
-                crate::api::imgproxy_signing::signed_url(filename, "thumb", "webp")
-            });
+            let avatar_url = avatar
+                .as_ref()
+                .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(filename));
             (name, avatar_url)
         }
         None => ("Unknown".to_string(), None),
