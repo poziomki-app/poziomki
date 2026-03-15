@@ -75,7 +75,7 @@ class NotificationHelper(
 
         // Always post group summary so all notifications stack
         val key = roomId ?: "unknown"
-        val summaryId = GROUP_SUMMARY_BASE + key.hashCode()
+        val summaryId = GROUP_SUMMARY_BASE + key.hashCode().and(0x7FFFFFFF)
         val summary =
             Notification
                 .Builder(context, CHANNEL_MESSAGES)

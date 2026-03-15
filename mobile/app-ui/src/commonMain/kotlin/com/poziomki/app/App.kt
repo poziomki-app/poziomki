@@ -22,7 +22,6 @@ import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
 import com.poziomki.app.ui.shared.ImgproxyCacheInterceptor
-import com.poziomki.app.ui.shared.MxcMediaFetcher
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import okio.Path.Companion.toOkioPath
@@ -103,7 +102,6 @@ private fun buildImageLoaderFactory(
                     .build()
             }.components {
                 add(ImgproxyCacheInterceptor())
-                add(MxcMediaFetcher.Factory())
                 @OptIn(ExperimentalCoilApi::class)
                 add(KtorNetworkFetcherFactory(imageHttpClient))
             }.build()

@@ -381,6 +381,7 @@ async fn search_dm_room_ids(
                 OR LOWER(p.name) LIKE $2
               )
           )
+        ORDER BY c.id
         LIMIT $4
         ",
     )

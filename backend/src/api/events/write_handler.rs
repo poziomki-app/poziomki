@@ -325,7 +325,7 @@ pub(in crate::api) async fn event_attend(
     // Approval gate only applies to "going" — "interested" is a soft signal that
     // intentionally bypasses approval so users can bookmark events without creator action.
     let requires_approval =
-        event.requires_approval && status_str == "going" && event.creator_id != profile.id;
+        event.requires_approval && status_str == ATTENDEE_GOING && event.creator_id != profile.id;
 
     let outcome = events_write_repo::check_capacity_and_upsert(
         event_uuid,
@@ -347,7 +347,7 @@ pub(in crate::api) async fn event_attend(
         }
     };
 
-    if written_status == "going" {
+    if written_status == ATTENDEE_GOING {
         if let Err(error) = enqueue_chat_membership_sync(&event.id, &profile.id, false).await {
             tracing::warn!(
                 %error,

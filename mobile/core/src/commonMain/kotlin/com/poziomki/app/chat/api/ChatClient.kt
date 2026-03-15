@@ -73,7 +73,6 @@ interface ChatClient {
 
     suspend fun registerPusher(
         ntfyEndpoint: String,
-        gatewayUrl: String,
     ): Result<Unit>
 
     suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>

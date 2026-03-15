@@ -89,11 +89,12 @@ class SessionManager(
     suspend fun getOnboardingDraft(): String? = dataStore.data.first()[ONBOARDING_DRAFT]
 
     suspend fun getOrCreateDeviceId(): String {
-        val prefs = dataStore.data.first()
-        prefs[DEVICE_ID]?.let { return it }
-        val newId = "android_${kotlin.uuid.Uuid.random()}"
-        dataStore.edit { it[DEVICE_ID] = newId }
-        return newId
+        val prefs = dataStore.edit { mutablePrefs ->
+            if (mutablePrefs[DEVICE_ID] == null) {
+                mutablePrefs[DEVICE_ID] = "android_${kotlin.uuid.Uuid.random()}"
+            }
+        }
+        return prefs[DEVICE_ID]!!
     }
 
     suspend fun clearSession() {

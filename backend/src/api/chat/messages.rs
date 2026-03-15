@@ -203,6 +203,7 @@ pub async fn load_history(
     let msgs: Vec<Message> = if let Some(before_id) = before {
         let before_ts: chrono::DateTime<chrono::Utc> = messages::table
             .filter(messages::id.eq(before_id))
+            .filter(messages::conversation_id.eq(conversation_id))
             .select(messages::created_at)
             .first(&mut conn)
             .await?;

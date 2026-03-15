@@ -67,6 +67,7 @@ class WsConnection(
             while (isActive) {
                 try {
                     connectOnce()
+                    backoffMs = 1_000L
                 } catch (_: CancellationException) {
                     break
                 } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

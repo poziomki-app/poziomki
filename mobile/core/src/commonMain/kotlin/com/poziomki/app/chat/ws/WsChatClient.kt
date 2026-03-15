@@ -229,7 +229,7 @@ class WsChatClient(
         return Result.failure(UnsupportedOperationException("Event rooms are created server-side"))
     }
 
-    override suspend fun registerPusher(ntfyEndpoint: String, gatewayUrl: String): Result<Unit> {
+    override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> {
         val deviceId = deviceId()
         val ntfyTopic = "poz_$deviceId"
         return when (val result = apiService.registerChatPush(deviceId, ntfyTopic)) {

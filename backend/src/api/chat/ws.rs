@@ -22,7 +22,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     };
 
     // --- Step 2: Register in hub ---
-    let (hub_tx, mut hub_rx) = hub.register(user_id);
+    let (_hub_tx, mut hub_rx) = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
 
     // Send initial conversation list
@@ -33,14 +33,12 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         conversations: conv_list,
     };
     if send_json(&mut ws_tx, &init_msg).await.is_err() {
-        hub.unregister(user_id, &hub_tx);
+        hub.unregister(user_id);
         return;
     }
 
     // --- Step 3: Main loop ---
     // Spawn a writer task that drains hub messages + outbound messages
-    let writer_hub = hub.clone();
-    let writer_user_id = user_id;
     let writer_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -57,8 +55,6 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
                 else => break,
             }
         }
-        // Intentionally not unregistering here; the reader loop handles it
-        let _ = (writer_hub, writer_user_id);
     });
 
     // Reader loop: process incoming client messages
@@ -82,9 +78,9 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         }
     }
 
-    // Cleanup
-    hub.unregister(user_id, &hub_tx);
+    // Cleanup: abort writer first so hub_rx is dropped, marking hub_tx as closed
     writer_task.abort();
+    hub.unregister(user_id);
 }
 
 /// Authenticate the first message. Returns (`user_id`, `user_pid`) or None on failure.
