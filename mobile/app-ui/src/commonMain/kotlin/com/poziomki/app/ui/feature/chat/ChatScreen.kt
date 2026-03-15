@@ -80,8 +80,6 @@ fun ChatScreen(
             timelineListState = timelineListState,
             onDraftChanged = viewModel::onDraftChanged,
             onSendMessage = viewModel::sendMessage,
-            onSendImageAttachment = viewModel::sendImageAttachment,
-            onSendFileAttachment = viewModel::sendFileAttachment,
             onToggleReaction = viewModel::toggleReaction,
             onMarkAsRead = viewModel::markAsRead,
             onViewportChanged = viewModel::onTimelineViewportChanged,

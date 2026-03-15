@@ -28,7 +28,6 @@ pub struct NewMessage {
     pub sender_id: i32,
     pub body: String,
     pub kind: String,
-    pub attachment_upload_id: Option<Uuid>,
     pub reply_to_id: Option<Uuid>,
     pub client_id: Option<String>,
     pub created_at: DateTime<Utc>,

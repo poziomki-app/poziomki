@@ -19,8 +19,6 @@ pub enum ClientMessage {
         kind: Option<String>,
         #[serde(rename = "replyToId")]
         reply_to_id: Option<Uuid>,
-        #[serde(rename = "attachmentUploadId")]
-        attachment_upload_id: Option<Uuid>,
         #[serde(rename = "clientId")]
         client_id: Option<String>,
     },
@@ -150,7 +148,6 @@ pub struct MessagePayload {
     pub sender_avatar: Option<String>,
     pub body: String,
     pub kind: String,
-    pub attachment_url: Option<String>,
     pub reply_to: Option<ReplyPayload>,
     pub reactions: Vec<ReactionPayload>,
     pub client_id: Option<String>,

@@ -26,7 +26,6 @@ sealed interface WsClientMessage {
         val body: String,
         val kind: String? = null,
         val replyToId: String? = null,
-        val attachmentUploadId: String? = null,
         val clientId: String? = null,
     ) : WsClientMessage
 
@@ -90,7 +89,6 @@ sealed interface WsServerMessage {
         val senderAvatar: String? = null,
         val body: String,
         val kind: String = "text",
-        val attachmentUrl: String? = null,
         val replyTo: WsReplyPayload? = null,
         val reactions: List<WsReactionPayload> = emptyList(),
         val clientId: String? = null,
@@ -176,7 +174,6 @@ data class WsMessagePayload(
     val senderAvatar: String? = null,
     val body: String,
     val kind: String = "text",
-    val attachmentUrl: String? = null,
     val replyTo: WsReplyPayload? = null,
     val reactions: List<WsReactionPayload> = emptyList(),
     val clientId: String? = null,

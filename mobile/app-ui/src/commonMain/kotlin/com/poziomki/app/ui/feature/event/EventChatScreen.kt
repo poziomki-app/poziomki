@@ -98,8 +98,6 @@ fun EventChatScreen(
                     timelineListState = timelineListState,
                     onDraftChanged = chatViewModel::onDraftChanged,
                     onSendMessage = chatViewModel::sendMessage,
-                    onSendImageAttachment = chatViewModel::sendImageAttachment,
-                    onSendFileAttachment = chatViewModel::sendFileAttachment,
                     onToggleReaction = chatViewModel::toggleReaction,
                     onMarkAsRead = chatViewModel::markAsRead,
                     onViewportChanged = chatViewModel::onTimelineViewportChanged,

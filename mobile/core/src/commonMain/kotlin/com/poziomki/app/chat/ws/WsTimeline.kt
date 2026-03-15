@@ -8,8 +8,6 @@ import com.poziomki.app.chat.api.Timeline
 import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.chat.api.TimelineMode
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
-import com.poziomki.app.network.ApiResult
-import com.poziomki.app.network.ApiService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +28,6 @@ class WsTimeline(
     private val conversationId: String,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
-    private val apiService: ApiService? = null,
     override val mode: TimelineMode = TimelineMode.Live,
     private val memberCache: MemberCache? = null,
 ) : Timeline {
@@ -369,23 +366,7 @@ class WsTimeline(
         mimeType: String?,
         caption: String?,
         inReplyToEventId: String?,
-    ): Result<Unit> {
-        val api = apiService ?: return Result.failure(IllegalStateException("No ApiService"))
-        val upload = when (val result = api.uploadImage(data, fileName, "chat_attachment")) {
-            is ApiResult.Success -> result.data
-            is ApiResult.Error -> return Result.failure(IllegalStateException(result.message))
-        }
-        wsConnection.send(
-            WsClientMessage.Send(
-                conversationId = conversationId,
-                body = caption ?: fileName,
-                attachmentUploadId = upload.id,
-                replyToId = inReplyToEventId,
-                clientId = "local_${Clock.System.now().toEpochMilliseconds()}_${Random.nextLong()}",
-            ),
-        )
-        return Result.success(Unit)
-    }
+    ): Result<Unit> = Result.failure(UnsupportedOperationException("Image sending not yet supported"))
 
     override suspend fun sendFile(
         data: ByteArray,
@@ -393,7 +374,7 @@ class WsTimeline(
         mimeType: String?,
         caption: String?,
         inReplyToEventId: String?,
-    ): Result<Unit> = sendImage(data, fileName, mimeType, caption, inReplyToEventId)
+    ): Result<Unit> = Result.failure(UnsupportedOperationException("File sending not yet supported"))
 
     override suspend fun edit(eventOrTransactionId: String, body: String): Result<Unit> {
         val sent = wsConnection.send(WsClientMessage.Edit(messageId = eventOrTransactionId, body = body))
