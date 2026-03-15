@@ -447,6 +447,7 @@ fun MainScreen(
                             EventsScreen(
                                 onNavigateToEventDetail = onNavigateToEventDetail,
                                 onNavigateToEventCreate = onNavigateToEventCreate,
+                                onNavigateToProfile = onNavigateToProfileView,
                                 profileAvatarAction = profileAvatarAction,
                             )
                         }
