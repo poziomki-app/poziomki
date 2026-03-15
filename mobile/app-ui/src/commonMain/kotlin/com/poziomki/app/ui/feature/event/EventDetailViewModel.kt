@@ -156,6 +156,21 @@ class EventDetailViewModel(
         }
     }
 
+    fun deleteEvent(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            when (eventRepository.deleteEvent(eventId)) {
+                is ApiResult.Success -> onDeleted()
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie udało się usunąć wydarzenia",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
+        }
+    }
+
     fun openEventChat(onNavigateToChat: (String) -> Unit) {
         val currentEvent = _state.value.event ?: return
         if (_state.value.isOpeningChat) return
