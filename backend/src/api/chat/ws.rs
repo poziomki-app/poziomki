@@ -216,7 +216,6 @@ async fn handle_client_message(
         ClientMessage::Send {
             conversation_id,
             body,
-            kind,
             reply_to_id,
             client_id,
         } => {
@@ -224,7 +223,7 @@ async fn handle_client_message(
                 user_id,
                 conversation_id,
                 &body,
-                kind.as_deref().unwrap_or("text"),
+                "text",
                 reply_to_id,
                 client_id,
                 hub,
@@ -315,10 +314,10 @@ async fn handle_send(
         }
     }
 
-    // Validate kind
-    if !matches!(kind, "text" | "image" | "file") {
+    // Only text messages are supported
+    if kind != "text" {
         let _ = outbound_tx.send(ServerMessage::Error {
-            message: "invalid message kind".to_string(),
+            message: "only text messages are supported".to_string(),
         });
         return;
     }

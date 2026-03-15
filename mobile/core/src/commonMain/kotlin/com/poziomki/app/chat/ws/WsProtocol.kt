@@ -27,7 +27,6 @@ sealed interface WsClientMessage {
     data class Send(
         val conversationId: String,
         val body: String,
-        val kind: String? = null,
         val replyToId: String? = null,
         val clientId: String? = null,
     ) : WsClientMessage

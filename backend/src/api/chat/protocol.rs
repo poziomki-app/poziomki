@@ -15,8 +15,6 @@ pub enum ClientMessage {
         #[serde(rename = "conversationId")]
         conversation_id: Uuid,
         body: String,
-        #[serde(default)]
-        kind: Option<String>,
         #[serde(rename = "replyToId")]
         reply_to_id: Option<Uuid>,
         #[serde(rename = "clientId")]
