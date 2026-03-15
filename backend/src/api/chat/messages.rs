@@ -17,7 +17,6 @@ pub async fn create_message(
     body: &str,
     kind: &str,
     reply_to_id: Option<Uuid>,
-    attachment_upload_id: Option<Uuid>,
     client_id: Option<String>,
 ) -> Result<(Message, MessagePayload), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
@@ -62,7 +61,6 @@ pub async fn create_message(
         sender_id,
         body: body.to_string(),
         kind: kind.to_string(),
-        attachment_upload_id,
         reply_to_id,
         client_id: client_id.clone(),
         created_at: now,
@@ -321,7 +319,6 @@ async fn batch_messages_to_payloads(
     viewer_user_id: i32,
     conn: &mut crate::db::DbConn,
 ) -> Result<Vec<MessagePayload>, crate::error::AppError> {
-    use crate::db::schema::uploads;
     use std::collections::HashMap;
 
     if msgs.is_empty() {
@@ -331,7 +328,6 @@ async fn batch_messages_to_payloads(
     // Collect all IDs we need to resolve
     let sender_ids: Vec<i32> = msgs.iter().map(|m| m.sender_id).collect();
     let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
-    let upload_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.attachment_upload_id).collect();
     let reply_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.reply_to_id).collect();
 
     // 1. Batch-load sender profiles
@@ -351,20 +347,7 @@ async fn batch_messages_to_payloads(
         .map(|(id, name, pid, avatar)| (id, (name, pid, avatar)))
         .collect();
 
-    // 2. Batch-load uploads
-    let upload_map: HashMap<Uuid, String> = if upload_ids.is_empty() {
-        HashMap::new()
-    } else {
-        uploads::table
-            .filter(uploads::id.eq_any(&upload_ids))
-            .select((uploads::id, uploads::filename))
-            .load::<(Uuid, String)>(conn)
-            .await?
-            .into_iter()
-            .collect()
-    };
-
-    // 3. Batch-load reply messages
+    // 2. Batch-load reply messages
     let reply_msgs: HashMap<Uuid, Message> = if reply_ids.is_empty() {
         HashMap::new()
     } else {
@@ -437,13 +420,6 @@ async fn batch_messages_to_payloads(
             },
         );
 
-        let attachment_url = msg.attachment_upload_id.and_then(|uid| {
-            upload_map.get(&uid).and_then(|f| {
-                crate::api::imgproxy_signing::signed_url(f, "feed", "webp")
-                    .or_else(|| Some(format!("/api/v1/uploads/{f}")))
-            })
-        });
-
         let reply_to = msg.reply_to_id.and_then(|rid| {
             reply_msgs.get(&rid).and_then(|rm| {
                 // Only resolve replies within the same conversation
@@ -504,7 +480,6 @@ async fn batch_messages_to_payloads(
             sender_avatar,
             body: msg.body.clone(),
             kind: msg.kind.clone(),
-            attachment_url,
             reply_to,
             reactions,
             client_id: msg.client_id.clone(),
@@ -537,23 +512,6 @@ async fn message_to_payload(
 
     let sender_avatar = sender_avatar
         .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(&filename));
-
-    // Resolve attachment URL
-    let attachment_url = if let Some(upload_id) = msg.attachment_upload_id {
-        use crate::db::schema::uploads;
-        let filename: Option<String> = uploads::table
-            .filter(uploads::id.eq(upload_id))
-            .select(uploads::filename)
-            .first(conn)
-            .await
-            .optional()?;
-        filename.and_then(|f| {
-            crate::api::imgproxy_signing::signed_url(&f, "feed", "webp")
-                .or_else(|| Some(format!("/api/v1/uploads/{f}")))
-        })
-    } else {
-        None
-    };
 
     // Resolve reply (scoped to same conversation)
     let reply_to = if let Some(reply_id) = msg.reply_to_id {
@@ -646,7 +604,6 @@ async fn message_to_payload(
         sender_avatar,
         body: msg.body.clone(),
         kind: msg.kind.clone(),
-        attachment_url,
         reply_to,
         reactions,
         client_id: msg.client_id.clone(),

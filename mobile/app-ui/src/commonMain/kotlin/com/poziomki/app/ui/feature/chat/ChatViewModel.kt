@@ -14,7 +14,6 @@ import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
-import com.poziomki.app.ui.shared.PickedFile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.Clock
 
 class ChatViewModel(
     private val chatClient: ChatClient,
@@ -196,38 +194,6 @@ class ChatViewModel(
                 }
             }
         }
-    }
-
-    fun sendImageAttachment(data: ByteArray) {
-        if (data.isEmpty()) return
-        sendAttachment(
-            sendOperation = { timeline, caption, inReplyTo ->
-                timeline.sendImage(
-                    data = data,
-                    fileName = "image_${Clock.System.now().toEpochMilliseconds()}.jpg",
-                    mimeType = "image/jpeg",
-                    caption = caption,
-                    inReplyToEventId = inReplyTo,
-                )
-            },
-            sendError = "Failed to send image",
-        )
-    }
-
-    fun sendFileAttachment(file: PickedFile) {
-        if (file.bytes.isEmpty()) return
-        sendAttachment(
-            sendOperation = { timeline, caption, inReplyTo ->
-                timeline.sendFile(
-                    data = file.bytes,
-                    fileName = file.name,
-                    mimeType = file.mimeType,
-                    caption = caption,
-                    inReplyToEventId = inReplyTo,
-                )
-            },
-            sendError = "Failed to send attachment",
-        )
     }
 
     fun toggleReaction(
@@ -696,72 +662,6 @@ class ChatViewModel(
     }
 
     private fun currentDraftRoomId(): String? = activeRoom?.roomId?.takeIf { it.isNotBlank() } ?: boundRoomId
-
-    private fun sendAttachment(
-        sendOperation: suspend (timeline: Timeline, caption: String?, inReplyToEventId: String?) -> Result<Unit>,
-        sendError: String,
-    ) {
-        val roomId = currentDraftRoomId()
-        val uiState = _uiState.value
-        val composerMode = uiState.composerMode
-        val caption = uiState.messageDraft.trim().ifEmpty { null }
-        val inReplyToEventId =
-            when (composerMode) {
-                is ComposerMode.Reply -> {
-                    composerMode.eventId
-                }
-
-                is ComposerMode.Edit -> {
-                    _uiState.update { current ->
-                        current.copy(error = "Attachment is not supported in edit mode")
-                    }
-                    return
-                }
-
-                ComposerMode.NewMessage -> {
-                    null
-                }
-            }
-
-        _uiState.update {
-            it.copy(
-                messageDraft = "",
-                composerMode = ComposerMode.NewMessage,
-                error = null,
-            )
-        }
-        roomId?.let(roomComposerDraftStore::clearDraft)
-        stopTyping(notifyRoom = true)
-
-        viewModelScope.launch {
-            val timeline = awaitTimelineForSend()
-            if (timeline == null) {
-                _uiState.update { current ->
-                    current.copy(
-                        messageDraft = caption.orEmpty(),
-                        composerMode = composerMode,
-                        error = "Conversation is still connecting. Please wait a few seconds.",
-                    )
-                }
-                roomId?.let { failedRoomId ->
-                    roomComposerDraftStore.saveDraft(roomId = failedRoomId, draft = caption.orEmpty())
-                }
-                return@launch
-            }
-            sendOperation(timeline, caption, inReplyToEventId).onFailure { throwable ->
-                _uiState.update { current ->
-                    current.copy(
-                        messageDraft = caption.orEmpty(),
-                        composerMode = composerMode,
-                        error = throwable.message ?: sendError,
-                    )
-                }
-                roomId?.let { failedRoomId ->
-                    roomComposerDraftStore.saveDraft(roomId = failedRoomId, draft = caption.orEmpty())
-                }
-            }
-        }
-    }
 
     private suspend fun awaitTimelineForSend(
         attempts: Int = 120,

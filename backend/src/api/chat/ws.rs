@@ -217,7 +217,6 @@ async fn handle_client_message(
             body,
             kind,
             reply_to_id,
-            attachment_upload_id,
             client_id,
         } => {
             handle_send(
@@ -226,7 +225,6 @@ async fn handle_client_message(
                 &body,
                 kind.as_deref().unwrap_or("text"),
                 reply_to_id,
-                attachment_upload_id,
                 client_id,
                 hub,
                 outbound_tx,
@@ -288,13 +286,12 @@ async fn handle_send(
     body: &str,
     kind: &str,
     reply_to_id: Option<uuid::Uuid>,
-    attachment_upload_id: Option<uuid::Uuid>,
     client_id: Option<String>,
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
     // Validate body
-    if body.trim().is_empty() && attachment_upload_id.is_none() {
+    if body.trim().is_empty() {
         let _ = outbound_tx.send(ServerMessage::Error {
             message: "message body cannot be empty".to_string(),
         });
@@ -333,7 +330,6 @@ async fn handle_send(
         body,
         kind,
         reply_to_id,
-        attachment_upload_id,
         client_id,
     )
     .await

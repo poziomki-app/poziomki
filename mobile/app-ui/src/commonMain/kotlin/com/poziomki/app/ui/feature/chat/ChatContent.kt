@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -64,7 +62,6 @@ import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.Copy
 import com.adamglin.phosphoricons.bold.PencilSimple
-import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.chat.api.Reaction
@@ -78,9 +75,6 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
-import com.poziomki.app.ui.shared.PickedFile
-import com.poziomki.app.ui.shared.rememberSingleFilePicker
-import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -97,8 +91,6 @@ fun ChatContent(
     timelineListState: LazyListState,
     onDraftChanged: (String) -> Unit,
     onSendMessage: () -> Unit,
-    onSendImageAttachment: (ByteArray) -> Unit,
-    onSendFileAttachment: (PickedFile) -> Unit,
     onToggleReaction: (String, String) -> Unit,
     onMarkAsRead: () -> Unit,
     onViewportChanged: (Int?) -> Unit,
@@ -121,10 +113,6 @@ fun ChatContent(
 
     var selectedActionEvent by remember { mutableStateOf<TimelineItem.Event?>(null) }
     var selectedReactionEvent by remember { mutableStateOf<TimelineItem.Event?>(null) }
-    var showAttachmentMenu by remember { mutableStateOf(false) }
-
-    val pickImage = rememberSingleImagePicker { bytes -> bytes?.let(onSendImageAttachment) }
-    val pickFile = rememberSingleFilePicker { file -> file?.let(onSendFileAttachment) }
 
     // In reversed layout, index 0 = newest (bottom of screen).
     // "Away from latest" means the first visible item is not near index 0.
@@ -328,34 +316,6 @@ fun ChatContent(
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box {
-                        IconButton(onClick = { showAttachmentMenu = true }) {
-                            Icon(
-                                imageVector = PhosphorIcons.Bold.Plus,
-                                contentDescription = "Załącznik",
-                                tint = TextSecondary,
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showAttachmentMenu,
-                            onDismissRequest = { showAttachmentMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Wyślij zdjęcie") },
-                                onClick = {
-                                    pickImage()
-                                    showAttachmentMenu = false
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Wyślij plik") },
-                                onClick = {
-                                    pickFile()
-                                    showAttachmentMenu = false
-                                },
-                            )
-                        }
-                    }
                     BasicTextField(
                         value = state.messageDraft,
                         onValueChange = { onDraftChanged(it) },
@@ -597,8 +557,11 @@ private fun ReactionBreakdownSheet(
                         selected = selectedTab == index + 1,
                         onClick = { selectedTab = index + 1 },
                         text = {
+                            val uniqueCount = reaction.senders
+                                .distinctBy { it.senderId }.size
+                                .takeIf { it > 0 } ?: reaction.count
                             Text(
-                                text = "${reaction.emoji} ${reaction.senders.distinctBy { it.senderId }.size.takeIf { it > 0 } ?: reaction.count}",
+                                text = "${reaction.emoji} $uniqueCount",
                                 fontWeight = if (selectedTab == index + 1) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
