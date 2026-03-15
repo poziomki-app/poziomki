@@ -83,9 +83,7 @@ fun App() {
     }
 }
 
-private fun buildImageLoaderFactory(
-    imageHttpClient: HttpClient,
-): (PlatformContext) -> ImageLoader =
+private fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformContext) -> ImageLoader =
     { context: PlatformContext ->
         ImageLoader
             .Builder(context)

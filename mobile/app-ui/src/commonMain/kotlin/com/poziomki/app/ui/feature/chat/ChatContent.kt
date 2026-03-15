@@ -557,9 +557,10 @@ private fun ReactionBreakdownSheet(
                         selected = selectedTab == index + 1,
                         onClick = { selectedTab = index + 1 },
                         text = {
-                            val uniqueCount = reaction.senders
-                                .distinctBy { it.senderId }.size
-                                .takeIf { it > 0 } ?: reaction.count
+                            val senderCount =
+                                reaction.senders.distinctBy { it.senderId }.size
+                            val uniqueCount =
+                                senderCount.takeIf { it > 0 } ?: reaction.count
                             Text(
                                 text = "${reaction.emoji} $uniqueCount",
                                 fontWeight = if (selectedTab == index + 1) FontWeight.Bold else FontWeight.Normal,
