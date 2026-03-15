@@ -162,7 +162,7 @@ fun AppNavigation(
         }
     }
 
-    val navigateToDm: (String, String) -> Unit = navigateToDm@{ userId, displayName ->
+    val navigateToDm: (String, String, String?) -> Unit = navigateToDm@{ userId, displayName, profileId ->
         if (userId.isBlank()) return@navigateToDm
         navigationScope.launch {
             val roomId =
@@ -183,6 +183,7 @@ fun AppNavigation(
                     id = roomId,
                     title = displayName.trim().ifBlank { null },
                     directUserId = userId,
+                    directProfileId = profileId,
                 ),
             )
         }
@@ -360,6 +361,7 @@ fun AppNavigation(
                 chatId = chat.id,
                 initialTitle = chat.title,
                 initialDirectUserId = chat.directUserId,
+                initialDirectProfileId = chat.directProfileId,
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
@@ -367,8 +369,8 @@ fun AppNavigation(
         composable<Route.NewChat> {
             NewChatScreen(
                 onBack = { navController.popBackStack() },
-                onUserSelected = { userId, displayName ->
-                    navigateToDm(userId, displayName)
+                onUserSelected = { userId, displayName, profileId ->
+                    navigateToDm(userId, displayName, profileId)
                     navController.popBackStack(Route.NewChat, inclusive = true)
                 },
             )

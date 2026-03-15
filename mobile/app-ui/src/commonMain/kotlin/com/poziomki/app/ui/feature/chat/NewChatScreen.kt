@@ -50,7 +50,7 @@ import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 @Composable
 fun NewChatScreen(
     onBack: () -> Unit,
-    onUserSelected: (userId: String, displayName: String) -> Unit,
+    onUserSelected: (userId: String, displayName: String, profileId: String?) -> Unit,
     viewModel: NewChatViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -102,7 +102,7 @@ fun NewChatScreen(
                     items(state.profiles, key = { it.id }) { profile ->
                         ProfileRow(
                             profile = profile,
-                            onClick = { onUserSelected(profile.userId, profile.name) },
+                            onClick = { onUserSelected(profile.userId, profile.name, profile.id) },
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
