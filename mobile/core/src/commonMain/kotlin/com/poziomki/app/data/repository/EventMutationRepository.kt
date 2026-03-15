@@ -370,7 +370,7 @@ internal class EventMutationRepository(
             longitude = event.longitude,
             starts_at = event.startsAt,
             ends_at = event.endsAt,
-            creator_id = event.creatorId,
+            creator_id = event.creator?.id ?: event.creatorId,
             creator_name = event.creator?.name,
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),

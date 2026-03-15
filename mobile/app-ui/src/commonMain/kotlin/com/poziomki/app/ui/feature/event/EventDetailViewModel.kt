@@ -51,7 +51,7 @@ class EventDetailViewModel(
             eventRepository
                 .observeEvent(eventId)
                 .combine(profileRepository.observeOwnProfile()) { event, profile ->
-                    val isCreator = event?.creatorId != null && event.creatorId == profile?.id
+                    val isCreator = event?.creator?.id != null && event.creator?.id == profile?.id
                     _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
                 }.collect {}
         }
@@ -149,6 +149,21 @@ class EventDetailViewModel(
                     _state.value =
                         _state.value.copy(
                             snackbarMessage = "nie uda\u0142o si\u0119 odrzuci\u0107 uczestnika",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
+        }
+    }
+
+    fun deleteEvent(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            when (eventRepository.deleteEvent(eventId)) {
+                is ApiResult.Success -> onDeleted()
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie udało się usunąć wydarzenia",
                             snackbarType = SnackbarType.ERROR,
                         )
                 }

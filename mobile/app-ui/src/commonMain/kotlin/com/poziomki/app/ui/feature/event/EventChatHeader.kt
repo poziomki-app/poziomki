@@ -42,6 +42,7 @@ import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
+import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -55,12 +56,16 @@ import com.poziomki.app.ui.shared.resolveImageUrl
 @Suppress("LongMethod", "LongParameterList")
 fun EventChatHeader(
     event: Event,
+    isCreator: Boolean,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     onJoin: () -> Unit,
     onLeave: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier =
@@ -127,7 +132,27 @@ fun EventChatHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                 ) {
-                    if (event.isAttending) {
+                    if (isCreator) {
+                        DropdownMenuItem(
+                            text = { Text("Edytuj") },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Usuń wydarzenie",
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                        )
+                    } else if (event.isAttending) {
                         DropdownMenuItem(
                             text = { Text("Opuść wydarzenie") },
                             onClick = {
@@ -241,5 +266,19 @@ fun EventChatHeader(
                 )
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        ConfirmDialog(
+            title = "usuń wydarzenie",
+            message = "czy na pewno chcesz usunąć to wydarzenie? tej operacji nie można cofnąć.",
+            confirmText = "usuń",
+            isDestructive = true,
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete()
+            },
+            onDismiss = { showDeleteDialog = false },
+        )
     }
 }
