@@ -1,9 +1,12 @@
 use lettre::{
     message::{
-        dkim::{dkim_sign, DkimConfig, DkimSigningAlgorithm, DkimSigningKey},
+        dkim::{
+            dkim_sign, DkimCanonicalization, DkimCanonicalizationType, DkimConfig,
+            DkimSigningAlgorithm, DkimSigningKey,
+        },
         header, Mailbox, MultiPart,
     },
-    transport::smtp::client::TlsParameters,
+    transport::smtp::{client::TlsParameters, extension::ClientId},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use std::sync::OnceLock;
@@ -38,7 +41,21 @@ fn dkim_config() -> Result<Option<&'static DkimConfig>, String> {
             .map_err(|e| format!("DKIM key parse: {e}"))?;
         let domain = std::env::var("DKIM_DOMAIN").unwrap_or_else(|_| "poziomki.app".into());
         let selector = std::env::var("DKIM_SELECTOR").unwrap_or_else(|_| "mail".into());
-        Ok(Some(DkimConfig::default_config(selector, domain, key)))
+        Ok(Some(DkimConfig::new(
+            selector,
+            domain,
+            key,
+            vec![
+                header::HeaderName::new_from_ascii_str("From"),
+                header::HeaderName::new_from_ascii_str("Subject"),
+                header::HeaderName::new_from_ascii_str("To"),
+                header::HeaderName::new_from_ascii_str("Date"),
+            ],
+            DkimCanonicalization {
+                header: DkimCanonicalizationType::Relaxed,
+                body: DkimCanonicalizationType::Relaxed,
+            },
+        )))
     })
     .as_ref()
     .map(Option::as_ref)
@@ -175,6 +192,7 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
         .ok_or_else(|| format!("No domain in {to}"))?;
     let mx_hosts = resolve_mx(domain).await?;
 
+    let ehlo = std::env::var("SMTP_EHLO").unwrap_or_else(|_| "mail.poziomki.app".into());
     let mut last_err = String::new();
     for mx_host in &mx_hosts {
         let tls_params = match TlsParameters::new(mx_host.clone()) {
@@ -184,10 +202,9 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
                 continue;
             }
         };
-        // Opportunistic STARTTLS: maximizes deliverability. OTP has short expiry (10 min)
-        // and is rate-limited, so cleartext fallback is an acceptable tradeoff.
         let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(mx_host)
             .port(25)
+            .hello_name(ClientId::Domain(ehlo.clone()))
             .timeout(Some(Duration::from_secs(30)))
             .tls(lettre::transport::smtp::client::Tls::Opportunistic(
                 tls_params,
