@@ -34,6 +34,7 @@ import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
+import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -127,13 +128,13 @@ fun ProfileViewScreen(
         }
 
         state.isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Primary)
             }
         }
 
         else -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
                 Text(
                     text = "nie znaleziono profilu",
                     fontFamily = NunitoFamily,
