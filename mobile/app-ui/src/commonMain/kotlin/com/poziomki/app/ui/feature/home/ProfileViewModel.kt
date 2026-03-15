@@ -94,7 +94,7 @@ class ProfileViewModel(
 
     fun signOut() {
         viewModelScope.launch {
-            chatClient.stop()
+            runCatching { chatClient.stop() }
             runCatching { apiService.signOut() }
             cacheManager.clearAll()
             sessionManager.clearSession()

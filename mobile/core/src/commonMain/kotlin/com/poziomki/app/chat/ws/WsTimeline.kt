@@ -294,13 +294,19 @@ class WsTimeline(
             .firstOrNull()
             ?.eventId
 
-        wsConnection.send(
+        val sent = wsConnection.send(
             WsClientMessage.History(
                 conversationId = conversationId,
                 before = oldestId,
                 limit = count.toInt(),
             ),
         )
+
+        if (!sent) {
+            _isPaginatingBackwards.value = false
+            pendingHistoryDeferred = null
+            return Result.failure(IllegalStateException("Not connected"))
+        }
 
         return try {
             val hasMore = withTimeoutOrNull(10_000L) { deferred.await() }

@@ -131,7 +131,7 @@ fun AppNavigation(
     var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
     LaunchedEffect(isLoggedIn) {
         if (wasLoggedIn && !isLoggedIn) {
-            chatClient.stop()
+            runCatching { chatClient.stop() }
             navController.navigate(Route.AuthGraph) {
                 popUpTo(0) { inclusive = true }
             }

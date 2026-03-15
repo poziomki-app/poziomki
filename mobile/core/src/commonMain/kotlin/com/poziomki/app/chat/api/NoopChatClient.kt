@@ -40,7 +40,6 @@ class NoopChatClient : ChatClient {
 
     override suspend fun registerPusher(
         ntfyEndpoint: String,
-        gatewayUrl: String,
     ): Result<Unit> = Result.success(Unit)
 
     override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)

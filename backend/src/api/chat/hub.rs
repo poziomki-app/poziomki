@@ -36,11 +36,10 @@ impl ChatHub {
         (tx, rx)
     }
 
-    /// Remove a specific sender for the given user (matched by pointer identity).
-    pub fn unregister(&self, user_id: i32, sender: &mpsc::UnboundedSender<ServerMessage>) {
+    /// Remove closed senders for the given user.
+    pub fn unregister(&self, user_id: i32) {
         if let Some(mut entry) = self.connections.get_mut(&user_id) {
-            let ptr = std::ptr::from_ref(sender);
-            entry.retain(|s| !std::ptr::eq(std::ptr::from_ref(s), ptr));
+            entry.retain(|s| !s.is_closed());
             if entry.is_empty() {
                 drop(entry);
                 self.connections.remove(&user_id);
