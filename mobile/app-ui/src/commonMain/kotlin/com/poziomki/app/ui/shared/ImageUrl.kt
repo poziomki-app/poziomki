@@ -15,7 +15,6 @@ private val uploadFilenameRegex =
 private fun hasSupportedImageScheme(value: String): Boolean =
     value.startsWith("https://") ||
         value.startsWith("http://") ||
-        value.startsWith("mxc://") ||
         value.startsWith("content://") ||
         value.startsWith("file://")
 
@@ -26,7 +25,6 @@ fun resolveImageUrl(url: String): String {
     if (normalized.isEmpty()) return normalized
     return when {
         normalized.startsWith("/") -> "$apiBaseUrl$normalized"
-        normalized.startsWith("mxc://") -> normalized
         hasSupportedImageScheme(normalized) -> normalized
         looksLikeUploadFilename(normalized) -> "$apiBaseUrl/api/v1/uploads/$normalized"
         else -> normalized

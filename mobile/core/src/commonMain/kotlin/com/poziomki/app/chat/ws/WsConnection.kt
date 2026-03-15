@@ -49,9 +49,15 @@ class WsConnection(
 
     private var sendChannel: (suspend (String) -> Unit)? = null
 
-    suspend fun send(msg: WsClientMessage) {
+    suspend fun send(msg: WsClientMessage): Boolean {
+        val channel = sendChannel ?: return false
         val text = wsJson.encodeToString(msg)
-        sendChannel?.invoke(text)
+        return try {
+            channel.invoke(text)
+            true
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+            false
+        }
     }
 
     fun connect() {

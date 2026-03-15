@@ -184,9 +184,19 @@ pub async fn resolve_event_conversation(
         ));
     }
 
-    let conversation =
-        conversations::resolve_or_create_event_conversation(event_id, &event_title, user.id)
-            .await?;
+    // Resolve creator's user_id from their profile_id
+    let creator_user_id: i32 = profiles::table
+        .filter(profiles::id.eq(creator_profile_id))
+        .select(profiles::user_id)
+        .first(&mut conn)
+        .await?;
+
+    let conversation = conversations::resolve_or_create_event_conversation(
+        event_id,
+        &event_title,
+        creator_user_id,
+    )
+    .await?;
 
     // Ensure requesting user is a member
     diesel::insert_into(conversation_members::table)

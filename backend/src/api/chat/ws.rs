@@ -141,6 +141,7 @@ async fn authenticate(
     let row: Option<(i32, uuid::Uuid)> = sessions::table
         .inner_join(users::table.on(users::id.eq(sessions::user_id)))
         .filter(sessions::token.eq(&hashed))
+        .filter(sessions::expires_at.gt(chrono::Utc::now()))
         .select((users::id, users::pid))
         .first::<(i32, uuid::Uuid)>(&mut conn)
         .await
@@ -257,6 +258,14 @@ async fn handle_send(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
+    // Validate body
+    if body.trim().is_empty() && attachment_upload_id.is_none() {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "message body cannot be empty".to_string(),
+        });
+        return;
+    }
+
     // Verify membership
     if !conversations::is_member(conversation_id, user_id)
         .await
@@ -372,6 +381,34 @@ async fn handle_react(
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
+    // Resolve conversation_id from message and check membership
+    let conversation_id = chat_messages::message_conversation_id(message_id).await;
+    match conversation_id {
+        Ok(Some(cid)) => {
+            if !conversations::is_member(cid, user_id)
+                .await
+                .unwrap_or(false)
+            {
+                let _ = outbound_tx.send(ServerMessage::Error {
+                    message: "not a member of this conversation".to_string(),
+                });
+                return;
+            }
+        }
+        Ok(None) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".to_string(),
+            });
+            return;
+        }
+        Err(_) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "internal error".to_string(),
+            });
+            return;
+        }
+    }
+
     match chat_messages::toggle_reaction(message_id, user_id, emoji).await {
         Ok((added, msg)) => {
             let members = conversations::member_user_ids(msg.conversation_id)
@@ -432,6 +469,13 @@ async fn handle_read(
     message_id: uuid::Uuid,
     hub: &ChatHub,
 ) {
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        return;
+    }
+
     if chat_messages::mark_read(conversation_id, user_id, message_id)
         .await
         .is_ok()
@@ -449,6 +493,13 @@ async fn handle_read(
 }
 
 async fn handle_typing(user_id: i32, conversation_id: uuid::Uuid, is_typing: bool, hub: &ChatHub) {
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        return;
+    }
+
     let members = conversations::member_user_ids(conversation_id)
         .await
         .unwrap_or_default();

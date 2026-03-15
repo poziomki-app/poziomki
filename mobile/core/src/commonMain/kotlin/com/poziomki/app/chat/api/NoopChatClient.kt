@@ -45,14 +45,6 @@ class NoopChatClient : ChatClient {
 
     override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
 
-    override suspend fun getMediaThumbnail(
-        mxcUrl: String,
-        width: Long,
-        height: Long,
-    ): ByteArray? = null
-
-    override suspend fun getMediaContent(mxcUrl: String): ByteArray? = null
-
     override suspend fun stop() {
         _state.value = ChatClientState.Idle
     }

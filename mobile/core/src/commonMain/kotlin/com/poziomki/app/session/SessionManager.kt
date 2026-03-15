@@ -23,6 +23,7 @@ class SessionManager(
         val USER_NAME = stringPreferencesKey("user_name")
         val PROFILE_ID = stringPreferencesKey("profile_id")
         val ONBOARDING_DRAFT = stringPreferencesKey("onboarding_draft")
+        val DEVICE_ID = stringPreferencesKey("device_id")
     }
 
     val isLoggedIn: Flow<Boolean> =
@@ -87,8 +88,21 @@ class SessionManager(
 
     suspend fun getOnboardingDraft(): String? = dataStore.data.first()[ONBOARDING_DRAFT]
 
+    suspend fun getOrCreateDeviceId(): String {
+        val prefs = dataStore.data.first()
+        prefs[DEVICE_ID]?.let { return it }
+        val newId = "android_${kotlin.uuid.Uuid.random()}"
+        dataStore.edit { it[DEVICE_ID] = newId }
+        return newId
+    }
+
     suspend fun clearSession() {
         tokenStore.clearToken()
-        dataStore.edit { it.clear() }
+        // Preserve device_id across logouts
+        val deviceId = dataStore.data.first()[DEVICE_ID]
+        dataStore.edit {
+            it.clear()
+            if (deviceId != null) it[DEVICE_ID] = deviceId
+        }
     }
 }
