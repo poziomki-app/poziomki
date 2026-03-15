@@ -21,6 +21,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun EventChatScreen(
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
+    onNavigateToEditEvent: (String) -> Unit,
     eventDetailViewModel: EventDetailViewModel = koinViewModel(),
     chatViewModel: ChatViewModel = koinViewModel(),
 ) {
@@ -87,10 +88,13 @@ fun EventChatScreen(
                 val event = requireNotNull(eventState.event)
                 EventChatHeader(
                     event = event,
+                    isCreator = eventState.isCreator,
                     onBack = onBack,
                     onNavigateToProfile = onNavigateToProfile,
                     onJoin = eventDetailViewModel::attendEvent,
                     onLeave = eventDetailViewModel::leaveEvent,
+                    onDelete = { eventDetailViewModel.deleteEvent(onBack) },
+                    onEdit = { onNavigateToEditEvent(event.id) },
                 )
                 ChatContent(
                     modifier = Modifier.weight(1f),
