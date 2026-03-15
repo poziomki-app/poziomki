@@ -502,13 +502,14 @@ private fun toTimelineEvent(
     replyTo: WsReplyPayload?,
     reactions: List<WsReactionPayload>,
 ): TimelineItem.Event {
-    val replyDetails = replyTo?.let {
-        ReplyDetails(
-            eventId = it.messageId,
-            senderDisplayName = it.senderName,
-            body = it.body,
-        )
-    }
+    val replyDetails =
+        replyTo?.let {
+            ReplyDetails(
+                eventId = it.messageId,
+                senderDisplayName = it.senderName,
+                body = it.body,
+            )
+        }
     return TimelineItem.Event(
         eventOrTransactionId = id,
         eventId = id,
@@ -534,9 +535,10 @@ private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): Time
 }
 
 private fun WsReactionPayload.toReaction(): Reaction {
-    val reactionSenders = userIds.zip(senderNames).map { (uid, name) ->
-        ReactionSender(senderId = uid.toString(), displayName = name)
-    }
+    val reactionSenders =
+        userIds.zip(senderNames).map { (uid, name) ->
+            ReactionSender(senderId = uid.toString(), displayName = name)
+        }
     return Reaction(
         emoji = emoji,
         count = count,

@@ -172,8 +172,7 @@ class ApiService(
 
     // Settings
 
-    suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> =
-        client.patch("/api/v1/settings", request)
+    suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> = client.patch("/api/v1/settings", request)
 
     // Chat (WebSocket backend)
 
@@ -188,10 +187,11 @@ class ApiService(
     suspend fun registerChatPush(
         deviceId: String,
         ntfyTopic: String,
-    ): ApiResult<SuccessResponse> = client.post(
-        "/api/v1/chat/push/register",
-        ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic),
-    )
+    ): ApiResult<SuccessResponse> =
+        client.post(
+            "/api/v1/chat/push/register",
+            ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic),
+        )
 
     suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =
         client.post("/api/v1/chat/push/unregister", ChatPushUnregisterRequest(deviceId = deviceId))
