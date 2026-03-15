@@ -185,7 +185,10 @@ class WsChatClient(
         _state.value = ChatClientState.Connecting
 
         openedRoomsMutex.withLock {
-            openedRooms.values.forEach { it.liveTimeline.close() }
+            openedRooms.values.forEach {
+                it.close()
+                it.liveTimeline.close()
+            }
             openedRooms.clear()
         }
         latestConversations = emptyList()
@@ -291,7 +294,10 @@ class WsChatClient(
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
         openedRoomsMutex.withLock {
-            openedRooms.values.forEach { it.liveTimeline.close() }
+            openedRooms.values.forEach {
+                it.close()
+                it.liveTimeline.close()
+            }
             openedRooms.clear()
         }
         latestConversations = emptyList()

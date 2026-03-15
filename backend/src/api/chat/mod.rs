@@ -243,6 +243,24 @@ pub async fn push_register(
 
     let (_session, user) = auth_or_respond!(headers);
 
+    if body.ntfy_topic.is_empty()
+        || body.ntfy_topic.len() > 128
+        || !body
+            .ntfy_topic
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
+        return Ok(error_response(
+            StatusCode::BAD_REQUEST,
+            &headers,
+            ErrorSpec {
+                error: "invalid ntfy_topic".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        ));
+    }
+
     let mut conn = crate::db::conn().await?;
     let now = chrono::Utc::now();
 

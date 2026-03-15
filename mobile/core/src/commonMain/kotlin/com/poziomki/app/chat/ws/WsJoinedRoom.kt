@@ -48,7 +48,8 @@ class WsJoinedRoom(
     private val _typingUserIds = MutableStateFlow<List<String>>(emptyList())
     override val typingUserIds: StateFlow<List<String>> = _typingUserIds
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
     private val typingTimeoutJobs = mutableMapOf<String, Job>()
 
     internal val memberCache = MemberCache()
@@ -140,4 +141,10 @@ class WsJoinedRoom(
     override suspend fun getMemberDisplayName(userId: String): String? = memberCache.getDisplayName(userId)
 
     override suspend fun getMemberAvatarUrl(userId: String): String? = memberCache.getAvatarUrl(userId)
+
+    internal fun close() {
+        typingTimeoutJobs.values.forEach { it.cancel() }
+        typingTimeoutJobs.clear()
+        scopeJob.cancel()
+    }
 }
