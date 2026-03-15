@@ -305,6 +305,15 @@ async fn handle_send(
         return;
     }
 
+    if let Some(ref cid) = client_id {
+        if cid.len() > 64 {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "client_id too long (max 64 chars)".to_string(),
+            });
+            return;
+        }
+    }
+
     // Validate kind
     if !matches!(kind, "text" | "image" | "file") {
         let _ = outbound_tx.send(ServerMessage::Error {
