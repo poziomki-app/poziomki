@@ -51,7 +51,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
 
     let avatar_url = sender_avatar
         .as_ref()
-        .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(filename));
+        .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(filename, "webp"));
 
     let push_data = serde_json::json!({
         "room_id": conversation_id.to_string(),

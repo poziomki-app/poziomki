@@ -2,11 +2,10 @@ use super::{
     bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
     fallback_variant_urls, internal_upload_error, load_owned_upload, not_found, public_upload_url,
     require_auth_profile, storage_delete, storage_signed_put_url, storage_upload,
-    uploads_multipart, uploads_resize, uploads_storage, validate_filename,
-    validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
-    DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
-    Multipart, NewUpload, Path, Response, Result, State, SuccessResponse, UploadChangeset,
-    UploadResponse, Utc, Uuid,
+    uploads_multipart, uploads_storage, validate_filename, validate_presign_payload, AppContext,
+    DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
+    ErrorSpec, HandlerError, HeaderMap, Json, Multipart, NewUpload, Path, Response, Result, State,
+    SuccessResponse, UploadChangeset, UploadResponse, Utc, Uuid,
 };
 use axum::response::IntoResponse;
 
@@ -25,7 +24,9 @@ pub(in crate::api) async fn file_upload(
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
         storage_upload(&headers, &filename, &parsed.bytes, &parsed.mime_type).await?;
-        let (thumbnail_url, standard_url) = fallback_variant_urls(&headers, &filename).await;
+        let format = crate::api::image_format_from_headers(&headers);
+        let (thumbnail_url, standard_url) =
+            fallback_variant_urls(&headers, &filename, format).await;
 
         let context_str = format!("{:?}", parsed.context).to_ascii_lowercase();
         let now = Utc::now();
@@ -62,7 +63,7 @@ pub(in crate::api) async fn file_upload(
             );
         }
 
-        let url = public_upload_url(&headers, &filename).await;
+        let url = public_upload_url(&headers, &filename, format).await;
 
         Ok(Json(DataResponse {
             data: UploadResponse {
@@ -174,8 +175,10 @@ pub(in crate::api) async fn file_upload_complete(
             );
         }
 
-        let url = public_upload_url(&headers, &upload.filename).await;
-        let (thumbnail_url, standard_url) = fallback_variant_urls(&headers, &upload.filename).await;
+        let format = crate::api::image_format_from_headers(&headers);
+        let url = public_upload_url(&headers, &upload.filename, format).await;
+        let (thumbnail_url, standard_url) =
+            fallback_variant_urls(&headers, &upload.filename, format).await;
 
         Ok(Json(DataResponse {
             data: UploadResponse {
@@ -211,12 +214,6 @@ pub(in crate::api) async fn file_delete(
         let upload = load_owned_upload(&headers, &filename, profile.id).await?;
 
         storage_delete(&headers, &filename).await?;
-
-        // Best-effort delete variants regardless of DB flags to avoid stale files.
-        let thumb_name = uploads_resize::variant_filename(&filename, "thumb");
-        let std_name = uploads_resize::variant_filename(&filename, "std");
-        let _ = uploads_storage::delete(&thumb_name).await;
-        let _ = uploads_storage::delete(&std_name).await;
 
         let changeset = UploadChangeset {
             deleted: Some(true),

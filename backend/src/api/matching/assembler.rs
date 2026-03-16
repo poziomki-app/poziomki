@@ -89,6 +89,7 @@ pub(super) async fn build_recommendations_response(
     repo: &MatchingRepository,
     conn: &mut crate::db::DbConn,
     privacy_map: &HashMap<i32, bool>,
+    format: &str,
 ) -> std::result::Result<Vec<ProfileRecommendation>, crate::error::AppError> {
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
     let user_models = repo.load_users_by_ids(&user_ids, conn).await?;
@@ -102,7 +103,7 @@ pub(super) async fn build_recommendations_response(
         .collect();
 
     let (resolved_pics, thumbhash_map) = tokio::join!(
-        resolve_image_urls(&pic_filenames),
+        resolve_image_urls(&pic_filenames, format),
         resolve_thumbhashes(&pic_filenames),
     );
     let pic_map: HashMap<String, String> = pic_filenames.into_iter().zip(resolved_pics).collect();

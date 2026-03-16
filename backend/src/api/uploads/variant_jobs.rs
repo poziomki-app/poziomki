@@ -4,37 +4,8 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::{uploads_resize, uploads_storage};
-use crate::db::models::uploads::{Upload, UploadChangeset};
+use crate::db::models::uploads::UploadChangeset;
 use crate::db::schema::uploads;
-
-struct VariantUploadResult {
-    thumb: std::result::Result<(), uploads_storage::StorageError>,
-    std: std::result::Result<(), uploads_storage::StorageError>,
-}
-
-/// Checks both variant uploads succeeded; on partial failure, cleans up and returns an error.
-async fn ensure_both_variants_uploaded(
-    results: VariantUploadResult,
-    thumb_name: &str,
-    std_name: &str,
-) -> std::result::Result<(), String> {
-    match (results.thumb, results.std) {
-        (Ok(()), Ok(())) => Ok(()),
-        (thumb, std) => {
-            if thumb.is_ok() {
-                let _ = uploads_storage::delete(thumb_name).await;
-            }
-            if std.is_ok() {
-                let _ = uploads_storage::delete(std_name).await;
-            }
-            let thumb_err = thumb.err().map(|e| format!("{e:?}"));
-            let std_err = std.err().map(|e| format!("{e:?}"));
-            Err(format!(
-                "variant upload incomplete: thumb_err={thumb_err:?} std_err={std_err:?}"
-            ))
-        }
-    }
-}
 
 pub(super) async fn generate_upload_variants_job(
     upload_id: Uuid,
@@ -43,7 +14,7 @@ pub(super) async fn generate_upload_variants_job(
 
     let Some(upload) = uploads::table
         .find(upload_id)
-        .first::<Upload>(&mut conn)
+        .first::<crate::db::models::uploads::Upload>(&mut conn)
         .await
         .optional()
         .map_err(|error| error.to_string())?
@@ -55,38 +26,34 @@ pub(super) async fn generate_upload_variants_job(
         return Ok(());
     }
 
-    process_upload_variants(&upload, &mut conn).await
-}
-
-async fn process_upload_variants(
-    upload: &Upload,
-    conn: &mut crate::db::DbConn,
-) -> std::result::Result<(), String> {
     let original_bytes = uploads_storage::read(&upload.filename)
         .await
         .map_err(|error| format!("read original upload failed: {error:?}"))?;
 
-    let variants = uploads_resize::generate_variants(&original_bytes, &upload.mime_type).await?;
-    let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
-    let std_name = uploads_resize::variant_filename(&upload.filename, "std");
+    let thumbhash = uploads_resize::compute_thumbhash(&original_bytes, &upload.mime_type).await?;
 
-    let (thumb_upload, std_upload) = tokio::join!(
-        uploads_storage::upload(&thumb_name, &variants.thumbnail, "image/webp"),
-        uploads_storage::upload(&std_name, &variants.standard, "image/webp")
-    );
-
-    ensure_both_variants_uploaded(
-        VariantUploadResult {
-            thumb: thumb_upload,
-            std: std_upload,
-        },
-        &thumb_name,
-        &std_name,
-    )
-    .await?;
+    let avif_mime = match uploads_resize::encode_avif(&original_bytes, &upload.mime_type).await {
+        Ok(avif_bytes) => {
+            if let Err(err) =
+                uploads_storage::upload(&upload.filename, &avif_bytes, "image/avif").await
+            {
+                tracing::warn!(filename = %upload.filename, ?err, "failed to overwrite original with AVIF");
+                None
+            } else {
+                Some("image/avif".to_string())
+            }
+        }
+        Err(reason) => {
+            if upload.mime_type != "image/avif" {
+                tracing::warn!(filename = %upload.filename, %reason, "AVIF re-encode skipped");
+            }
+            None
+        }
+    };
 
     let changeset = UploadChangeset {
-        thumbhash: Some(Some(variants.thumbhash)),
+        thumbhash: Some(Some(thumbhash)),
+        mime_type: avif_mime,
         has_variants: Some(true),
         updated_at: Some(Utc::now()),
         ..Default::default()
@@ -94,9 +61,9 @@ async fn process_upload_variants(
 
     diesel::update(uploads::table.find(upload.id))
         .set(&changeset)
-        .execute(conn)
+        .execute(&mut conn)
         .await
-        .map_err(|error| format!("update upload variants metadata failed: {error}"))?;
+        .map_err(|error| format!("update upload thumbhash metadata failed: {error}"))?;
 
     Ok(())
 }

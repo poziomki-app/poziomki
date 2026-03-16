@@ -1,9 +1,9 @@
 use super::{
     bad_request, encode_thumbhash, extract_filename_from_original_uri, fallback_variant_urls,
     header, load_owned_original_for_variant, load_owned_upload, public_upload_url,
-    require_auth_profile, resolve_upload_mime_type, storage_read, uploads_resize,
-    validate_filename, AppContext, DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path,
-    Response, Result, State, UploadStatusResponse,
+    require_auth_profile, resolve_upload_mime_type, storage_read, validate_filename, AppContext,
+    DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path, Response, Result, State,
+    UploadStatusResponse,
 };
 use axum::response::IntoResponse;
 
@@ -77,7 +77,8 @@ pub(in crate::api) async fn file_get(
         let profile = require_auth_profile(&headers).await?;
         let mime_type = resolve_upload_mime_type(&headers, &filename, profile.id).await?;
 
-        if let Some(url) = crate::api::imgproxy_signing::signed_url(&filename, "full", "webp") {
+        let format = crate::api::image_format_from_headers(&headers);
+        if let Some(url) = crate::api::imgproxy_signing::signed_url(&filename, "full", format) {
             return Ok(Json(super::super::state::UploadUrlResponse { url }).into_response());
         }
         let bytes = storage_read(&headers, &filename).await?;
@@ -101,23 +102,10 @@ pub(in crate::api) async fn file_status(
         let profile = require_auth_profile(&headers).await?;
         let upload = load_owned_upload(&headers, &filename, profile.id).await?;
 
-        let imgproxy = crate::api::imgproxy_signing::is_configured();
-        let url = public_upload_url(&headers, &upload.filename).await;
-        let (thumbnail_url, standard_url) = if imgproxy {
-            (
-                crate::api::imgproxy_signing::signed_avatar_url(&upload.filename),
-                crate::api::imgproxy_signing::signed_url(&upload.filename, "feed", "webp"),
-            )
-        } else if upload.has_variants {
-            let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
-            let std_name = uploads_resize::variant_filename(&upload.filename, "std");
-            (
-                Some(public_upload_url(&headers, &thumb_name).await),
-                Some(public_upload_url(&headers, &std_name).await),
-            )
-        } else {
-            fallback_variant_urls(&headers, &upload.filename).await
-        };
+        let format = crate::api::image_format_from_headers(&headers);
+        let url = public_upload_url(&headers, &upload.filename, format).await;
+        let (thumbnail_url, standard_url) =
+            fallback_variant_urls(&headers, &upload.filename, format).await;
         let thumbhash = upload.thumbhash.as_deref().map(encode_thumbhash);
 
         Ok(Json(DataResponse {

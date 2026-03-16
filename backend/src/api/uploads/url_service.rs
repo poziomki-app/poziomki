@@ -5,8 +5,8 @@ fn dev_upload_url(filename: &str) -> String {
     format!("/api/v1/uploads/{filename}")
 }
 
-pub(super) async fn public_upload_url(headers: &HeaderMap, filename: &str) -> String {
-    if let Some(url) = crate::api::imgproxy_signing::signed_url(filename, "feed", "webp") {
+pub(super) async fn public_upload_url(headers: &HeaderMap, filename: &str, format: &str) -> String {
+    if let Some(url) = crate::api::imgproxy_signing::signed_url(filename, "feed", format) {
         return url;
     }
     let _ = headers;
@@ -16,13 +16,14 @@ pub(super) async fn public_upload_url(headers: &HeaderMap, filename: &str) -> St
 pub(super) async fn fallback_variant_urls(
     headers: &HeaderMap,
     original_filename: &str,
+    format: &str,
 ) -> (Option<String>, Option<String>) {
     if crate::api::imgproxy_signing::is_configured() {
-        let thumb = crate::api::imgproxy_signing::signed_avatar_url(original_filename);
-        let feed = crate::api::imgproxy_signing::signed_url(original_filename, "feed", "webp");
+        let thumb = crate::api::imgproxy_signing::signed_avatar_url(original_filename, format);
+        let feed = crate::api::imgproxy_signing::signed_url(original_filename, "feed", format);
         return (thumb, feed);
     }
-    let fallback = public_upload_url(headers, original_filename).await;
+    let fallback = public_upload_url(headers, original_filename, format).await;
     (Some(fallback.clone()), Some(fallback))
 }
 

@@ -7,17 +7,8 @@ use tokio::sync::Semaphore;
 /// Max concurrent CPU-bound resize operations.
 static RESIZE_SEMAPHORE: Semaphore = Semaphore::const_new(4);
 
-pub(in crate::api) struct ImageVariants {
-    pub(in crate::api) thumbnail: Vec<u8>,
-    pub(in crate::api) standard: Vec<u8>,
-    pub(in crate::api) thumbhash: Vec<u8>,
-}
-
 /// Async entry point — acquires semaphore and offloads CPU work.
-pub(in crate::api) async fn generate_variants(
-    bytes: &[u8],
-    mime: &str,
-) -> Result<ImageVariants, String> {
+pub(in crate::api) async fn compute_thumbhash(bytes: &[u8], mime: &str) -> Result<Vec<u8>, String> {
     let _permit = RESIZE_SEMAPHORE
         .acquire()
         .await
@@ -26,7 +17,7 @@ pub(in crate::api) async fn generate_variants(
     let owned_bytes = bytes.to_vec();
     let owned_mime = mime.to_string();
 
-    tokio::task::spawn_blocking(move || generate_variants_blocking(&owned_bytes, &owned_mime))
+    tokio::task::spawn_blocking(move || compute_thumbhash_blocking(&owned_bytes, &owned_mime))
         .await
         .map_err(|e| format!("spawn_blocking join error: {e}"))?
 }
@@ -36,6 +27,7 @@ fn decode_source_image(bytes: &[u8], mime: &str) -> Result<Image<'static>, Strin
         "image/jpeg" => Some(ImageFormat::Jpeg),
         "image/png" => Some(ImageFormat::Png),
         "image/webp" => Some(ImageFormat::WebP),
+        "image/avif" => Some(ImageFormat::Avif),
         _ => None,
     };
 
@@ -57,26 +49,10 @@ fn decode_source_image(bytes: &[u8], mime: &str) -> Result<Image<'static>, Strin
         .map_err(|e| format!("src image: {e}"))
 }
 
-fn generate_variants_blocking(bytes: &[u8], mime: &str) -> Result<ImageVariants, String> {
+fn compute_thumbhash_blocking(bytes: &[u8], mime: &str) -> Result<Vec<u8>, String> {
     let src_image = decode_source_image(bytes, mime)?;
     let (orig_w, orig_h) = (src_image.width(), src_image.height());
-
-    // Thumbnail: max 200px
-    let (thumb_w, thumb_h) = fit_dimensions(orig_w, orig_h, 200);
-    let thumbnail = resize_and_encode_webp(&src_image, thumb_w, thumb_h, 75.0)?;
-
-    // Standard: max 800px
-    let (std_w, std_h) = fit_dimensions(orig_w, orig_h, 800);
-    let standard = resize_and_encode_webp(&src_image, std_w, std_h, 80.0)?;
-
-    // Thumbhash: max 100px
-    let thumbhash = compute_thumbhash(&src_image, orig_w, orig_h)?;
-
-    Ok(ImageVariants {
-        thumbnail,
-        standard,
-        thumbhash,
-    })
+    compute_thumbhash_from_image(&src_image, orig_w, orig_h)
 }
 
 fn fit_dimensions(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
@@ -94,20 +70,15 @@ fn fit_dimensions(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
     }
 }
 
-fn validate_dimensions(src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Result<(), String> {
-    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
-        return Err("zero dimension".into());
-    }
-    Ok(())
-}
-
 fn resize_rgba(src: &Image<'_>, dst_w: u32, dst_h: u32) -> Result<Vec<u8>, String> {
     let (src_w, src_h) = (src.width(), src.height());
     if src_w == dst_w && src_h == dst_h {
         return Ok(src.buffer().to_vec());
     }
 
-    validate_dimensions(src_w, src_h, dst_w, dst_h)?;
+    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
+        return Err("zero dimension".into());
+    }
 
     let mut dst_image = Image::new(dst_w, dst_h, fast_image_resize::PixelType::U8x4);
 
@@ -120,46 +91,11 @@ fn resize_rgba(src: &Image<'_>, dst_w: u32, dst_h: u32) -> Result<Vec<u8>, Strin
     Ok(dst_image.into_vec())
 }
 
-fn encode_webp(
-    rgba_pixels: &[u8],
-    width: u32,
-    height: u32,
-    quality: f32,
-) -> Result<Vec<u8>, String> {
-    if width == 0 || height == 0 {
-        return Err("webp encode: zero dimension".to_string());
-    }
-    let expected_len = usize::try_from(width)
-        .ok()
-        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
-        .and_then(|pixels| pixels.checked_mul(4))
-        .ok_or_else(|| "webp encode: dimension overflow".to_string())?;
-    if rgba_pixels.len() != expected_len {
-        return Err(format!(
-            "webp encode: invalid rgba buffer length {}, expected {}",
-            rgba_pixels.len(),
-            expected_len
-        ));
-    }
-
-    let encoder = webp::Encoder::from_rgba(rgba_pixels, width, height);
-    encoder
-        .encode_simple(false, quality)
-        .map(|encoded| encoded.to_vec())
-        .map_err(|e| format!("webp encode: {e:?}"))
-}
-
-fn resize_and_encode_webp(
+fn compute_thumbhash_from_image(
     src: &Image<'_>,
-    dst_w: u32,
-    dst_h: u32,
-    quality: f32,
+    orig_w: u32,
+    orig_h: u32,
 ) -> Result<Vec<u8>, String> {
-    let resized = resize_rgba(src, dst_w, dst_h)?;
-    encode_webp(&resized, dst_w, dst_h, quality)
-}
-
-fn compute_thumbhash(src: &Image<'_>, orig_w: u32, orig_h: u32) -> Result<Vec<u8>, String> {
     let (tw, th) = fit_dimensions(orig_w, orig_h, 100);
     let resized = resize_rgba(src, tw, th)?;
 
@@ -171,10 +107,39 @@ fn compute_thumbhash(src: &Image<'_>, orig_w: u32, orig_h: u32) -> Result<Vec<u8
     ))
 }
 
-pub(in crate::api) fn variant_filename(original: &str, suffix: &str) -> String {
-    let stem = original
-        .rfind('.')
-        .and_then(|pos| original.get(..pos))
-        .unwrap_or(original);
-    format!("{stem}_{suffix}.webp")
+/// Re-encode image bytes to AVIF. Skips if already AVIF.
+pub(super) async fn encode_avif(bytes: &[u8], mime: &str) -> Result<Vec<u8>, String> {
+    if mime == "image/avif" {
+        return Err("already avif".into());
+    }
+
+    let _permit = RESIZE_SEMAPHORE
+        .acquire()
+        .await
+        .map_err(|e| format!("semaphore closed: {e}"))?;
+
+    let owned_bytes = bytes.to_vec();
+    let owned_mime = mime.to_string();
+
+    tokio::task::spawn_blocking(move || encode_avif_blocking(&owned_bytes, &owned_mime))
+        .await
+        .map_err(|e| format!("spawn_blocking join error: {e}"))?
+}
+
+fn encode_avif_blocking(bytes: &[u8], mime: &str) -> Result<Vec<u8>, String> {
+    let src_image = decode_source_image(bytes, mime)?;
+    let (w, h) = (src_image.width(), src_image.height());
+
+    let mut buf = Vec::new();
+    let encoder = image::codecs::avif::AvifEncoder::new_with_speed_quality(&mut buf, 6, 80);
+    image::ImageEncoder::write_image(
+        encoder,
+        src_image.buffer(),
+        w,
+        h,
+        image::ExtendedColorType::Rgba8,
+    )
+    .map_err(|e| format!("avif encode: {e}"))?;
+
+    Ok(buf)
 }

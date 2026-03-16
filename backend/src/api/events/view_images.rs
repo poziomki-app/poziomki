@@ -3,13 +3,18 @@ use std::collections::{HashMap, HashSet};
 use crate::api::state::EventResponse;
 
 /// Resolve a set of raw image filenames to signed URLs in parallel, returning a lookup map.
-pub(super) async fn resolve_image_map(raw_values: HashSet<String>) -> HashMap<String, String> {
-    let resolve = crate::api::resolve_image_url;
+pub(super) async fn resolve_image_map(
+    raw_values: HashSet<String>,
+    format: &str,
+) -> HashMap<String, String> {
     let futs: Vec<_> = raw_values
         .into_iter()
-        .map(|raw| async move {
-            let resolved = resolve(&raw).await;
-            (raw, resolved)
+        .map(|raw| {
+            let fmt = format.to_owned();
+            async move {
+                let resolved = crate::api::resolve_image_url(&raw, &fmt).await;
+                (raw, resolved)
+            }
         })
         .collect();
     futures_util::future::join_all(futs)
@@ -43,12 +48,12 @@ fn replace_resolved_image(value: &mut Option<String>, url_map: &HashMap<String, 
 }
 
 /// Resolve all image URLs (cover, creator, attendee previews) in event responses.
-pub(super) async fn resolve_event_images(responses: &mut [EventResponse]) {
+pub(super) async fn resolve_event_images(responses: &mut [EventResponse], format: &str) {
     let filenames = collect_image_filenames(responses);
     if filenames.is_empty() {
         return;
     }
-    let url_map = resolve_image_map(filenames).await;
+    let url_map = resolve_image_map(filenames, format).await;
 
     for response in responses.iter_mut() {
         replace_resolved_image(&mut response.cover_image, &url_map);

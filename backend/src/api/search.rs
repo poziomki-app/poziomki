@@ -159,8 +159,9 @@ pub(super) async fn search(
         })?;
 
     // Collect all image URLs and resolve in batch.
+    let format = super::image_format_from_headers(&headers);
     let all_urls = collect_search_image_urls(&results);
-    let resolved = super::resolve_image_urls(&all_urls).await;
+    let resolved = super::resolve_image_urls(&all_urls, format).await;
     let url_map: HashMap<String, String> = all_urls.into_iter().zip(resolved).collect();
     apply_resolved_search_image_urls(&mut results, &url_map);
 

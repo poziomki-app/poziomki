@@ -65,7 +65,8 @@ pub(super) async fn events_list(
 
     let all_events = events_repo::list_upcoming_events(now, limit).await?;
 
-    let data = events_view::build_event_responses(&all_events, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = events_view::build_event_responses(&all_events, &profile.id, format).await?;
     Ok(with_private_short_cache(
         Json(DataResponse { data }).into_response(),
     ))
@@ -82,7 +83,8 @@ pub(super) async fn events_mine(
 
     let my_events = events_repo::list_events_by_creator(profile.id).await?;
 
-    let data = events_view::build_event_responses(&my_events, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = events_view::build_event_responses(&my_events, &profile.id, format).await?;
     Ok(with_private_short_cache(
         Json(DataResponse { data }).into_response(),
     ))
@@ -105,7 +107,8 @@ pub(super) async fn event_get(
         return Ok(not_found_event(&headers, &id));
     };
 
-    let data = build_event_response(&event, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&event, &profile.id, format).await?;
     Ok(with_private_short_cache(
         Json(DataResponse { data }).into_response(),
     ))

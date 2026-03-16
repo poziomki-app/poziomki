@@ -62,7 +62,7 @@ pub(in crate::api) async fn attendee_info(
         .iter()
         .filter_map(|r| r.profile.profile_picture.clone())
         .collect();
-    let url_map = resolve_image_map(filenames).await;
+    let url_map = resolve_image_map(filenames, "webp").await;
 
     let mut list: Vec<AttendeeFullInfo> = rows
         .iter()
