@@ -207,6 +207,7 @@ pub fn router() -> Router<AppContext> {
                         method = %req.method(),
                         path = %req.uri().path(),
                         request_id = %request_id,
+                        user_id = tracing::field::Empty,
                     )
                 })
                 .on_response(StatusAwareOnResponse),

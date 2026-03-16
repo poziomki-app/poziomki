@@ -72,11 +72,14 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
         let result = req.send().await;
 
         match result {
-            Ok(resp) => {
-                if let Err(e) = resp.error_for_status() {
+            Ok(resp) => match resp.error_for_status() {
+                Ok(_) => {
+                    tracing::info!(topic = ntfy_topic, "push_delivered");
+                }
+                Err(e) => {
                     tracing::warn!(topic = ntfy_topic, error = %e, "push notification rejected");
                 }
-            }
+            },
             Err(e) => {
                 tracing::warn!(topic = ntfy_topic, error = %e, "push notification failed");
             }
