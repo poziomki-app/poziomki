@@ -92,7 +92,8 @@ pub(in crate::api) async fn profile_create(
     let (new_profile, profile_id) = build_create_model(&user, &payload, picture);
     let inserted = insert_profile(&new_profile, profile_id, &payload).await?;
 
-    let data = full_profile_response(&inserted, &user.pid, Some(user.id)).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = full_profile_response(&inserted, &user.pid, Some(user.id), format).await?;
     Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
 }
 
@@ -129,7 +130,8 @@ pub(in crate::api) async fn profile_update(
     let changeset = build_update_changeset(&payload, picture);
     let updated = apply_update(&profile, &payload, changeset).await?;
 
-    let data = full_profile_response(&updated, &user.pid, Some(user.id)).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = full_profile_response(&updated, &user.pid, Some(user.id), format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 

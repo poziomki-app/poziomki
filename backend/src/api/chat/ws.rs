@@ -549,7 +549,7 @@ async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
     };
     let avatar_url = avatar
         .as_ref()
-        .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
+        .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f, "webp"));
     (name, avatar_url)
 }
 

@@ -23,8 +23,9 @@ mod state;
 mod uploads;
 
 pub(crate) use common::{
-    auth_or_respond, env_non_empty, error_response, extract_filename, parse_uuid,
-    parse_uuid_response, resolve_image_url, resolve_image_urls, resolve_thumbhashes, ErrorSpec,
+    auth_or_respond, env_non_empty, error_response, extract_filename, image_format_from_headers,
+    parse_uuid, parse_uuid_response, resolve_image_url, resolve_image_urls, resolve_thumbhashes,
+    ErrorSpec,
 };
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))

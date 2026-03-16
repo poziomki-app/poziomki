@@ -91,7 +91,8 @@ pub(super) async fn profiles_recommendations(
 
     let top = rank_and_take(&mut scored, limit);
 
-    let data = build_recommendations_response(&top, &repo, &mut conn, &privacy_map).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_recommendations_response(&top, &repo, &mut conn, &privacy_map, format).await?;
 
     let mut response = Json(DataResponse { data }).into_response();
     response
@@ -200,10 +201,15 @@ pub(super) async fn events_recommendations(
 
     let top = rank_events_and_take(&mut scored, limit);
 
+    let format = crate::api::image_format_from_headers(&headers);
     let top_models: Vec<Event> = top.iter().map(|(_, event)| (*event).clone()).collect();
-    let base =
-        super::events::build_event_responses_with_conn(&top_models, &my_profile_id, &mut conn)
-            .await?;
+    let base = super::events::build_event_responses_with_conn(
+        &top_models,
+        &my_profile_id,
+        &mut conn,
+        format,
+    )
+    .await?;
     let score_by_event: HashMap<Uuid, f64> = top
         .iter()
         .map(|(score, event)| (event.id, *score))

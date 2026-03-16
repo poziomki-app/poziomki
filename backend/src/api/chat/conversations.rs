@@ -311,7 +311,7 @@ pub async fn list_for_user(
                     .and_then(|oid| {
                         profile_map.get(&oid).map(|(pid, name, avatar)| {
                             let avatar_url = avatar.as_ref().map(|filename| {
-                                crate::api::imgproxy_signing::signed_avatar_url(filename)
+                                crate::api::imgproxy_signing::signed_avatar_url(filename, "webp")
                                     .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
                             });
                             (

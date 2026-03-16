@@ -103,30 +103,33 @@ fn build_from_context(
 pub(in crate::api) async fn build_event_responses(
     event_models: &[Event],
     profile_id: &Uuid,
+    format: &str,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
-    build_event_responses_with_conn(event_models, profile_id, &mut conn).await
+    build_event_responses_with_conn(event_models, profile_id, &mut conn, format).await
 }
 
 pub(in crate::api) async fn build_event_responses_with_conn(
     event_models: &[Event],
     profile_id: &Uuid,
     conn: &mut crate::db::DbConn,
+    format: &str,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
     let batch_ctx = load_event_batch_context(event_models, *profile_id, conn).await?;
     let mut responses: Vec<EventResponse> = event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))
         .collect();
-    resolve_event_images(&mut responses).await;
+    resolve_event_images(&mut responses, format).await;
     Ok(responses)
 }
 
 pub(in crate::api) async fn build_event_response(
     event: &Event,
     profile_id: &Uuid,
+    format: &str,
 ) -> std::result::Result<EventResponse, crate::error::AppError> {
-    let responses = build_event_responses(std::slice::from_ref(event), profile_id).await?;
+    let responses = build_event_responses(std::slice::from_ref(event), profile_id, format).await?;
     responses.into_iter().next().ok_or_else(|| {
         crate::error::AppError::Message("Failed to build event response".to_string())
     })

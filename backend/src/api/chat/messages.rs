@@ -435,7 +435,7 @@ async fn batch_messages_to_payloads(
             |(name, pid, avatar)| {
                 let avatar_url = avatar
                     .as_ref()
-                    .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
+                    .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f, "webp"));
                 (name.clone(), Some(pid.to_string()), avatar_url)
             },
         );

@@ -146,7 +146,8 @@ pub(in crate::api) async fn event_create(
         })
         .await?;
 
-    let data = build_event_response(&inserted, &validated.profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&inserted, &validated.profile.id, format).await?;
     Ok(created_event_response(data))
 }
 
@@ -248,7 +249,8 @@ pub(in crate::api) async fn event_update(
         }
     }
 
-    let data = build_event_response(&updated, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&updated, &profile.id, format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 
@@ -358,7 +360,8 @@ pub(in crate::api) async fn event_attend(
         }
     }
 
-    let data = build_event_response(&event, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&event, &profile.id, format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 
@@ -374,7 +377,8 @@ pub(in crate::api) async fn event_save(
 
     upsert_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_SAVED).await?;
 
-    let data = build_event_response(&event, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&event, &profile.id, format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 
@@ -527,7 +531,8 @@ pub(in crate::api) async fn event_leave(
         );
     }
 
-    let data = build_event_response(&event, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&event, &profile.id, format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }
 
@@ -543,6 +548,7 @@ pub(in crate::api) async fn event_unsave(
 
     delete_event_interaction(profile.id, event_uuid, EVENT_INTERACTION_SAVED).await?;
 
-    let data = build_event_response(&event, &profile.id).await?;
+    let format = crate::api::image_format_from_headers(&headers);
+    let data = build_event_response(&event, &profile.id, format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

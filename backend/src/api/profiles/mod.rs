@@ -36,11 +36,12 @@ pub(super) async fn profile_me(
     headers: HeaderMap,
 ) -> Result<Response> {
     let (_session, user) = auth_or_respond!(headers);
+    let format = crate::api::image_format_from_headers(&headers);
 
     let profile = load_profile_by_user_id(user.id).await?;
 
     let data = match profile {
-        Some(ref p) => Some(full_profile_response(p, &user.pid, Some(user.id)).await?),
+        Some(ref p) => Some(full_profile_response(p, &user.pid, Some(user.id), format).await?),
         None => None,
     };
 
@@ -53,6 +54,7 @@ pub(super) async fn profile_get(
     Path(id): Path<String>,
 ) -> Result<Response> {
     let (_session, user) = auth_or_respond!(headers);
+    let format = crate::api::image_format_from_headers(&headers);
 
     let profile_uuid = super::parse_uuid(&id, "profile")?;
 
@@ -60,7 +62,7 @@ pub(super) async fn profile_get(
         return Ok(not_found_profile(&headers, &id));
     };
 
-    let data = profile_to_response(&profile, &user_pid, Some(user.id)).await;
+    let data = profile_to_response(&profile, &user_pid, Some(user.id), format).await;
     Ok(Json(DataResponse { data }).into_response())
 }
 
@@ -70,6 +72,7 @@ pub(super) async fn profile_get_full(
     Path(id): Path<String>,
 ) -> Result<Response> {
     let (_session, user) = auth_or_respond!(headers);
+    let format = crate::api::image_format_from_headers(&headers);
 
     let profile_uuid = super::parse_uuid(&id, "profile")?;
 
@@ -77,6 +80,6 @@ pub(super) async fn profile_get_full(
         return Ok(not_found_profile(&headers, &id));
     };
 
-    let data = full_profile_response(&profile, &user_pid, Some(user.id)).await?;
+    let data = full_profile_response(&profile, &user_pid, Some(user.id), format).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

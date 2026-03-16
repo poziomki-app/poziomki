@@ -115,19 +115,31 @@ pub fn extract_filename(value: &str) -> String {
     }
 }
 
+/// Extract the preferred image format (`"avif"` or `"webp"`) from the `X-Image-Format` header.
+pub fn image_format_from_headers(headers: &HeaderMap) -> &str {
+    headers
+        .get("x-image-format")
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| matches!(*v, "avif" | "webp"))
+        .unwrap_or("webp")
+}
+
 /// Resolve a stored image value (filename or legacy presigned URL) to a fresh signed URL.
-/// Prefers imgproxy (feed/800px, webp) when configured; otherwise uses app-routed media URL.
-pub async fn resolve_image_url(stored: &str) -> String {
+/// Prefers imgproxy (feed/800px) when configured; otherwise uses app-routed media URL.
+pub async fn resolve_image_url(stored: &str, format: &str) -> String {
     let filename = extract_filename(stored);
-    if let Some(url) = super::imgproxy_signing::signed_url(&filename, "feed", "webp") {
+    if let Some(url) = super::imgproxy_signing::signed_url(&filename, "feed", format) {
         return url;
     }
     format!("/api/v1/uploads/{filename}")
 }
 
 /// Resolve multiple image URLs in parallel.
-pub async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
-    let futs: Vec<_> = stored.iter().map(|s| resolve_image_url(s)).collect();
+pub async fn resolve_image_urls(stored: &[String], format: &str) -> Vec<String> {
+    let futs: Vec<_> = stored
+        .iter()
+        .map(|s| resolve_image_url(s, format))
+        .collect();
     futures_util::future::join_all(futs).await
 }
 

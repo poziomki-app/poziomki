@@ -57,16 +57,17 @@ pub(in crate::api) async fn profile_to_response(
     profile: &Profile,
     user_pid: &Uuid,
     viewer_user_id: Option<i32>,
+    format: &str,
 ) -> ProfileResponse {
     let profile_picture = match &profile.profile_picture {
-        Some(pic) => Some(resolve_image_url(pic).await),
+        Some(pic) => Some(resolve_image_url(pic, format).await),
         None => None,
     };
 
     let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
-    let images = resolve_image_urls(&raw_images).await;
+    let images = resolve_image_urls(&raw_images, format).await;
 
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
@@ -90,18 +91,19 @@ pub(in crate::api) async fn full_profile_response(
     profile: &Profile,
     user_pid: &Uuid,
     viewer_user_id: Option<i32>,
+    format: &str,
 ) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
     let profile_tags = load_profile_tags(profile.id).await?;
 
     let profile_picture = match &profile.profile_picture {
-        Some(pic) => Some(resolve_image_url(pic).await),
+        Some(pic) => Some(resolve_image_url(pic, format).await),
         None => None,
     };
 
     let thumbhash = lookup_thumbhash(profile.profile_picture.as_ref()).await;
 
     let raw_images = decode_profile_images(profile);
-    let images = resolve_image_urls(&raw_images).await;
+    let images = resolve_image_urls(&raw_images, format).await;
 
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
