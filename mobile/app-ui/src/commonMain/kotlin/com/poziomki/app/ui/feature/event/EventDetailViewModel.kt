@@ -24,7 +24,6 @@ data class EventDetailState(
     val isOpeningChat: Boolean = false,
     val isUpdatingAttendance: Boolean = false,
     val isCreator: Boolean = false,
-    val error: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
@@ -83,7 +82,6 @@ class EventDetailViewModel(
             _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.attendEvent(eventId)) {
                 is ApiResult.Success -> {
-                    eventRepository.refreshEvent(eventId)
                     eventRepository.refreshAttendees(eventId)
                 }
 
@@ -105,7 +103,6 @@ class EventDetailViewModel(
             _state.value = _state.value.copy(isUpdatingAttendance = true)
             when (eventRepository.leaveEvent(eventId)) {
                 is ApiResult.Success -> {
-                    eventRepository.refreshEvent(eventId)
                     eventRepository.refreshAttendees(eventId)
                 }
 
@@ -176,7 +173,7 @@ class EventDetailViewModel(
         }
     }
 
-    fun openEventChat(onNavigateToChat: (String) -> Unit) {
+    fun openEventChat() {
         val currentEvent = _state.value.event ?: return
         if (_state.value.isOpeningChat) return
         if (!currentEvent.isAttending) {
@@ -189,24 +186,19 @@ class EventDetailViewModel(
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(isOpeningChat = true, error = null)
+            _state.value = _state.value.copy(isOpeningChat = true)
 
-            val roomResult =
-                eventRepository.ensureEventRoom(
-                    eventId = eventId,
-                )
-
-            roomResult
-                .onSuccess { roomId ->
-                    _state.value = _state.value.copy(isOpeningChat = false)
-                    onNavigateToChat(roomId)
-                }.onFailure { throwable ->
+            eventRepository
+                .ensureEventRoom(eventId = eventId)
+                .onFailure { throwable ->
                     _state.value =
                         _state.value.copy(
-                            isOpeningChat = false,
-                            error = throwable.message ?: "Nie udalo sie otworzyc czatu wydarzenia",
+                            snackbarMessage = throwable.message ?: "Nie udało się otworzyć czatu wydarzenia",
+                            snackbarType = SnackbarType.ERROR,
                         )
                 }
+
+            _state.value = _state.value.copy(isOpeningChat = false)
         }
     }
 }
