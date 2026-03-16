@@ -73,9 +73,9 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
+import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
-import com.poziomki.app.ui.designsystem.components.PoziomkiSnackbar
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
@@ -306,7 +306,7 @@ fun ProfileEditScreen(
 
         // Snackbar for save/upload errors
         state.snackbarMessage?.let { message ->
-            PoziomkiSnackbar(
+            AppSnackbar(
                 message = message,
                 type = state.snackbarType,
                 modifier =

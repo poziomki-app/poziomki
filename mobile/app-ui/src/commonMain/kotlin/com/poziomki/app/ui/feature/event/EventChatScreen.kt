@@ -1,8 +1,10 @@
 package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -10,14 +12,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.poziomki.app.chat.ActiveChat
+import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.feature.chat.ChatContent
 import com.poziomki.app.ui.feature.chat.ChatViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod", "Indentation")
 fun EventChatScreen(
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
@@ -66,58 +72,82 @@ fun EventChatScreen(
                 }.toMap()
         }
 
-    Column(modifier = Modifier.fillMaxSize().background(Background)) {
-        when {
-            eventState.isLoading && eventState.event == null -> {
-                EventChatLoadingView()
-            }
+    Box(modifier = Modifier.fillMaxSize().background(Background)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            when {
+                eventState.isLoading && eventState.event == null -> {
+                    EventChatLoadingView()
+                }
 
-            eventState.event == null -> {
-                EventChatNotFoundView()
-            }
+                eventState.event == null -> {
+                    EventChatNotFoundView()
+                }
 
-            eventState.event?.isAttending != true -> {
-                EventChatJoinRequiredView(onJoin = eventDetailViewModel::attendEvent)
-            }
+                eventState.event?.isAttending != true -> {
+                    val event = requireNotNull(eventState.event)
+                    EventChatJoinRequiredView(
+                        event = event,
+                        isUpdatingAttendance = eventState.isUpdatingAttendance,
+                        onJoin = eventDetailViewModel::attendEvent,
+                        onBack = onBack,
+                    )
+                }
 
-            eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
-                EventChatLoadingView()
-            }
+                eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
+                    EventChatLoadingView()
+                }
 
-            else -> {
-                val event = requireNotNull(eventState.event)
-                EventChatHeader(
-                    event = event,
-                    isCreator = eventState.isCreator,
-                    onBack = onBack,
-                    onNavigateToProfile = onNavigateToProfile,
-                    onJoin = eventDetailViewModel::attendEvent,
-                    onLeave = eventDetailViewModel::leaveEvent,
-                    onDelete = { eventDetailViewModel.deleteEvent(onBack) },
-                    onEdit = { onNavigateToEditEvent(event.id) },
-                )
-                ChatContent(
-                    modifier = Modifier.weight(1f),
-                    state = chatState,
-                    timelineListState = timelineListState,
-                    onDraftChanged = chatViewModel::onDraftChanged,
-                    onSendMessage = chatViewModel::sendMessage,
-                    onToggleReaction = chatViewModel::toggleReaction,
-                    onMarkAsRead = chatViewModel::markAsRead,
-                    onViewportChanged = chatViewModel::onTimelineViewportChanged,
-                    onJumpToLatest = chatViewModel::jumpToLatestHandled,
-                    onStartReply = chatViewModel::startReply,
-                    onStartEdit = chatViewModel::startEdit,
-                    onCancelComposerMode = chatViewModel::cancelComposerMode,
-                    onRedactEvent = chatViewModel::redactEvent,
-                    onClearError = chatViewModel::clearError,
-                    onNavigateToProfile = onNavigateToProfile,
-                    resolveDisplayNames = chatViewModel::resolveDisplayNames,
-                    resolveAvatarUrls = chatViewModel::resolveAvatarUrls,
-                    showSenderMeta = true,
-                    avatarOverrides = avatarOverrides,
-                    avatarOverridesByName = avatarOverridesByName,
-                )
+                else -> {
+                    val event = requireNotNull(eventState.event)
+                    EventChatHeader(
+                        event = event,
+                        isCreator = eventState.isCreator,
+                        onBack = onBack,
+                        onNavigateToProfile = onNavigateToProfile,
+                        onJoin = eventDetailViewModel::attendEvent,
+                        onLeave = eventDetailViewModel::leaveEvent,
+                        onDelete = { eventDetailViewModel.deleteEvent(onBack) },
+                        onEdit = { onNavigateToEditEvent(event.id) },
+                    )
+                    ChatContent(
+                        modifier = Modifier.weight(1f),
+                        state = chatState,
+                        timelineListState = timelineListState,
+                        onDraftChanged = chatViewModel::onDraftChanged,
+                        onSendMessage = chatViewModel::sendMessage,
+                        onToggleReaction = chatViewModel::toggleReaction,
+                        onMarkAsRead = chatViewModel::markAsRead,
+                        onViewportChanged = chatViewModel::onTimelineViewportChanged,
+                        onJumpToLatest = chatViewModel::jumpToLatestHandled,
+                        onStartReply = chatViewModel::startReply,
+                        onStartEdit = chatViewModel::startEdit,
+                        onCancelComposerMode = chatViewModel::cancelComposerMode,
+                        onRedactEvent = chatViewModel::redactEvent,
+                        onClearError = chatViewModel::clearError,
+                        onNavigateToProfile = onNavigateToProfile,
+                        resolveDisplayNames = chatViewModel::resolveDisplayNames,
+                        resolveAvatarUrls = chatViewModel::resolveAvatarUrls,
+                        showSenderMeta = true,
+                        avatarOverrides = avatarOverrides,
+                        avatarOverridesByName = avatarOverridesByName,
+                    )
+                }
+            }
+        }
+
+        // Snackbar overlay
+        eventState.snackbarMessage?.let { message ->
+            AppSnackbar(
+                message = message,
+                type = eventState.snackbarType,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(PoziomkiTheme.spacing.md),
+            )
+            LaunchedEffect(message) {
+                kotlinx.coroutines.delay(3000)
+                eventDetailViewModel.clearSnackbar()
             }
         }
     }
