@@ -50,6 +50,13 @@ class EventRepository(
             .mapToList(Dispatchers.IO)
             .map { rows -> rows.map { it.toApiModel() } }
 
+    fun observeRecommendedEvents(): Flow<List<Event>> =
+        db.eventQueries
+            .selectRecommended()
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { it.toApiModel() } }
+
     fun observeEvent(id: String): Flow<Event?> =
         db.eventQueries
             .selectById(id)
@@ -73,14 +80,39 @@ class EventRepository(
                 .toSet()
         }
 
-    suspend fun fetchRecommendedEvents(): List<Event> =
+    suspend fun fetchRecommendedEvents(
+        lat: Double? = null,
+        lng: Double? = null,
+        radiusM: Int? = null,
+        forceRefresh: Boolean = false,
+    ): List<Event> =
         withContext(Dispatchers.IO) {
-            when (val result = api.getMatchingEvents()) {
+            if (!forceRefresh) {
+                val cachedAt =
+                    db.cacheStateQueries
+                        .selectByKey(RECOMMENDED_EVENTS_CACHE_KEY)
+                        .executeAsOneOrNull()
+                        ?.cached_at
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) {
+                    return@withContext db.eventQueries
+                        .selectRecommended()
+                        .executeAsList()
+                        .map { it.toApiModel() }
+                }
+            }
+
+            when (val result = api.getMatchingEvents(lat = lat, lng = lng, radiusM = radiusM)) {
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
+                        db.eventQueries.clearRecommendedFlags()
                         result.data.forEach { event ->
-                            eventMutationManager.upsertEvent(event, now, inListFeed = false)
+                            eventMutationManager.upsertEvent(
+                                event = event,
+                                cachedAt = now,
+                                inListFeed = false,
+                                isRecommended = true,
+                            )
                         }
                         db.cacheStateQueries.upsert(RECOMMENDED_EVENTS_CACHE_KEY, now)
                     }
@@ -88,7 +120,10 @@ class EventRepository(
                 }
 
                 is ApiResult.Error -> {
-                    emptyList()
+                    db.eventQueries
+                        .selectRecommended()
+                        .executeAsList()
+                        .map { it.toApiModel() }
                 }
             }
         }

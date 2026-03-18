@@ -37,30 +37,48 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
 @Composable
-fun EventChatLoadingView() {
+fun EventChatLoadingView(onBack: () -> Unit) {
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding(),
-        contentAlignment = Alignment.Center,
     ) {
-        CircularProgressIndicator(color = Primary)
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.Bold.ArrowLeft,
+                contentDescription = "Wstecz",
+                tint = TextPrimary,
+            )
+        }
+        CircularProgressIndicator(color = Primary, modifier = Modifier.align(Alignment.Center))
     }
 }
 
 @Composable
-fun EventChatNotFoundView() {
+fun EventChatNotFoundView(onBack: () -> Unit) {
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding(),
-        contentAlignment = Alignment.Center,
     ) {
-        Text("Nie znaleziono wydarzenia", color = TextSecondary)
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.Bold.ArrowLeft,
+                contentDescription = "Wstecz",
+                tint = TextPrimary,
+            )
+        }
+        Text("Nie znaleziono wydarzenia", color = TextSecondary, modifier = Modifier.align(Alignment.Center))
     }
 }
 

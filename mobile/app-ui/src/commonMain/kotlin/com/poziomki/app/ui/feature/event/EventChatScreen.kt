@@ -76,11 +76,11 @@ fun EventChatScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             when {
                 eventState.isLoading && eventState.event == null -> {
-                    EventChatLoadingView()
+                    EventChatLoadingView(onBack = onBack)
                 }
 
                 eventState.event == null -> {
-                    EventChatNotFoundView()
+                    EventChatNotFoundView(onBack = onBack)
                 }
 
                 eventState.event?.isAttending != true -> {
@@ -94,7 +94,7 @@ fun EventChatScreen(
                 }
 
                 eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
-                    EventChatLoadingView()
+                    EventChatLoadingView(onBack = onBack)
                 }
 
                 else -> {
