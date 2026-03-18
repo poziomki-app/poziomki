@@ -78,6 +78,11 @@ class ApiService(
 
     suspend fun unsaveEvent(id: String): ApiResult<Event> = client.delete("/api/v1/events/$id/save")
 
+    suspend fun postEventFeedback(
+        id: String,
+        feedback: String,
+    ): ApiResult<SuccessResponse> = client.post("/api/v1/matching/events/$id/feedback", EventFeedbackRequest(feedback))
+
     suspend fun approveAttendee(
         eventId: String,
         profileId: String,

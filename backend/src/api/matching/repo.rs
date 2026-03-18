@@ -11,10 +11,12 @@ use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profile_tags::ProfileTag;
 use crate::db::models::profiles::Profile;
+use crate::db::models::recommendation_feedback::RecommendationFeedback;
 use crate::db::models::tags::Tag;
 use crate::db::models::users::User;
 use crate::db::schema::{
-    event_interactions, event_tags, events, profile_tags, profiles, tags, user_settings, users,
+    event_interactions, event_tags, events, profile_tags, profiles, recommendation_feedback, tags,
+    user_settings, users,
 };
 
 pub(super) struct MatchingRepository;
@@ -29,6 +31,8 @@ pub(super) struct MatchingUserContext {
     pub(super) profile_tag_ids: HashSet<Uuid>,
     pub(super) saved_event_ids: HashSet<Uuid>,
     pub(super) joined_event_ids: HashSet<Uuid>,
+    pub(super) more_event_ids: HashSet<Uuid>,
+    pub(super) less_event_ids: HashSet<Uuid>,
 }
 
 impl MatchingRepository {
@@ -56,6 +60,31 @@ impl MatchingRepository {
             .load::<EventInteraction>(conn)
             .await?;
         Ok(interactions.into_iter().map(|row| row.event_id).collect())
+    }
+
+    async fn load_feedback_event_ids(
+        &self,
+        profile_id: Uuid,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<(HashSet<Uuid>, HashSet<Uuid>), crate::error::AppError> {
+        let rows = recommendation_feedback::table
+            .filter(recommendation_feedback::profile_id.eq(profile_id))
+            .load::<RecommendationFeedback>(conn)
+            .await?;
+        let mut more = HashSet::new();
+        let mut less = HashSet::new();
+        for row in rows {
+            match row.feedback.as_str() {
+                "more" => {
+                    more.insert(row.event_id);
+                }
+                "less" => {
+                    less.insert(row.event_id);
+                }
+                _ => {}
+            }
+        }
+        Ok((more, less))
     }
 
     /// Lean context for profile-only recommendations (no event interactions).
@@ -89,21 +118,35 @@ impl MatchingRepository {
             .first::<Profile>(conn)
             .await
             .optional()?;
-        let (profile_tag_ids, saved_event_ids, joined_event_ids) = match &profile {
-            Some(profile) => (
-                self.load_profile_tag_ids(profile.id, conn).await?,
-                self.load_interaction_event_ids(profile.id, "saved", conn)
-                    .await?,
-                self.load_interaction_event_ids(profile.id, "joined", conn)
-                    .await?,
-            ),
-            None => (HashSet::new(), HashSet::new(), HashSet::new()),
-        };
+        let (profile_tag_ids, saved_event_ids, joined_event_ids, more_event_ids, less_event_ids) =
+            match &profile {
+                Some(profile) => {
+                    let (more, less) = self.load_feedback_event_ids(profile.id, conn).await?;
+                    (
+                        self.load_profile_tag_ids(profile.id, conn).await?,
+                        self.load_interaction_event_ids(profile.id, "saved", conn)
+                            .await?,
+                        self.load_interaction_event_ids(profile.id, "joined", conn)
+                            .await?,
+                        more,
+                        less,
+                    )
+                }
+                None => (
+                    HashSet::new(),
+                    HashSet::new(),
+                    HashSet::new(),
+                    HashSet::new(),
+                    HashSet::new(),
+                ),
+            };
         Ok(MatchingUserContext {
             profile,
             profile_tag_ids,
             saved_event_ids,
             joined_event_ids,
+            more_event_ids,
+            less_event_ids,
         })
     }
 
