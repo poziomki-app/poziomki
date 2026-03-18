@@ -106,9 +106,11 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:5150:5150"
+      - "127.0.0.1:9092:9092"
     environment:
       RUST_ENV: production
       PORT: 5150
+      METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
@@ -168,6 +170,7 @@ services:
         condition: service_healthy
     environment:
       RUST_ENV: production
+      METRICS_PORT: 9093
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}
@@ -206,6 +209,8 @@ services:
       retries: 5
       start_period: 15s
     read_only: true
+    ports:
+      - "127.0.0.1:9093:9093"
     tmpfs:
       - /tmp
     security_opt:
