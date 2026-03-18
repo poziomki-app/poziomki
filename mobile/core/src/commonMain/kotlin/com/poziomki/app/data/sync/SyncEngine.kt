@@ -177,6 +177,7 @@ class SyncEngine(
             score = event.score,
             cached_at = now,
             in_list_feed = existing?.in_list_feed ?: 1L,
+            is_recommended = existing?.is_recommended ?: 0L,
             is_dirty = 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,

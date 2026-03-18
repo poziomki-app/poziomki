@@ -82,9 +82,20 @@ class EventsViewModel(
         }
     }
 
-    private fun loadRecommendedEvents() {
+    private fun loadRecommendedEvents(forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            val recommended = eventRepository.fetchRecommendedEvents()
+            val location =
+                if (locationProvider.isPermissionGranted()) {
+                    locationProvider.getCurrentLocation()
+                } else {
+                    null
+                }
+            val recommended =
+                eventRepository.fetchRecommendedEvents(
+                    lat = location?.latitude,
+                    lng = location?.longitude,
+                    forceRefresh = forceRefresh,
+                )
             _state.value = _state.value.copy(recommendedEvents = recommended)
             filterEvents()
         }
@@ -110,7 +121,7 @@ class EventsViewModel(
             if (!success && _state.value.allEvents.isNotEmpty()) {
                 _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć wydarzeń")
             }
-            loadRecommendedEvents()
+            loadRecommendedEvents(forceRefresh = true)
             if (_state.value.activeFilter == TimeFilter.NEARBY) {
                 fetchNearbyIfPermitted()
             }
