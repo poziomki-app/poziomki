@@ -14,6 +14,7 @@ pub mod otp_codes;
 pub mod profile_tags;
 pub mod profiles;
 pub mod push_subscriptions;
+pub mod recommendation_feedback;
 pub mod sessions;
 pub mod tags;
 pub mod uploads;

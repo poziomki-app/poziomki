@@ -11,3 +11,8 @@ pub(in crate::api) struct MatchingQuery {
     #[serde(default, rename = "radiusM")]
     pub(in crate::api) radius_m: Option<u32>,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+pub(in crate::api) struct EventFeedbackRequest {
+    pub(in crate::api) feedback: String,
+}

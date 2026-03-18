@@ -213,6 +213,21 @@ class EventsViewModel(
         return dLat * dLat + dLng * dLng
     }
 
+    fun onSwipeFeedback(
+        eventId: String,
+        feedback: String,
+    ) {
+        _state.value =
+            _state.value.copy(
+                recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
+            )
+        filterEvents()
+
+        viewModelScope.launch {
+            apiService.postEventFeedback(eventId, feedback)
+        }
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =
