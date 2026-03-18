@@ -29,6 +29,16 @@ pub(super) async fn run_worker_loop() {
     }
 }
 
+pub(super) async fn run_metrics_loop() {
+    loop {
+        match super::outbox_stats_snapshot().await {
+            Ok(snapshot) => crate::telemetry::update_outbox_metrics(&snapshot),
+            Err(error) => tracing::warn!(%error, "failed to refresh outbox metrics"),
+        }
+        tokio::time::sleep(Duration::from_secs(15)).await;
+    }
+}
+
 fn write_worker_heartbeat() {
     let now_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -63,6 +73,7 @@ async fn process_one_job() -> std::result::Result<bool, String> {
     match result {
         Ok(()) => {
             mark_job_done(&job.id).await.map_err(|e| e.to_string())?;
+            crate::telemetry::record_outbox_job_result(&job.topic, "success");
         }
         Err(ref error) => {
             mark_job_failed(&job, error)
@@ -70,8 +81,10 @@ async fn process_one_job() -> std::result::Result<bool, String> {
                 .map_err(|e| e.to_string())?;
             let is_terminal = job.attempts >= job.max_attempts;
             if is_terminal {
+                crate::telemetry::record_outbox_job_result(&job.topic, "exhausted");
                 tracing::error!(%error, job_id = %job.id, job_topic = %job.topic, attempts = job.attempts, max_attempts = job.max_attempts, "job permanently failed");
             } else {
+                crate::telemetry::record_outbox_job_result(&job.topic, "retry");
                 tracing::warn!(%error, job_id = %job.id, job_topic = %job.topic, attempts = job.attempts, max_attempts = job.max_attempts, "job dispatch failed, will retry");
             }
         }

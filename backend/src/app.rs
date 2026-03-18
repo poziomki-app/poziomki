@@ -151,6 +151,7 @@ pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
 pub async fn run_api_server() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
     init_tracing_once()?;
+    crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Api)?;
     let cfg = load_runtime_config()?;
     let ctx = build_app_context()?;
     let router = build_router_with_state(ctx);
@@ -175,6 +176,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
 pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
     init_tracing_once()?;
+    crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     let _cfg = load_runtime_config()?;
     let ctx = build_app_context()?;
 
