@@ -93,6 +93,7 @@ fn events_routes() -> Router<AppContext> {
             "/{id}/attendees/{profile_id}/reject",
             post(events::event_reject_attendee),
         )
+        .route("/{id}/report", post(events::event_report))
         .layer(cache_layer("private, max-age=60"))
 }
 
