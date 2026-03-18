@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -275,78 +276,26 @@ fun EventsScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongMethod")
 private fun SwipeableEventCard(
     event: Event,
     onClick: () -> Unit,
     onCreatorClick: (() -> Unit)?,
     onSwipeFeedback: (String) -> Unit,
 ) {
-    val dismissState =
-        rememberSwipeToDismissBoxState(
-            confirmValueChange = { value ->
-                when (value) {
-                    SwipeToDismissBoxValue.StartToEnd -> {
-                        onSwipeFeedback("more")
-                        true
-                    }
+    val dismissState = rememberSwipeToDismissBoxState()
 
-                    SwipeToDismissBoxValue.EndToStart -> {
-                        onSwipeFeedback("less")
-                        true
-                    }
-
-                    SwipeToDismissBoxValue.Settled -> {
-                        false
-                    }
-                }
-            },
-        )
+    LaunchedEffect(dismissState.currentValue) {
+        when (dismissState.currentValue) {
+            SwipeToDismissBoxValue.StartToEnd -> onSwipeFeedback("more")
+            SwipeToDismissBoxValue.EndToStart -> onSwipeFeedback("less")
+            SwipeToDismissBoxValue.Settled -> Unit
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            val direction = dismissState.dismissDirection
-            val color by animateColorAsState(
-                when (dismissState.targetValue) {
-                    SwipeToDismissBoxValue.StartToEnd -> Color(0xFF4CAF50).copy(alpha = 0.3f)
-                    SwipeToDismissBoxValue.EndToStart -> Color(0xFFE57373).copy(alpha = 0.3f)
-                    SwipeToDismissBoxValue.Settled -> Color.Transparent
-                },
-                label = "swipeBg",
-            )
-            val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .clip(cardShape)
-                        .background(color),
-            ) {
-                if (direction == SwipeToDismissBoxValue.StartToEnd) {
-                    Icon(
-                        PhosphorIcons.Bold.ThumbsUp,
-                        contentDescription = "Więcej takich",
-                        modifier =
-                            Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 24.dp)
-                                .size(28.dp),
-                        tint = Color(0xFF2E7D32),
-                    )
-                } else if (direction == SwipeToDismissBoxValue.EndToStart) {
-                    Icon(
-                        PhosphorIcons.Bold.ThumbsDown,
-                        contentDescription = "Mniej takich",
-                        modifier =
-                            Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 24.dp)
-                                .size(28.dp),
-                        tint = Color(0xFFC62828),
-                    )
-                }
-            }
+            SwipeFeedbackBackground(dismissState)
         },
     ) {
         EventCard(
@@ -354,6 +303,52 @@ private fun SwipeableEventCard(
             onClick = onClick,
             onCreatorClick = onCreatorClick,
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeFeedbackBackground(state: SwipeToDismissBoxState) {
+    val direction = state.dismissDirection
+    val color by animateColorAsState(
+        when (state.targetValue) {
+            SwipeToDismissBoxValue.StartToEnd -> Color(0xFF4CAF50).copy(alpha = 0.3f)
+            SwipeToDismissBoxValue.EndToStart -> Color(0xFFE57373).copy(alpha = 0.3f)
+            SwipeToDismissBoxValue.Settled -> Color.Transparent
+        },
+        label = "swipeBg",
+    )
+    val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .clip(cardShape)
+                .background(color),
+    ) {
+        if (direction == SwipeToDismissBoxValue.StartToEnd) {
+            Icon(
+                PhosphorIcons.Bold.ThumbsUp,
+                contentDescription = "Więcej takich",
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 24.dp)
+                        .size(28.dp),
+                tint = Color(0xFF2E7D32),
+            )
+        } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+            Icon(
+                PhosphorIcons.Bold.ThumbsDown,
+                contentDescription = "Mniej takich",
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 24.dp)
+                        .size(28.dp),
+                tint = Color(0xFFC62828),
+            )
+        }
     }
 }
 
