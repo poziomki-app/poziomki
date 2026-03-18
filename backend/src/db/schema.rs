@@ -160,6 +160,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    reports (id) {
+        id -> Uuid,
+        reporter_id -> Uuid,
+        target_type -> Varchar,
+        target_id -> Uuid,
+        reason -> Text,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     profiles (id) {
         id -> Uuid,
         user_id -> Int4,
@@ -266,6 +277,7 @@ diesel::joinable!(event_tags -> tags (tag_id));
 diesel::joinable!(events -> profiles (creator_id));
 diesel::joinable!(profile_tags -> profiles (profile_id));
 diesel::joinable!(profile_tags -> tags (tag_id));
+diesel::joinable!(reports -> profiles (reporter_id));
 diesel::joinable!(profiles -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(user_settings -> users (user_id));
@@ -286,6 +298,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     profile_tags,
     profiles,
     push_subscriptions,
+    reports,
     sessions,
     tags,
     uploads,
