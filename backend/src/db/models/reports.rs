@@ -12,6 +12,7 @@ pub struct Report {
     pub target_type: String,
     pub target_id: Uuid,
     pub reason: String,
+    pub description: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -22,4 +23,5 @@ pub struct NewReport {
     pub target_type: String,
     pub target_id: Uuid,
     pub reason: String,
+    pub description: Option<String>,
 }

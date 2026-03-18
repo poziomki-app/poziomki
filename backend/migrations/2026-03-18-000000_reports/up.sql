@@ -3,7 +3,8 @@ CREATE TABLE reports (
     reporter_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     target_type VARCHAR(16) NOT NULL CHECK (target_type IN ('event', 'profile', 'conversation')),
     target_id UUID NOT NULL,
-    reason TEXT NOT NULL,
+    reason VARCHAR(32) NOT NULL,
+    description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

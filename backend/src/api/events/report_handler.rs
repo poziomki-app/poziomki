@@ -14,6 +14,17 @@ use crate::app::AppContext;
 use super::events_service::{forbidden, load_event, require_auth_profile, validation_error};
 use super::report_repo;
 
+const VALID_REASONS: &[&str] = &[
+    "spam",
+    "inappropriate",
+    "misleading",
+    "harassment",
+    "hate_speech",
+    "violence",
+    "scam",
+    "other",
+];
+
 pub(in crate::api) async fn event_report(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
@@ -31,26 +42,40 @@ pub(in crate::api) async fn event_report(
     };
 
     if event.creator_id == profile.id {
-        return Ok(forbidden(&headers, "You cannot report your own event"));
-    }
-
-    let reason = body.reason.trim().to_string();
-    if reason.is_empty() {
-        return Ok(validation_error(&headers, "Reason is required"));
-    }
-    if reason.chars().count() > 2000 {
-        return Ok(validation_error(
+        return Ok(forbidden(
             &headers,
-            "Reason must be at most 2000 characters",
+            "Nie mozesz zglosic wlasnego wydarzenia",
         ));
     }
 
-    let inserted = report_repo::insert_event_report(profile.id, event_id, reason).await?;
+    let reason = body.reason.trim().to_lowercase();
+    if !VALID_REASONS.contains(&reason.as_str()) {
+        return Ok(validation_error(&headers, "Nieprawidlowy powod zgloszenia"));
+    }
+
+    let description = body
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+
+    if let Some(ref desc) = description {
+        if desc.chars().count() > 2000 {
+            return Ok(validation_error(
+                &headers,
+                "Opis moze miec maksymalnie 2000 znakow",
+            ));
+        }
+    }
+
+    let inserted =
+        report_repo::insert_event_report(profile.id, event_id, reason, description).await?;
 
     if !inserted {
         return Ok(validation_error(
             &headers,
-            "You have already reported this event",
+            "To wydarzenie zostalo juz przez Ciebie zgloszone",
         ));
     }
 
