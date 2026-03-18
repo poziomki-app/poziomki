@@ -44,13 +44,13 @@ pub(in crate::api) async fn event_report(
     if event.creator_id == profile.id {
         return Ok(forbidden(
             &headers,
-            "Nie mozesz zglosic wlasnego wydarzenia",
+            "Nie możesz zgłosić własnego wydarzenia",
         ));
     }
 
     let reason = body.reason.trim().to_lowercase();
     if !VALID_REASONS.contains(&reason.as_str()) {
-        return Ok(validation_error(&headers, "Nieprawidlowy powod zgloszenia"));
+        return Ok(validation_error(&headers, "Nieprawidłowy powód zgłoszenia"));
     }
 
     let description = body
@@ -64,7 +64,7 @@ pub(in crate::api) async fn event_report(
         if desc.chars().count() > 2000 {
             return Ok(validation_error(
                 &headers,
-                "Opis moze miec maksymalnie 2000 znakow",
+                "Opis może mieć maksymalnie 2000 znaków",
             ));
         }
     }
@@ -75,7 +75,7 @@ pub(in crate::api) async fn event_report(
     if !inserted {
         return Ok(validation_error(
             &headers,
-            "To wydarzenie zostalo juz przez Ciebie zgloszone",
+            "To wydarzenie zostało już przez Ciebie zgłoszone",
         ));
     }
 
