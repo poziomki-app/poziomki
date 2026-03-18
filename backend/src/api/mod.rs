@@ -1,5 +1,7 @@
 use axum::{
+    extract::MatchedPath,
     http::{header, HeaderValue},
+    middleware,
     routing::{delete, get, patch, post},
     Router,
 };
@@ -170,6 +172,29 @@ fn ops_routes() -> Router<AppContext> {
         .layer(cache_layer("no-store"))
 }
 
+async fn observe_http_metrics(
+    request: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().to_string();
+    let route = crate::telemetry::metrics_route_label(
+        request
+            .extensions()
+            .get::<MatchedPath>()
+            .map(MatchedPath::as_str),
+    )
+    .to_string();
+    let started_at = std::time::Instant::now();
+    let response = next.run(request).await;
+    crate::telemetry::record_http_request(
+        &method,
+        &route,
+        response.status().as_u16(),
+        started_at.elapsed(),
+    );
+    response
+}
+
 pub fn router() -> Router<AppContext> {
     Router::new()
         .route("/health", get(root::health))
@@ -185,6 +210,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1", search_routes())
         .nest("/api/v1/chat", chat_routes())
         .nest("/api/v1/ops", ops_routes())
+        .layer(middleware::from_fn(observe_http_metrics))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &axum::http::Request<_>| {
