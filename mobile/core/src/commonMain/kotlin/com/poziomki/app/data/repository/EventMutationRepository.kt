@@ -128,6 +128,7 @@ internal class EventMutationRepository(
                     score = current.score,
                     cached_at = current.cached_at,
                     in_list_feed = current.in_list_feed,
+                    is_recommended = current.is_recommended,
                     is_dirty = 1L,
                     requires_approval = current.requires_approval,
                     is_pending = current.is_pending,
@@ -335,11 +336,13 @@ internal class EventMutationRepository(
             }
         }
 
+    @Suppress("CyclomaticComplexMethod")
     fun upsertEvent(
         event: Event,
         cachedAt: Long,
         isDirty: Boolean = false,
         inListFeed: Boolean? = null,
+        isRecommended: Boolean? = null,
     ) {
         val existing = db.eventQueries.selectById(event.id).executeAsOneOrNull()
         val existingConversationId = existing?.conversation_id
@@ -349,6 +352,12 @@ internal class EventMutationRepository(
                 true -> 1L
                 false -> if (existing?.in_list_feed == 1L) 1L else 0L
                 null -> existing?.in_list_feed ?: 1L
+            }
+        val effectiveIsRecommended =
+            when (isRecommended) {
+                true -> 1L
+                false -> 0L
+                null -> existing?.is_recommended ?: 0L
             }
 
         db.eventQueries.upsert(
@@ -375,6 +384,7 @@ internal class EventMutationRepository(
             score = event.score,
             cached_at = cachedAt,
             in_list_feed = effectiveInListFeed,
+            is_recommended = effectiveIsRecommended,
             is_dirty = if (isDirty) 1L else 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
@@ -487,6 +497,7 @@ internal class EventMutationRepository(
             score = event.score,
             cached_at = event.cached_at,
             in_list_feed = event.in_list_feed,
+            is_recommended = event.is_recommended,
             is_dirty = event.is_dirty,
             requires_approval = event.requires_approval,
             is_pending = event.is_pending,
