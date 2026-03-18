@@ -14,7 +14,9 @@ import kotlinx.coroutines.launch
 data class PrivacyState(
     val isExporting: Boolean = false,
     val isDeleting: Boolean = false,
+    val isChangingPassword: Boolean = false,
     val exportedJson: String? = null,
+    val passwordSuccessMessage: String? = null,
     val error: String? = null,
 )
 
@@ -53,6 +55,71 @@ class PrivacyViewModel(
         _state.value = _state.value.copy(exportedJson = null)
     }
 
+    fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String,
+        onPasswordChanged: () -> Unit,
+    ) {
+        when {
+            currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank() -> {
+                _state.value =
+                    _state.value.copy(
+                        error = "Uzupełnij wszystkie pola hasła.",
+                        passwordSuccessMessage = null,
+                    )
+                return
+            }
+
+            newPassword.length < 8 -> {
+                _state.value =
+                    _state.value.copy(
+                        error = "Nowe hasło musi mieć co najmniej 8 znaków.",
+                        passwordSuccessMessage = null,
+                    )
+                return
+            }
+
+            newPassword != confirmPassword -> {
+                _state.value =
+                    _state.value.copy(
+                        error = "Nowe hasła nie są takie same.",
+                        passwordSuccessMessage = null,
+                    )
+                return
+            }
+        }
+
+        viewModelScope.launch {
+            _state.value =
+                _state.value.copy(
+                    isChangingPassword = true,
+                    error = null,
+                    passwordSuccessMessage = null,
+                )
+            when (apiService.changePassword(currentPassword, newPassword)) {
+                is ApiResult.Success -> {
+                    cacheManager.clearAll()
+                    sessionManager.clearSession()
+                    _state.value =
+                        _state.value.copy(
+                            isChangingPassword = false,
+                            passwordSuccessMessage = "Hasło zostało zmienione. Zaloguj się ponownie.",
+                        )
+                    onPasswordChanged()
+                }
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            isChangingPassword = false,
+                            error = "Nie udało się zmienić hasła. Sprawdź aktualne hasło.",
+                        )
+                }
+            }
+        }
+    }
+
     fun deleteAccount(
         password: String,
         onDeleted: () -> Unit,
@@ -81,5 +148,9 @@ class PrivacyViewModel(
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    fun clearPasswordSuccess() {
+        _state.value = _state.value.copy(passwordSuccessMessage = null)
     }
 }
