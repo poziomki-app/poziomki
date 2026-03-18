@@ -109,8 +109,8 @@ pub(super) async fn events_recommendations(
     let (_session, user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(20).clamp(1, 100));
-    let candidate_limit = i64::try_from(std::cmp::max(limit.saturating_mul(20), 500))
-        .unwrap_or(i64::MAX);
+    let candidate_limit =
+        i64::try_from(std::cmp::max(limit.saturating_mul(20), 500)).unwrap_or(i64::MAX);
 
     let mut conn = crate::db::conn().await?;
     let user_ctx = repo.load_user_context(user.id, &mut conn).await?;
