@@ -165,7 +165,8 @@ diesel::table! {
         reporter_id -> Uuid,
         target_type -> Varchar,
         target_id -> Uuid,
-        reason -> Text,
+        reason -> Varchar,
+        description -> Nullable<Text>,
         created_at -> Timestamptz,
     }
 }

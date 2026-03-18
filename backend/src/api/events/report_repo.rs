@@ -9,6 +9,7 @@ pub(in crate::api) async fn insert_event_report(
     reporter_id: Uuid,
     event_id: Uuid,
     reason: String,
+    description: Option<String>,
 ) -> std::result::Result<bool, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
 
@@ -17,6 +18,7 @@ pub(in crate::api) async fn insert_event_report(
         target_type: "event".to_string(),
         target_id: event_id,
         reason,
+        description,
     };
 
     let rows = diesel::insert_into(reports::table)
