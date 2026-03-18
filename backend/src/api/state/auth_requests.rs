@@ -29,3 +29,10 @@ pub(in crate::api) struct ResendOtpBody {
 pub(in crate::api) struct DeleteAccountBody {
     pub(in crate::api) password: String,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::api) struct ChangePasswordBody {
+    pub(in crate::api) current_password: String,
+    pub(in crate::api) new_password: String,
+}

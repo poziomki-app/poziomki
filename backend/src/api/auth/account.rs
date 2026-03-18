@@ -7,9 +7,12 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 
-use crate::api::auth_or_respond;
+use crate::api::{auth_or_respond, error_response};
 
-use super::super::state::{DataResponse, DeleteAccountBody, SuccessResponse};
+use super::super::state::{
+    invalidate_auth_cache_for_user_id, ChangePasswordBody, DataResponse, DeleteAccountBody,
+    SuccessResponse,
+};
 use super::auth_service::unauthorized_error;
 type Result<T> = crate::error::AppResult<T>;
 
@@ -54,6 +57,60 @@ pub(in crate::api) async fn delete_account(
     delete_user_data(user.id).await?;
 
     Ok(Json(SuccessResponse { success: true }).into_response())
+}
+
+pub(in crate::api) async fn change_password(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<ChangePasswordBody>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+
+    if payload.current_password.is_empty()
+        || !crate::security::verify_password(&payload.current_password, &user.password)
+    {
+        return Ok(unauthorized_error(&headers, "Invalid password"));
+    }
+
+    if !(8..=128).contains(&payload.new_password.len()) {
+        return Ok(error_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            &headers,
+            crate::api::ErrorSpec {
+                error: "Password must be between 8 and 128 characters".to_string(),
+                code: "VALIDATION_ERROR",
+                details: None,
+            },
+        ));
+    }
+
+    let new_hash = crate::security::hash_password(&payload.new_password)?;
+    let mut conn = crate::db::conn().await?;
+
+    conn.transaction(|conn| {
+        let new_hash = new_hash.clone();
+        Box::pin(async move {
+            diesel::update(users::table.find(user.id))
+                .set((
+                    users::password.eq(new_hash),
+                    users::updated_at.eq(Utc::now()),
+                ))
+                .execute(conn)
+                .await?;
+            diesel::delete(sessions::table.filter(sessions::user_id.eq(user.id)))
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        })
+    })
+    .await?;
+
+    invalidate_auth_cache_for_user_id(user.id).await;
+
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 pub(in crate::api) async fn export_data(
