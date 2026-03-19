@@ -92,6 +92,7 @@ internal class EventRoomRepository(
             score = current.score,
             cached_at = current.cached_at,
             in_list_feed = current.in_list_feed,
+            is_recommended = current.is_recommended,
             is_dirty = current.is_dirty,
             requires_approval = current.requires_approval,
             is_pending = current.is_pending,

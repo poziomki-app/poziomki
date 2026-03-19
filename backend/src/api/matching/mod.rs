@@ -108,7 +108,9 @@ pub(super) async fn events_recommendations(
     let repo = MatchingRepository;
     let (_session, user) = auth_or_respond!(headers);
 
-    let limit = query.limit.unwrap_or(20).clamp(1, 100) as usize;
+    let limit = usize::from(query.limit.unwrap_or(20).clamp(1, 100));
+    let candidate_limit =
+        i64::try_from(std::cmp::max(limit.saturating_mul(20), 500)).unwrap_or(i64::MAX);
 
     let mut conn = crate::db::conn().await?;
     let user_ctx = repo.load_user_context(user.id, &mut conn).await?;
@@ -118,7 +120,7 @@ pub(super) async fn events_recommendations(
 
     // Fetch future events
     let future_events = repo
-        .load_future_events(now, 100, &mut conn)
+        .load_future_events(now, candidate_limit, &mut conn)
         .await?
         .into_iter()
         .filter(|event| {
