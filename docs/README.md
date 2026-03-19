@@ -1,4 +1,4 @@
-**Badanie potrzeb studentów** [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
+**Badanie potrzeb studentów** – [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
 
 <p align="center">
   <picture>
@@ -26,7 +26,7 @@ jeśli masz pomysł na dodanie nowej funkcjonalności lub chcesz zgłosić istni
 
 <p align="center">
   <a href="../../stargazers">
-    <img src="https://img.shields.io/github/stars/poziomki-app/poziomki-rs?style=for-the-badge" alt="GitHub Stars">
+    <img src="./assets/star.gif" alt="Star" width="200">
   </a>
 </p>
 
