@@ -42,9 +42,51 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
+private data class PasswordFormState(
+    val currentPassword: String,
+    val newPassword: String,
+    val confirmPassword: String,
+)
+
+private data class PasswordSectionProps(
+    val form: PasswordFormState,
+    val isLoading: Boolean,
+    val onCurrentPasswordChange: (String) -> Unit,
+    val onNewPasswordChange: (String) -> Unit,
+    val onConfirmPasswordChange: (String) -> Unit,
+    val onSubmit: () -> Unit,
+)
+
+private data class PasswordFormBindings(
+    val form: PasswordFormState,
+    val onCurrentPasswordChange: (String) -> Unit,
+    val onNewPasswordChange: (String) -> Unit,
+    val onConfirmPasswordChange: (String) -> Unit,
+)
+
+private data class PasswordFormController(
+    val bindings: PasswordFormBindings,
+    val clear: () -> Unit,
+)
+
+private data class PrivacyContentProps(
+    val state: PrivacyState,
+    val navBarBottom: androidx.compose.ui.unit.Dp,
+    val passwordSection: PasswordSectionProps,
+    val onExport: () -> Unit,
+    val onDelete: () -> Unit,
+)
+
+private data class PrivacyActions(
+    val onChangePassword: () -> Unit,
+    val onExport: () -> Unit,
+    val onDelete: () -> Unit,
+)
+
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
+    onPasswordChanged: () -> Unit = {},
     onAccountDeleted: () -> Unit = {},
     viewModel: PrivacyViewModel = koinViewModel(),
 ) {
@@ -52,6 +94,29 @@ fun PrivacyScreen(
     val nunito = NunitoFamily
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val passwordController = rememberPasswordFormController()
+    val actions =
+        PrivacyActions(
+            onChangePassword = {
+                viewModel.changePassword(
+                    currentPassword = passwordController.bindings.form.currentPassword,
+                    newPassword = passwordController.bindings.form.newPassword,
+                    confirmPassword = passwordController.bindings.form.confirmPassword,
+                ) {
+                    passwordController.clear()
+                    onPasswordChanged()
+                }
+            },
+            onExport = { viewModel.exportData() },
+            onDelete = { showDeleteDialog = true },
+        )
+    val contentProps =
+        buildPrivacyContentProps(
+            state = state,
+            navBarBottom = navBarBottom,
+            passwordBindings = passwordController.bindings,
+            actions = actions,
+        )
 
     Column(
         modifier =
@@ -67,123 +132,265 @@ fun PrivacyScreen(
             modifier = Modifier.padding(top = statusBarPadding),
         )
 
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = PoziomkiTheme.spacing.lg),
-        ) {
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            // Error
-            state.error?.let { error ->
-                Text(
-                    text = error,
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
-                )
-            }
-
-            // TWOJE DANE section
-            SectionLabel("TWOJE DANE", color = TextMuted)
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-            Text(
-                text =
-                    "Możesz wyeksportować wszystkie dane powiązane z Twoim kontem. " +
-                        "Otrzymasz plik zawierający Twoje informacje profilowe, preferencje " +
-                        "i historię aktywności.",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Normal,
-                fontSize = 14.sp,
-                color = TextSecondary,
-                lineHeight = 20.sp,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            // Export button
-            PoziomkiButton(
-                text = "eksportuj dane",
-                onClick = { viewModel.exportData() },
-                variant = ButtonVariant.OUTLINE,
-                icon = PhosphorIcons.Bold.DownloadSimple,
-                loading = state.isExporting,
-            )
-
-            // Show exported data
-            state.exportedJson?.let { json ->
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-                Text(
-                    text = "Dane wyeksportowane pomyślnie:",
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    color = TextSecondary,
-                )
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                Text(
-                    text = json.take(2000),
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 12.sp,
-                    color = TextMuted,
-                    lineHeight = 16.sp,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.shapes.small,
-                            ).padding(PoziomkiTheme.spacing.md),
-                )
-            }
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-
-            // USUŃ KONTO section
-            SectionLabel("USUŃ KONTO", color = TextMuted)
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-            Text(
-                text =
-                    "Usunięcie konta jest nieodwracalne. Wszystkie Twoje dane, " +
-                        "w tym profil, wiadomości i historia aktywności, " +
-                        "zostaną trwale usunięte.",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Normal,
-                fontSize = 14.sp,
-                color = TextSecondary,
-                lineHeight = 20.sp,
-            )
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            // Delete button
-            PoziomkiButton(
-                text = "usuń konto",
-                onClick = { showDeleteDialog = true },
-                variant = ButtonVariant.DESTRUCTIVE,
-                icon = PhosphorIcons.Bold.Trash,
-                loading = state.isDeleting,
-            )
-
-            Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
-        }
+        PrivacyContent(props = contentProps, nunito = nunito)
     }
 
-    if (showDeleteDialog) {
-        DeleteAccountDialog(
-            isLoading = state.isDeleting,
-            onDismiss = { showDeleteDialog = false },
-            onConfirm = { password ->
-                viewModel.deleteAccount(password) {
-                    showDeleteDialog = false
-                    onAccountDeleted()
-                }
-            },
+    DeleteAccountDialogHost(
+        showDialog = showDeleteDialog,
+        isLoading = state.isDeleting,
+        onDismiss = { showDeleteDialog = false },
+        onConfirm = { password ->
+            viewModel.deleteAccount(password) {
+                showDeleteDialog = false
+                onAccountDeleted()
+            }
+        },
+    )
+}
+
+@Composable
+private fun rememberPasswordFormController(): PasswordFormController {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+
+    return PasswordFormController(
+        bindings =
+            PasswordFormBindings(
+                form =
+                    PasswordFormState(
+                        currentPassword = currentPassword,
+                        newPassword = newPassword,
+                        confirmPassword = confirmPassword,
+                    ),
+                onCurrentPasswordChange = { currentPassword = it },
+                onNewPasswordChange = { newPassword = it },
+                onConfirmPasswordChange = { confirmPassword = it },
+            ),
+        clear = {
+            currentPassword = ""
+            newPassword = ""
+            confirmPassword = ""
+        },
+    )
+}
+
+private fun buildPrivacyContentProps(
+    state: PrivacyState,
+    navBarBottom: androidx.compose.ui.unit.Dp,
+    passwordBindings: PasswordFormBindings,
+    actions: PrivacyActions,
+): PrivacyContentProps =
+    PrivacyContentProps(
+        state = state,
+        navBarBottom = navBarBottom,
+        passwordSection =
+            PasswordSectionProps(
+                form = passwordBindings.form,
+                isLoading = state.isChangingPassword,
+                onCurrentPasswordChange = passwordBindings.onCurrentPasswordChange,
+                onNewPasswordChange = passwordBindings.onNewPasswordChange,
+                onConfirmPasswordChange = passwordBindings.onConfirmPasswordChange,
+                onSubmit = actions.onChangePassword,
+            ),
+        onExport = actions.onExport,
+        onDelete = actions.onDelete,
+    )
+
+@Composable
+private fun PrivacyContent(
+    props: PrivacyContentProps,
+    nunito: androidx.compose.ui.text.font.FontFamily,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = PoziomkiTheme.spacing.lg),
+    ) {
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        PrivacyMessages(
+            error = props.state.error,
+            passwordSuccessMessage = props.state.passwordSuccessMessage,
+            nunito = nunito,
+        )
+        ChangePasswordSection(
+            props = props.passwordSection,
+            nunito = nunito,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        ExportDataSection(
+            exportedJson = props.state.exportedJson,
+            isExporting = props.state.isExporting,
+            onExport = props.onExport,
+            nunito = nunito,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        DeleteAccountSection(
+            isDeleting = props.state.isDeleting,
+            onDelete = props.onDelete,
+            nunito = nunito,
+        )
+        Spacer(modifier = Modifier.height(props.navBarBottom + PoziomkiTheme.spacing.xl))
+    }
+}
+
+@Composable
+private fun PrivacyMessages(
+    error: String?,
+    passwordSuccessMessage: String?,
+    nunito: androidx.compose.ui.text.font.FontFamily,
+) {
+    error?.let {
+        Text(
+            text = it,
+            fontFamily = nunito,
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
         )
     }
+
+    passwordSuccessMessage?.let {
+        Text(
+            text = it,
+            fontFamily = nunito,
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
+        )
+    }
+}
+
+@Composable
+private fun ChangePasswordSection(
+    props: PasswordSectionProps,
+    nunito: androidx.compose.ui.text.font.FontFamily,
+) {
+    SectionLabel("ZMIEŃ HASŁO", color = TextMuted)
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    Text(
+        text = "Po zmianie hasła wylogujemy Cię ze wszystkich urządzeń i poprosimy o ponowne zalogowanie.",
+        fontFamily = nunito,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        color = TextSecondary,
+        lineHeight = 20.sp,
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+    PoziomkiPasswordField(
+        value = props.form.currentPassword,
+        onValueChange = props.onCurrentPasswordChange,
+        placeholder = "Aktualne hasło",
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    PoziomkiPasswordField(
+        value = props.form.newPassword,
+        onValueChange = props.onNewPasswordChange,
+        placeholder = "Nowe hasło",
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    PoziomkiPasswordField(
+        value = props.form.confirmPassword,
+        onValueChange = props.onConfirmPasswordChange,
+        placeholder = "Powtórz nowe hasło",
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+    PoziomkiButton(
+        text = "zmień hasło",
+        onClick = props.onSubmit,
+        variant = ButtonVariant.OUTLINE,
+        loading = props.isLoading,
+    )
+}
+
+@Composable
+private fun ExportDataSection(
+    exportedJson: String?,
+    isExporting: Boolean,
+    onExport: () -> Unit,
+    nunito: androidx.compose.ui.text.font.FontFamily,
+) {
+    SectionLabel("TWOJE DANE", color = TextMuted)
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    Text(
+        text =
+            "Możesz wyeksportować wszystkie dane powiązane z Twoim kontem. " +
+                "Otrzymasz plik zawierający Twoje informacje profilowe, preferencje " +
+                "i historię aktywności.",
+        fontFamily = nunito,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        color = TextSecondary,
+        lineHeight = 20.sp,
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+    PoziomkiButton(
+        text = "eksportuj dane",
+        onClick = onExport,
+        variant = ButtonVariant.OUTLINE,
+        icon = PhosphorIcons.Bold.DownloadSimple,
+        loading = isExporting,
+    )
+
+    exportedJson?.let { json ->
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        Text(
+            text = "Dane wyeksportowane pomyślnie:",
+            fontFamily = nunito,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            color = TextSecondary,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        Text(
+            text = json.take(2000),
+            fontFamily = nunito,
+            fontWeight = FontWeight.Normal,
+            fontSize = 12.sp,
+            color = TextMuted,
+            lineHeight = 16.sp,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.shapes.small,
+                    ).padding(PoziomkiTheme.spacing.md),
+        )
+    }
+}
+
+@Composable
+private fun DeleteAccountSection(
+    isDeleting: Boolean,
+    onDelete: () -> Unit,
+    nunito: androidx.compose.ui.text.font.FontFamily,
+) {
+    SectionLabel("USUŃ KONTO", color = TextMuted)
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+    Text(
+        text =
+            "Usunięcie konta jest nieodwracalne. Wszystkie Twoje dane, " +
+                "w tym profil, wiadomości i historia aktywności, " +
+                "zostaną trwale usunięte.",
+        fontFamily = nunito,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        color = TextSecondary,
+        lineHeight = 20.sp,
+    )
+    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+    PoziomkiButton(
+        text = "usuń konto",
+        onClick = onDelete,
+        variant = ButtonVariant.DESTRUCTIVE,
+        icon = PhosphorIcons.Bold.Trash,
+        loading = isDeleting,
+    )
 }
 
 @Composable
@@ -245,4 +452,20 @@ private fun DeleteAccountDialog(
             }
         },
     )
+}
+
+@Composable
+private fun DeleteAccountDialogHost(
+    showDialog: Boolean,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    if (showDialog) {
+        DeleteAccountDialog(
+            isLoading = isLoading,
+            onDismiss = onDismiss,
+            onConfirm = onConfirm,
+        )
+    }
 }

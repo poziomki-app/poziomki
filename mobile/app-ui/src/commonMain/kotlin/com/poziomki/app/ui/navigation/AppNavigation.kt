@@ -326,12 +326,21 @@ fun AppNavigation(
             EventChatScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
+                onNavigateToEditEvent = { id -> navController.navigate(Route.EventEdit(id)) },
             )
         }
         composable<Route.EventCreate> {
             EventCreateScreen(
                 onBack = { navController.popBackStack() },
                 onCreated = { navController.popBackStack() },
+            )
+        }
+        composable<Route.EventEdit> { backStackEntry ->
+            val route = backStackEntry.toRoute<Route.EventEdit>()
+            EventCreateScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { navController.popBackStack() },
+                eventId = route.id,
             )
         }
         composable<Route.ProfileView> {
@@ -348,6 +357,11 @@ fun AppNavigation(
         composable<Route.Privacy> {
             PrivacyScreen(
                 onBack = { navController.popBackStack() },
+                onPasswordChanged = {
+                    navController.navigate(Route.AuthGraph) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
                 onAccountDeleted = {
                     navController.navigate(Route.AuthGraph) {
                         popUpTo(0) { inclusive = true }

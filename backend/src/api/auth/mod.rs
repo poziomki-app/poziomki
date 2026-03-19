@@ -36,7 +36,7 @@ use crate::db::models::sessions::Session;
 use crate::db::schema::sessions;
 use crate::jobs::enqueue_otp_email;
 
-pub(super) use auth_account::{delete_account, export_data};
+pub(super) use auth_account::{change_password, delete_account, export_data};
 pub(super) use auth_session::get_session;
 
 pub(super) async fn sign_up(

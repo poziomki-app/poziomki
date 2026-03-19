@@ -17,6 +17,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.long
 
@@ -56,6 +57,8 @@ internal class EventMutationRepository(
                     endsAt = request.endsAt,
                     tags = optimisticTags,
                     maxAttendees = request.maxAttendees,
+                    isAttending = true,
+                    attendeesCount = 1,
                 )
             val now = Clock.System.now().toEpochMilliseconds()
             upsertEvent(tempEvent, now, isDirty = true, inListFeed = true)
@@ -115,7 +118,7 @@ internal class EventMutationRepository(
                     creator_name = current.creator_name,
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
-                    max_attendees = (request.maxAttendees as? JsonPrimitive)?.long,
+                    max_attendees = maxAttendeesFromRequest(request),
                     is_attending = current.is_attending,
                     is_saved = current.is_saved,
                     attendees_preview_json = current.attendees_preview_json,
@@ -159,18 +162,6 @@ internal class EventMutationRepository(
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
             val previousAttending = current?.is_attending == 1L
             val previousCount = current?.attendees_count ?: 0L
-            val isFull =
-                current != null &&
-                    !previousAttending &&
-                    current.max_attendees != null &&
-                    current.attendees_count >= current.max_attendees
-            if (isFull && !connectivityMonitor.isOnline.value) {
-                return@withContext ApiResult.Error(
-                    message = "Event is full",
-                    code = "VALIDATION_ERROR",
-                    status = 400,
-                )
-            }
             if (current != null && !previousAttending) {
                 db.eventQueries.updateAttendance(
                     is_attending = 1L,
@@ -370,7 +361,7 @@ internal class EventMutationRepository(
             longitude = event.longitude,
             starts_at = event.startsAt,
             ends_at = event.endsAt,
-            creator_id = event.creatorId,
+            creator_id = event.creator?.id ?: event.creatorId,
             creator_name = event.creator?.name,
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
@@ -464,6 +455,11 @@ internal class EventMutationRepository(
             attendees_count = attendeesCount,
             id = id,
         )
+    }
+
+    private fun maxAttendeesFromRequest(request: UpdateEventRequest): Long? {
+        val element = request.maxAttendees
+        return if (element is JsonPrimitive && element !is JsonNull) element.long else null
     }
 
     private fun restoreEvent(event: com.poziomki.app.db.Event) {
