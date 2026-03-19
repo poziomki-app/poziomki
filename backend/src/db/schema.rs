@@ -160,6 +160,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    recommendation_feedback (profile_id, event_id) {
+        profile_id -> Uuid,
+        event_id -> Uuid,
+        feedback -> Varchar,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     profiles (id) {
         id -> Uuid,
         user_id -> Int4,
@@ -257,6 +266,8 @@ diesel::joinable!(conversations -> events (event_id));
 diesel::joinable!(messages -> conversations (conversation_id));
 diesel::joinable!(messages -> uploads (attachment_upload_id));
 diesel::joinable!(message_reactions -> messages (message_id));
+diesel::joinable!(recommendation_feedback -> events (event_id));
+diesel::joinable!(recommendation_feedback -> profiles (profile_id));
 diesel::joinable!(event_attendees -> events (event_id));
 diesel::joinable!(event_attendees -> profiles (profile_id));
 diesel::joinable!(event_interactions -> events (event_id));
@@ -285,6 +296,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     otp_codes,
     profile_tags,
     profiles,
+    recommendation_feedback,
     push_subscriptions,
     sessions,
     tags,
