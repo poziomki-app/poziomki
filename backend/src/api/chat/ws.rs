@@ -349,6 +349,12 @@ async fn handle_send(
             };
 
             if created {
+                tracing::info!(
+                    conversation_id = %conversation_id,
+                    sender_id = user_id,
+                    "message_sent"
+                );
+
                 let members = conversations::member_user_ids(conversation_id)
                     .await
                     .unwrap_or_default();
