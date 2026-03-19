@@ -81,6 +81,13 @@ pub(in crate::api) struct UpdateEventBody {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub(in crate::api) struct ReportEventBody {
+    pub(in crate::api) reason: String,
+    #[serde(default)]
+    pub(in crate::api) description: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub(in crate::api) struct AttendEventBody {
     #[serde(default)]
     pub(in crate::api) status: Option<AttendeeStatus>,
