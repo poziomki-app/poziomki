@@ -1,3 +1,5 @@
+**Badanie potrzeb studentów** [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/dark-mode.svg">
@@ -7,8 +9,6 @@
 </p>
 
 <sub><b>pl</b> · <a href="./README.en.md">en</a></sub>
-
-**Badanie potrzeb studentów** — [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
 
 aplikacja społecznościowa dla studentów, łącząca według wspólnych zainteresowań i zachęcająca do spędzania więcej czasu razem za pomocą lokalnych wydarzeń
 
@@ -26,7 +26,7 @@ jeśli masz pomysł na dodanie nowej funkcjonalności lub chcesz zgłosić istni
 
 <p align="center">
   <a href="../../stargazers">
-    <img src="https://img.shields.io/github/stars/poziomki-app/poziomki-rs?style=for-the-badge&logo=github&label=⭐%20star" alt="star">
+    <img src="https://img.shields.io/github/stars/poziomki-app/poziomki-rs?style=for-the-badge" alt="GitHub Stars">
   </a>
 </p>
 
