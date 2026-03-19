@@ -24,7 +24,6 @@ data class EventDetailState(
     val isOpeningChat: Boolean = false,
     val isUpdatingAttendance: Boolean = false,
     val isCreator: Boolean = false,
-    val error: String? = null,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
@@ -51,7 +50,7 @@ class EventDetailViewModel(
             eventRepository
                 .observeEvent(eventId)
                 .combine(profileRepository.observeOwnProfile()) { event, profile ->
-                    val isCreator = event?.creatorId != null && event.creatorId == profile?.id
+                    val isCreator = event?.creator?.id != null && event.creator?.id == profile?.id
                     _state.value = _state.value.copy(event = event, isLoading = false, isCreator = isCreator)
                 }.collect {}
         }
@@ -156,7 +155,25 @@ class EventDetailViewModel(
         }
     }
 
-    fun openEventChat(onNavigateToChat: (String) -> Unit) {
+    fun deleteEvent(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            when (eventRepository.deleteEvent(eventId)) {
+                is ApiResult.Success -> {
+                    onDeleted()
+                }
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            snackbarMessage = "nie udało się usunąć wydarzenia",
+                            snackbarType = SnackbarType.ERROR,
+                        )
+                }
+            }
+        }
+    }
+
+    fun openEventChat() {
         val currentEvent = _state.value.event ?: return
         if (_state.value.isOpeningChat) return
         if (!currentEvent.isAttending) {
@@ -169,24 +186,19 @@ class EventDetailViewModel(
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(isOpeningChat = true, error = null)
+            _state.value = _state.value.copy(isOpeningChat = true)
 
-            val roomResult =
-                eventRepository.ensureEventRoom(
-                    eventId = eventId,
-                )
-
-            roomResult
-                .onSuccess { roomId ->
-                    _state.value = _state.value.copy(isOpeningChat = false)
-                    onNavigateToChat(roomId)
-                }.onFailure { throwable ->
+            eventRepository
+                .ensureEventRoom(eventId = eventId)
+                .onFailure { throwable ->
                     _state.value =
                         _state.value.copy(
-                            isOpeningChat = false,
-                            error = throwable.message ?: "Nie udalo sie otworzyc czatu wydarzenia",
+                            snackbarMessage = throwable.message ?: "Nie udało się otworzyć czatu wydarzenia",
+                            snackbarType = SnackbarType.ERROR,
                         )
                 }
+
+            _state.value = _state.value.copy(isOpeningChat = false)
         }
     }
 }
