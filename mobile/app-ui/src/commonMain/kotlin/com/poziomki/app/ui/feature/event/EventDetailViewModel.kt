@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 data class EventDetailState(
     val event: Event? = null,
     val attendees: List<EventAttendee> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isOpeningChat: Boolean = false,
     val isUpdatingAttendance: Boolean = false,
     val isCreator: Boolean = false,
@@ -66,9 +66,12 @@ class EventDetailViewModel(
 
     private fun refreshData() {
         viewModelScope.launch {
-            _state.value = EventDetailState(isLoading = true)
-            eventRepository.refreshEvent(eventId)
+            _state.value = _state.value.copy(isLoading = true)
+            val success = eventRepository.refreshEvent(eventId)
             eventRepository.refreshAttendees(eventId)
+            if (!success) {
+                _state.value = _state.value.copy(isLoading = false)
+            }
         }
     }
 
