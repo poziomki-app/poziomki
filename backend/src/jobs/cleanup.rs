@@ -19,11 +19,11 @@ async fn purge_expired_rows() -> Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
     let now = chrono::Utc::now();
 
-    let sessions_deleted = diesel::delete(sessions::table.filter(sessions::expires_at.lt(now)))
+    let sessions_deleted = diesel::delete(sessions::table.filter(sessions::expires_at.le(now)))
         .execute(&mut conn)
         .await?;
 
-    let otps_deleted = diesel::delete(otp_codes::table.filter(otp_codes::expires_at.lt(now)))
+    let otps_deleted = diesel::delete(otp_codes::table.filter(otp_codes::expires_at.le(now)))
         .execute(&mut conn)
         .await?;
 
