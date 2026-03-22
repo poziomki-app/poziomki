@@ -31,6 +31,7 @@ class PrivacyViewModel(
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
 
     fun exportData() {
+        if (_state.value.isExporting) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isExporting = true, error = null, exportSuccess = false)
             when (val result = apiService.exportData()) {
