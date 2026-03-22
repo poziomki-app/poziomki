@@ -27,7 +27,7 @@ class ApiService(
 
     suspend fun signOut(): ApiResult<SuccessResponse> = client.post("/api/v1/auth/sign-out")
 
-    suspend fun exportData(): ApiResult<kotlinx.serialization.json.JsonObject> = client.get("/api/v1/auth/export")
+    suspend fun exportData(): ApiResult<ByteArray> = client.downloadBytes("/api/v1/auth/export")
 
     suspend fun deleteAccount(password: String): ApiResult<SuccessResponse> =
         client.delete("/api/v1/auth/account", DeleteAccountRequest(password))
