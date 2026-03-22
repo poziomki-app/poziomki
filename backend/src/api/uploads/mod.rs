@@ -63,3 +63,12 @@ pub(super) async fn generate_upload_variants_job(
 ) -> std::result::Result<(), String> {
     uploads_variant_jobs::generate_upload_variants_job(upload_id).await
 }
+
+/// Best-effort delete of an upload's S3 objects (original + thumb + std variants).
+pub(in crate::api) async fn delete_upload_objects(filename: &str) {
+    let _ = uploads_storage::delete(filename).await;
+    let thumb = uploads_resize::variant_filename(filename, "thumb");
+    let std = uploads_resize::variant_filename(filename, "std");
+    let _ = uploads_storage::delete(&thumb).await;
+    let _ = uploads_storage::delete(&std).await;
+}
