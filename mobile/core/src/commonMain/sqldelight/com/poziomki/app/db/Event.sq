@@ -20,6 +20,7 @@ CREATE TABLE event (
     score REAL NOT NULL DEFAULT 0.0,
     cached_at INTEGER NOT NULL DEFAULT 0,
     in_list_feed INTEGER NOT NULL DEFAULT 1,
+    is_recommended INTEGER NOT NULL DEFAULT 0,
     is_dirty INTEGER NOT NULL DEFAULT 0,
     latitude REAL,
     longitude REAL,
@@ -33,6 +34,12 @@ FROM event
 WHERE in_list_feed = 1 OR is_dirty = 1
 ORDER BY starts_at ASC;
 
+selectRecommended:
+SELECT *
+FROM event
+WHERE is_recommended = 1
+ORDER BY score DESC, starts_at ASC;
+
 selectById:
 SELECT *
 FROM event
@@ -43,9 +50,9 @@ INSERT OR REPLACE INTO event(
     id, title, description, cover_image, location,
     starts_at, ends_at, creator_id, creator_name, creator_profile_picture,
     attendees_count, max_attendees, is_attending, is_saved, attendees_preview_json, tags_json, created_at,
-    conversation_id, score, cached_at, in_list_feed, is_dirty, latitude, longitude,
+    conversation_id, score, cached_at, in_list_feed, is_recommended, is_dirty, latitude, longitude,
     requires_approval, is_pending
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateAttendance:
 UPDATE event
@@ -77,6 +84,11 @@ WHERE id = ?;
 clearListFeedFlags:
 UPDATE event
 SET in_list_feed = 0
+WHERE is_dirty = 0;
+
+clearRecommendedFlags:
+UPDATE event
+SET is_recommended = 0
 WHERE is_dirty = 0;
 
 replaceId:
