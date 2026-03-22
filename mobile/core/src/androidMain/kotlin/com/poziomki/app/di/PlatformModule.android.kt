@@ -15,8 +15,6 @@ import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.session.AndroidSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStore
-import com.poziomki.app.storage.AndroidFileSaver
-import com.poziomki.app.storage.FileSaver
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import org.koin.core.module.Module
@@ -82,5 +80,4 @@ actual fun platformModule(): Module =
         single { LocationProvider(get<Context>()) }
         single { NotificationHelper(get<Context>()) }
         single { PushManager(get(), get(), get<Context>()) }
-        single<FileSaver> { AndroidFileSaver(get<Context>()) }
     }
