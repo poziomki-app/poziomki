@@ -78,7 +78,7 @@ fun PrivacyScreen(
         )
     }
 
-    if (showPasswordDialog) {
+    if (showPasswordDialog && state.error == null) {
         ChangePasswordDialog(
             isLoading = state.isChangingPassword,
             onDismiss = { showPasswordDialog = false },
@@ -91,7 +91,7 @@ fun PrivacyScreen(
         )
     }
 
-    if (showDeleteDialog) {
+    if (showDeleteDialog && state.error == null) {
         DeleteAccountDialog(
             isLoading = state.isDeleting,
             onDismiss = { showDeleteDialog = false },
