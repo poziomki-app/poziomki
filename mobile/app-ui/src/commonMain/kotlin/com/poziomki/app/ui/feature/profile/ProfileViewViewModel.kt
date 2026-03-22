@@ -57,7 +57,13 @@ class ProfileViewViewModel(
         viewModelScope.launch {
             profileRepository.observeProfile(profileId).collect { profile ->
                 if (profile != null) {
-                    _state.update { it.copy(profile = profile, isLoading = false) }
+                    _state.update {
+                        it.copy(
+                            profile = profile,
+                            isLoading = false,
+                            isBookmarked = profile.isBookmarked,
+                        )
+                    }
                 }
             }
         }
@@ -65,10 +71,8 @@ class ProfileViewViewModel(
 
     private fun refreshProfile() {
         viewModelScope.launch {
-            val result = profileRepository.refreshProfile(profileId)
-            if (result.refreshed) {
-                _state.update { it.copy(isBookmarked = result.isBookmarked) }
-            } else {
+            val success = profileRepository.refreshProfile(profileId)
+            if (!success) {
                 _state.update { it.copy(isLoading = false) }
             }
         }
@@ -78,7 +82,9 @@ class ProfileViewViewModel(
         if (bookmarkInFlight) return
         bookmarkInFlight = true
         val current = _state.value.isBookmarked
-        _state.update { it.copy(isBookmarked = !current) }
+        val newValue = !current
+        // Optimistic local update
+        profileRepository.updateBookmarked(profileId, newValue)
         viewModelScope.launch {
             val result =
                 if (current) {
@@ -87,7 +93,8 @@ class ProfileViewViewModel(
                     apiService.bookmarkProfile(profileId)
                 }
             if (result is ApiResult.Error) {
-                _state.update { it.copy(isBookmarked = current) }
+                // Revert on failure
+                profileRepository.updateBookmarked(profileId, current)
             }
             bookmarkInFlight = false
         }
