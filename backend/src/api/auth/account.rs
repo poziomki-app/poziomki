@@ -33,6 +33,17 @@ async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error:
         .await
         .optional()?;
 
+    // Collect upload filenames before the transaction for S3 cleanup afterwards
+    let upload_filenames: Vec<String> = if let Some(pid) = profile_id {
+        uploads::table
+            .filter(uploads::owner_id.eq(pid))
+            .select(uploads::filename)
+            .load(&mut conn)
+            .await?
+    } else {
+        vec![]
+    };
+
     conn.transaction(|conn| {
         Box::pin(async move {
             if let Some(pid) = profile_id {
@@ -135,6 +146,12 @@ async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error:
         })
     })
     .await?;
+
+    // Best-effort S3 cleanup (outside transaction — external side-effect)
+    for filename in &upload_filenames {
+        crate::api::uploads::delete_upload_objects(filename).await;
+    }
+
     Ok(())
 }
 
