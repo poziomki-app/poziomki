@@ -1,5 +1,6 @@
 package com.poziomki.app.ui.feature.home
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,8 +28,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,6 +59,8 @@ import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.ThumbsDown
+import com.adamglin.phosphoricons.bold.ThumbsUp
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
@@ -182,6 +189,7 @@ fun EventsScreen(
                                 onEventClick = onNavigateToEventDetail,
                             )
                         } else {
+                            val isRecommended = state.activeFilter == TimeFilter.ALL
                             LazyColumn(
                                 modifier =
                                     Modifier
@@ -196,11 +204,28 @@ fun EventsScreen(
                                     }
                                 } else {
                                     items(state.events, key = { it.id }) { event ->
-                                        EventCard(
-                                            event = event,
-                                            onClick = { onNavigateToEventDetail(event.id) },
-                                            onCreatorClick = event.creator?.let { c -> { onNavigateToProfile(c.id) } },
-                                        )
+                                        val creatorClick =
+                                            event.creator?.let { c ->
+                                                {
+                                                    onNavigateToProfile(c.id)
+                                                }
+                                            }
+                                        if (isRecommended) {
+                                            SwipeableEventCard(
+                                                event = event,
+                                                onClick = { onNavigateToEventDetail(event.id) },
+                                                onCreatorClick = creatorClick,
+                                                onSwipeFeedback = { feedback ->
+                                                    viewModel.onSwipeFeedback(event.id, feedback)
+                                                },
+                                            )
+                                        } else {
+                                            EventCard(
+                                                event = event,
+                                                onClick = { onNavigateToEventDetail(event.id) },
+                                                onCreatorClick = creatorClick,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -244,6 +269,84 @@ fun EventsScreen(
                     viewModel.clearRefreshError()
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableEventCard(
+    event: Event,
+    onClick: () -> Unit,
+    onCreatorClick: (() -> Unit)?,
+    onSwipeFeedback: (String) -> Unit,
+) {
+    val dismissState = rememberSwipeToDismissBoxState()
+
+    LaunchedEffect(dismissState.currentValue) {
+        when (dismissState.currentValue) {
+            SwipeToDismissBoxValue.StartToEnd -> onSwipeFeedback("more")
+            SwipeToDismissBoxValue.EndToStart -> onSwipeFeedback("less")
+            SwipeToDismissBoxValue.Settled -> Unit
+        }
+    }
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            SwipeFeedbackBackground(dismissState)
+        },
+    ) {
+        EventCard(
+            event = event,
+            onClick = onClick,
+            onCreatorClick = onCreatorClick,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeFeedbackBackground(state: SwipeToDismissBoxState) {
+    val direction = state.dismissDirection
+    val color by animateColorAsState(
+        when (state.targetValue) {
+            SwipeToDismissBoxValue.StartToEnd -> Color(0xFF4CAF50).copy(alpha = 0.3f)
+            SwipeToDismissBoxValue.EndToStart -> Color(0xFFE57373).copy(alpha = 0.3f)
+            SwipeToDismissBoxValue.Settled -> Color.Transparent
+        },
+        label = "swipeBg",
+    )
+    val cardShape = RoundedCornerShape(PoziomkiTheme.componentSizes.cardRadius)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .clip(cardShape)
+                .background(color),
+    ) {
+        if (direction == SwipeToDismissBoxValue.StartToEnd) {
+            Icon(
+                PhosphorIcons.Bold.ThumbsUp,
+                contentDescription = "Więcej takich",
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 24.dp)
+                        .size(28.dp),
+                tint = Color(0xFF2E7D32),
+            )
+        } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+            Icon(
+                PhosphorIcons.Bold.ThumbsDown,
+                contentDescription = "Mniej takich",
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 24.dp)
+                        .size(28.dp),
+                tint = Color(0xFFC62828),
+            )
         }
     }
 }
