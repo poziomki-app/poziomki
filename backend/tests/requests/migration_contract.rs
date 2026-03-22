@@ -373,7 +373,12 @@ async fn events_flow_matches_phase_3_contract() {
             .get("/api/v1/auth/export")
             .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
             .await;
-        assert_eq!(export_response.status_code(), 200);
+        assert_eq!(
+            export_response.status_code(),
+            200,
+            "export body: {}",
+            export_response.text()
+        );
         let export_payload: serde_json::Value = export_response.json();
         let interactions = export_payload["data"]["eventInteractions"]
             .as_array()
