@@ -15,8 +15,8 @@ use crate::db::models::recommendation_feedback::RecommendationFeedback;
 use crate::db::models::tags::Tag;
 use crate::db::models::users::User;
 use crate::db::schema::{
-    event_interactions, event_tags, events, profile_tags, profiles, recommendation_feedback, tags,
-    user_settings, users,
+    conversations, event_interactions, event_tags, events, profile_bookmarks, profile_tags,
+    profiles, recommendation_feedback, tags, user_settings, users,
 };
 
 pub(super) struct MatchingRepository;
@@ -24,6 +24,8 @@ pub(super) struct MatchingRepository;
 pub(super) struct MatchingProfileContext {
     pub(super) profile: Option<Profile>,
     pub(super) profile_tag_ids: HashSet<Uuid>,
+    pub(super) social_tag_ids: HashSet<Uuid>,
+    pub(super) social_programs: HashSet<String>,
 }
 
 pub(super) struct MatchingUserContext {
@@ -87,6 +89,98 @@ impl MatchingRepository {
         Ok((more, less))
     }
 
+    async fn load_bookmarked_profile_ids(
+        &self,
+        profile_id: Uuid,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<Vec<Uuid>, crate::error::AppError> {
+        profile_bookmarks::table
+            .filter(profile_bookmarks::profile_id.eq(profile_id))
+            .select(profile_bookmarks::target_profile_id)
+            .load::<Uuid>(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn load_dm_partner_profile_ids(
+        &self,
+        user_id: i32,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<Vec<Uuid>, crate::error::AppError> {
+        // Get all DM partner user IDs
+        let dm_convos: Vec<(Option<i32>, Option<i32>)> = conversations::table
+            .filter(conversations::kind.eq("dm"))
+            .filter(
+                conversations::user_low_id
+                    .eq(user_id)
+                    .or(conversations::user_high_id.eq(user_id)),
+            )
+            .select((conversations::user_low_id, conversations::user_high_id))
+            .load(conn)
+            .await?;
+
+        let partner_user_ids: Vec<i32> = dm_convos
+            .into_iter()
+            .filter_map(|(low, high)| {
+                let low = low?;
+                let high = high?;
+                if low == user_id {
+                    Some(high)
+                } else {
+                    Some(low)
+                }
+            })
+            .collect();
+
+        if partner_user_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        profiles::table
+            .filter(profiles::user_id.eq_any(&partner_user_ids))
+            .select(profiles::id)
+            .load::<Uuid>(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn load_social_signals(
+        &self,
+        profile_id: Uuid,
+        user_id: i32,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<(HashSet<Uuid>, HashSet<String>), crate::error::AppError> {
+        let bookmarked_ids = self.load_bookmarked_profile_ids(profile_id, conn).await?;
+        let dm_partner_ids = self.load_dm_partner_profile_ids(user_id, conn).await?;
+
+        let mut social_profile_ids: Vec<Uuid> = bookmarked_ids;
+        social_profile_ids.extend(dm_partner_ids);
+        social_profile_ids.sort_unstable();
+        social_profile_ids.dedup();
+
+        if social_profile_ids.is_empty() {
+            return Ok((HashSet::new(), HashSet::new()));
+        }
+
+        // Load tags from social profiles
+        let tag_map = self
+            .batch_load_profile_tag_ids(&social_profile_ids, conn)
+            .await?;
+        let social_tag_ids: HashSet<Uuid> = tag_map.into_values().flatten().collect();
+
+        // Load programs from social profiles
+        let social_profiles: Vec<Profile> = profiles::table
+            .filter(profiles::id.eq_any(&social_profile_ids))
+            .load(conn)
+            .await?;
+        let social_programs: HashSet<String> = social_profiles
+            .into_iter()
+            .filter_map(|p| p.program)
+            .collect();
+
+        Ok((social_tag_ids, social_programs))
+    }
+
     /// Lean context for profile-only recommendations (no event interactions).
     pub(super) async fn load_profile_context(
         &self,
@@ -98,13 +192,20 @@ impl MatchingRepository {
             .first::<Profile>(conn)
             .await
             .optional()?;
-        let profile_tag_ids = match &profile {
-            Some(profile) => self.load_profile_tag_ids(profile.id, conn).await?,
-            None => HashSet::new(),
+        let (profile_tag_ids, social_tag_ids, social_programs) = match &profile {
+            Some(profile) => {
+                let tags = self.load_profile_tag_ids(profile.id, conn).await?;
+                let (social_tags, social_progs) =
+                    self.load_social_signals(profile.id, user_id, conn).await?;
+                (tags, social_tags, social_progs)
+            }
+            None => (HashSet::new(), HashSet::new(), HashSet::new()),
         };
         Ok(MatchingProfileContext {
             profile,
             profile_tag_ids,
+            social_tag_ids,
+            social_programs,
         })
     }
 
