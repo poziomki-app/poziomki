@@ -93,7 +93,7 @@ fun EventChatScreen(
                     )
                 }
 
-                eventState.isOpeningChat || eventState.event?.conversationId.isNullOrBlank() -> {
+                eventState.isOpeningChat || eventState.event?.conversationId?.isNullOrBlank() ?: true -> {
                     EventChatLoadingView(onBack = onBack)
                 }
 
