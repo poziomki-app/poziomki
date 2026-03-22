@@ -6,6 +6,7 @@ import com.poziomki.app.data.CacheManager
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.session.SessionManager
+import com.poziomki.app.storage.FileSaver
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,7 @@ data class PrivacyState(
     val isExporting: Boolean = false,
     val isDeleting: Boolean = false,
     val isChangingPassword: Boolean = false,
-    val exportedJson: String? = null,
+    val exportSuccess: Boolean = false,
     val passwordSuccessMessage: String? = null,
     val error: String? = null,
 )
@@ -24,20 +25,31 @@ class PrivacyViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val cacheManager: CacheManager,
+    private val fileSaver: FileSaver,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PrivacyState())
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
 
     fun exportData() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isExporting = true, error = null)
+            _state.value = _state.value.copy(isExporting = true, error = null, exportSuccess = false)
             when (val result = apiService.exportData()) {
                 is ApiResult.Success -> {
-                    _state.value =
-                        _state.value.copy(
-                            isExporting = false,
-                            exportedJson = result.data.toString(),
+                    val saved =
+                        fileSaver.saveToDownloads(
+                            result.data,
+                            "poziomki-export.zip",
+                            "application/zip",
                         )
+                    _state.value =
+                        if (saved) {
+                            _state.value.copy(isExporting = false, exportSuccess = true)
+                        } else {
+                            _state.value.copy(
+                                isExporting = false,
+                                error = "Nie udało się zapisać pliku",
+                            )
+                        }
                 }
 
                 is ApiResult.Error -> {
@@ -51,8 +63,8 @@ class PrivacyViewModel(
         }
     }
 
-    fun clearExport() {
-        _state.value = _state.value.copy(exportedJson = null)
+    fun clearExportSuccess() {
+        _state.value = _state.value.copy(exportSuccess = false)
     }
 
     fun changePassword(

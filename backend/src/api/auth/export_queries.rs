@@ -255,6 +255,21 @@ pub(super) async fn load_event_interactions(
         .collect())
 }
 
+pub(super) async fn load_upload_filenames(
+    profile_id: uuid::Uuid,
+) -> std::result::Result<Vec<String>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+
+    let filenames = uploads::table
+        .filter(uploads::owner_id.eq(profile_id))
+        .filter(uploads::deleted.eq(false))
+        .select(uploads::filename)
+        .load::<String>(&mut conn)
+        .await?;
+
+    Ok(filenames)
+}
+
 pub(super) async fn load_recommendation_feedback(
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {

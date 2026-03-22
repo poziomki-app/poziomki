@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -134,7 +133,7 @@ private fun PrivacyContent(
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-        ExportDataSection(state.exportedJson, state.isExporting, onExport, nunito)
+        ExportDataSection(state.exportSuccess, state.isExporting, onExport, nunito)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
         DeleteAccountSection(state.isDeleting, onDelete, nunito)
         Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
@@ -172,7 +171,7 @@ private fun PrivacyMessages(
 
 @Composable
 private fun ExportDataSection(
-    exportedJson: String?,
+    exportSuccess: Boolean,
     isExporting: Boolean,
     onExport: () -> Unit,
     nunito: androidx.compose.ui.text.font.FontFamily,
@@ -182,8 +181,8 @@ private fun ExportDataSection(
     Text(
         text =
             "Możesz wyeksportować wszystkie dane powiązane z Twoim kontem. " +
-                "Otrzymasz plik zawierający Twoje informacje profilowe, preferencje " +
-                "i historię aktywności.",
+                "Otrzymasz plik zawierający Twoje informacje profilowe, preferencje, " +
+                "historię aktywności i zdjęcia.",
         fontFamily = nunito,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
@@ -199,30 +198,14 @@ private fun ExportDataSection(
         loading = isExporting,
     )
 
-    exportedJson?.let { json ->
+    if (exportSuccess) {
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
         Text(
-            text = "Dane wyeksportowane pomyślnie:",
+            text = "Plik zapisano w folderze Pobrane.",
             fontFamily = nunito,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             color = TextSecondary,
-        )
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-        Text(
-            text = json.take(2000),
-            fontFamily = nunito,
-            fontWeight = FontWeight.Normal,
-            fontSize = 12.sp,
-            color = TextMuted,
-            lineHeight = 16.sp,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.shapes.small,
-                    ).padding(PoziomkiTheme.spacing.md),
         )
     }
 }

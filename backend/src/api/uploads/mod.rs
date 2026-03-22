@@ -63,3 +63,11 @@ pub(super) async fn generate_upload_variants_job(
 ) -> std::result::Result<(), String> {
     uploads_variant_jobs::generate_upload_variants_job(upload_id).await
 }
+
+pub(in crate::api) async fn read_upload_bytes(
+    filename: &str,
+) -> std::result::Result<Vec<u8>, crate::error::AppError> {
+    uploads_storage::read(filename)
+        .await
+        .map_err(|_err| crate::error::AppError::message("failed to read upload from storage"))
+}
