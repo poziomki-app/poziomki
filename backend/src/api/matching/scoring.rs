@@ -40,6 +40,8 @@ pub(super) fn score_profile(
     my_program: Option<&str>,
     candidate: &Profile,
     candidate_show_program: bool,
+    social_tags: &HashSet<Uuid>,
+    social_programs: &HashSet<String>,
 ) -> f64 {
     let mut score = jaccard(my_tag_ids, candidate_tags) * 100.0;
     if candidate_show_program {
@@ -48,6 +50,18 @@ pub(super) fn score_profile(
         if same_program {
             score += 10.0;
         }
+        // Social program affinity: candidate shares program with someone
+        // user has bookmarked or messaged
+        if let Some(ref prog) = candidate.program {
+            if social_programs.contains(prog) {
+                score += 5.0;
+            }
+        }
+    }
+    // Social tag affinity: overlap between candidate's tags and tags of
+    // bookmarked/messaged people
+    if !social_tags.is_empty() && !candidate_tags.is_empty() {
+        score += jaccard(social_tags, candidate_tags) * 15.0;
     }
     score
 }
