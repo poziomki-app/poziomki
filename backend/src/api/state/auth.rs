@@ -155,6 +155,7 @@ pub(in crate::api) async fn require_auth_context(
         if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
             maybe_renew_session(&session).await;
         }
+        tracing::Span::current().record("user_id", user.id);
         return Ok(AuthContext { session, user });
     }
 
@@ -181,6 +182,7 @@ pub(in crate::api) async fn require_auth_context(
 
     let session = maybe_renew_session_on_conn(session, &mut conn).await;
     cache_auth_put(hashed, &session, &user).await;
+    tracing::Span::current().record("user_id", user.id);
     Ok(AuthContext { session, user })
 }
 

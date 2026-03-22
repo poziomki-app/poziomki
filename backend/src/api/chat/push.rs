@@ -61,6 +61,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
     });
 
     for (ntfy_topic, ntfy_server) in &topics {
+        let topic_prefix: String = ntfy_topic.chars().take(8).collect();
         let url = format!("{ntfy_server}/{ntfy_topic}");
         let mut req = client
             .post(&url)
@@ -72,13 +73,16 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
         let result = req.send().await;
 
         match result {
-            Ok(resp) => {
-                if let Err(e) = resp.error_for_status() {
-                    tracing::warn!(topic = ntfy_topic, error = %e, "push notification rejected");
+            Ok(resp) => match resp.error_for_status() {
+                Ok(_) => {
+                    tracing::info!(topic = topic_prefix, "push_delivered");
                 }
-            }
+                Err(e) => {
+                    tracing::warn!(topic = topic_prefix, error = %e, "push notification rejected");
+                }
+            },
             Err(e) => {
-                tracing::warn!(topic = ntfy_topic, error = %e, "push notification failed");
+                tracing::warn!(topic = topic_prefix, error = %e, "push notification failed");
             }
         }
     }
