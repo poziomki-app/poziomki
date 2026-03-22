@@ -6,3 +6,4 @@ pub mod error;
 pub mod jobs;
 pub mod search;
 pub mod security;
+pub mod telemetry;
