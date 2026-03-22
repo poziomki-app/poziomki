@@ -228,6 +228,7 @@ class EventsViewModel(
         eventId: String,
         feedback: String,
     ) {
+        val removed = _state.value.recommendedEvents.find { it.id == eventId }
         _state.value =
             _state.value.copy(
                 recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
@@ -235,7 +236,14 @@ class EventsViewModel(
         filterEvents()
 
         viewModelScope.launch {
-            apiService.postEventFeedback(eventId, feedback)
+            val result = apiService.postEventFeedback(eventId, feedback)
+            if (result is ApiResult.Error && removed != null) {
+                _state.value =
+                    _state.value.copy(
+                        recommendedEvents = _state.value.recommendedEvents + removed,
+                    )
+                filterEvents()
+            }
         }
     }
 
