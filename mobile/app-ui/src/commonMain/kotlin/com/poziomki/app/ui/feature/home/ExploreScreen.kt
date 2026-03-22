@@ -221,7 +221,7 @@ fun ExploreScreen(
                                 contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                             ) {
-                                if (state.profiles.size > 5) {
+                                if (state.profiles.size >= 7) {
                                     item(key = "recommended-row") {
                                         RecommendedPeopleRow(
                                             profiles = state.recommendedProfiles,
@@ -229,7 +229,7 @@ fun ExploreScreen(
                                         )
                                     }
                                 }
-                                val cardProfiles = if (state.profiles.size > 5) state.remainingProfiles else state.profiles
+                                val cardProfiles = if (state.profiles.size >= 7) state.remainingProfiles else state.profiles
                                 items(cardProfiles, key = { it.id }) { profile ->
                                     ProfileCard(
                                         name = profile.name,

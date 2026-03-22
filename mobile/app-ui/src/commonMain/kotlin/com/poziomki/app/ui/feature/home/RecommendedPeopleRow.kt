@@ -69,7 +69,7 @@ private fun RecommendedPersonItem(
     score: Double,
     onClick: () -> Unit,
 ) {
-    val avatarSize = 56.dp
+    val avatarSize = 64.dp
     val strokeWidth = 3.dp
     val ringPadding = 3.dp
     val totalSize = avatarSize + (strokeWidth + ringPadding) * 2
