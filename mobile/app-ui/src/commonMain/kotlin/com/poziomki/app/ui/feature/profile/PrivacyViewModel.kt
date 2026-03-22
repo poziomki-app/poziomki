@@ -31,11 +31,19 @@ class PrivacyViewModel(
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
 
     fun exportData() {
-        if (_state.value.isExporting) return
+        if (_state.value.isExporting || _state.value.exportSuccess) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isExporting = true, error = null, exportSuccess = false)
             when (val result = apiService.exportData()) {
                 is ApiResult.Success -> {
+                    if (result.data.isEmpty()) {
+                        _state.value =
+                            _state.value.copy(
+                                isExporting = false,
+                                error = "Nie udało się pobrać danych",
+                            )
+                        return@launch
+                    }
                     val saved =
                         fileSaver.saveToDownloads(
                             result.data,
