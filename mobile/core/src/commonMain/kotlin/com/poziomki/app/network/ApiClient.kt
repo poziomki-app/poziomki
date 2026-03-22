@@ -17,6 +17,7 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -173,7 +174,7 @@ class ApiClient(
                     tokenProvider()?.let { bearerAuth(it) }
                 }
             if (response.status.isSuccess()) {
-                ApiResult.Success(response.body<ByteArray>())
+                ApiResult.Success(response.readRawBytes())
             } else {
                 if (response.status.value == 401) {
                     onUnauthorized?.invoke()
