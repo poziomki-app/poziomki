@@ -23,7 +23,8 @@ class IosFileSaver : FileSaver {
                     true,
                 )
             val documentsDir = paths.firstOrNull() as? String ?: return false
-            val filePath = "$documentsDir/$filename"
+            val safe = sanitizeFilename(filename)
+            val filePath = "$documentsDir/$safe"
             val data = bytes.toNSData()
             data.writeToFile(filePath, atomically = true)
         } catch (_: Exception) {

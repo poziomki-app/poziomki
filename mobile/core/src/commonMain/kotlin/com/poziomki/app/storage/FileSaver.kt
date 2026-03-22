@@ -7,3 +7,9 @@ interface FileSaver {
         mimeType: String,
     ): Boolean
 }
+
+/** Strip path separators so the filename can never escape the target directory. */
+fun sanitizeFilename(filename: String): String {
+    val base = filename.substringAfterLast('/').substringAfterLast('\\')
+    return base.ifBlank { "export" }
+}

@@ -16,10 +16,11 @@ class AndroidFileSaver(
         mimeType: String,
     ): Boolean =
         try {
+            val safe = sanitizeFilename(filename)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                saveViaMediaStore(bytes, filename, mimeType)
+                saveViaMediaStore(bytes, safe, mimeType)
             } else {
-                saveToLegacyDownloads(bytes, filename)
+                saveToLegacyDownloads(bytes, safe)
             }
         } catch (_: Exception) {
             false
