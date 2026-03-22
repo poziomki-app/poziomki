@@ -96,6 +96,7 @@ fn events_routes() -> Router<AppContext> {
     Router::new()
         .route("/", get(events::events_list).post(events::event_create))
         .route("/mine", get(events::events_mine))
+        .route("/saved", get(events::events_saved))
         .route("/{id}", get(events::event_get))
         .route("/{id}", patch(events::event_update))
         .route("/{id}", delete(events::event_delete))
