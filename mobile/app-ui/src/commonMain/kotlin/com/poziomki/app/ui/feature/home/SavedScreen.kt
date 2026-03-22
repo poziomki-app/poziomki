@@ -14,10 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -40,7 +38,6 @@ import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import org.koin.compose.viewmodel.koinViewModel
@@ -64,18 +61,10 @@ fun SavedScreen(
     ) {
         ScreenHeader(title = "zapisane", onBack = onBack)
 
-        TabRow(
+        SecondaryTabRow(
             selectedTabIndex = selectedTab,
             containerColor = Background,
             contentColor = TextPrimary,
-            indicator = { tabPositions ->
-                if (selectedTab < tabPositions.size) {
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = Primary,
-                    )
-                }
-            },
         ) {
             Tab(
                 selected = selectedTab == 0,
