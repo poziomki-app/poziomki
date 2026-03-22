@@ -359,6 +359,7 @@ internal class EventMutationRepository(
                 false -> 0L
                 null -> existing?.is_recommended ?: 0L
             }
+        val finalScore = if (isRecommended == true) event.score else (existing?.score ?: event.score)
 
         db.eventQueries.upsert(
             id = event.id,
@@ -381,7 +382,7 @@ internal class EventMutationRepository(
             tags_json = json.encodeToString(event.tags),
             created_at = event.createdAt,
             conversation_id = conversationId,
-            score = event.score,
+            score = finalScore,
             cached_at = cachedAt,
             in_list_feed = effectiveInListFeed,
             is_recommended = effectiveIsRecommended,
