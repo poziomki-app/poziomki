@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,8 +40,10 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.shared.rememberExportFileSaver
 import org.koin.compose.viewmodel.koinViewModel
 
+@Suppress("LongMethod")
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
@@ -53,6 +56,18 @@ fun PrivacyScreen(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
+
+    val saveExport =
+        rememberExportFileSaver(
+            onSaved = { viewModel.onExportSaved() },
+            onCancelled = { viewModel.clearExportBytes() },
+        )
+
+    LaunchedEffect(state.exportBytes) {
+        state.exportBytes?.let { bytes ->
+            saveExport(bytes, "poziomki-export.zip")
+        }
+    }
 
     Column(
         modifier =

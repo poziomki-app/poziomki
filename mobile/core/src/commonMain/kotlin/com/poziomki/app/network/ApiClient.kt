@@ -17,7 +17,6 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -58,6 +57,12 @@ class ApiClient(
                 url(baseUrl)
                 header("X-Image-Format", preferredImageFormat())
             }
+        }
+
+    private val rawClient =
+        HttpClient(engine) {
+            install(HttpCookies)
+            defaultRequest { url(baseUrl) }
         }
 
     suspend inline fun <reified T> get(path: String): ApiResult<T> =
@@ -170,11 +175,11 @@ class ApiClient(
     suspend fun downloadBytes(path: String): ApiResult<ByteArray> =
         try {
             val response =
-                httpClient.get(path) {
+                rawClient.get(path) {
                     tokenProvider()?.let { bearerAuth(it) }
                 }
             if (response.status.isSuccess()) {
-                ApiResult.Success(response.readRawBytes())
+                ApiResult.Success(response.body<ByteArray>())
             } else {
                 if (response.status.value == 401) {
                     onUnauthorized?.invoke()
