@@ -166,6 +166,24 @@ class ApiClient(
         }
     }
 
+    suspend fun downloadBytes(path: String): ApiResult<ByteArray> =
+        try {
+            val response =
+                httpClient.get(path) {
+                    tokenProvider()?.let { bearerAuth(it) }
+                }
+            if (response.status.isSuccess()) {
+                ApiResult.Success(response.body<ByteArray>())
+            } else {
+                if (response.status.value == 401) {
+                    onUnauthorized?.invoke()
+                }
+                ApiResult.Error("Export failed", response.status.value.toString(), response.status.value)
+            }
+        } catch (e: Exception) {
+            ApiResult.Error("Brak po\u0142\u0105czenia z internetem", "NETWORK_ERROR", 0)
+        }
+
     @PublishedApi
     internal suspend inline fun <reified T> request(block: () -> HttpResponse): ApiResult<T> =
         try {

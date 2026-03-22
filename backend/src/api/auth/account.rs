@@ -1,6 +1,9 @@
 #[path = "export_queries.rs"]
 mod auth_export_queries;
 
+use std::io::Write;
+
+use axum::http::header;
 use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
@@ -281,12 +284,60 @@ pub(in crate::api) async fn export_data(
         "uploads": user_uploads,
         "sessions": user_sessions,
         "settings": settings,
-        "conversations": [],
-        "messages": [],
         "exportedAt": Utc::now().to_rfc3339(),
     });
 
-    Ok(Json(DataResponse { data: export }).into_response())
+    // Collect image files from S3
+    let upload_filenames = if let Some(pid) = profile_id {
+        auth_export_queries::load_upload_filenames(pid).await?
+    } else {
+        vec![]
+    };
+
+    let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
+    for filename in &upload_filenames {
+        if let Ok(bytes) = crate::api::uploads::read_upload_bytes(filename).await {
+            image_files.push((filename.clone(), bytes));
+        }
+    }
+
+    // Build ZIP archive
+    let json_bytes = serde_json::to_vec_pretty(&export)?;
+    let cursor = std::io::Cursor::new(Vec::new());
+    let mut zip = zip::ZipWriter::new(cursor);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    zip.start_file("data.json", options)
+        .map_err(|e| crate::error::AppError::message(format!("zip error: {e}")))?;
+    zip.write_all(&json_bytes)
+        .map_err(|e| crate::error::AppError::message(format!("zip write error: {e}")))?;
+
+    for (filename, bytes) in &image_files {
+        if zip
+            .start_file(format!("images/{filename}"), options)
+            .is_ok()
+        {
+            let _ = zip.write_all(bytes);
+        }
+    }
+
+    let cursor = zip
+        .finish()
+        .map_err(|e| crate::error::AppError::message(format!("zip finish error: {e}")))?;
+    let zip_bytes = cursor.into_inner();
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/zip"),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"poziomki-export.zip\"",
+            ),
+        ],
+        zip_bytes,
+    )
+        .into_response())
 }
 
 async fn load_profile_data(

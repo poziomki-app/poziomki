@@ -11,6 +11,8 @@ import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.session.IosSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStoreIos
+import com.poziomki.app.storage.FileSaver
+import com.poziomki.app.storage.IosFileSaver
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
 import org.koin.core.module.Module
@@ -27,4 +29,5 @@ actual fun platformModule(): Module =
         }
         single<ConnectivityMonitor> { IosConnectivityMonitor() }
         single { LocationProvider() }
+        single<FileSaver> { IosFileSaver() }
     }
