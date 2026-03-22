@@ -17,13 +17,15 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.readRawBytes
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.utils.io.core.readBytes
+import io.ktor.utils.io.readRemaining
 import kotlinx.serialization.json.Json
 
 class ApiClient(
@@ -174,7 +176,11 @@ class ApiClient(
                     tokenProvider()?.let { bearerAuth(it) }
                 }
             if (response.status.isSuccess()) {
-                ApiResult.Success(response.readRawBytes())
+                val channel = response.bodyAsChannel()
+
+                @Suppress("DEPRECATION")
+                val bytes = channel.readRemaining().readBytes()
+                ApiResult.Success(bytes)
             } else {
                 if (response.status.value == 401) {
                     onUnauthorized?.invoke()
