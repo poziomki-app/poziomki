@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::db::models::event_attendees::EventAttendee;
 use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
-use crate::db::schema::{event_attendees, event_interactions, events};
+use crate::db::schema::{event_attendees, event_interactions, events, reports};
 
 pub(in crate::api) const MAX_ATTEMPTS: usize = 3;
 
@@ -181,6 +181,13 @@ pub(in crate::api) async fn delete_event(
     event_id: Uuid,
 ) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
+    diesel::delete(
+        reports::table
+            .filter(reports::target_type.eq("event"))
+            .filter(reports::target_id.eq(event_id)),
+    )
+    .execute(&mut conn)
+    .await?;
     diesel::delete(events::table.find(event_id))
         .execute(&mut conn)
         .await?;
