@@ -15,7 +15,7 @@ import com.poziomki.app.ui.designsystem.theme.SuccessLight
 enum class SnackbarType { SUCCESS, ERROR }
 
 @Composable
-fun PoziomkiSnackbar(
+fun AppSnackbar(
     message: String,
     type: SnackbarType = SnackbarType.ERROR,
     modifier: Modifier = Modifier,
