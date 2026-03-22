@@ -150,8 +150,12 @@ impl MatchingRepository {
         user_id: i32,
         conn: &mut crate::db::DbConn,
     ) -> std::result::Result<(HashSet<Uuid>, HashSet<String>), crate::error::AppError> {
-        let bookmarked_ids = self.load_bookmarked_profile_ids(profile_id, conn).await?;
-        let dm_partner_ids = self.load_dm_partner_profile_ids(user_id, conn).await?;
+        // Parallelize independent lookups with separate connections
+        let mut conn2 = crate::db::conn().await?;
+        let (bookmarked_ids, dm_partner_ids) = tokio::try_join!(
+            self.load_bookmarked_profile_ids(profile_id, conn),
+            self.load_dm_partner_profile_ids(user_id, &mut conn2),
+        )?;
 
         let mut social_profile_ids: Vec<Uuid> = bookmarked_ids;
         social_profile_ids.extend(dm_partner_ids);
@@ -168,14 +172,14 @@ impl MatchingRepository {
             .await?;
         let social_tag_ids: HashSet<Uuid> = tag_map.into_values().flatten().collect();
 
-        // Load programs from social profiles
-        let social_profiles: Vec<Profile> = profiles::table
+        // Load only program column instead of full Profile rows
+        let social_programs: HashSet<String> = profiles::table
             .filter(profiles::id.eq_any(&social_profile_ids))
-            .load(conn)
-            .await?;
-        let social_programs: HashSet<String> = social_profiles
+            .select(profiles::program)
+            .load::<Option<String>>(conn)
+            .await?
             .into_iter()
-            .filter_map(|p| p.program)
+            .flatten()
             .collect();
 
         Ok((social_tag_ids, social_programs))
