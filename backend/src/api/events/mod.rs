@@ -91,6 +91,23 @@ pub(super) async fn events_mine(
     ))
 }
 
+pub(super) async fn events_saved(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (profile, _user_pid) = match require_auth_profile(&headers).await {
+        Ok(auth) => auth,
+        Err(response) => return Ok(*response),
+    };
+
+    let saved_events = events_repo::list_saved_events(profile.id).await?;
+
+    let data = events_view::build_event_responses(&saved_events, &profile.id).await?;
+    Ok(with_private_short_cache(
+        Json(DataResponse { data }).into_response(),
+    ))
+}
+
 pub(super) async fn event_get(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
