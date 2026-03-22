@@ -12,6 +12,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -37,7 +38,7 @@ class SavedViewModel(
     private fun observeSavedEvents() {
         viewModelScope.launch {
             eventRepository.observeSavedEvents().collect { events ->
-                _state.value = _state.value.copy(events = events)
+                _state.update { it.copy(events = events) }
             }
         }
     }
@@ -46,28 +47,27 @@ class SavedViewModel(
         viewModelScope.launch {
             eventRepository.refreshSavedEvents()
             loadBookmarkedProfiles()
-            _state.value = _state.value.copy(isLoading = false)
+            _state.update { it.copy(isLoading = false) }
         }
     }
 
     fun pullToRefresh() {
-        _state.value = _state.value.copy(isRefreshing = true)
+        _state.update { it.copy(isRefreshing = true) }
         viewModelScope.launch {
             eventRepository.refreshSavedEvents(forceRefresh = true)
             loadBookmarkedProfiles()
-            _state.value = _state.value.copy(isRefreshing = false)
+            _state.update { it.copy(isRefreshing = false) }
         }
     }
 
     private suspend fun loadBookmarkedProfiles() {
-        withContext(Dispatchers.IO) {
-            when (val result = apiService.getBookmarkedProfiles()) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(profiles = result.data)
-                }
-
-                is ApiResult.Error -> {}
+        val result =
+            withContext(Dispatchers.IO) {
+                apiService.getBookmarkedProfiles()
             }
+        when (result) {
+            is ApiResult.Success -> _state.update { it.copy(profiles = result.data) }
+            is ApiResult.Error -> println("Failed to load bookmarked profiles: ${result.message}")
         }
     }
 }

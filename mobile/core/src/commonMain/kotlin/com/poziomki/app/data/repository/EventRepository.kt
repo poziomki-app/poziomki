@@ -193,6 +193,7 @@ class EventRepository(
                 is ApiResult.Success -> {
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
+                        db.eventQueries.clearSavedFlags()
                         result.data.forEach { event ->
                             eventMutationManager.upsertEvent(event, now, inListFeed = false)
                         }
