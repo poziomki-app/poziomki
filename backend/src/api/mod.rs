@@ -101,6 +101,7 @@ fn matching_routes() -> Router<AppContext> {
     Router::new()
         .route("/profiles", get(matching::profiles_recommendations))
         .route("/events", get(matching::events_recommendations))
+        .route("/events/{id}/feedback", post(matching::event_feedback))
         .layer(cache_layer("private, max-age=300"))
 }
 
