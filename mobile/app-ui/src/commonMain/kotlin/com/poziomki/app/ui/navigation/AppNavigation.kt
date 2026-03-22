@@ -86,6 +86,7 @@ import com.poziomki.app.ui.feature.home.ExploreScreen
 import com.poziomki.app.ui.feature.home.MessagesScreen
 import com.poziomki.app.ui.feature.home.ProfileScreen
 import com.poziomki.app.ui.feature.home.ProfileViewModel
+import com.poziomki.app.ui.feature.home.SavedScreen
 import com.poziomki.app.ui.feature.onboarding.BasicInfoScreen
 import com.poziomki.app.ui.feature.onboarding.InterestsScreen
 import com.poziomki.app.ui.feature.onboarding.ProfileSetupScreen
@@ -311,6 +312,7 @@ fun AppNavigation(
                 onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
                 onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
                 onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
+                onNavigateToSaved = { navController.navigate(Route.Saved) },
                 onNavigateToChat = navigateToChat,
                 onNavigateToNewChat = { navController.navigate(Route.NewChat) },
                 onSignOut = {
@@ -341,6 +343,13 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() },
                 onCreated = { navController.popBackStack() },
                 eventId = route.id,
+            )
+        }
+        composable<Route.Saved> {
+            SavedScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
+                onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
             )
         }
         composable<Route.ProfileView> {
@@ -399,6 +408,7 @@ fun MainScreen(
     onNavigateToProfileView: (String) -> Unit,
     onNavigateToProfileEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    onNavigateToSaved: () -> Unit,
     onNavigateToChat: (String) -> Unit,
     onNavigateToNewChat: () -> Unit,
     onSignOut: () -> Unit,
@@ -477,6 +487,7 @@ fun MainScreen(
                             ProfileScreen(
                                 onNavigateToEdit = onNavigateToProfileEdit,
                                 onNavigateToPrivacy = onNavigateToPrivacy,
+                                onNavigateToSaved = onNavigateToSaved,
                                 onNavigateToProfileView = onNavigateToProfileView,
                                 onSignOut = onSignOut,
                             )
