@@ -26,7 +26,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -58,6 +57,7 @@ import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
+import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
@@ -232,14 +232,13 @@ fun EventsScreen(
 
             // Refresh error snackbar
             state.refreshError?.let { error ->
-                Snackbar(
+                AppSnackbar(
+                    message = error,
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
                             .padding(PoziomkiTheme.spacing.md),
-                ) {
-                    Text(text = error)
-                }
+                )
                 LaunchedEffect(error) {
                     delay(3000)
                     viewModel.clearRefreshError()

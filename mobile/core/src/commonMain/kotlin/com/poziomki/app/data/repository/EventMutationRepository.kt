@@ -17,6 +17,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.long
 
@@ -56,6 +57,8 @@ internal class EventMutationRepository(
                     endsAt = request.endsAt,
                     tags = optimisticTags,
                     maxAttendees = request.maxAttendees,
+                    isAttending = true,
+                    attendeesCount = 1,
                 )
             val now = Clock.System.now().toEpochMilliseconds()
             upsertEvent(tempEvent, now, isDirty = true, inListFeed = true)
@@ -115,7 +118,7 @@ internal class EventMutationRepository(
                     creator_name = current.creator_name,
                     creator_profile_picture = current.creator_profile_picture,
                     attendees_count = current.attendees_count,
-                    max_attendees = (request.maxAttendees as? JsonPrimitive)?.long,
+                    max_attendees = maxAttendeesFromRequest(request),
                     is_attending = current.is_attending,
                     is_saved = current.is_saved,
                     attendees_preview_json = current.attendees_preview_json,
@@ -125,6 +128,7 @@ internal class EventMutationRepository(
                     score = current.score,
                     cached_at = current.cached_at,
                     in_list_feed = current.in_list_feed,
+                    is_recommended = current.is_recommended,
                     is_dirty = 1L,
                     requires_approval = current.requires_approval,
                     is_pending = current.is_pending,
@@ -159,18 +163,6 @@ internal class EventMutationRepository(
             val current = db.eventQueries.selectById(id).executeAsOneOrNull()
             val previousAttending = current?.is_attending == 1L
             val previousCount = current?.attendees_count ?: 0L
-            val isFull =
-                current != null &&
-                    !previousAttending &&
-                    current.max_attendees != null &&
-                    current.attendees_count >= current.max_attendees
-            if (isFull && !connectivityMonitor.isOnline.value) {
-                return@withContext ApiResult.Error(
-                    message = "Event is full",
-                    code = "VALIDATION_ERROR",
-                    status = 400,
-                )
-            }
             if (current != null && !previousAttending) {
                 db.eventQueries.updateAttendance(
                     is_attending = 1L,
@@ -344,11 +336,13 @@ internal class EventMutationRepository(
             }
         }
 
+    @Suppress("CyclomaticComplexMethod")
     fun upsertEvent(
         event: Event,
         cachedAt: Long,
         isDirty: Boolean = false,
         inListFeed: Boolean? = null,
+        isRecommended: Boolean? = null,
     ) {
         val existing = db.eventQueries.selectById(event.id).executeAsOneOrNull()
         val existingConversationId = existing?.conversation_id
@@ -358,6 +352,12 @@ internal class EventMutationRepository(
                 true -> 1L
                 false -> if (existing?.in_list_feed == 1L) 1L else 0L
                 null -> existing?.in_list_feed ?: 1L
+            }
+        val effectiveIsRecommended =
+            when (isRecommended) {
+                true -> 1L
+                false -> 0L
+                null -> existing?.is_recommended ?: 0L
             }
 
         db.eventQueries.upsert(
@@ -370,7 +370,7 @@ internal class EventMutationRepository(
             longitude = event.longitude,
             starts_at = event.startsAt,
             ends_at = event.endsAt,
-            creator_id = event.creatorId,
+            creator_id = event.creator?.id ?: event.creatorId,
             creator_name = event.creator?.name,
             creator_profile_picture = event.creator?.profilePicture,
             attendees_count = event.attendeesCount.toLong(),
@@ -384,6 +384,7 @@ internal class EventMutationRepository(
             score = event.score,
             cached_at = cachedAt,
             in_list_feed = effectiveInListFeed,
+            is_recommended = effectiveIsRecommended,
             is_dirty = if (isDirty) 1L else 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
@@ -466,6 +467,11 @@ internal class EventMutationRepository(
         )
     }
 
+    private fun maxAttendeesFromRequest(request: UpdateEventRequest): Long? {
+        val element = request.maxAttendees
+        return if (element is JsonPrimitive && element !is JsonNull) element.long else null
+    }
+
     private fun restoreEvent(event: com.poziomki.app.db.Event) {
         db.eventQueries.upsert(
             id = event.id,
@@ -491,6 +497,7 @@ internal class EventMutationRepository(
             score = event.score,
             cached_at = event.cached_at,
             in_list_feed = event.in_list_feed,
+            is_recommended = event.is_recommended,
             is_dirty = event.is_dirty,
             requires_approval = event.requires_approval,
             is_pending = event.is_pending,

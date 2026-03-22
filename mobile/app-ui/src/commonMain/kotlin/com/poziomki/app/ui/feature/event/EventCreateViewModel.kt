@@ -6,7 +6,6 @@ import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.CreateEventRequest
-import com.poziomki.app.network.GeocodingService
 import com.poziomki.app.network.UpdateEventRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +35,6 @@ data class EventCreateState(
 class EventCreateViewModel(
     private val eventRepository: EventRepository,
     private val apiService: ApiService,
-    private val geocodingService: GeocodingService,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EventCreateState())
     val state: StateFlow<EventCreateState> = _state.asStateFlow()
@@ -53,10 +51,6 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(description = description)
     }
 
-    fun updateLocation(location: String) {
-        _state.value = _state.value.copy(location = location)
-    }
-
     fun updateLocationWithCoordinates(
         name: String,
         lat: Double,
@@ -64,8 +58,6 @@ class EventCreateViewModel(
     ) {
         _state.value = _state.value.copy(location = name, latitude = lat, longitude = lng)
     }
-
-    suspend fun searchLocation(query: String) = geocodingService.search(query)
 
     fun updateStartsAt(startsAt: String) {
         _state.value = _state.value.copy(startsAt = startsAt)
@@ -199,8 +191,17 @@ class EventCreateViewModel(
                 requiresApproval = s.requiresApproval,
             )
         when (eventRepository.updateEvent(eventId, request)) {
-            is ApiResult.Success -> onSaved()
-            is ApiResult.Error -> _state.value = _state.value.copy(isLoading = false, error = "Nie udało się zaktualizować wydarzenia")
+            is ApiResult.Success -> {
+                onSaved()
+            }
+
+            is ApiResult.Error -> {
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Nie udało się zaktualizować wydarzenia",
+                    )
+            }
         }
     }
 
@@ -223,8 +224,17 @@ class EventCreateViewModel(
                 requiresApproval = if (s.requiresApproval) true else null,
             )
         when (eventRepository.createEvent(request)) {
-            is ApiResult.Success -> onSaved()
-            is ApiResult.Error -> _state.value = _state.value.copy(isLoading = false, error = "Nie udało się utworzyć wydarzenia")
+            is ApiResult.Success -> {
+                onSaved()
+            }
+
+            is ApiResult.Error -> {
+                _state.value =
+                    _state.value.copy(
+                        isLoading = false,
+                        error = "Nie udało się utworzyć wydarzenia",
+                    )
+            }
         }
     }
 }
