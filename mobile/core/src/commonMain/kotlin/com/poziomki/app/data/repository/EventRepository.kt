@@ -30,15 +30,16 @@ class EventRepository(
 ) {
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
+        private const val RECOMMENDED_CACHE_KEY = "recommended_events"
 
-        private fun recommendedCacheKey(
-            lat: Double?,
-            lng: Double?,
-            radiusM: Int?,
-        ): String {
-            if (lat == null || lng == null) return "recommended_events"
-            return "recommended_events_${lat}_${lng}_${radiusM ?: "default"}"
-        }
+        @Volatile
+        private var lastLat: Double? = null
+
+        @Volatile
+        private var lastLng: Double? = null
+
+        @Volatile
+        private var lastRadius: Int? = null
     }
 
     private val eventRoomManager = EventRoomRepository(db = db, api = api, chatClient = chatClient)
@@ -95,11 +96,12 @@ class EventRepository(
         forceRefresh: Boolean = false,
     ): List<Event> =
         withContext(Dispatchers.IO) {
-            val cacheKey = recommendedCacheKey(lat, lng, radiusM)
-            if (!forceRefresh) {
+            val locationChanged = lat != lastLat || lng != lastLng || radiusM != lastRadius
+
+            if (!forceRefresh && !locationChanged) {
                 val cachedAt =
                     db.cacheStateQueries
-                        .selectByKey(cacheKey)
+                        .selectByKey(RECOMMENDED_CACHE_KEY)
                         .executeAsOneOrNull()
                         ?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) {
@@ -123,8 +125,11 @@ class EventRepository(
                                 isRecommended = true,
                             )
                         }
-                        db.cacheStateQueries.upsert(cacheKey, now)
+                        db.cacheStateQueries.upsert(RECOMMENDED_CACHE_KEY, now)
                     }
+                    lastLat = lat
+                    lastLng = lng
+                    lastRadius = radiusM
                     result.data
                 }
 
