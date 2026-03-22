@@ -11,7 +11,9 @@ use axum::{
 use crate::api::state::{ReportEventBody, SuccessResponse};
 use crate::app::AppContext;
 
-use super::events_service::{forbidden, load_event, require_auth_profile, validation_error};
+use super::events_service::{
+    forbidden, load_event, not_found_event, require_auth_profile, validation_error,
+};
 use super::report_repo;
 
 const VALID_REASONS: &[&str] = &[
@@ -69,8 +71,11 @@ pub(in crate::api) async fn event_report(
         }
     }
 
-    let inserted =
-        report_repo::insert_event_report(profile.id, event_id, reason, description).await?;
+    let Some(inserted) =
+        report_repo::insert_event_report(profile.id, event_id, reason, description).await?
+    else {
+        return Ok(not_found_event(&headers, &id));
+    };
 
     if !inserted {
         return Ok(validation_error(
