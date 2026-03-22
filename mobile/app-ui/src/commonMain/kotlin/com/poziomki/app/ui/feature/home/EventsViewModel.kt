@@ -224,6 +224,29 @@ class EventsViewModel(
         return dLat * dLat + dLng * dLng
     }
 
+    fun onSwipeFeedback(
+        eventId: String,
+        feedback: String,
+    ) {
+        val removed = _state.value.recommendedEvents.find { it.id == eventId }
+        _state.value =
+            _state.value.copy(
+                recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
+            )
+        filterEvents()
+
+        viewModelScope.launch {
+            val result = apiService.postEventFeedback(eventId, feedback)
+            if (result is ApiResult.Error && removed != null) {
+                _state.value =
+                    _state.value.copy(
+                        recommendedEvents = _state.value.recommendedEvents + removed,
+                    )
+                filterEvents()
+            }
+        }
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =

@@ -7,13 +7,15 @@ use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profile_tags::ProfileTag;
+use crate::db::models::recommendation_feedback::RecommendationFeedback;
 use crate::db::models::sessions::Session;
 use crate::db::models::tags::Tag;
 use crate::db::models::uploads::Upload;
 use crate::db::models::user_settings::UserSetting;
 use crate::db::schema::event_interactions;
 use crate::db::schema::{
-    event_attendees, event_tags, events, profile_tags, sessions, tags, uploads, user_settings,
+    event_attendees, event_tags, events, profile_tags, recommendation_feedback, sessions, tags,
+    uploads, user_settings,
 };
 
 pub(super) async fn load_user_tags(
@@ -248,6 +250,43 @@ pub(super) async fn load_event_interactions(
                 "kind": row.kind,
                 "createdAt": row.created_at.to_rfc3339(),
                 "updatedAt": row.updated_at.to_rfc3339(),
+            })
+        })
+        .collect())
+}
+
+pub(super) async fn load_recommendation_feedback(
+    profile_id: Uuid,
+) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+
+    let rows = recommendation_feedback::table
+        .filter(recommendation_feedback::profile_id.eq(profile_id))
+        .load::<RecommendationFeedback>(&mut conn)
+        .await?;
+
+    let event_ids: Vec<Uuid> = rows.iter().map(|r| r.event_id).collect();
+    let event_rows = if event_ids.is_empty() {
+        vec![]
+    } else {
+        events::table
+            .filter(events::id.eq_any(&event_ids))
+            .load::<Event>(&mut conn)
+            .await?
+    };
+
+    Ok(rows
+        .iter()
+        .map(|row| {
+            let title = event_rows
+                .iter()
+                .find(|event| event.id == row.event_id)
+                .map(|event| event.title.clone());
+            serde_json::json!({
+                "eventId": row.event_id.to_string(),
+                "title": title,
+                "feedback": row.feedback,
+                "createdAt": row.created_at.to_rfc3339(),
             })
         })
         .collect())
