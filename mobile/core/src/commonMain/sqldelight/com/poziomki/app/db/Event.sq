@@ -40,6 +40,12 @@ FROM event
 WHERE is_recommended = 1
 ORDER BY score DESC, starts_at ASC;
 
+selectSaved:
+SELECT *
+FROM event
+WHERE is_saved = 1
+ORDER BY cached_at DESC;
+
 selectById:
 SELECT *
 FROM event
