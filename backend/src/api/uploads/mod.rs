@@ -64,6 +64,14 @@ pub(super) async fn generate_upload_variants_job(
     uploads_variant_jobs::generate_upload_variants_job(upload_id).await
 }
 
+pub(in crate::api) async fn read_upload_bytes(
+    filename: &str,
+) -> std::result::Result<Vec<u8>, crate::error::AppError> {
+    uploads_storage::read(filename)
+        .await
+        .map_err(|_err| crate::error::AppError::message("failed to read upload from storage"))
+}
+
 /// Best-effort delete of an upload's S3 objects (original + thumb + std variants).
 pub(in crate::api) async fn delete_upload_objects(filename: &str) {
     let _ = uploads_storage::delete(filename).await;

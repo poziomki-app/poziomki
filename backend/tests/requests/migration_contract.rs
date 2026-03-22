@@ -5,6 +5,16 @@ use base64::Engine as _;
 
 use serial_test::serial;
 use std::future::Future;
+use std::io::Read;
+
+fn parse_export_zip(bytes: &[u8]) -> serde_json::Value {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).unwrap();
+    let mut file = archive.by_name("data.json").unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    serde_json::from_str(&contents).unwrap()
+}
 
 fn auth_header(token: &str) -> (HeaderName, HeaderValue) {
     let value = HeaderValue::from_str(&format!("Bearer {token}")).unwrap();
@@ -373,14 +383,9 @@ async fn events_flow_matches_phase_3_contract() {
             .get("/api/v1/auth/export")
             .add_header(attendee_auth_key.clone(), attendee_auth_value.clone())
             .await;
-        assert_eq!(
-            export_response.status_code(),
-            200,
-            "export body: {}",
-            export_response.text()
-        );
-        let export_payload: serde_json::Value = export_response.json();
-        let interactions = export_payload["data"]["eventInteractions"]
+        assert_eq!(export_response.status_code(), 200);
+        let export_payload = parse_export_zip(export_response.as_bytes());
+        let interactions = export_payload["eventInteractions"]
             .as_array()
             .cloned()
             .unwrap_or_default();
@@ -472,8 +477,8 @@ async fn events_flow_matches_phase_3_contract() {
             .add_header(interested_auth_key.clone(), interested_auth_value.clone())
             .await;
         assert_eq!(interested_export_response.status_code(), 200);
-        let interested_export_payload: serde_json::Value = interested_export_response.json();
-        let interested_interactions = interested_export_payload["data"]["eventInteractions"]
+        let interested_export_payload = parse_export_zip(interested_export_response.as_bytes());
+        let interested_interactions = interested_export_payload["eventInteractions"]
             .as_array()
             .cloned()
             .unwrap_or_default();
