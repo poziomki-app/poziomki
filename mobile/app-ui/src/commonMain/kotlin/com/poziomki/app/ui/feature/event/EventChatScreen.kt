@@ -11,7 +11,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.poziomki.app.chat.ActiveChat
@@ -76,7 +78,12 @@ fun EventChatScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             when {
                 eventState.isLoading && eventState.event == null -> {
-                    EventChatLoadingView(onBack = onBack)
+                    var showSpinner by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(300)
+                        showSpinner = true
+                    }
+                    if (showSpinner) EventChatLoadingView(onBack = onBack)
                 }
 
                 eventState.event == null -> {
@@ -94,7 +101,12 @@ fun EventChatScreen(
                 }
 
                 eventState.isOpeningChat || eventState.event?.conversationId?.isNullOrBlank() ?: true -> {
-                    EventChatLoadingView(onBack = onBack)
+                    var showSpinner by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(300)
+                        showSpinner = true
+                    }
+                    if (showSpinner) EventChatLoadingView(onBack = onBack)
                 }
 
                 else -> {
