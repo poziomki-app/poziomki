@@ -693,6 +693,69 @@ async fn delete_account_verifies_hashed_password() {
 
 #[tokio::test]
 #[serial]
+async fn change_password_rotates_credentials_and_invalidates_sessions() {
+    request(|request, _ctx| async move {
+        let token = sign_up_and_verify(
+            &request,
+            "change-password@example.com",
+            "old-password",
+            "Password User",
+        )
+        .await;
+
+        let (auth_key, auth_value) = auth_header(&token);
+
+        let change_bad = request
+            .patch("/api/v1/auth/account/password")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .json(&serde_json::json!({
+                "currentPassword": "wrong-password",
+                "newPassword": "new-password-123",
+            }))
+            .await;
+        assert_eq!(change_bad.status_code(), 401);
+
+        let change_ok = request
+            .patch("/api/v1/auth/account/password")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .json(&serde_json::json!({
+                "currentPassword": "old-password",
+                "newPassword": "new-password-123",
+            }))
+            .await;
+        assert_eq!(change_ok.status_code(), 200);
+
+        let old_sessions = request
+            .get("/api/v1/auth/sessions")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .await;
+        assert_eq!(old_sessions.status_code(), 401);
+
+        let old_sign_in = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "change-password@example.com",
+                "password": "old-password",
+            }))
+            .await;
+        assert_eq!(old_sign_in.status_code(), 401);
+
+        let new_sign_in = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "change-password@example.com",
+                "password": "new-password-123",
+            }))
+            .await;
+        assert_eq!(new_sign_in.status_code(), 200);
+        let new_payload: serde_json::Value = new_sign_in.json();
+        assert!(new_payload["data"]["token"].is_string());
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn uploads_auth_check_accepts_owned_variant_url() {
     request(|request, _ctx| async move {
         let (auth_key, auth_value) =

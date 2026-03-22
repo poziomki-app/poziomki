@@ -399,6 +399,12 @@ data class DeleteAccountRequest(
     val password: String,
 )
 
+@Serializable
+data class ChangePasswordRequest(
+    val currentPassword: String,
+    val newPassword: String,
+)
+
 // Geocoding models
 
 data class GeocodingResult(

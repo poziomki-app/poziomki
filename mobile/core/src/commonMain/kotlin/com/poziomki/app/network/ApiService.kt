@@ -32,6 +32,15 @@ class ApiService(
     suspend fun deleteAccount(password: String): ApiResult<SuccessResponse> =
         client.delete("/api/v1/auth/account", DeleteAccountRequest(password))
 
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): ApiResult<SuccessResponse> =
+        client.patch(
+            "/api/v1/auth/account/password",
+            ChangePasswordRequest(currentPassword = currentPassword, newPassword = newPassword),
+        )
+
     // Profiles
 
     suspend fun getMyProfile(): ApiResult<Profile> = client.get("/api/v1/profiles/me")
