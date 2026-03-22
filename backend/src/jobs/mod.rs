@@ -1,3 +1,4 @@
+mod cleanup;
 pub(crate) mod outbox;
 
 use crate::app::AppContext;
@@ -10,5 +11,6 @@ pub(crate) use outbox::{
 
 pub fn start_background_workers(ctx: &AppContext) -> AppResult<()> {
     outbox::maybe_start_worker(ctx);
+    tokio::spawn(async { cleanup::run_cleanup_loop().await });
     Ok(())
 }
