@@ -42,47 +42,6 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
-private data class PasswordFormState(
-    val currentPassword: String,
-    val newPassword: String,
-    val confirmPassword: String,
-)
-
-private data class PasswordSectionProps(
-    val form: PasswordFormState,
-    val isLoading: Boolean,
-    val onCurrentPasswordChange: (String) -> Unit,
-    val onNewPasswordChange: (String) -> Unit,
-    val onConfirmPasswordChange: (String) -> Unit,
-    val onSubmit: () -> Unit,
-)
-
-private data class PasswordFormBindings(
-    val form: PasswordFormState,
-    val onCurrentPasswordChange: (String) -> Unit,
-    val onNewPasswordChange: (String) -> Unit,
-    val onConfirmPasswordChange: (String) -> Unit,
-)
-
-private data class PasswordFormController(
-    val bindings: PasswordFormBindings,
-    val clear: () -> Unit,
-)
-
-private data class PrivacyContentProps(
-    val state: PrivacyState,
-    val navBarBottom: androidx.compose.ui.unit.Dp,
-    val passwordSection: PasswordSectionProps,
-    val onExport: () -> Unit,
-    val onDelete: () -> Unit,
-)
-
-private data class PrivacyActions(
-    val onChangePassword: () -> Unit,
-    val onExport: () -> Unit,
-    val onDelete: () -> Unit,
-)
-
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
@@ -94,29 +53,7 @@ fun PrivacyScreen(
     val nunito = NunitoFamily
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showDeleteDialog by remember { mutableStateOf(false) }
-    val passwordController = rememberPasswordFormController()
-    val actions =
-        PrivacyActions(
-            onChangePassword = {
-                viewModel.changePassword(
-                    currentPassword = passwordController.bindings.form.currentPassword,
-                    newPassword = passwordController.bindings.form.newPassword,
-                    confirmPassword = passwordController.bindings.form.confirmPassword,
-                ) {
-                    passwordController.clear()
-                    onPasswordChanged()
-                }
-            },
-            onExport = { viewModel.exportData() },
-            onDelete = { showDeleteDialog = true },
-        )
-    val contentProps =
-        buildPrivacyContentProps(
-            state = state,
-            navBarBottom = navBarBottom,
-            passwordBindings = passwordController.bindings,
-            actions = actions,
-        )
+    var showPasswordDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -124,7 +61,6 @@ fun PrivacyScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        // Top bar
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         ScreenHeader(
             title = "prywatność",
@@ -132,75 +68,52 @@ fun PrivacyScreen(
             modifier = Modifier.padding(top = statusBarPadding),
         )
 
-        PrivacyContent(props = contentProps, nunito = nunito)
+        PrivacyContent(
+            state = state,
+            navBarBottom = navBarBottom,
+            nunito = nunito,
+            onOpenPasswordDialog = { showPasswordDialog = true },
+            onExport = { viewModel.exportData() },
+            onDelete = { showDeleteDialog = true },
+        )
     }
 
-    DeleteAccountDialogHost(
-        showDialog = showDeleteDialog,
-        isLoading = state.isDeleting,
-        onDismiss = { showDeleteDialog = false },
-        onConfirm = { password ->
-            viewModel.deleteAccount(password) {
-                showDeleteDialog = false
-                onAccountDeleted()
-            }
-        },
-    )
+    if (showPasswordDialog && state.error == null) {
+        ChangePasswordDialog(
+            isLoading = state.isChangingPassword,
+            onDismiss = { showPasswordDialog = false },
+            onSubmit = { current, new, confirm ->
+                viewModel.changePassword(current, new, confirm) {
+                    showPasswordDialog = false
+                    onPasswordChanged()
+                }
+            },
+        )
+    }
+
+    if (showDeleteDialog && state.error == null) {
+        DeleteAccountDialog(
+            isLoading = state.isDeleting,
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = { password ->
+                viewModel.deleteAccount(password) {
+                    showDeleteDialog = false
+                    onAccountDeleted()
+                }
+            },
+        )
+    }
 }
 
-@Composable
-private fun rememberPasswordFormController(): PasswordFormController {
-    var currentPassword by remember { mutableStateOf("") }
-    var newPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-
-    return PasswordFormController(
-        bindings =
-            PasswordFormBindings(
-                form =
-                    PasswordFormState(
-                        currentPassword = currentPassword,
-                        newPassword = newPassword,
-                        confirmPassword = confirmPassword,
-                    ),
-                onCurrentPasswordChange = { currentPassword = it },
-                onNewPasswordChange = { newPassword = it },
-                onConfirmPasswordChange = { confirmPassword = it },
-            ),
-        clear = {
-            currentPassword = ""
-            newPassword = ""
-            confirmPassword = ""
-        },
-    )
-}
-
-private fun buildPrivacyContentProps(
-    state: PrivacyState,
-    navBarBottom: androidx.compose.ui.unit.Dp,
-    passwordBindings: PasswordFormBindings,
-    actions: PrivacyActions,
-): PrivacyContentProps =
-    PrivacyContentProps(
-        state = state,
-        navBarBottom = navBarBottom,
-        passwordSection =
-            PasswordSectionProps(
-                form = passwordBindings.form,
-                isLoading = state.isChangingPassword,
-                onCurrentPasswordChange = passwordBindings.onCurrentPasswordChange,
-                onNewPasswordChange = passwordBindings.onNewPasswordChange,
-                onConfirmPasswordChange = passwordBindings.onConfirmPasswordChange,
-                onSubmit = actions.onChangePassword,
-            ),
-        onExport = actions.onExport,
-        onDelete = actions.onDelete,
-    )
-
+@Suppress("LongParameterList")
 @Composable
 private fun PrivacyContent(
-    props: PrivacyContentProps,
+    state: PrivacyState,
+    navBarBottom: androidx.compose.ui.unit.Dp,
     nunito: androidx.compose.ui.text.font.FontFamily,
+    onOpenPasswordDialog: () -> Unit,
+    onExport: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     Column(
         modifier =
@@ -210,29 +123,21 @@ private fun PrivacyContent(
                 .padding(horizontal = PoziomkiTheme.spacing.lg),
     ) {
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-        PrivacyMessages(
-            error = props.state.error,
-            passwordSuccessMessage = props.state.passwordSuccessMessage,
-            nunito = nunito,
+        PrivacyMessages(state.error, state.passwordSuccessMessage, nunito)
+
+        SectionLabel("HASŁO", color = TextMuted)
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        PoziomkiButton(
+            text = "zmień hasło",
+            onClick = onOpenPasswordDialog,
+            variant = ButtonVariant.OUTLINE,
         )
-        ChangePasswordSection(
-            props = props.passwordSection,
-            nunito = nunito,
-        )
+
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-        ExportDataSection(
-            exportedJson = props.state.exportedJson,
-            isExporting = props.state.isExporting,
-            onExport = props.onExport,
-            nunito = nunito,
-        )
+        ExportDataSection(state.exportedJson, state.isExporting, onExport, nunito)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-        DeleteAccountSection(
-            isDeleting = props.state.isDeleting,
-            onDelete = props.onDelete,
-            nunito = nunito,
-        )
-        Spacer(modifier = Modifier.height(props.navBarBottom + PoziomkiTheme.spacing.xl))
+        DeleteAccountSection(state.isDeleting, onDelete, nunito)
+        Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
     }
 }
 
@@ -263,48 +168,6 @@ private fun PrivacyMessages(
             modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
         )
     }
-}
-
-@Composable
-private fun ChangePasswordSection(
-    props: PasswordSectionProps,
-    nunito: androidx.compose.ui.text.font.FontFamily,
-) {
-    SectionLabel("ZMIEŃ HASŁO", color = TextMuted)
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-    Text(
-        text = "Po zmianie hasła wylogujemy Cię ze wszystkich urządzeń i poprosimy o ponowne zalogowanie.",
-        fontFamily = nunito,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        color = TextSecondary,
-        lineHeight = 20.sp,
-    )
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-    PoziomkiPasswordField(
-        value = props.form.currentPassword,
-        onValueChange = props.onCurrentPasswordChange,
-        placeholder = "Aktualne hasło",
-    )
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-    PoziomkiPasswordField(
-        value = props.form.newPassword,
-        onValueChange = props.onNewPasswordChange,
-        placeholder = "Nowe hasło",
-    )
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-    PoziomkiPasswordField(
-        value = props.form.confirmPassword,
-        onValueChange = props.onConfirmPasswordChange,
-        placeholder = "Powtórz nowe hasło",
-    )
-    Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-    PoziomkiButton(
-        text = "zmień hasło",
-        onClick = props.onSubmit,
-        variant = ButtonVariant.OUTLINE,
-        loading = props.isLoading,
-    )
 }
 
 @Composable
@@ -452,20 +315,4 @@ private fun DeleteAccountDialog(
             }
         },
     )
-}
-
-@Composable
-private fun DeleteAccountDialogHost(
-    showDialog: Boolean,
-    isLoading: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    if (showDialog) {
-        DeleteAccountDialog(
-            isLoading = isLoading,
-            onDismiss = onDismiss,
-            onConfirm = onConfirm,
-        )
-    }
 }
