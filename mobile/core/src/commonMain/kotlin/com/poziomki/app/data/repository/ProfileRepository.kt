@@ -100,14 +100,21 @@ class ProfileRepository(
             }
         }
 
+    data class ProfileRefreshResult(
+        val refreshed: Boolean,
+        val isBookmarked: Boolean = false,
+    )
+
     suspend fun refreshProfile(
         id: String,
         forceRefresh: Boolean = false,
-    ): Boolean =
+    ): ProfileRefreshResult =
         withContext(Dispatchers.IO) {
             if (!forceRefresh) {
                 val cachedAt = db.profileQueries.cachedAtById(id).executeAsOneOrNull()
-                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) {
+                    return@withContext ProfileRefreshResult(refreshed = true)
+                }
             }
             when (val result = api.getProfileFull(id)) {
                 is ApiResult.Success -> {
@@ -118,11 +125,14 @@ class ProfileRepository(
                             ?.is_own == 1L
                     upsertProfile(result.data.toProfile(), isOwn = existingIsOwn)
                     upsertProfileTags(result.data.id, result.data.tags)
-                    true
+                    ProfileRefreshResult(
+                        refreshed = true,
+                        isBookmarked = result.data.isBookmarked,
+                    )
                 }
 
                 is ApiResult.Error -> {
-                    false
+                    ProfileRefreshResult(refreshed = false)
                 }
             }
         }

@@ -10,7 +10,7 @@ use crate::api::state::{DataResponse, SuccessResponse};
 use crate::api::{error_response, ErrorSpec};
 use crate::db::models::profile_bookmarks::ProfileBookmark;
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{profile_bookmarks, profiles};
+use crate::db::schema::{profile_bookmarks, profiles, users};
 
 use super::profiles_view::profile_to_response;
 use crate::api::state::ProfileResponse;
@@ -100,43 +100,41 @@ pub(in crate::api) async fn profiles_bookmarked(
 ) -> crate::error::AppResult<Vec<ProfileResponse>> {
     let mut conn = crate::db::conn().await?;
 
-    let bookmarked_profiles: Vec<(ProfileBookmark, Profile)> = profile_bookmarks::table
-        .inner_join(profiles::table.on(profile_bookmarks::target_profile_id.eq(profiles::id)))
+    let bookmarked_profiles: Vec<(ProfileBookmark, (Profile, Uuid))> = profile_bookmarks::table
+        .inner_join(
+            profiles::table
+                .on(profile_bookmarks::target_profile_id.eq(profiles::id))
+                .inner_join(users::table),
+        )
         .filter(profile_bookmarks::profile_id.eq(my_profile_id))
         .order(profile_bookmarks::created_at.desc())
-        .load::<(ProfileBookmark, Profile)>(&mut conn)
+        .select((
+            profile_bookmarks::all_columns,
+            (profiles::all_columns, users::pid),
+        ))
+        .load(&mut conn)
         .await?;
 
     let mut responses = Vec::with_capacity(bookmarked_profiles.len());
-    for (_bookmark, profile) in bookmarked_profiles {
-        let user_pid = profiles_owner_pid(profile.user_id, &mut conn).await;
+    for (_bookmark, (profile, user_pid)) in bookmarked_profiles {
         let response = profile_to_response(&profile, &user_pid, Some(viewer_user_id)).await;
         responses.push(response);
     }
     Ok(responses)
 }
 
-pub(in crate::api) async fn is_bookmarked(
-    my_profile_id: Uuid,
+pub(in crate::api) async fn is_bookmarked_by_user(
+    user_id: i32,
     target_profile_id: Uuid,
 ) -> crate::error::AppResult<bool> {
     let mut conn = crate::db::conn().await?;
     let exists = profile_bookmarks::table
-        .filter(profile_bookmarks::profile_id.eq(my_profile_id))
+        .inner_join(profiles::table.on(profile_bookmarks::profile_id.eq(profiles::id)))
+        .filter(profiles::user_id.eq(user_id))
         .filter(profile_bookmarks::target_profile_id.eq(target_profile_id))
         .select(profile_bookmarks::profile_id)
         .first::<Uuid>(&mut conn)
         .await
         .optional()?;
     Ok(exists.is_some())
-}
-
-async fn profiles_owner_pid(user_id: i32, conn: &mut crate::db::DbConn) -> Uuid {
-    use crate::db::schema::users;
-    users::table
-        .filter(users::id.eq(user_id))
-        .select(users::pid)
-        .first::<Uuid>(conn)
-        .await
-        .unwrap_or(Uuid::nil())
 }

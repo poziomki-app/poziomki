@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ProfileViewState(
@@ -35,6 +36,8 @@ class ProfileViewViewModel(
     private val _state = MutableStateFlow(ProfileViewState())
     val state: StateFlow<ProfileViewState> = _state.asStateFlow()
 
+    private var bookmarkInFlight = false
+
     init {
         observeProfile()
         refreshProfile()
@@ -45,7 +48,7 @@ class ProfileViewViewModel(
         viewModelScope.launch {
             val ownProfileId = sessionManager.profileId.first()
             if (ownProfileId == profileId) {
-                _state.value = _state.value.copy(isOwnProfile = true)
+                _state.update { it.copy(isOwnProfile = true) }
             }
         }
     }
@@ -54,12 +57,7 @@ class ProfileViewViewModel(
         viewModelScope.launch {
             profileRepository.observeProfile(profileId).collect { profile ->
                 if (profile != null) {
-                    _state.value =
-                        _state.value.copy(
-                            profile = profile,
-                            isLoading = false,
-                            isBookmarked = profile.isBookmarked,
-                        )
+                    _state.update { it.copy(profile = profile, isLoading = false) }
                 }
             }
         }
@@ -67,17 +65,20 @@ class ProfileViewViewModel(
 
     private fun refreshProfile() {
         viewModelScope.launch {
-            val success = profileRepository.refreshProfile(profileId)
-            if (!success) {
-                _state.value = _state.value.copy(isLoading = false)
+            val result = profileRepository.refreshProfile(profileId)
+            if (result.refreshed) {
+                _state.update { it.copy(isBookmarked = result.isBookmarked) }
+            } else {
+                _state.update { it.copy(isLoading = false) }
             }
         }
     }
 
     fun toggleBookmark() {
+        if (bookmarkInFlight) return
+        bookmarkInFlight = true
         val current = _state.value.isBookmarked
-        // Optimistic update
-        _state.value = _state.value.copy(isBookmarked = !current)
+        _state.update { it.copy(isBookmarked = !current) }
         viewModelScope.launch {
             val result =
                 if (current) {
@@ -86,9 +87,9 @@ class ProfileViewViewModel(
                     apiService.bookmarkProfile(profileId)
                 }
             if (result is ApiResult.Error) {
-                // Revert on failure
-                _state.value = _state.value.copy(isBookmarked = current)
+                _state.update { it.copy(isBookmarked = current) }
             }
+            bookmarkInFlight = false
         }
     }
 }
