@@ -1,3 +1,5 @@
+#[path = "bookmarks.rs"]
+mod profiles_bookmarks;
 #[path = "http.rs"]
 mod profiles_http;
 #[path = "repo.rs"]
@@ -77,6 +79,51 @@ pub(super) async fn profile_get_full(
         return Ok(not_found_profile(&headers, &id));
     };
 
-    let data = full_profile_response(&profile, &user_pid, Some(user.id)).await?;
+    let mut data = full_profile_response(&profile, &user_pid, Some(user.id)).await?;
+
+    // Check if the viewer has bookmarked this profile
+    let viewer_profile = load_profile_by_user_id(user.id).await?;
+    if let Some(ref viewer) = viewer_profile {
+        data.is_bookmarked = profiles_bookmarks::is_bookmarked(viewer.id, profile_uuid).await?;
+    }
+
+    Ok(Json(DataResponse { data }).into_response())
+}
+
+pub(super) async fn profile_bookmark_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let target_uuid = super::parse_uuid(&id, "profile")?;
+    let Some(my_profile) = load_profile_by_user_id(user.id).await? else {
+        return Ok(not_found_profile(&headers, "me"));
+    };
+    profiles_bookmarks::profile_bookmark(&headers, &my_profile, target_uuid).await
+}
+
+pub(super) async fn profile_unbookmark_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let target_uuid = super::parse_uuid(&id, "profile")?;
+    let Some(my_profile) = load_profile_by_user_id(user.id).await? else {
+        return Ok(not_found_profile(&headers, "me"));
+    };
+    profiles_bookmarks::profile_unbookmark(my_profile.id, target_uuid).await
+}
+
+pub(super) async fn profiles_bookmarked_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let Some(my_profile) = load_profile_by_user_id(user.id).await? else {
+        return Ok(not_found_profile(&headers, "me"));
+    };
+    let data = profiles_bookmarks::profiles_bookmarked(my_profile.id, user.id).await?;
     Ok(Json(DataResponse { data }).into_response())
 }

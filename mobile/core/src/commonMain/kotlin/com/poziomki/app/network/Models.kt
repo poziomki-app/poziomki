@@ -114,6 +114,7 @@ data class ProfileWithTags(
     val gradientStart: String? = null,
     val gradientEnd: String? = null,
     val tags: List<Tag> = emptyList(),
+    val isBookmarked: Boolean = false,
 )
 
 @Serializable
