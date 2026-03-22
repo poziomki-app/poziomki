@@ -117,13 +117,6 @@ pub(in crate::api) async fn invalidate_auth_cache_for_token(token: &str) {
         .remove(&session_token_hash(token));
 }
 
-pub(in crate::api) async fn invalidate_auth_cache_for_user_id(user_id: i32) {
-    auth_cache()
-        .write()
-        .await
-        .retain(|_, entry| entry.user.id != user_id);
-}
-
 pub(in crate::api) async fn resolve_session_by_token(
     token: &str,
 ) -> std::result::Result<Option<Session>, crate::error::AppError> {
