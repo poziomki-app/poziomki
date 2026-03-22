@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.poziomki.app.data.repository.ProfileRepository
+import com.poziomki.app.network.ApiResult
+import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.ProfileWithTags
 import com.poziomki.app.session.SessionManager
 import com.poziomki.app.ui.navigation.Route
@@ -18,12 +20,14 @@ data class ProfileViewState(
     val profile: ProfileWithTags? = null,
     val isLoading: Boolean = true,
     val isOwnProfile: Boolean = false,
+    val isBookmarked: Boolean = false,
 )
 
 class ProfileViewViewModel(
     savedStateHandle: SavedStateHandle,
     private val profileRepository: ProfileRepository,
     private val sessionManager: SessionManager,
+    private val apiService: ApiService,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Route.ProfileView>()
     private val profileId = route.id
@@ -50,7 +54,12 @@ class ProfileViewViewModel(
         viewModelScope.launch {
             profileRepository.observeProfile(profileId).collect { profile ->
                 if (profile != null) {
-                    _state.value = _state.value.copy(profile = profile, isLoading = false)
+                    _state.value =
+                        _state.value.copy(
+                            profile = profile,
+                            isLoading = false,
+                            isBookmarked = profile.isBookmarked,
+                        )
                 }
             }
         }
@@ -61,6 +70,24 @@ class ProfileViewViewModel(
             val success = profileRepository.refreshProfile(profileId)
             if (!success) {
                 _state.value = _state.value.copy(isLoading = false)
+            }
+        }
+    }
+
+    fun toggleBookmark() {
+        val current = _state.value.isBookmarked
+        // Optimistic update
+        _state.value = _state.value.copy(isBookmarked = !current)
+        viewModelScope.launch {
+            val result =
+                if (current) {
+                    apiService.unbookmarkProfile(profileId)
+                } else {
+                    apiService.bookmarkProfile(profileId)
+                }
+            if (result is ApiResult.Error) {
+                // Revert on failure
+                _state.value = _state.value.copy(isBookmarked = current)
             }
         }
     }

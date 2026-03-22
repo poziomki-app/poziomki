@@ -153,6 +153,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    profile_bookmarks (profile_id, target_profile_id) {
+        profile_id -> Uuid,
+        target_profile_id -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     profile_tags (profile_id, tag_id) {
         profile_id -> Uuid,
         tag_id -> Uuid,
@@ -307,6 +315,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     message_reactions,
     messages,
     otp_codes,
+    profile_bookmarks,
     profile_tags,
     profiles,
     recommendation_feedback,

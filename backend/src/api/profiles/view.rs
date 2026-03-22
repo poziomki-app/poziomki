@@ -117,6 +117,7 @@ pub(in crate::api) async fn full_profile_response(
         gradient_start: profile.gradient_start.clone(),
         gradient_end: profile.gradient_end.clone(),
         tags: profile_tags,
+        is_bookmarked: false,
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
     })

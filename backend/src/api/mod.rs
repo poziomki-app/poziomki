@@ -49,11 +49,16 @@ fn auth_routes() -> Router<AppContext> {
 fn profiles_routes() -> Router<AppContext> {
     Router::new()
         .route("/me", get(profiles::profile_me))
+        .route("/bookmarked", get(profiles::profiles_bookmarked_handler))
         .route("/", post(profiles::profile_create))
         .route("/{id}", get(profiles::profile_get))
         .route("/{id}", patch(profiles::profile_update))
         .route("/{id}", delete(profiles::profile_delete))
         .route("/{id}/full", get(profiles::profile_get_full))
+        .route(
+            "/{id}/bookmark",
+            post(profiles::profile_bookmark_handler).delete(profiles::profile_unbookmark_handler),
+        )
         .layer(cache_layer("private, max-age=60"))
 }
 
