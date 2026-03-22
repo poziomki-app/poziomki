@@ -47,13 +47,12 @@ class AndroidFileSaver(
         return true
     }
 
-    @Suppress("DEPRECATION")
     private fun saveToLegacyDownloads(
         bytes: ByteArray,
         filename: String,
     ): Boolean {
         val downloadsDir =
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return false
         val file = File(downloadsDir, filename)
         file.writeBytes(bytes)
         return true
