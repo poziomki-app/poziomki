@@ -7,6 +7,7 @@ use crate::db::schema::{otp_codes, sessions};
 const CLEANUP_INTERVAL_SECS: u64 = 3600;
 
 pub(super) async fn run_cleanup_loop() {
+    tracing::info!("cleanup loop started (interval: {CLEANUP_INTERVAL_SECS}s)");
     loop {
         if let Err(error) = purge_expired_rows().await {
             tracing::warn!(%error, "session/otp cleanup failed");
