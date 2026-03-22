@@ -23,10 +23,11 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use super::state::{DataResponse, EventFeedbackRequest, MatchingQuery};
+use super::state::{DataResponse, EventFeedbackRequest, MatchingQuery, SuccessResponse};
+use crate::api::{error_response, ErrorSpec};
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{profiles, recommendation_feedback};
+use crate::db::schema::{events, profiles, recommendation_feedback};
 use matching_assembler::{batch_load_show_program, build_recommendations_response};
 use matching_repo::MatchingRepository;
 use matching_scoring::{
@@ -252,11 +253,43 @@ pub(super) async fn event_feedback(
 
     let mut conn = crate::db::conn().await?;
 
-    let profile_id: Uuid = profiles::table
+    // Issue 1: Return proper 404 when user has no profile
+    let Some(profile_id) = profiles::table
         .filter(profiles::user_id.eq(user.id))
         .select(profiles::id)
-        .first(&mut conn)
-        .await?;
+        .first::<Uuid>(&mut conn)
+        .await
+        .optional()?
+    else {
+        return Ok(error_response(
+            StatusCode::NOT_FOUND,
+            &headers,
+            ErrorSpec {
+                error: "Profile not found. Create a profile first.".to_string(),
+                code: "NOT_FOUND",
+                details: None,
+            },
+        ));
+    };
+
+    // Issue 3: Validate event exists before insert to avoid FK violation → 500
+    let event_exists = events::table
+        .find(event_uuid)
+        .select(events::id)
+        .first::<Uuid>(&mut conn)
+        .await
+        .optional()?;
+    if event_exists.is_none() {
+        return Ok(error_response(
+            StatusCode::NOT_FOUND,
+            &headers,
+            ErrorSpec {
+                error: format!("Event '{event_id}' not found"),
+                code: "NOT_FOUND",
+                details: None,
+            },
+        ));
+    }
 
     let now = Utc::now();
     diesel::insert_into(recommendation_feedback::table)
@@ -278,7 +311,11 @@ pub(super) async fn event_feedback(
         .execute(&mut conn)
         .await?;
 
-    Ok(StatusCode::NO_CONTENT.into_response())
+    // Issue 2: Return DataResponse<SuccessResponse> instead of 204 No Content
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 #[cfg(test)]
