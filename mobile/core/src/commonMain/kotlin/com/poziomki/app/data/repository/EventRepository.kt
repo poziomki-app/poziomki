@@ -30,7 +30,16 @@ class EventRepository(
 ) {
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
-        private const val RECOMMENDED_EVENTS_CACHE_KEY = "recommended_events"
+        private const val RECOMMENDED_CACHE_KEY = "recommended_events"
+
+        @Volatile
+        private var lastLat: Double? = null
+
+        @Volatile
+        private var lastLng: Double? = null
+
+        @Volatile
+        private var lastRadius: Int? = null
     }
 
     private val eventRoomManager = EventRoomRepository(db = db, api = api, chatClient = chatClient)
@@ -87,10 +96,12 @@ class EventRepository(
         forceRefresh: Boolean = false,
     ): List<Event> =
         withContext(Dispatchers.IO) {
-            if (!forceRefresh) {
+            val locationChanged = lat != lastLat || lng != lastLng || radiusM != lastRadius
+
+            if (!forceRefresh && !locationChanged) {
                 val cachedAt =
                     db.cacheStateQueries
-                        .selectByKey(RECOMMENDED_EVENTS_CACHE_KEY)
+                        .selectByKey(RECOMMENDED_CACHE_KEY)
                         .executeAsOneOrNull()
                         ?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) {
@@ -114,8 +125,11 @@ class EventRepository(
                                 isRecommended = true,
                             )
                         }
-                        db.cacheStateQueries.upsert(RECOMMENDED_EVENTS_CACHE_KEY, now)
+                        db.cacheStateQueries.upsert(RECOMMENDED_CACHE_KEY, now)
                     }
+                    lastLat = lat
+                    lastLng = lng
+                    lastRadius = radiusM
                     result.data
                 }
 
