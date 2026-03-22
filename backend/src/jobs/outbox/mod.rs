@@ -128,6 +128,9 @@ pub fn maybe_start_worker(_ctx: &AppContext) {
     tokio::spawn(async move {
         outbox_worker::run_worker_loop().await;
     });
+    tokio::spawn(async move {
+        outbox_worker::run_metrics_loop().await;
+    });
     tracing::info!("Outbox worker started");
 }
 
@@ -220,7 +223,7 @@ pub async fn outbox_stats_snapshot() -> Result<OutboxStatsSnapshot> {
     .get_result::<OutboxStatsRow>(&mut conn)
     .await?;
 
-    Ok(OutboxStatsSnapshot {
+    let snapshot = OutboxStatsSnapshot {
         pending_jobs: row.pending_jobs,
         ready_jobs: row.ready_jobs,
         retrying_jobs: row.retrying_jobs,
@@ -231,5 +234,8 @@ pub async fn outbox_stats_snapshot() -> Result<OutboxStatsSnapshot> {
         oldest_ready_job_age_seconds: row.oldest_ready_job_age_seconds,
         oldest_pending_job_age_seconds: row.oldest_pending_job_age_seconds,
         last_processed_at: row.last_processed_at,
-    })
+    };
+
+    crate::telemetry::update_outbox_metrics(&snapshot);
+    Ok(snapshot)
 }
