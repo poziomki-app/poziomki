@@ -201,7 +201,7 @@ private fun ExportDataSection(
     if (exportSuccess) {
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
         Text(
-            text = "Plik zapisano w folderze Pobrane.",
+            text = "Dane wyeksportowane pomyślnie.",
             fontFamily = nunito,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
