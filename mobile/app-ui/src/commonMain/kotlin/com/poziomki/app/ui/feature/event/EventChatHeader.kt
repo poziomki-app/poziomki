@@ -3,6 +3,7 @@ package com.poziomki.app.ui.feature.event
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +43,7 @@ import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
+import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -52,16 +54,10 @@ import com.poziomki.app.ui.shared.pluralizePolish
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @Composable
-@Suppress("LongMethod", "LongParameterList")
-fun EventChatHeader(
+fun EventCoverImage(
     event: Event,
-    onBack: () -> Unit,
-    onNavigateToProfile: (String) -> Unit,
-    onJoin: () -> Unit,
-    onLeave: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
 ) {
-    var showMenu by remember { mutableStateOf(false) }
-
     Box(
         modifier =
             Modifier
@@ -97,6 +93,94 @@ fun EventChatHeader(
                     ),
         )
 
+        content()
+    }
+}
+
+@Composable
+@Suppress("LongMethod")
+fun EventMetaRows(event: Event) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = PhosphorIcons.Fill.CalendarDots,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = TextSecondary,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = formatEventDateFull(event.startsAt),
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary,
+        )
+    }
+
+    event.location?.let { location ->
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = PhosphorIcons.Fill.MapPin,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = TextSecondary,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = location,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                maxLines = 1,
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(2.dp))
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = PhosphorIcons.Fill.UsersThree,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = TextSecondary,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        val maxAttendees = event.maxAttendees
+        val attendeesText =
+            if (maxAttendees != null) {
+                "${event.attendeesCount} / $maxAttendees " +
+                    pluralizePolish(maxAttendees, "miejsce", "miejsca", "miejsc")
+            } else {
+                pluralizePolish(
+                    event.attendeesCount,
+                    "uczestnik",
+                    "uczestników",
+                    "uczestników",
+                )
+            }
+        Text(
+            text = attendeesText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary,
+        )
+    }
+}
+
+@Composable
+@Suppress("LongMethod", "LongParameterList")
+fun EventChatHeader(
+    event: Event,
+    isCreator: Boolean,
+    onBack: () -> Unit,
+    onNavigateToProfile: (String) -> Unit,
+    onJoin: () -> Unit,
+    onLeave: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    EventCoverImage(event = event) {
         Row(
             modifier =
                 Modifier
@@ -127,7 +211,27 @@ fun EventChatHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                 ) {
-                    if (event.isAttending) {
+                    if (isCreator) {
+                        DropdownMenuItem(
+                            text = { Text("Edytuj") },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Usuń wydarzenie",
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                        )
+                    } else if (event.isAttending) {
                         DropdownMenuItem(
                             text = { Text("Opuść wydarzenie") },
                             onClick = {
@@ -184,62 +288,21 @@ fun EventChatHeader(
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = PhosphorIcons.Fill.CalendarDots,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = TextSecondary,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = formatEventDateFull(event.startsAt),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                )
-            }
-
-            event.location?.let { location ->
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = PhosphorIcons.Fill.MapPin,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = TextSecondary,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = location,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = PhosphorIcons.Fill.UsersThree,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = TextSecondary,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text =
-                        pluralizePolish(
-                            event.attendeesCount,
-                            "uczestnik",
-                            "uczestników",
-                            "uczestników",
-                        ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                )
-            }
+            EventMetaRows(event = event)
         }
+    }
+
+    if (showDeleteDialog) {
+        ConfirmDialog(
+            title = "usuń wydarzenie",
+            message = "czy na pewno chcesz usunąć to wydarzenie? tej operacji nie można cofnąć.",
+            confirmText = "usuń",
+            isDestructive = true,
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete()
+            },
+            onDismiss = { showDeleteDialog = false },
+        )
     }
 }

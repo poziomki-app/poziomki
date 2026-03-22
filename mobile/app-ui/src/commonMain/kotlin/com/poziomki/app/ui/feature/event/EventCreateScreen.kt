@@ -77,8 +77,12 @@ import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraPosition
@@ -96,6 +100,7 @@ import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun EventCreateScreen(
     onBack: () -> Unit,
     onCreated: () -> Unit,
@@ -112,13 +117,11 @@ fun EventCreateScreen(
     var showLocationPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
-    var selectedHour by remember { mutableStateOf(12) }
-    var selectedMinute by remember { mutableStateOf(0) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
-    var selectedEndDateMillis by remember { mutableStateOf<Long?>(null) }
-    var selectedEndHour by remember { mutableStateOf(23) }
+    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
+    var selectedHour by remember { mutableStateOf(18) }
+    var selectedMinute by remember { mutableStateOf(0) }
+    var selectedEndHour by remember { mutableStateOf(20) }
     var selectedEndMinute by remember { mutableStateOf(0) }
 
     val isEditMode = eventId != null
@@ -129,6 +132,50 @@ fun EventCreateScreen(
         }
     }
 
+    // Initialize defaults for create mode (tomorrow 18:00-20:00)
+    LaunchedEffect(Unit) {
+        if (!isEditMode && state.startsAt.isBlank()) {
+            val tz = TimeZone.currentSystemDefault()
+            val tomorrow =
+                Clock.System
+                    .now()
+                    .plus(1, DateTimeUnit.DAY, tz)
+                    .toLocalDateTime(tz)
+                    .date
+            val tomorrowMillis = tomorrow.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+            selectedDateMillis = tomorrowMillis
+            selectedHour = 18
+            selectedMinute = 0
+            selectedEndHour = 20
+            selectedEndMinute = 0
+            viewModel.updateStartsAt(toIsoString(tomorrowMillis, 18, 0))
+            viewModel.updateEndsAt(toIsoString(tomorrowMillis, 20, 0))
+        }
+    }
+
+    // Initialize date/time pickers from loaded event data (edit mode)
+    LaunchedEffect(state.startsAt) {
+        if (state.startsAt.isNotBlank() && selectedDateMillis == null) {
+            runCatching {
+                val instant = Instant.parse(state.startsAt)
+                val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+                selectedDateMillis = dt.date.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+                selectedHour = dt.hour
+                selectedMinute = dt.minute
+            }
+        }
+    }
+    LaunchedEffect(state.endsAt) {
+        if (state.endsAt.isNotBlank() && isEditMode) {
+            runCatching {
+                val instant = Instant.parse(state.endsAt)
+                val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+                selectedEndHour = dt.hour
+                selectedEndMinute = dt.minute
+            }
+        }
+    }
+
     // Parse existing startsAt for display
     val dateDisplay =
         remember(state.startsAt) {
@@ -136,7 +183,9 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${dt.monthNumber.toString().padStart(2, '0')}.${dt.year}"
+                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${
+                        dt.monthNumber.toString().padStart(2, '0')
+                    }.${dt.year}"
                 }.getOrDefault("")
             } else {
                 ""
@@ -149,21 +198,9 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
-                }.getOrDefault("")
-            } else {
-                ""
-            }
-        }
-
-    // Parse existing endsAt for display
-    val endDateDisplay =
-        remember(state.endsAt) {
-            if (state.endsAt.isNotBlank()) {
-                runCatching {
-                    val instant = Instant.parse(state.endsAt)
-                    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${dt.monthNumber.toString().padStart(2, '0')}.${dt.year}"
+                    "${dt.hour.toString().padStart(2, '0')}:${
+                        dt.minute.toString().padStart(2, '0')
+                    }"
                 }.getOrDefault("")
             } else {
                 ""
@@ -176,7 +213,9 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.endsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
+                    "${dt.hour.toString().padStart(2, '0')}:${
+                        dt.minute.toString().padStart(2, '0')
+                    }"
                 }.getOrDefault("")
             } else {
                 ""
@@ -193,7 +232,6 @@ fun EventCreateScreen(
                 .background(Background)
                 .padding(top = topInsets),
     ) {
-        // Top bar
         ScreenHeader(
             title = if (isEditMode) "edytuj wydarzenie" else "nowe wydarzenie",
             onBack = onBack,
@@ -206,7 +244,7 @@ fun EventCreateScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = PoziomkiTheme.spacing.md),
         ) {
-            // Cover image section
+            // Cover image
             SectionLabel("zdjęcie")
             val coverImageUrl = state.coverImageUrl
             val coverImageBytes = state.coverImageBytes
@@ -229,7 +267,8 @@ fun EventCreateScreen(
                             contentScale = ContentScale.Crop,
                         )
                     } else if (coverImageBytes != null) {
-                        val imageBitmap = remember(coverImageBytes) { decodeImageBytes(coverImageBytes) }
+                        val imageBitmap =
+                            remember(coverImageBytes) { decodeImageBytes(coverImageBytes) }
                         if (imageBitmap != null) {
                             androidx.compose.foundation.Image(
                                 bitmap = imageBitmap,
@@ -256,7 +295,6 @@ fun EventCreateScreen(
                         }
                     }
 
-                    // Remove button
                     Surface(
                         modifier =
                             Modifier
@@ -278,7 +316,6 @@ fun EventCreateScreen(
                     }
                 }
             } else {
-                // Dashed placeholder
                 Surface(
                     modifier =
                         Modifier
@@ -314,7 +351,7 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
             // Title
-            SectionLabel("nazwa")
+            SectionLabel("nazwa", required = true)
             PoziomkiTextField(
                 value = state.title,
                 onValueChange = viewModel::updateTitle,
@@ -356,7 +393,7 @@ fun EventCreateScreen(
                 }
             }
 
-            // Small map preview when location is selected
+            // Map preview
             val lat = state.latitude
             val lng = state.longitude
             if (lat != null && lng != null) {
@@ -371,7 +408,8 @@ fun EventCreateScreen(
                 ) {
                     MaplibreMap(
                         modifier = Modifier.fillMaxSize(),
-                        baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/positron"),
+                        baseStyle =
+                            BaseStyle.Uri("https://tiles.openfreemap.org/styles/positron"),
                         cameraState =
                             rememberCameraState(
                                 firstPosition =
@@ -391,10 +429,7 @@ fun EventCreateScreen(
                                     ),
                             ),
                     ) {
-                        val source =
-                            rememberGeoJsonSource(
-                                data = pointGeoJson(lat, lng),
-                            )
+                        val source = rememberGeoJsonSource(data = pointGeoJson(lat, lng))
                         CircleLayer(
                             id = "preview-marker",
                             source = source,
@@ -422,7 +457,7 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            SectionLabel("limit uczestników (opcjonalnie)")
+            SectionLabel("limit uczestników")
             PoziomkiTextField(
                 value = state.attendeeLimit,
                 onValueChange = viewModel::updateAttendeeLimit,
@@ -433,89 +468,84 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            // Date and time row
-            SectionLabel("start")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            ) {
-                // Date chip
-                Surface(
-                    modifier =
-                        Modifier
-                            .weight(2f)
-                            .clickable { showDatePicker = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceColor,
-                ) {
-                    Text(
-                        text = dateDisplay.ifBlank { "01.01.2025" },
-                        fontFamily = NunitoFamily,
-                        color = if (dateDisplay.isBlank()) TextMuted else TextPrimary,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
+            // Date and time — consolidated
+            SectionLabel("kiedy", required = true)
 
-                // Time chip
-                Surface(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .clickable { showTimePicker = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceColor,
-                ) {
-                    Text(
-                        text = timeDisplay.ifBlank { "21:00" },
-                        fontFamily = NunitoFamily,
-                        color = if (timeDisplay.isBlank()) TextMuted else TextPrimary,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
+            // Date chip
+            Surface(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker = true },
+                shape = RoundedCornerShape(14.dp),
+                color = SurfaceColor,
+            ) {
+                Text(
+                    text = dateDisplay.ifBlank { "wybierz datę" },
+                    fontFamily = NunitoFamily,
+                    color = if (dateDisplay.isBlank()) TextMuted else TextPrimary,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(16.dp),
+                )
             }
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
-            // End date (optional)
-            SectionLabel("koniec (opcjonalnie)")
+            // Start time + End time
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
             ) {
-                Surface(
-                    modifier =
-                        Modifier
-                            .weight(2f)
-                            .clickable { showEndDatePicker = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceColor,
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = endDateDisplay.ifBlank { "01.01.2025" },
+                        text = "od",
                         fontFamily = NunitoFamily,
-                        color = if (endDateDisplay.isBlank()) TextMuted else TextPrimary,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(16.dp),
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
                     )
+                    Surface(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showTimePicker = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceColor,
+                    ) {
+                        Text(
+                            text = timeDisplay.ifBlank { "18:00" },
+                            fontFamily = NunitoFamily,
+                            color = if (timeDisplay.isBlank()) TextMuted else TextPrimary,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
                 }
 
-                Surface(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .clickable { showEndTimePicker = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceColor,
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = endTimeDisplay.ifBlank { "21:00" },
+                        text = "do (opcjonalnie)",
                         fontFamily = NunitoFamily,
-                        color = if (endTimeDisplay.isBlank()) TextMuted else TextPrimary,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(16.dp),
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
                     )
+                    Surface(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showEndTimePicker = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceColor,
+                    ) {
+                        Text(
+                            text = endTimeDisplay.ifBlank { "20:00" },
+                            fontFamily = NunitoFamily,
+                            color = if (endTimeDisplay.isBlank()) TextMuted else TextPrimary,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
                 }
             }
 
@@ -544,17 +574,8 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            // Help text
-            Text(
-                text = "Po utworzeniu możesz zaprosić ludzi, udostępniając link do czatu wydarzenia.",
-                fontFamily = NunitoFamily,
-                color = TextMuted,
-                fontSize = 13.sp,
-            )
-
             // Error
             state.error?.let { error ->
-                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
                 Text(
                     text = error,
                     color = MaterialTheme.colorScheme.error,
@@ -565,16 +586,20 @@ fun EventCreateScreen(
                     kotlinx.coroutines.delay(5000)
                     viewModel.clearError()
                 }
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
             }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-            // Submit button
+            // Submit
             PoziomkiButton(
                 text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
                 onClick = { viewModel.saveEvent(onCreated) },
                 variant = ButtonVariant.PRIMARY,
-                enabled = state.title.isNotBlank() && state.startsAt.isNotBlank() && state.attendeeLimitError == null,
+                enabled =
+                    state.title.isNotBlank() &&
+                        state.startsAt.isNotBlank() &&
+                        state.attendeeLimitError == null,
                 loading = state.isLoading,
             )
 
@@ -584,17 +609,27 @@ fun EventCreateScreen(
 
     // Date Picker Dialog
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+        val datePickerState =
+            rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        selectedDateMillis = millis
-                        updateStartsAt(millis, selectedHour, selectedMinute, viewModel)
-                    }
-                    showDatePicker = false
-                }) {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            selectedDateMillis = millis
+                            viewModel.updateStartsAt(
+                                toIsoString(millis, selectedHour, selectedMinute),
+                            )
+                            if (state.endsAt.isNotBlank()) {
+                                viewModel.updateEndsAt(
+                                    toIsoString(millis, selectedEndHour, selectedEndMinute),
+                                )
+                            }
+                        }
+                        showDatePicker = false
+                    },
+                ) {
                     Text("OK")
                 }
             },
@@ -622,9 +657,10 @@ fun EventCreateScreen(
         )
     }
 
-    // Time Picker Dialog
+    // Start Time Picker Dialog
     if (showTimePicker) {
-        val timePickerState = rememberTimePickerState(initialHour = selectedHour, initialMinute = selectedMinute)
+        val timePickerState =
+            rememberTimePickerState(initialHour = selectedHour, initialMinute = selectedMinute)
         Dialog(onDismissRequest = { showTimePicker = false }) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -635,7 +671,7 @@ fun EventCreateScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Wybierz godzinę",
+                        text = "Godzina rozpoczęcia",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 16.dp),
                     )
@@ -650,14 +686,18 @@ fun EventCreateScreen(
                         TextButton(onClick = { showTimePicker = false }) {
                             Text("Anuluj")
                         }
-                        TextButton(onClick = {
-                            selectedHour = timePickerState.hour
-                            selectedMinute = timePickerState.minute
-                            selectedDateMillis?.let { millis ->
-                                updateStartsAt(millis, selectedHour, selectedMinute, viewModel)
-                            }
-                            showTimePicker = false
-                        }) {
+                        TextButton(
+                            onClick = {
+                                selectedHour = timePickerState.hour
+                                selectedMinute = timePickerState.minute
+                                selectedDateMillis?.let { millis ->
+                                    viewModel.updateStartsAt(
+                                        toIsoString(millis, selectedHour, selectedMinute),
+                                    )
+                                }
+                                showTimePicker = false
+                            },
+                        ) {
                             Text("OK")
                         }
                     }
@@ -666,35 +706,13 @@ fun EventCreateScreen(
         }
     }
 
-    // End Date Picker Dialog
-    if (showEndDatePicker) {
-        val endDatePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedEndDateMillis)
-        DatePickerDialog(
-            onDismissRequest = { showEndDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    endDatePickerState.selectedDateMillis?.let { millis ->
-                        selectedEndDateMillis = millis
-                        updateEndsAt(millis, selectedEndHour, selectedEndMinute, viewModel)
-                    }
-                    showEndDatePicker = false
-                }) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) {
-                    Text("Anuluj")
-                }
-            },
-        ) {
-            DatePicker(state = endDatePickerState)
-        }
-    }
-
     // End Time Picker Dialog
     if (showEndTimePicker) {
-        val endTimePickerState = rememberTimePickerState(initialHour = selectedEndHour, initialMinute = selectedEndMinute)
+        val endTimePickerState =
+            rememberTimePickerState(
+                initialHour = selectedEndHour,
+                initialMinute = selectedEndMinute,
+            )
         Dialog(onDismissRequest = { showEndTimePicker = false }) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -705,7 +723,7 @@ fun EventCreateScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Wybierz godzin\u0119 zako\u0144czenia",
+                        text = "Godzina zakończenia",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 16.dp),
                     )
@@ -720,14 +738,22 @@ fun EventCreateScreen(
                         TextButton(onClick = { showEndTimePicker = false }) {
                             Text("Anuluj")
                         }
-                        TextButton(onClick = {
-                            selectedEndHour = endTimePickerState.hour
-                            selectedEndMinute = endTimePickerState.minute
-                            selectedEndDateMillis?.let { millis ->
-                                updateEndsAt(millis, selectedEndHour, selectedEndMinute, viewModel)
-                            }
-                            showEndTimePicker = false
-                        }) {
+                        TextButton(
+                            onClick = {
+                                selectedEndHour = endTimePickerState.hour
+                                selectedEndMinute = endTimePickerState.minute
+                                selectedDateMillis?.let { millis ->
+                                    viewModel.updateEndsAt(
+                                        toIsoString(
+                                            millis,
+                                            selectedEndHour,
+                                            selectedEndMinute,
+                                        ),
+                                    )
+                                }
+                                showEndTimePicker = false
+                            },
+                        ) {
                             Text("OK")
                         }
                     }
@@ -737,32 +763,17 @@ fun EventCreateScreen(
     }
 }
 
-private fun updateStartsAt(
-    dateMillis: Long,
-    hour: Int,
-    minute: Int,
-    viewModel: EventCreateViewModel,
-) {
-    viewModel.updateStartsAt(toIsoString(dateMillis, hour, minute))
-}
-
-private fun updateEndsAt(
-    dateMillis: Long,
-    hour: Int,
-    minute: Int,
-    viewModel: EventCreateViewModel,
-) {
-    viewModel.updateEndsAt(toIsoString(dateMillis, hour, minute))
-}
-
 private fun toIsoString(
     dateMillis: Long,
     hour: Int,
     minute: Int,
 ): String {
-    val dateInstant = Instant.fromEpochMilliseconds(dateMillis)
-    val dateLd = dateInstant.toLocalDateTime(TimeZone.currentSystemDefault())
-    return "${dateLd.year}-${dateLd.monthNumber.toString().padStart(2, '0')}-${dateLd.dayOfMonth.toString().padStart(2, '0')}T${
-        hour.toString().padStart(2, '0')
-    }:${minute.toString().padStart(2, '0')}:00Z"
+    val dateOnly =
+        Instant.fromEpochMilliseconds(dateMillis).toLocalDateTime(TimeZone.UTC).date
+    val startOfDay = dateOnly.atStartOfDayIn(TimeZone.currentSystemDefault())
+    val instant =
+        startOfDay
+            .plus(hour.toLong(), DateTimeUnit.HOUR)
+            .plus(minute.toLong(), DateTimeUnit.MINUTE)
+    return instant.toString()
 }
