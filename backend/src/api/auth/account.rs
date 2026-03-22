@@ -18,26 +18,140 @@ type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{profiles, sessions, users};
+use crate::db::schema::{
+    conversations, event_attendees, events, profile_tags, profiles, sessions, uploads,
+    user_settings, users,
+};
 
 async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
 
+    let profile_id: Option<uuid::Uuid> = profiles::table
+        .filter(profiles::user_id.eq(user_id))
+        .select(profiles::id)
+        .first(&mut conn)
+        .await
+        .optional()?;
+
+    // Collect upload filenames before the transaction for S3 cleanup afterwards
+    let upload_filenames: Vec<String> = if let Some(pid) = profile_id {
+        uploads::table
+            .filter(uploads::owner_id.eq(pid))
+            .select(uploads::filename)
+            .load(&mut conn)
+            .await?
+    } else {
+        vec![]
+    };
+
     conn.transaction(|conn| {
         Box::pin(async move {
-            diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
+            if let Some(pid) = profile_id {
+                // Collect upload IDs before removing the FK reference
+                let upload_ids: Vec<uuid::Uuid> = uploads::table
+                    .filter(uploads::owner_id.eq(pid))
+                    .select(uploads::id)
+                    .load(conn)
+                    .await?;
+
+                // Break uploads → profiles FK (owner_id is nullable)
+                diesel::update(uploads::table.filter(uploads::owner_id.eq(pid)))
+                    .set(uploads::owner_id.eq(None::<uuid::Uuid>))
+                    .execute(conn)
+                    .await?;
+
+                // Remove user from events they attend (no CASCADE on profile_id)
+                diesel::delete(event_attendees::table.filter(event_attendees::profile_id.eq(pid)))
+                    .execute(conn)
+                    .await?;
+
+                // Remove profile tags (no CASCADE)
+                diesel::delete(profile_tags::table.filter(profile_tags::profile_id.eq(pid)))
+                    .execute(conn)
+                    .await?;
+
+                // Delete DM conversations (cascades → conv_members, messages, reactions)
+                diesel::delete(
+                    conversations::table
+                        .filter(conversations::kind.eq("dm"))
+                        .filter(
+                            conversations::user_low_id
+                                .eq(user_id)
+                                .or(conversations::user_high_id.eq(user_id)),
+                        ),
+                )
                 .execute(conn)
                 .await?;
-            diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+
+                // Delete user's events (cascades → attendees, tags, interactions,
+                // feedback, event conversations + their messages)
+                diesel::delete(events::table.filter(events::creator_id.eq(pid)))
+                    .execute(conn)
+                    .await?;
+
+                // Delete user settings (no CASCADE)
+                diesel::delete(user_settings::table.filter(user_settings::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+
+                // Delete profile (cascades → event_interactions, recommendation_feedback, reports)
+                diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+
+                // Delete sessions
+                diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+
+                // Delete user (cascades → conv_members, messages, reactions, push_subscriptions)
+                diesel::delete(users::table.find(user_id))
+                    .execute(conn)
+                    .await?;
+
+                // Clean up orphaned upload rows (safe: all message FK refs are gone)
+                if !upload_ids.is_empty() {
+                    diesel::delete(uploads::table.filter(uploads::id.eq_any(&upload_ids)))
+                        .execute(conn)
+                        .await?;
+                }
+            } else {
+                // No profile — clean up user-level data only
+                diesel::delete(
+                    conversations::table
+                        .filter(conversations::kind.eq("dm"))
+                        .filter(
+                            conversations::user_low_id
+                                .eq(user_id)
+                                .or(conversations::user_high_id.eq(user_id)),
+                        ),
+                )
                 .execute(conn)
                 .await?;
-            diesel::delete(users::table.find(user_id))
-                .execute(conn)
-                .await?;
+
+                diesel::delete(user_settings::table.filter(user_settings::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+
+                diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+
+                diesel::delete(users::table.find(user_id))
+                    .execute(conn)
+                    .await?;
+            }
+
             Ok::<(), diesel::result::Error>(())
         })
     })
     .await?;
+
+    // Best-effort S3 cleanup (outside transaction — external side-effect)
+    for filename in &upload_filenames {
+        crate::api::uploads::delete_upload_objects(filename).await;
+    }
+
     Ok(())
 }
 
@@ -55,6 +169,7 @@ pub(in crate::api) async fn delete_account(
     }
 
     delete_user_data(user.id).await?;
+    invalidate_auth_cache_for_user_id(user.id).await;
 
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
