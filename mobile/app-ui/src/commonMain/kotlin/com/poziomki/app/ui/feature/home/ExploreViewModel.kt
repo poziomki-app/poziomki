@@ -25,7 +25,7 @@ data class ExploreState(
     val isSearching: Boolean = false,
 ) {
     companion object {
-        const val RECOMMENDED_COUNT = 5
+        const val RECOMMENDED_COUNT = 4
     }
 
     val recommendedProfiles get() = profiles.take(RECOMMENDED_COUNT)
