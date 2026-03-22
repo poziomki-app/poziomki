@@ -97,6 +97,11 @@ UPDATE event
 SET is_recommended = 0
 WHERE is_dirty = 0;
 
+clearSavedFlags:
+UPDATE event
+SET is_saved = 0
+WHERE is_dirty = 0;
+
 replaceId:
 UPDATE event
 SET id = ?
