@@ -81,11 +81,7 @@ pub(super) async fn profile_get_full(
 
     let mut data = full_profile_response(&profile, &user_pid, Some(user.id)).await?;
 
-    // Check if the viewer has bookmarked this profile
-    let viewer_profile = load_profile_by_user_id(user.id).await?;
-    if let Some(ref viewer) = viewer_profile {
-        data.is_bookmarked = profiles_bookmarks::is_bookmarked(viewer.id, profile_uuid).await?;
-    }
+    data.is_bookmarked = profiles_bookmarks::is_bookmarked_by_user(user.id, profile_uuid).await?;
 
     Ok(Json(DataResponse { data }).into_response())
 }
