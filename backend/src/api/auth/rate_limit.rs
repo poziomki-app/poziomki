@@ -14,6 +14,7 @@ const AUTH_RESEND_OTP_MAX_ATTEMPTS: u32 = 12;
 const AUTH_FORGOT_PASSWORD_MAX_ATTEMPTS: u32 = 5;
 const AUTH_FORGOT_PASSWORD_VERIFY_MAX_ATTEMPTS: u32 = 25;
 const AUTH_FORGOT_PASSWORD_RESEND_MAX_ATTEMPTS: u32 = 5;
+const AUTH_RESET_PASSWORD_MAX_ATTEMPTS: u32 = 5;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum AuthRateLimitAction {
@@ -24,6 +25,7 @@ pub(super) enum AuthRateLimitAction {
     ForgotPassword,
     ForgotPasswordVerify,
     ForgotPasswordResend,
+    ResetPassword,
 }
 
 impl AuthRateLimitAction {
@@ -36,6 +38,7 @@ impl AuthRateLimitAction {
             Self::ForgotPassword => AUTH_FORGOT_PASSWORD_MAX_ATTEMPTS,
             Self::ForgotPasswordVerify => AUTH_FORGOT_PASSWORD_VERIFY_MAX_ATTEMPTS,
             Self::ForgotPasswordResend => AUTH_FORGOT_PASSWORD_RESEND_MAX_ATTEMPTS,
+            Self::ResetPassword => AUTH_RESET_PASSWORD_MAX_ATTEMPTS,
         }
     }
 
@@ -48,6 +51,7 @@ impl AuthRateLimitAction {
             Self::ForgotPassword => "auth_forgot_password_email",
             Self::ForgotPasswordVerify => "auth_forgot_password_verify_email",
             Self::ForgotPasswordResend => "auth_forgot_password_resend_email",
+            Self::ResetPassword => "auth_reset_password",
         }
     }
 }
