@@ -159,6 +159,7 @@ class ProfileRepository(
             }
         }
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun updateProfile(
         id: String,
         request: UpdateProfileRequest,
@@ -202,7 +203,11 @@ class ProfileRepository(
             if (connectivityMonitor.isOnline.value) {
                 when (val result = api.updateProfile(id, request)) {
                     is ApiResult.Success -> {
-                        upsertProfile(result.data, isOwn = current?.is_own == 1L)
+                        upsertProfile(
+                            result.data,
+                            isOwn = current?.is_own == 1L,
+                            isBookmarked = current?.is_bookmarked == 1L,
+                        )
                         result
                     }
 
