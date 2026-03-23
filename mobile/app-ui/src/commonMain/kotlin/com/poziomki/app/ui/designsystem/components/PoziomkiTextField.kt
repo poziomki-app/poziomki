@@ -23,7 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,6 +46,7 @@ import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun PoziomkiTextField(
     value: String,
@@ -57,6 +61,7 @@ fun PoziomkiTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     trailingContent: @Composable (() -> Unit)? = null,
+    contentType: ContentType? = null,
 ) {
     val nunito = NunitoFamily
     val shape = RoundedCornerShape(PoziomkiTheme.radius.md)
@@ -99,7 +104,14 @@ fun PoziomkiTextField(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .padding(horizontal = 16.dp, vertical = if (singleLine) 0.dp else 12.dp),
+                            .padding(horizontal = 16.dp, vertical = if (singleLine) 0.dp else 12.dp)
+                            .then(
+                                if (contentType != null) {
+                                    Modifier.semantics { this.contentType = contentType }
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     singleLine = singleLine,
                     maxLines = maxLines,
                     minLines = minLines,
@@ -147,6 +159,7 @@ fun PoziomkiTextField(
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 fun PoziomkiPasswordField(
     value: String,
@@ -156,6 +169,7 @@ fun PoziomkiPasswordField(
     placeholder: String? = null,
     error: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+    contentType: ContentType? = null,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -173,6 +187,7 @@ fun PoziomkiPasswordField(
             } else {
                 PasswordVisualTransformation()
             },
+        contentType = contentType,
         trailingContent = {
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                 Icon(
