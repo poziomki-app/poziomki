@@ -172,7 +172,10 @@ pub(super) async fn forgot_password(
         }
     }
 
-    Ok(Json(SuccessResponse { success: true }).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 pub(super) async fn forgot_password_verify(
@@ -217,7 +220,10 @@ pub(super) async fn forgot_password_resend(
     }
 
     maybe_resend_forgot_password_otp(&email).await?;
-    Ok(Json(SuccessResponse { success: true }).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 pub(super) async fn reset_password(
