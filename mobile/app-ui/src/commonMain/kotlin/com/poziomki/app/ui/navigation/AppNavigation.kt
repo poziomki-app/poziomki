@@ -74,8 +74,11 @@ import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.feature.auth.ForgotPasswordScreen
+import com.poziomki.app.ui.feature.auth.ForgotPasswordVerifyScreen
 import com.poziomki.app.ui.feature.auth.LoginScreen
 import com.poziomki.app.ui.feature.auth.RegisterScreen
+import com.poziomki.app.ui.feature.auth.ResetPasswordScreen
 import com.poziomki.app.ui.feature.auth.VerifyScreen
 import com.poziomki.app.ui.feature.chat.ChatScreen
 import com.poziomki.app.ui.feature.chat.NewChatScreen
@@ -217,6 +220,9 @@ fun AppNavigation(
                             popUpTo(Route.AuthGraph) { inclusive = true }
                         }
                     },
+                    onForgotPassword = {
+                        navController.navigate(Route.ForgotPassword())
+                    },
                     prefillEmail = login.prefillEmail,
                 )
             }
@@ -238,6 +244,44 @@ fun AppNavigation(
                 VerifyScreen(
                     email = verify.email,
                     onVerifySuccess = {
+                        navController.navigate(Route.OnboardingGraph) {
+                            popUpTo(Route.AuthGraph) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable<Route.ForgotPassword> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.ForgotPassword>()
+                ForgotPasswordScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onSuccess = { email ->
+                        navController.navigate(Route.ForgotPasswordVerify(email))
+                    },
+                    prefillEmail = route.prefillEmail,
+                )
+            }
+            composable<Route.ForgotPasswordVerify> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.ForgotPasswordVerify>()
+                ForgotPasswordVerifyScreen(
+                    email = route.email,
+                    onVerifySuccess = { resetToken ->
+                        navController.navigate(
+                            Route.ResetPassword(email = route.email, resetToken = resetToken),
+                        )
+                    },
+                )
+            }
+            composable<Route.ResetPassword> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.ResetPassword>()
+                ResetPasswordScreen(
+                    email = route.email,
+                    resetToken = route.resetToken,
+                    onSuccess = {
+                        navController.navigate(Route.MainGraph) {
+                            popUpTo(Route.AuthGraph) { inclusive = true }
+                        }
+                    },
+                    onNeedsOnboarding = {
                         navController.navigate(Route.OnboardingGraph) {
                             popUpTo(Route.AuthGraph) { inclusive = true }
                         }

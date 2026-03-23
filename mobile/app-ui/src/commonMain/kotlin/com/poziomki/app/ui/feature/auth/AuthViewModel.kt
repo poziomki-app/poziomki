@@ -19,6 +19,7 @@ data class AuthUiState(
     val resendCooldownSeconds: Int = 0,
 )
 
+@Suppress("TooManyFunctions")
 class AuthViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
@@ -235,5 +236,120 @@ class AuthViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun forgotPassword(
+        email: String,
+        onSuccess: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState(isLoading = true)
+            when (val result = apiService.forgotPassword(email)) {
+                is ApiResult.Success -> {
+                    _uiState.value = AuthUiState()
+                    onSuccess()
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        AuthUiState(error = localizeAuthError(result.code, result.message))
+                }
+            }
+        }
+    }
+
+    fun forgotPasswordVerify(
+        email: String,
+        otp: String,
+        onSuccess: (String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            when (val result = apiService.forgotPasswordVerify(email, otp)) {
+                is ApiResult.Success -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = null)
+                    onSuccess(result.data.resetToken)
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            error = localizeAuthError(result.code, result.message),
+                        )
+                }
+            }
+        }
+    }
+
+    fun forgotPasswordResend(email: String) {
+        if (_uiState.value.resendCooldownSeconds > 0) return
+
+        viewModelScope.launch {
+            when (apiService.forgotPasswordResend(email)) {
+                is ApiResult.Success -> {
+                    _uiState.value = _uiState.value.copy(otpResent = true)
+                    launch {
+                        delay(3_000)
+                        _uiState.value = _uiState.value.copy(otpResent = false)
+                    }
+                }
+
+                is ApiResult.Error -> { /* silently fail */ }
+            }
+            startResendCooldown()
+        }
+    }
+
+    @Suppress("CyclomaticComplexMethod")
+    fun resetPassword(
+        resetToken: String,
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onNeedsOnboarding: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState(isLoading = true)
+            when (val result = apiService.resetPassword(resetToken, newPassword)) {
+                is ApiResult.Success -> {
+                    val user = result.data.user
+                    val token = result.data.token
+                    if (user != null && !token.isNullOrBlank()) {
+                        sessionManager.saveSession(
+                            token = token,
+                            userId = user.id,
+                            email = user.email,
+                            name = user.name,
+                        )
+                        when (val profileResult = apiService.getMyProfile()) {
+                            is ApiResult.Success -> {
+                                sessionManager.saveProfileId(profileResult.data.id)
+                                _uiState.value = AuthUiState()
+                                onSuccess()
+                            }
+
+                            is ApiResult.Error -> {
+                                if (profileResult.code == "NOT_FOUND" ||
+                                    profileResult.status == HTTP_NOT_FOUND
+                                ) {
+                                    _uiState.value = AuthUiState()
+                                    onNeedsOnboarding()
+                                } else {
+                                    _uiState.value = AuthUiState()
+                                    onSuccess()
+                                }
+                            }
+                        }
+                    } else {
+                        _uiState.value = AuthUiState(error = "No user data in response")
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        AuthUiState(error = localizeAuthError(result.code, result.message))
+                }
+            }
+        }
     }
 }

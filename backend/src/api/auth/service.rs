@@ -8,6 +8,8 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+use diesel_async::AsyncConnection;
+
 use super::super::{
     error_response,
     state::{
@@ -17,7 +19,7 @@ use super::super::{
     ErrorSpec,
 };
 use crate::db::models::users::{NewUser, User, UserChangeset};
-use crate::db::schema::users;
+use crate::db::schema::{sessions, users};
 use crate::jobs::enqueue_otp_email;
 
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
@@ -240,6 +242,130 @@ pub(super) async fn verify_otp_inner(
             "token": session.token,
             "session": session_model_to_view(&session.model),
             "status": true,
+        }),
+    })
+    .into_response())
+}
+
+// --- Forgot password ---
+
+const RESET_TOKEN_TTL_SECS: i64 = 600;
+
+fn hash_reset_token(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write;
+    let digest = Sha256::digest(token.as_bytes());
+    let mut hex = String::with_capacity(3 + 64);
+    hex.push_str("rt:");
+    for byte in digest {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    hex
+}
+
+pub(super) async fn forgot_password_verify_inner(
+    headers: &HeaderMap,
+    email: &str,
+    otp: &str,
+) -> std::result::Result<Response, crate::error::AppError> {
+    let Some(user) = find_user_by_email(email).await? else {
+        return Ok(invalid_otp_response(headers));
+    };
+
+    if user.email_verified_at.is_none() {
+        return Ok(invalid_otp_response(headers));
+    }
+
+    let otp_ok = verify_otp_db(email, otp).await;
+    if !otp_ok {
+        return Ok(invalid_otp_response(headers));
+    }
+
+    let raw_token = uuid::Uuid::new_v4().simple().to_string();
+    let hashed = hash_reset_token(&raw_token);
+    let now = Utc::now();
+
+    let mut conn = crate::db::conn().await?;
+    diesel::update(users::table.find(user.id))
+        .set((
+            users::reset_token.eq(&hashed),
+            users::reset_sent_at.eq(now),
+            users::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .await?;
+
+    Ok(Json(DataResponse {
+        data: serde_json::json!({ "resetToken": raw_token }),
+    })
+    .into_response())
+}
+
+pub(super) async fn reset_password_inner(
+    headers: &HeaderMap,
+    reset_token: &str,
+    new_password: &str,
+) -> std::result::Result<Response, crate::error::AppError> {
+    if !(8..=128).contains(&new_password.len()) {
+        return Ok(error_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            headers,
+            ErrorSpec {
+                error: "Password must be between 8 and 128 characters".to_string(),
+                code: "VALIDATION_ERROR",
+                details: None,
+            },
+        ));
+    }
+
+    let hashed_token = hash_reset_token(reset_token);
+    let cutoff = Utc::now() - chrono::Duration::seconds(RESET_TOKEN_TTL_SECS);
+
+    let mut conn = crate::db::conn().await?;
+    let user = users::table
+        .filter(users::reset_token.eq(&hashed_token))
+        .filter(users::reset_sent_at.gt(cutoff))
+        .first::<User>(&mut conn)
+        .await
+        .optional()?;
+
+    let Some(user) = user else {
+        return Ok(unauthorized_error(
+            headers,
+            "Invalid or expired reset token",
+        ));
+    };
+
+    let new_hash = crate::security::hash_password(new_password)?;
+
+    conn.transaction(|conn| {
+        let new_hash = new_hash.clone();
+        Box::pin(async move {
+            diesel::update(users::table.find(user.id))
+                .set((
+                    users::password.eq(new_hash),
+                    users::reset_token.eq(None::<String>),
+                    users::reset_sent_at.eq(None::<chrono::DateTime<Utc>>),
+                    users::updated_at.eq(Utc::now()),
+                ))
+                .execute(conn)
+                .await?;
+            diesel::delete(sessions::table.filter(sessions::user_id.eq(user.id)))
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        })
+    })
+    .await?;
+
+    super::super::state::invalidate_auth_cache_for_user_id(user.id).await;
+
+    let session = create_session_db(headers, user.id).await?;
+    Ok(Json(DataResponse {
+        data: serde_json::json!({
+            "user": user_model_to_view(&user),
+            "token": session.token,
+            "session": session_model_to_view(&session.model),
         }),
     })
     .into_response())
