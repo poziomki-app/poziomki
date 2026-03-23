@@ -220,10 +220,10 @@ class ProfileRepository(
         }
     }
 
-    fun updateBookmarked(
+    suspend fun updateBookmarked(
         id: String,
         isBookmarked: Boolean,
-    ) {
+    ) = withContext(Dispatchers.IO) {
         db.profileQueries.updateBookmarked(
             is_bookmarked = if (isBookmarked) 1L else 0L,
             id = id,

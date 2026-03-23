@@ -83,9 +83,9 @@ class ProfileViewViewModel(
         bookmarkInFlight = true
         val current = _state.value.isBookmarked
         val newValue = !current
-        // Optimistic local update
-        profileRepository.updateBookmarked(profileId, newValue)
         viewModelScope.launch {
+            // Optimistic local update
+            profileRepository.updateBookmarked(profileId, newValue)
             val result =
                 if (current) {
                     apiService.unbookmarkProfile(profileId)

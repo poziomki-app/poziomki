@@ -122,7 +122,8 @@ fun ProfileViewScreen(
                                         } else {
                                             PhosphorIcons.Bold.BookmarkSimple
                                         },
-                                    contentDescription = null,
+                                    contentDescription =
+                                        if (state.isBookmarked) "Usuń zakładkę" else "Dodaj zakładkę",
                                     tint = if (state.isBookmarked) Primary else White,
                                     modifier = Modifier.size(22.dp),
                                 )
