@@ -24,6 +24,7 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+@Suppress("TooManyFunctions")
 class ProfileRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
@@ -31,6 +32,29 @@ class ProfileRepository(
     private val pendingOps: PendingOperationsManager,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    fun observeBookmarkedProfiles(): Flow<List<Profile>> =
+        db.profileQueries
+            .selectBookmarked()
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { it.toApiModel() } }
+
+    suspend fun refreshBookmarkedProfiles(): Boolean =
+        withContext(Dispatchers.IO) {
+            when (val result = api.getBookmarkedProfiles()) {
+                is ApiResult.Success -> {
+                    result.data.forEach { profile ->
+                        upsertProfile(profile, isOwn = false, isBookmarked = true)
+                    }
+                    true
+                }
+
+                is ApiResult.Error -> {
+                    false
+                }
+            }
+        }
 
     fun observeOwnProfile(): Flow<Profile?> =
         db.profileQueries
