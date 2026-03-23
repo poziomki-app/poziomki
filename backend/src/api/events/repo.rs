@@ -41,7 +41,7 @@ pub(in crate::api) async fn list_saved_events(
             event_interactions::table.on(event_interactions::event_id
                 .eq(events::id)
                 .and(event_interactions::profile_id.eq(profile_id))
-                .and(event_interactions::kind.eq("saved"))),
+                .and(event_interactions::kind.eq(super::EVENT_INTERACTION_SAVED))),
         )
         .order(event_interactions::created_at.desc())
         .select(events::all_columns)

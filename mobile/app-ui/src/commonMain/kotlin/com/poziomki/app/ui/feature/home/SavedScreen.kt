@@ -40,6 +40,7 @@ import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.poziomki.app.ui.shared.formatEventDate
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -147,6 +148,14 @@ private fun SavedEventRow(
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
                 color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = formatEventDate(event.startsAt),
+                fontFamily = NunitoFamily,
+                fontSize = 14.sp,
+                color = TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
