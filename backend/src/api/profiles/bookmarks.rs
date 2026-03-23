@@ -123,15 +123,13 @@ pub(in crate::api) async fn profiles_bookmarked(
     Ok(responses)
 }
 
-pub(in crate::api) async fn is_bookmarked_by_user(
-    user_id: i32,
+pub(in crate::api) async fn is_bookmarked(
+    my_profile_id: Uuid,
     target_profile_id: Uuid,
 ) -> crate::error::AppResult<bool> {
     let mut conn = crate::db::conn().await?;
     let exists = profile_bookmarks::table
-        .inner_join(profiles::table.on(profile_bookmarks::profile_id.eq(profiles::id)))
-        .filter(profiles::user_id.eq(user_id))
-        .filter(profile_bookmarks::target_profile_id.eq(target_profile_id))
+        .find((my_profile_id, target_profile_id))
         .select(profile_bookmarks::profile_id)
         .first::<Uuid>(&mut conn)
         .await

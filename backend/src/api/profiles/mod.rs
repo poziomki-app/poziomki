@@ -81,7 +81,9 @@ pub(super) async fn profile_get_full(
 
     let mut data = full_profile_response(&profile, &user_pid, Some(user.id)).await?;
 
-    data.is_bookmarked = profiles_bookmarks::is_bookmarked_by_user(user.id, profile_uuid).await?;
+    if let Some(my_profile) = load_profile_by_user_id(user.id).await? {
+        data.is_bookmarked = profiles_bookmarks::is_bookmarked(my_profile.id, profile_uuid).await?;
+    }
 
     Ok(Json(DataResponse { data }).into_response())
 }
