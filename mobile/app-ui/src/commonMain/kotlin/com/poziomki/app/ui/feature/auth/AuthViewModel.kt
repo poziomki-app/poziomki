@@ -297,10 +297,10 @@ class AuthViewModel(
     ) {
         val resetToken = pendingResetToken ?: return
         viewModelScope.launch {
-            pendingResetToken = null
             _uiState.value = AuthUiState(isLoading = true)
             when (val result = apiService.resetPassword(email, resetToken, newPassword)) {
                 is ApiResult.Success -> {
+                    pendingResetToken = null
                     val user = result.data.user
                     val token = result.data.token
                     if (user != null && !token.isNullOrBlank()) {
