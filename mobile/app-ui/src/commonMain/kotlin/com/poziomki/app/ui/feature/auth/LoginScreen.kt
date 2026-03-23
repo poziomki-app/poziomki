@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -89,7 +90,10 @@ fun LoginScreen(
 
         PoziomkiTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                viewModel.clearError()
+            },
             label = "email",
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions =
@@ -97,15 +101,20 @@ fun LoginScreen(
                     keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next,
                 ),
+            contentType = ContentType.Username + ContentType.EmailAddress,
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
         PoziomkiPasswordField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = {
+                password = it
+                viewModel.clearError()
+            },
             label = "has\u0142o",
             placeholder = "has\u0142o",
+            contentType = ContentType.Password,
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
