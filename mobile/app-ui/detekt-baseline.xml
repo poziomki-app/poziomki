@@ -35,6 +35,7 @@
     <ID>Indentation:EventsViewModel.kt$EventsViewModel$ </ID>
     <ID>Indentation:ExploreScreen.kt$ </ID>
     <ID>Indentation:FilterTabs.kt$ </ID>
+    <ID>Indentation:ForgotPasswordScreen.kt$ </ID>
     <ID>Indentation:GroupsScreen.kt$ </ID>
     <ID>Indentation:InterestsScreen.kt$ </ID>
     <ID>Indentation:LocationPickerSheet.kt$ </ID>
@@ -60,6 +61,7 @@
     <ID>Indentation:ProfileViewScreen.kt$ </ID>
     <ID>Indentation:RecommendedPeopleRow.kt$ </ID>
     <ID>Indentation:RegisterScreen.kt$ </ID>
+    <ID>Indentation:ResetPasswordScreen.kt$ </ID>
     <ID>Indentation:RoomRow.kt$ </ID>
     <ID>Indentation:ScreenHeader.kt$ </ID>
     <ID>Indentation:StackedAvatars.kt$ </ID>

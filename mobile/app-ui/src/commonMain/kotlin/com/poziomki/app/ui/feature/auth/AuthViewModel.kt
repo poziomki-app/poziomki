@@ -19,6 +19,7 @@ data class AuthUiState(
     val resendCooldownSeconds: Int = 0,
 )
 
+@Suppress("TooManyFunctions")
 class AuthViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
@@ -32,6 +33,7 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private var cooldownJob: Job? = null
+    private var pendingResetToken: String? = null
 
     @Suppress("CyclomaticComplexMethod")
     private fun localizeAuthError(
@@ -215,14 +217,17 @@ class AuthViewModel(
         }
     }
 
-    fun resendOtp(email: String) {
-        if (_uiState.value.resendCooldownSeconds > 0) return
+    fun resendOtp(email: String) = resendOtpInternal(email, apiService::resendOtp)
 
+    private fun resendOtpInternal(
+        email: String,
+        sender: suspend (String) -> ApiResult<com.poziomki.app.network.SuccessResponse>,
+    ) {
+        if (_uiState.value.resendCooldownSeconds > 0) return
         viewModelScope.launch {
-            when (apiService.resendOtp(email)) {
+            when (sender(email)) {
                 is ApiResult.Success -> {
                     _uiState.value = _uiState.value.copy(otpResent = true)
-                    // Auto-clear confirmation after 3s
                     launch {
                         delay(3_000)
                         _uiState.value = _uiState.value.copy(otpResent = false)
@@ -231,7 +236,6 @@ class AuthViewModel(
 
                 is ApiResult.Error -> { /* silently fail — user can retry */ }
             }
-            // Start 30s cooldown
             startResendCooldown()
         }
     }
@@ -250,5 +254,106 @@ class AuthViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun forgotPassword(
+        email: String,
+        onSuccess: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState(isLoading = true)
+            when (val result = apiService.forgotPassword(email)) {
+                is ApiResult.Success -> {
+                    _uiState.value = AuthUiState()
+                    onSuccess()
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        AuthUiState(error = localizeAuthError(result.code, result.message))
+                }
+            }
+        }
+    }
+
+    fun forgotPasswordVerify(
+        email: String,
+        otp: String,
+        onSuccess: (String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            when (val result = apiService.forgotPasswordVerify(email, otp)) {
+                is ApiResult.Success -> {
+                    pendingResetToken = result.data.resetToken
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = null)
+                    onSuccess(result.data.resetToken)
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            error = localizeAuthError(result.code, result.message),
+                        )
+                }
+            }
+        }
+    }
+
+    fun forgotPasswordResend(email: String) = resendOtpInternal(email, apiService::forgotPasswordResend)
+
+    @Suppress("CyclomaticComplexMethod")
+    fun resetPassword(
+        email: String,
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onNeedsOnboarding: () -> Unit,
+    ) {
+        val resetToken = pendingResetToken ?: return
+        viewModelScope.launch {
+            _uiState.value = AuthUiState(isLoading = true)
+            when (val result = apiService.resetPassword(email, resetToken, newPassword)) {
+                is ApiResult.Success -> {
+                    pendingResetToken = null
+                    val user = result.data.user
+                    val token = result.data.token
+                    if (user != null && !token.isNullOrBlank()) {
+                        sessionManager.saveSession(
+                            token = token,
+                            userId = user.id,
+                            email = user.email,
+                            name = user.name,
+                        )
+                        when (val profileResult = apiService.getMyProfile()) {
+                            is ApiResult.Success -> {
+                                sessionManager.saveProfileId(profileResult.data.id)
+                                _uiState.value = AuthUiState()
+                                onSuccess()
+                            }
+
+                            is ApiResult.Error -> {
+                                if (profileResult.code == "NOT_FOUND" ||
+                                    profileResult.status == HTTP_NOT_FOUND
+                                ) {
+                                    _uiState.value = AuthUiState()
+                                    onNeedsOnboarding()
+                                } else {
+                                    _uiState.value = AuthUiState()
+                                    onSuccess()
+                                }
+                            }
+                        }
+                    } else {
+                        _uiState.value = AuthUiState(error = "No user data in response")
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.value =
+                        AuthUiState(error = localizeAuthError(result.code, result.message))
+                }
+            }
+        }
     }
 }

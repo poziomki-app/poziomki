@@ -411,6 +411,31 @@ data class ChangePasswordRequest(
     val newPassword: String,
 )
 
+// Forgot password models
+
+@Serializable
+data class ForgotPasswordRequest(
+    val email: String,
+)
+
+@Serializable
+data class ForgotPasswordVerifyRequest(
+    val email: String,
+    val otp: String,
+)
+
+@Serializable
+data class ResetPasswordRequest(
+    val email: String,
+    val resetToken: String,
+    val newPassword: String,
+)
+
+@Serializable
+data class ResetTokenResponse(
+    val resetToken: String,
+)
+
 // Geocoding models
 
 data class GeocodingResult(

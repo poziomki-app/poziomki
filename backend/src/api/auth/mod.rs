@@ -11,8 +11,9 @@ use crate::api::auth_or_respond;
 
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use self::auth_service::{
-    create_user_or_error, find_user_by_email, generate_otp_code, send_otp_email,
-    sign_in_success_or_unauthorized, verify_otp_inner, OTP_RESEND_COOLDOWN_SECS,
+    create_user_or_error, find_user_by_email, forgot_password_verify_inner, generate_otp_code,
+    reset_password_inner, send_otp_email, sign_in_success_or_unauthorized, verify_otp_inner,
+    OTP_RESEND_COOLDOWN_SECS,
 };
 type Result<T> = crate::error::AppResult<T>;
 
@@ -28,7 +29,8 @@ use super::{
     state::{
         extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
         normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view, DataResponse,
-        ResendOtpBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
+        ForgotPasswordBody, ForgotPasswordVerifyBody, ResendOtpBody, ResetPasswordBody,
+        SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
     },
     ErrorSpec,
 };
@@ -142,6 +144,106 @@ pub(super) async fn resend_otp(
 
     maybe_resend_otp(&email).await?;
     Ok(Json(SuccessResponse { success: true }).into_response())
+}
+
+pub(super) async fn forgot_password(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<ForgotPasswordBody>,
+) -> Result<Response> {
+    let email = normalize_email(&payload.email);
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::ForgotPassword, &email).await
+    {
+        return Ok(*response);
+    }
+
+    // Always return success to prevent email enumeration.
+    if let Ok(Some(user)) = find_user_by_email(&email).await {
+        if user.email_verified_at.is_some()
+            && !otp_in_cooldown(&email, OTP_RESEND_COOLDOWN_SECS).await
+        {
+            let code = generate_otp_code();
+            if upsert_otp(&email, &code).await.is_ok() {
+                if let Err(error) = enqueue_otp_email(&email, &code).await {
+                    tracing::error!(%error, email = %email, "failed to enqueue OTP for forgot password");
+                }
+            }
+        }
+    }
+
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
+}
+
+pub(super) async fn forgot_password_verify(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<ForgotPasswordVerifyBody>,
+) -> Result<Response> {
+    let email = normalize_email(&payload.email);
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::ForgotPasswordVerify, &email).await
+    {
+        return Ok(*response);
+    }
+
+    forgot_password_verify_inner(&headers, &email, &payload.otp).await
+}
+
+async fn maybe_resend_forgot_password_otp(email: &str) -> crate::error::AppResult<()> {
+    let user = find_user_by_email(email).await?;
+    let is_verified = user.as_ref().is_some_and(|u| u.email_verified_at.is_some());
+    if !is_verified || otp_in_cooldown(email, OTP_RESEND_COOLDOWN_SECS).await {
+        return Ok(());
+    }
+    let code = generate_otp_code();
+    upsert_otp(email, &code).await?;
+    if let Err(error) = enqueue_otp_email(email, &code).await {
+        tracing::error!(%error, email = %email, "failed to enqueue OTP for forgot password resend");
+    }
+    Ok(())
+}
+
+pub(super) async fn forgot_password_resend(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<ForgotPasswordBody>,
+) -> Result<Response> {
+    let email = normalize_email(&payload.email);
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::ForgotPasswordResend, &email).await
+    {
+        return Ok(*response);
+    }
+
+    maybe_resend_forgot_password_otp(&email).await?;
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
+}
+
+pub(super) async fn reset_password(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(payload): Json<ResetPasswordBody>,
+) -> Result<Response> {
+    let email = normalize_email(&payload.email);
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::ResetPassword, &email).await
+    {
+        return Ok(*response);
+    }
+    reset_password_inner(
+        &headers,
+        &email,
+        &payload.reset_token,
+        &payload.new_password,
+    )
+    .await
 }
 
 pub(super) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {
