@@ -51,7 +51,7 @@ class AuthViewModel(
                 "Nieprawid\u0142owy kod weryfikacyjny"
             }
 
-            code == "VALIDATION_ERROR" && message.contains("Invalid email", ignoreCase = true) -> {
+            code == "VALIDATION_ERROR" && message.contains("Invalid email address", ignoreCase = true) -> {
                 "Nieprawid\u0142owy adres email"
             }
 
