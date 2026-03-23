@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,7 @@ import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -110,7 +112,21 @@ fun LoginScreen(
             placeholder = "has\u0142o",
         )
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        TextButton(
+            onClick = onForgotPassword,
+            modifier = Modifier.align(Alignment.Start),
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = "nie pami\u0119tam has\u0142a",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 13.sp,
+                color = TextMuted,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
         PoziomkiButton(
             text = "zaloguj si\u0119",
@@ -120,21 +136,6 @@ fun LoginScreen(
             enabled = email.isNotBlank() && password.isNotBlank(),
             loading = uiState.isLoading,
         )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-
-        TextButton(
-            onClick = onForgotPassword,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        ) {
-            Text(
-                text = "nie pami\u0119tam has\u0142a",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = TextSecondary,
-            )
-        }
 
         TextButton(
             onClick = onNavigateToRegister,
