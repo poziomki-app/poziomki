@@ -305,6 +305,7 @@ class AuthViewModel(
 
     @Suppress("CyclomaticComplexMethod")
     fun resetPassword(
+        email: String,
         newPassword: String,
         onSuccess: () -> Unit,
         onNeedsOnboarding: () -> Unit,
@@ -313,7 +314,7 @@ class AuthViewModel(
         viewModelScope.launch {
             pendingResetToken = null
             _uiState.value = AuthUiState(isLoading = true)
-            when (val result = apiService.resetPassword(resetToken, newPassword)) {
+            when (val result = apiService.resetPassword(email, resetToken, newPassword)) {
                 is ApiResult.Success -> {
                     val user = result.data.user
                     val token = result.data.token

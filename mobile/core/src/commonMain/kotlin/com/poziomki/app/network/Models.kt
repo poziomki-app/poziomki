@@ -425,6 +425,7 @@ data class ForgotPasswordVerifyRequest(
 
 @Serializable
 data class ResetPasswordRequest(
+    val email: String,
     val resetToken: String,
     val newPassword: String,
 )

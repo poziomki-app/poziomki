@@ -48,12 +48,13 @@ class ApiService(
         client.post("/api/v1/auth/forgot-password/resend", ForgotPasswordRequest(email))
 
     suspend fun resetPassword(
+        email: String,
         resetToken: String,
         newPassword: String,
     ): ApiResult<AuthResponse> =
         client.post(
             "/api/v1/auth/reset-password",
-            ResetPasswordRequest(resetToken, newPassword),
+            ResetPasswordRequest(email, resetToken, newPassword),
         )
 
     suspend fun changePassword(
