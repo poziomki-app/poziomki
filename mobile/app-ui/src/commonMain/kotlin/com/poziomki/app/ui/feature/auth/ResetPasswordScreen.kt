@@ -34,7 +34,6 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ResetPasswordScreen(
     email: String,
-    resetToken: String,
     onSuccess: () -> Unit,
     onNeedsOnboarding: () -> Unit,
     viewModel: AuthViewModel = koinViewModel(),
@@ -132,7 +131,7 @@ fun ResetPasswordScreen(
         PoziomkiButton(
             text = "zapisz has\u0142o",
             onClick = {
-                viewModel.resetPassword(resetToken, password, onSuccess, onNeedsOnboarding)
+                viewModel.resetPassword(password, onSuccess, onNeedsOnboarding)
             },
             enabled = password.length >= 8 && password == confirmPassword,
             loading = uiState.isLoading,

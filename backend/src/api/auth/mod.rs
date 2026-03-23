@@ -223,6 +223,15 @@ pub(super) async fn reset_password(
     headers: HeaderMap,
     Json(payload): Json<ResetPasswordBody>,
 ) -> Result<Response> {
+    if let Err(response) = enforce_rate_limit(
+        &headers,
+        AuthRateLimitAction::ResetPassword,
+        &payload.reset_token,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
     reset_password_inner(&headers, &payload.reset_token, &payload.new_password).await
 }
 

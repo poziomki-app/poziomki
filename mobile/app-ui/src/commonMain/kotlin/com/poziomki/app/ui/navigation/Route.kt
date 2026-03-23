@@ -26,7 +26,6 @@ sealed interface Route {
 
     @Serializable data class ResetPassword(
         val email: String,
-        val resetToken: String,
     ) : Route
 
     // Onboarding

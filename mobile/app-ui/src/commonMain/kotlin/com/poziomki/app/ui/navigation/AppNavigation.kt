@@ -264,9 +264,9 @@ fun AppNavigation(
                 val route = backStackEntry.toRoute<Route.ForgotPasswordVerify>()
                 ForgotPasswordVerifyScreen(
                     email = route.email,
-                    onVerifySuccess = { resetToken ->
+                    onVerifySuccess = {
                         navController.navigate(
-                            Route.ResetPassword(email = route.email, resetToken = resetToken),
+                            Route.ResetPassword(email = route.email),
                         )
                     },
                 )
@@ -275,7 +275,6 @@ fun AppNavigation(
                 val route = backStackEntry.toRoute<Route.ResetPassword>()
                 ResetPasswordScreen(
                     email = route.email,
-                    resetToken = route.resetToken,
                     onSuccess = {
                         navController.navigate(Route.MainGraph) {
                             popUpTo(Route.AuthGraph) { inclusive = true }
