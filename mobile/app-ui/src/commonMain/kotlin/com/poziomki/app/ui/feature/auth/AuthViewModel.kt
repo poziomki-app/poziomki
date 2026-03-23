@@ -202,14 +202,17 @@ class AuthViewModel(
         }
     }
 
-    fun resendOtp(email: String) {
-        if (_uiState.value.resendCooldownSeconds > 0) return
+    fun resendOtp(email: String) = resendOtpInternal(email, apiService::resendOtp)
 
+    private fun resendOtpInternal(
+        email: String,
+        sender: suspend (String) -> ApiResult<com.poziomki.app.network.SuccessResponse>,
+    ) {
+        if (_uiState.value.resendCooldownSeconds > 0) return
         viewModelScope.launch {
-            when (apiService.resendOtp(email)) {
+            when (sender(email)) {
                 is ApiResult.Success -> {
                     _uiState.value = _uiState.value.copy(otpResent = true)
-                    // Auto-clear confirmation after 3s
                     launch {
                         delay(3_000)
                         _uiState.value = _uiState.value.copy(otpResent = false)
@@ -218,7 +221,6 @@ class AuthViewModel(
 
                 is ApiResult.Error -> { /* silently fail — user can retry */ }
             }
-            // Start 30s cooldown
             startResendCooldown()
         }
     }
@@ -284,24 +286,7 @@ class AuthViewModel(
         }
     }
 
-    fun forgotPasswordResend(email: String) {
-        if (_uiState.value.resendCooldownSeconds > 0) return
-
-        viewModelScope.launch {
-            when (apiService.forgotPasswordResend(email)) {
-                is ApiResult.Success -> {
-                    _uiState.value = _uiState.value.copy(otpResent = true)
-                    launch {
-                        delay(3_000)
-                        _uiState.value = _uiState.value.copy(otpResent = false)
-                    }
-                }
-
-                is ApiResult.Error -> { /* silently fail */ }
-            }
-            startResendCooldown()
-        }
-    }
+    fun forgotPasswordResend(email: String) = resendOtpInternal(email, apiService::forgotPasswordResend)
 
     @Suppress("CyclomaticComplexMethod")
     fun resetPassword(
