@@ -80,6 +80,7 @@ class EventsViewModel(
                 x.attendeesCount == y.attendeesCount &&
                 x.maxAttendees == y.maxAttendees &&
                 x.isAttending == y.isAttending &&
+                x.isSaved == y.isSaved &&
                 x.attendeesPreview == y.attendeesPreview &&
                 x.creator == y.creator
         }
@@ -243,6 +244,17 @@ class EventsViewModel(
                         recommendedEvents = _state.value.recommendedEvents + removed,
                     )
                 filterEvents()
+            }
+        }
+    }
+
+    fun toggleSave(eventId: String) {
+        viewModelScope.launch {
+            val event = _state.value.events.find { it.id == eventId } ?: return@launch
+            if (event.isSaved) {
+                eventRepository.unsaveEvent(eventId)
+            } else {
+                eventRepository.saveEvent(eventId)
             }
         }
     }
