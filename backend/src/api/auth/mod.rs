@@ -223,12 +223,9 @@ pub(super) async fn reset_password(
     headers: HeaderMap,
     Json(payload): Json<ResetPasswordBody>,
 ) -> Result<Response> {
-    if let Err(response) = enforce_rate_limit(
-        &headers,
-        AuthRateLimitAction::ResetPassword,
-        &payload.reset_token,
-    )
-    .await
+    let email = normalize_email(&payload.email);
+    if let Err(response) =
+        enforce_rate_limit(&headers, AuthRateLimitAction::ResetPassword, &email).await
     {
         return Ok(*response);
     }

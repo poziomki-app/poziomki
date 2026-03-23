@@ -131,7 +131,7 @@ fun ResetPasswordScreen(
         PoziomkiButton(
             text = "zapisz has\u0142o",
             onClick = {
-                viewModel.resetPassword(password, onSuccess, onNeedsOnboarding)
+                viewModel.resetPassword(email, password, onSuccess, onNeedsOnboarding)
             },
             enabled = password.length >= 8 && password == confirmPassword,
             loading = uiState.isLoading,

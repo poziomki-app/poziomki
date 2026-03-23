@@ -51,6 +51,7 @@ pub(in crate::api) struct ForgotPasswordVerifyBody {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(in crate::api) struct ResetPasswordBody {
+    pub(in crate::api) email: String,
     pub(in crate::api) reset_token: String,
     pub(in crate::api) new_password: String,
 }
