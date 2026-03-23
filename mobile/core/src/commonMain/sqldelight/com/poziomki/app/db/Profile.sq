@@ -77,6 +77,12 @@ SELECT cached_at
 FROM profile
 WHERE id = ?;
 
+selectBookmarked:
+SELECT *
+FROM profile
+WHERE is_bookmarked = 1
+ORDER BY cached_at DESC;
+
 updateBookmarked:
 UPDATE profile
 SET is_bookmarked = ?
