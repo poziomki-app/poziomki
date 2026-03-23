@@ -44,8 +44,11 @@ class ProfileRepository(
         withContext(Dispatchers.IO) {
             when (val result = api.getBookmarkedProfiles()) {
                 is ApiResult.Success -> {
-                    result.data.forEach { profile ->
-                        upsertProfile(profile, isOwn = false, isBookmarked = true)
+                    db.transaction {
+                        db.profileQueries.clearBookmarkedFlags()
+                        result.data.forEach { profile ->
+                            upsertProfile(profile, isOwn = false, isBookmarked = true)
+                        }
                     }
                     true
                 }
