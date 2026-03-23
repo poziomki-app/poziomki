@@ -34,6 +34,9 @@ pub(super) fn jaccard(a: &HashSet<Uuid>, b: &HashSet<Uuid>) -> f64 {
     intersection as f64 / union as f64
 }
 
+const SOCIAL_PROGRAM_BONUS: f64 = 5.0;
+const SOCIAL_TAG_WEIGHT: f64 = 15.0;
+
 pub(super) fn score_profile(
     my_tag_ids: &HashSet<Uuid>,
     candidate_tags: &HashSet<Uuid>,
@@ -49,19 +52,18 @@ pub(super) fn score_profile(
             my_program.is_some_and(|prog| candidate.program.as_deref() == Some(prog));
         if same_program {
             score += 10.0;
-        }
-        // Social program affinity: candidate shares program with someone
-        // user has bookmarked or messaged
-        if let Some(ref prog) = candidate.program {
+        } else if let Some(ref prog) = candidate.program {
+            // Social program affinity: candidate shares program with someone
+            // user has bookmarked or messaged (only when not already same program)
             if social_programs.contains(prog) {
-                score += 5.0;
+                score += SOCIAL_PROGRAM_BONUS;
             }
         }
     }
     // Social tag affinity: overlap between candidate's tags and tags of
     // bookmarked/messaged people
     if !social_tags.is_empty() && !candidate_tags.is_empty() {
-        score += jaccard(social_tags, candidate_tags) * 15.0;
+        score += jaccard(social_tags, candidate_tags) * SOCIAL_TAG_WEIGHT;
     }
     score
 }
