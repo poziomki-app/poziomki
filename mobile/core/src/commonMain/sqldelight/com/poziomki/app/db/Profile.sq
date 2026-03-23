@@ -10,6 +10,7 @@ CREATE TABLE profile (
     gradient_start TEXT,
     gradient_end TEXT,
     is_own INTEGER NOT NULL DEFAULT 0,
+    is_bookmarked INTEGER NOT NULL DEFAULT 0,
     created_at TEXT,
     updated_at TEXT,
     cached_at INTEGER NOT NULL DEFAULT 0,
@@ -40,9 +41,9 @@ upsert:
 INSERT OR REPLACE INTO profile(
     id, user_id, name, bio, profile_picture, thumbhash,
     images_json, program, gradient_start, gradient_end,
-    is_own, created_at, updated_at,
+    is_own, is_bookmarked, created_at, updated_at,
     cached_at, is_dirty
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM profile
@@ -74,4 +75,20 @@ LIMIT 1;
 cachedAtById:
 SELECT cached_at
 FROM profile
+WHERE id = ?;
+
+selectBookmarked:
+SELECT *
+FROM profile
+WHERE is_bookmarked = 1
+ORDER BY cached_at DESC;
+
+clearBookmarkedFlags:
+UPDATE profile
+SET is_bookmarked = 0
+WHERE is_dirty = 0 AND is_bookmarked = 1;
+
+updateBookmarked:
+UPDATE profile
+SET is_bookmarked = ?
 WHERE id = ?;

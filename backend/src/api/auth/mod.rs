@@ -57,12 +57,12 @@ pub(super) async fn sign_up(
     };
 
     // Generate and send OTP for email verification
-    {
+    if !otp_in_cooldown(&normalized_email, OTP_RESEND_COOLDOWN_SECS).await {
         let code = generate_otp_code();
         upsert_otp(&normalized_email, &code).await?;
-        if let Err(error) = enqueue_otp_email(&normalized_email, &code).await {
+        enqueue_otp_email(&normalized_email, &code).await.inspect_err(|error| {
             tracing::error!(%error, email = %normalized_email, "failed to enqueue OTP email after sign up");
-        }
+        }).ok();
     }
 
     let data = serde_json::json!({

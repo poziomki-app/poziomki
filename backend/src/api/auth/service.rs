@@ -11,8 +11,8 @@ use diesel_async::RunQueryDsl;
 use super::super::{
     error_response,
     state::{
-        create_session_db, normalize_email, session_model_to_view, upsert_otp, user_model_to_view,
-        validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
+        create_session_db, normalize_email, otp_in_cooldown, session_model_to_view, upsert_otp,
+        user_model_to_view, validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
     },
     ErrorSpec,
 };
@@ -168,10 +168,12 @@ pub(super) async fn sign_in_success_or_unauthorized(
     };
 
     if user.email_verified_at.is_none() {
-        let code = generate_otp_code();
-        upsert_otp(email, &code).await?;
-        if let Err(error) = enqueue_otp_email(email, &code).await {
-            tracing::error!(%error, email = %email, "failed to enqueue OTP email for unverified sign in");
+        if !otp_in_cooldown(email, OTP_RESEND_COOLDOWN_SECS).await {
+            let code = generate_otp_code();
+            upsert_otp(email, &code).await?;
+            enqueue_otp_email(email, &code).await.inspect_err(|error| {
+                tracing::error!(%error, email = %email, "failed to enqueue OTP email for unverified sign in");
+            }).ok();
         }
 
         return Ok(error_response(

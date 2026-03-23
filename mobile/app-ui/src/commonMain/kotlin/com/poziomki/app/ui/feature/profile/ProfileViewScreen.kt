@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,7 +35,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.BookmarkSimple
+import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
@@ -85,6 +89,48 @@ fun ProfileViewScreen(
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
                     if (!state.isOwnProfile) {
+                        // Bookmark button
+                        Surface(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(
+                                        start = 16.dp,
+                                        bottom = bottomInsets + 20.dp,
+                                    ),
+                            shape = RoundedCornerShape(28.dp),
+                            color = Color.Transparent,
+                            border = BorderStroke(1.dp, Border),
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.toggleBookmark() },
+                                modifier =
+                                    Modifier.background(
+                                        Brush.verticalGradient(
+                                            colors =
+                                                listOf(
+                                                    Color(0xFF1A2029),
+                                                    Color(0xFF161B22),
+                                                ),
+                                        ),
+                                    ),
+                            ) {
+                                Icon(
+                                    imageVector =
+                                        if (state.isBookmarked) {
+                                            PhosphorIcons.Fill.BookmarkSimple
+                                        } else {
+                                            PhosphorIcons.Bold.BookmarkSimple
+                                        },
+                                    contentDescription =
+                                        if (state.isBookmarked) "Usuń zakładkę" else "Dodaj zakładkę",
+                                    tint = if (state.isBookmarked) Primary else White,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
+
+                        // Message button
                         Surface(
                             modifier =
                                 Modifier

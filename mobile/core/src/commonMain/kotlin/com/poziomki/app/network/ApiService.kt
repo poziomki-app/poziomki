@@ -49,6 +49,12 @@ class ApiService(
 
     suspend fun getProfileFull(id: String): ApiResult<ProfileWithTags> = client.get("/api/v1/profiles/$id/full")
 
+    suspend fun bookmarkProfile(id: String): ApiResult<SuccessResponse> = client.post("/api/v1/profiles/$id/bookmark")
+
+    suspend fun unbookmarkProfile(id: String): ApiResult<SuccessResponse> = client.delete("/api/v1/profiles/$id/bookmark")
+
+    suspend fun getBookmarkedProfiles(): ApiResult<List<Profile>> = client.get("/api/v1/profiles/bookmarked")
+
     suspend fun createProfile(request: CreateProfileRequest): ApiResult<Profile> = client.post("/api/v1/profiles", request)
 
     suspend fun updateProfile(
@@ -61,6 +67,8 @@ class ApiService(
     suspend fun getEvents(limit: Int = 20): ApiResult<List<Event>> = client.get("/api/v1/events?limit=$limit")
 
     suspend fun getMyEvents(): ApiResult<List<Event>> = client.get("/api/v1/events/mine")
+
+    suspend fun getSavedEvents(): ApiResult<List<Event>> = client.get("/api/v1/events/saved")
 
     suspend fun getEvent(id: String): ApiResult<Event> = client.get("/api/v1/events/$id")
 

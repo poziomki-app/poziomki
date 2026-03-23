@@ -88,6 +88,8 @@ pub(super) async fn profiles_recommendations(
                 my_program.as_deref(),
                 candidate,
                 show_program,
+                &user_ctx.social_tag_ids,
+                &user_ctx.social_programs,
             );
             (score, candidate)
         })

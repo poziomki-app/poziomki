@@ -47,14 +47,23 @@ fn auth_routes() -> Router<AppContext> {
 }
 
 fn profiles_routes() -> Router<AppContext> {
-    Router::new()
+    let cached = Router::new()
         .route("/me", get(profiles::profile_me))
+        .route("/bookmarked", get(profiles::profiles_bookmarked_handler))
         .route("/", post(profiles::profile_create))
         .route("/{id}", get(profiles::profile_get))
         .route("/{id}", patch(profiles::profile_update))
         .route("/{id}", delete(profiles::profile_delete))
         .route("/{id}/full", get(profiles::profile_get_full))
-        .layer(cache_layer("private, max-age=60"))
+        .layer(cache_layer("private, max-age=60"));
+
+    Router::new()
+        .route(
+            "/{id}/bookmark",
+            post(profiles::profile_bookmark_handler).delete(profiles::profile_unbookmark_handler),
+        )
+        .layer(cache_layer("no-store"))
+        .merge(cached)
 }
 
 fn degrees_routes() -> Router<AppContext> {
@@ -77,6 +86,7 @@ fn events_routes() -> Router<AppContext> {
     Router::new()
         .route("/", get(events::events_list).post(events::event_create))
         .route("/mine", get(events::events_mine))
+        .route("/saved", get(events::events_saved))
         .route("/{id}", get(events::event_get))
         .route("/{id}", patch(events::event_update))
         .route("/{id}", delete(events::event_delete))
