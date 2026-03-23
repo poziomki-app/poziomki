@@ -303,6 +303,7 @@ pub(super) async fn forgot_password_verify_inner(
 
 pub(super) async fn reset_password_inner(
     headers: &HeaderMap,
+    email: &str,
     reset_token: &str,
     new_password: &str,
 ) -> std::result::Result<Response, crate::error::AppError> {
@@ -323,6 +324,7 @@ pub(super) async fn reset_password_inner(
 
     let mut conn = crate::db::conn().await?;
     let user = users::table
+        .filter(users::email.eq(email))
         .filter(users::reset_token.eq(&hashed_token))
         .filter(users::reset_sent_at.gt(cutoff))
         .first::<User>(&mut conn)

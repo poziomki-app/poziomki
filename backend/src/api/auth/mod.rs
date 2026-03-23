@@ -229,7 +229,13 @@ pub(super) async fn reset_password(
     {
         return Ok(*response);
     }
-    reset_password_inner(&headers, &payload.reset_token, &payload.new_password).await
+    reset_password_inner(
+        &headers,
+        &email,
+        &payload.reset_token,
+        &payload.new_password,
+    )
+    .await
 }
 
 pub(super) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {
