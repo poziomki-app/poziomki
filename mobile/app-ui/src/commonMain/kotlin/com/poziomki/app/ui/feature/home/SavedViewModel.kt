@@ -65,9 +65,8 @@ class SavedViewModel(
             withContext(Dispatchers.IO) {
                 apiService.getBookmarkedProfiles()
             }
-        when (result) {
-            is ApiResult.Success -> _state.update { it.copy(profiles = result.data) }
-            is ApiResult.Error -> println("Failed to load bookmarked profiles: ${result.message}")
+        if (result is ApiResult.Success) {
+            _state.update { it.copy(profiles = result.data) }
         }
     }
 }
