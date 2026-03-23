@@ -194,8 +194,12 @@ class EventRepository(
                     val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
                         db.eventQueries.clearSavedFlags()
-                        result.data.forEach { event ->
-                            eventMutationManager.upsertEvent(event, now, inListFeed = false)
+                        result.data.forEachIndexed { index, event ->
+                            eventMutationManager.upsertEvent(
+                                event,
+                                now - index,
+                                inListFeed = false,
+                            )
                         }
                         db.cacheStateQueries.upsert(SAVED_CACHE_KEY, now)
                     }
