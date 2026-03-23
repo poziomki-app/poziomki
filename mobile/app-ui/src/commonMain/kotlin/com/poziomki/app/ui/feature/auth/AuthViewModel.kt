@@ -33,6 +33,7 @@ class AuthViewModel(
 
     private var cooldownJob: Job? = null
 
+    @Suppress("CyclomaticComplexMethod")
     private fun localizeAuthError(
         code: String,
         message: String,
@@ -48,6 +49,20 @@ class AuthViewModel(
 
             code == "VALIDATION_ERROR" && message.contains("verification code", ignoreCase = true) -> {
                 "Nieprawid\u0142owy kod weryfikacyjny"
+            }
+
+            code == "VALIDATION_ERROR" && message.contains("Invalid email", ignoreCase = true) -> {
+                "Nieprawid\u0142owy adres email"
+            }
+
+            code == "VALIDATION_ERROR" && message.contains("Password must be", ignoreCase = true) -> {
+                "Has\u0142o musi mie\u0107 od 8 do 128 znak\u00f3w"
+            }
+
+            code == "VALIDATION_ERROR" &&
+                message.contains("email", ignoreCase = true) &&
+                message.contains("required", ignoreCase = true) -> {
+                "Podaj adres email"
             }
 
             code == "NETWORK_ERROR" -> {
