@@ -250,18 +250,35 @@ fun AppNavigation(
                     },
                 )
             }
-            composable<Route.ForgotPassword> { backStackEntry ->
-                val route = backStackEntry.toRoute<Route.ForgotPassword>()
+            composable<Route.ForgotPassword> { entry ->
+                val authEntry =
+                    remember(entry) {
+                        try {
+                            navController.getBackStackEntry(Route.AuthGraph)
+                        } catch (_: Exception) {
+                            entry
+                        }
+                    }
+                val route = entry.toRoute<Route.ForgotPassword>()
                 ForgotPasswordScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onSuccess = { email ->
                         navController.navigate(Route.ForgotPasswordVerify(email))
                     },
                     prefillEmail = route.prefillEmail,
+                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
                 )
             }
-            composable<Route.ForgotPasswordVerify> { backStackEntry ->
-                val route = backStackEntry.toRoute<Route.ForgotPasswordVerify>()
+            composable<Route.ForgotPasswordVerify> { entry ->
+                val authEntry =
+                    remember(entry) {
+                        try {
+                            navController.getBackStackEntry(Route.AuthGraph)
+                        } catch (_: Exception) {
+                            entry
+                        }
+                    }
+                val route = entry.toRoute<Route.ForgotPasswordVerify>()
                 ForgotPasswordVerifyScreen(
                     email = route.email,
                     onVerifySuccess = {
@@ -269,10 +286,19 @@ fun AppNavigation(
                             Route.ResetPassword(email = route.email),
                         )
                     },
+                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
                 )
             }
-            composable<Route.ResetPassword> { backStackEntry ->
-                val route = backStackEntry.toRoute<Route.ResetPassword>()
+            composable<Route.ResetPassword> { entry ->
+                val authEntry =
+                    remember(entry) {
+                        try {
+                            navController.getBackStackEntry(Route.AuthGraph)
+                        } catch (_: Exception) {
+                            entry
+                        }
+                    }
+                val route = entry.toRoute<Route.ResetPassword>()
                 ResetPasswordScreen(
                     email = route.email,
                     onSuccess = {
@@ -285,6 +311,7 @@ fun AppNavigation(
                             popUpTo(Route.AuthGraph) { inclusive = true }
                         }
                     },
+                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
                 )
             }
         }
