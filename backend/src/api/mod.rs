@@ -44,6 +44,16 @@ fn auth_routes() -> Router<AppContext> {
         .route("/account", delete(auth::delete_account))
         .route("/account/password", patch(auth::change_password))
         .route("/export", get(auth::export_data))
+        .route("/forgot-password", post(auth::forgot_password))
+        .route(
+            "/forgot-password/verify",
+            post(auth::forgot_password_verify),
+        )
+        .route(
+            "/forgot-password/resend",
+            post(auth::forgot_password_resend),
+        )
+        .route("/reset-password", post(auth::reset_password))
 }
 
 fn profiles_routes() -> Router<AppContext> {
