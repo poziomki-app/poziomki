@@ -160,7 +160,9 @@ pub(super) async fn forgot_password(
 
     // Always return success to prevent email enumeration.
     if let Ok(Some(user)) = find_user_by_email(&email).await {
-        if user.email_verified_at.is_some() {
+        if user.email_verified_at.is_some()
+            && !otp_in_cooldown(&email, OTP_RESEND_COOLDOWN_SECS).await
+        {
             let code = generate_otp_code();
             if upsert_otp(&email, &code).await.is_ok() {
                 if let Err(error) = enqueue_otp_email(&email, &code).await {
