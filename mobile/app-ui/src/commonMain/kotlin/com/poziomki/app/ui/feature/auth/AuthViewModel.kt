@@ -33,7 +33,6 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private var cooldownJob: Job? = null
-    private var pendingResetToken: String? = null
 
     private fun localizeAuthError(
         code: String,
@@ -270,7 +269,6 @@ class AuthViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             when (val result = apiService.forgotPasswordVerify(email, otp)) {
                 is ApiResult.Success -> {
-                    pendingResetToken = result.data.resetToken
                     _uiState.value = _uiState.value.copy(isLoading = false, error = null)
                     onSuccess(result.data.resetToken)
                 }
@@ -291,16 +289,19 @@ class AuthViewModel(
     @Suppress("CyclomaticComplexMethod")
     fun resetPassword(
         email: String,
+        resetToken: String,
         newPassword: String,
         onSuccess: () -> Unit,
         onNeedsOnboarding: () -> Unit,
     ) {
-        val resetToken = pendingResetToken ?: return
+        if (resetToken.isBlank()) {
+            _uiState.value = AuthUiState(error = "Sesja wygasła — spróbuj ponownie")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState(isLoading = true)
             when (val result = apiService.resetPassword(email, resetToken, newPassword)) {
                 is ApiResult.Success -> {
-                    pendingResetToken = null
                     val user = result.data.user
                     val token = result.data.token
                     if (user != null && !token.isNullOrBlank()) {

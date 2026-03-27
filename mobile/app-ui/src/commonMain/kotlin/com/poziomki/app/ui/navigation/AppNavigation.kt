@@ -284,8 +284,8 @@ fun AppNavigation(
                     email = route.email,
                     title = "resetowanie has\u0142a",
                     onSubmit = { email, otp, _ ->
-                        viewModel.forgotPasswordVerify(email, otp) {
-                            navController.navigate(Route.ResetPassword(email = route.email))
+                        viewModel.forgotPasswordVerify(email, otp) { resetToken ->
+                            navController.navigate(Route.ResetPassword(email = route.email, resetToken = resetToken))
                         }
                     },
                     onResend = { email -> viewModel.forgotPasswordResend(email) },
@@ -297,6 +297,7 @@ fun AppNavigation(
                 val route = entry.toRoute<Route.ResetPassword>()
                 ResetPasswordScreen(
                     email = route.email,
+                    resetToken = route.resetToken,
                     onSuccess = {
                         navController.navigate(Route.MainGraph) {
                             popUpTo(Route.AuthGraph) { inclusive = true }
