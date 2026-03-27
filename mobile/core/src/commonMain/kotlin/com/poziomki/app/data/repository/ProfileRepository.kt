@@ -44,10 +44,11 @@ class ProfileRepository(
         withContext(Dispatchers.IO) {
             when (val result = api.getBookmarkedProfiles()) {
                 is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
                     db.transaction {
                         db.profileQueries.clearBookmarkedFlags()
-                        result.data.forEach { profile ->
-                            upsertProfile(profile, isOwn = false, isBookmarked = true)
+                        result.data.forEachIndexed { index, profile ->
+                            upsertProfile(profile, isOwn = false, isBookmarked = true, cachedAt = now - index)
                         }
                     }
                     true
@@ -266,8 +267,8 @@ class ProfileRepository(
         profile: Profile,
         isOwn: Boolean,
         isBookmarked: Boolean = false,
+        cachedAt: Long = Clock.System.now().toEpochMilliseconds(),
     ) {
-        val now = Clock.System.now().toEpochMilliseconds()
         db.transaction {
             if (isOwn) {
                 db.profileQueries.clearOwnExcept(profile.id)
@@ -287,7 +288,7 @@ class ProfileRepository(
                 is_bookmarked = if (isBookmarked) 1L else 0L,
                 created_at = profile.createdAt,
                 updated_at = profile.updatedAt,
-                cached_at = now,
+                cached_at = cachedAt,
                 is_dirty = 0L,
             )
         }
