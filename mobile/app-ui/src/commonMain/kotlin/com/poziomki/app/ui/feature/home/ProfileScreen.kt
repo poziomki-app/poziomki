@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretRight
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
@@ -64,6 +65,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ProfileScreen(
     onNavigateToEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    onNavigateToSaved: () -> Unit,
     onNavigateToProfileView: (String) -> Unit,
     onSignOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel(),
@@ -122,6 +124,12 @@ fun ProfileScreen(
                                         icon = PhosphorIcons.Bold.Shield,
                                         label = "prywatność",
                                         onClick = onNavigateToPrivacy,
+                                    )
+                                    HorizontalDivider(color = Border, thickness = 1.dp)
+                                    SettingsMenuItem(
+                                        icon = PhosphorIcons.Bold.BookmarkSimple,
+                                        label = "zapisane",
+                                        onClick = onNavigateToSaved,
                                     )
                                 }
 

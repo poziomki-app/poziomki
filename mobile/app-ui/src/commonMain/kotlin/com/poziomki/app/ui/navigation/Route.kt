@@ -55,6 +55,8 @@ sealed interface Route {
 
     @Serializable data object Privacy : Route
 
+    @Serializable data object Saved : Route
+
     @Serializable data class Chat(
         val id: String,
         val title: String? = null,

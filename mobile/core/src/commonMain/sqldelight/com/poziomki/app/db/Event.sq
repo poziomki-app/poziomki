@@ -40,6 +40,12 @@ FROM event
 WHERE is_recommended = 1
 ORDER BY score DESC, starts_at ASC;
 
+selectSaved:
+SELECT *
+FROM event
+WHERE is_saved = 1
+ORDER BY cached_at DESC;
+
 selectById:
 SELECT *
 FROM event
@@ -89,6 +95,11 @@ WHERE is_dirty = 0;
 clearRecommendedFlags:
 UPDATE event
 SET is_recommended = 0
+WHERE is_dirty = 0;
+
+clearSavedFlags:
+UPDATE event
+SET is_saved = 0
 WHERE is_dirty = 0;
 
 replaceId:

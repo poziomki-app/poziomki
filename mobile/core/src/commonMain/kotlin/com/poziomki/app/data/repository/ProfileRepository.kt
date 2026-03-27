@@ -24,6 +24,7 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+@Suppress("TooManyFunctions")
 class ProfileRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
@@ -31,6 +32,33 @@ class ProfileRepository(
     private val pendingOps: PendingOperationsManager,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    fun observeBookmarkedProfiles(): Flow<List<Profile>> =
+        db.profileQueries
+            .selectBookmarked()
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { it.toApiModel() } }
+
+    suspend fun refreshBookmarkedProfiles(): Boolean =
+        withContext(Dispatchers.IO) {
+            when (val result = api.getBookmarkedProfiles()) {
+                is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.transaction {
+                        db.profileQueries.clearBookmarkedFlags()
+                        result.data.forEachIndexed { index, profile ->
+                            upsertProfile(profile, isOwn = false, isBookmarked = true, cachedAt = now - index)
+                        }
+                    }
+                    true
+                }
+
+                is ApiResult.Error -> {
+                    false
+                }
+            }
+        }
 
     fun observeOwnProfile(): Flow<Profile?> =
         db.profileQueries
@@ -239,8 +267,8 @@ class ProfileRepository(
         profile: Profile,
         isOwn: Boolean,
         isBookmarked: Boolean = false,
+        cachedAt: Long = Clock.System.now().toEpochMilliseconds(),
     ) {
-        val now = Clock.System.now().toEpochMilliseconds()
         db.transaction {
             if (isOwn) {
                 db.profileQueries.clearOwnExcept(profile.id)
@@ -260,7 +288,7 @@ class ProfileRepository(
                 is_bookmarked = if (isBookmarked) 1L else 0L,
                 created_at = profile.createdAt,
                 updated_at = profile.updatedAt,
-                cached_at = now,
+                cached_at = cachedAt,
                 is_dirty = 0L,
             )
         }
