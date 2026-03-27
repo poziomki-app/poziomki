@@ -325,8 +325,16 @@ class AuthViewModel(
                                     _uiState.value = AuthUiState()
                                     onNeedsOnboarding()
                                 } else {
-                                    _uiState.value = AuthUiState()
-                                    onSuccess()
+                                    val cachedProfileId = sessionManager.getProfileId()
+                                    if (cachedProfileId != null) {
+                                        _uiState.value = AuthUiState()
+                                        onSuccess()
+                                    } else {
+                                        _uiState.value =
+                                            AuthUiState(
+                                                error = localizeAuthError(profileResult.code, profileResult.message),
+                                            )
+                                    }
                                 }
                             }
                         }
