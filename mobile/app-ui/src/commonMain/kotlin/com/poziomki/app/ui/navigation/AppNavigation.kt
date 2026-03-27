@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -74,8 +75,11 @@ import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.feature.auth.AuthViewModel
+import com.poziomki.app.ui.feature.auth.ForgotPasswordScreen
 import com.poziomki.app.ui.feature.auth.LoginScreen
 import com.poziomki.app.ui.feature.auth.RegisterScreen
+import com.poziomki.app.ui.feature.auth.ResetPasswordScreen
 import com.poziomki.app.ui.feature.auth.VerifyScreen
 import com.poziomki.app.ui.feature.chat.ChatScreen
 import com.poziomki.app.ui.feature.chat.NewChatScreen
@@ -117,6 +121,19 @@ val bottomNavItems =
             Route.Messages,
         ),
     )
+
+@Composable
+private fun rememberGraphEntry(
+    entry: NavBackStackEntry,
+    navController: NavHostController,
+    graphRoute: Route,
+) = remember(entry) {
+    try {
+        navController.getBackStackEntry(graphRoute)
+    } catch (_: Exception) {
+        entry
+    }
+}
 
 @Composable
 fun AppNavigation(
@@ -218,6 +235,9 @@ fun AppNavigation(
                             popUpTo(Route.AuthGraph) { inclusive = true }
                         }
                     },
+                    onForgotPassword = {
+                        navController.navigate(Route.ForgotPassword())
+                    },
                     prefillEmail = login.prefillEmail,
                 )
             }
@@ -245,19 +265,59 @@ fun AppNavigation(
                     },
                 )
             }
+            composable<Route.ForgotPassword> { entry ->
+                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                val route = entry.toRoute<Route.ForgotPassword>()
+                ForgotPasswordScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onSuccess = { email ->
+                        navController.navigate(Route.ForgotPasswordVerify(email))
+                    },
+                    prefillEmail = route.prefillEmail,
+                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
+                )
+            }
+            composable<Route.ForgotPasswordVerify> { entry ->
+                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                val route = entry.toRoute<Route.ForgotPasswordVerify>()
+                val viewModel = koinViewModel<AuthViewModel>(viewModelStoreOwner = authEntry)
+                VerifyScreen(
+                    email = route.email,
+                    title = "resetowanie has\u0142a",
+                    onSubmit = { email, otp, _ ->
+                        viewModel.forgotPasswordVerify(email, otp) { resetToken ->
+                            navController.navigate(Route.ResetPassword(email = route.email, resetToken = resetToken))
+                        }
+                    },
+                    onResend = { email -> viewModel.forgotPasswordResend(email) },
+                    viewModel = viewModel,
+                )
+            }
+            composable<Route.ResetPassword> { entry ->
+                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                val route = entry.toRoute<Route.ResetPassword>()
+                ResetPasswordScreen(
+                    email = route.email,
+                    resetToken = route.resetToken,
+                    onSuccess = {
+                        navController.navigate(Route.MainGraph) {
+                            popUpTo(Route.AuthGraph) { inclusive = true }
+                        }
+                    },
+                    onNeedsOnboarding = {
+                        navController.navigate(Route.OnboardingGraph) {
+                            popUpTo(Route.AuthGraph) { inclusive = true }
+                        }
+                    },
+                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
+                )
+            }
         }
 
         // Onboarding graph — shared ViewModel across all screens
         navigation<Route.OnboardingGraph>(startDestination = Route.BasicInfo) {
             composable<Route.BasicInfo> { entry ->
-                val parentEntry =
-                    remember(entry) {
-                        try {
-                            navController.getBackStackEntry(Route.OnboardingGraph)
-                        } catch (_: Exception) {
-                            entry
-                        }
-                    }
+                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
                 BasicInfoScreen(
                     onNext = { navController.navigate(Route.Interests) },
                     onBack = {
@@ -269,14 +329,7 @@ fun AppNavigation(
                 )
             }
             composable<Route.Interests> { entry ->
-                val parentEntry =
-                    remember(entry) {
-                        try {
-                            navController.getBackStackEntry(Route.OnboardingGraph)
-                        } catch (_: Exception) {
-                            entry
-                        }
-                    }
+                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
                 InterestsScreen(
                     onNext = { navController.navigate(Route.ProfileSetup) },
                     onBack = { navController.popBackStack() },
@@ -284,14 +337,7 @@ fun AppNavigation(
                 )
             }
             composable<Route.ProfileSetup> { entry ->
-                val parentEntry =
-                    remember(entry) {
-                        try {
-                            navController.getBackStackEntry(Route.OnboardingGraph)
-                        } catch (_: Exception) {
-                            entry
-                        }
-                    }
+                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
                 ProfileSetupScreen(
                     onComplete = {
                         navController.navigate(Route.MainGraph) {

@@ -2,7 +2,6 @@ package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,38 +21,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
-import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongMethod")
 @Composable
-fun LoginScreen(
-    onNavigateToRegister: () -> Unit,
-    onLoginSuccess: () -> Unit,
-    onNeedsVerification: (String) -> Unit,
-    onNeedsOnboarding: () -> Unit,
-    onForgotPassword: () -> Unit,
+fun ForgotPasswordScreen(
+    onNavigateBack: () -> Unit,
+    onSuccess: (String) -> Unit,
     prefillEmail: String? = null,
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var email by remember { mutableStateOf(prefillEmail.orEmpty()) }
-    var password by remember { mutableStateOf("") }
 
     Column(
         modifier =
@@ -71,16 +62,25 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "poznajmy si\u0119!",
+            text = "nie pami\u0119tam has\u0142a",
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 20.sp,
             color = TextSecondary,
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Error banner
+        Text(
+            text = "podaj sw\u00f3j email, a wy\u015blemy ci kod weryfikacyjny",
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 14.sp,
+            color = TextSecondary,
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         uiState.error?.let { error ->
             Text(
                 text = error,
@@ -103,55 +103,27 @@ fun LoginScreen(
             keyboardOptions =
                 KeyboardOptions(
                     keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next,
+                    imeAction = ImeAction.Done,
                 ),
-            contentType = ContentType.Username + ContentType.EmailAddress,
         )
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-        PoziomkiPasswordField(
-            value = password,
-            onValueChange = {
-                password = it
-                viewModel.clearError()
-            },
-            label = "has\u0142o",
-            placeholder = "has\u0142o",
-            contentType = ContentType.Password,
-        )
-
-        TextButton(
-            onClick = onForgotPassword,
-            modifier = Modifier.align(Alignment.Start),
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-        ) {
-            Text(
-                text = "nie pami\u0119tam has\u0142a",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 13.sp,
-                color = TextMuted,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
         PoziomkiButton(
-            text = "zaloguj si\u0119",
-            onClick = {
-                viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
-            },
-            enabled = email.isNotBlank() && password.isNotBlank(),
+            text = "wy\u015blij kod",
+            onClick = { viewModel.forgotPassword(email) { onSuccess(email) } },
+            enabled = email.isNotBlank(),
             loading = uiState.isLoading,
         )
 
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
         TextButton(
-            onClick = onNavigateToRegister,
+            onClick = onNavigateBack,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         ) {
             Text(
-                text = "zarejestruj si\u0119",
+                text = "wr\u00f3\u0107 do logowania",
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,

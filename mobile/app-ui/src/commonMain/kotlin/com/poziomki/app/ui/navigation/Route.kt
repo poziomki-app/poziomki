@@ -16,6 +16,19 @@ sealed interface Route {
         val email: String,
     ) : Route
 
+    @Serializable data class ForgotPassword(
+        val prefillEmail: String? = null,
+    ) : Route
+
+    @Serializable data class ForgotPasswordVerify(
+        val email: String,
+    ) : Route
+
+    @Serializable data class ResetPassword(
+        val email: String,
+        val resetToken: String,
+    ) : Route
+
     // Onboarding
     @Serializable data object OnboardingGraph : Route
 
