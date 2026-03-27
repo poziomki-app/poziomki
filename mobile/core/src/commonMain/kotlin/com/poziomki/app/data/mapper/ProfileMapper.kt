@@ -50,6 +50,7 @@ fun com.poziomki.app.db.Profile.toApiModelWithTags(tags: List<Tag>): ProfileWith
         gradientStart = gradient_start,
         gradientEnd = gradient_end,
         tags = tags,
+        isBookmarked = is_bookmarked == 1L,
     )
 
 private fun parseImages(jsonStr: String?): List<String> =

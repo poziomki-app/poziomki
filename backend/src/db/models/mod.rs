@@ -11,6 +11,7 @@ pub mod job_outbox;
 pub mod message_reactions;
 pub mod messages;
 pub mod otp_codes;
+pub mod profile_bookmarks;
 pub mod profile_tags;
 pub mod profiles;
 pub mod push_subscriptions;
