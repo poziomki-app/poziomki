@@ -25,15 +25,6 @@ pub(super) fn proximity_score(distance_km: f64, max_km: f64) -> f64 {
 }
 
 #[allow(clippy::cast_precision_loss)]
-pub(super) fn jaccard(a: &HashSet<Uuid>, b: &HashSet<Uuid>) -> f64 {
-    if a.is_empty() && b.is_empty() {
-        return 0.0;
-    }
-    let intersection = a.intersection(b).count();
-    let union = a.union(b).count();
-    intersection as f64 / union as f64
-}
-
 pub(super) fn score_profile(
     my_tag_ids: &HashSet<Uuid>,
     candidate_tags: &HashSet<Uuid>,
@@ -41,12 +32,17 @@ pub(super) fn score_profile(
     candidate: &Profile,
     candidate_show_program: bool,
 ) -> f64 {
-    let mut score = jaccard(my_tag_ids, candidate_tags) * 100.0;
+    let shared = my_tag_ids.intersection(candidate_tags).count();
+    let mut score = if my_tag_ids.is_empty() {
+        0.0
+    } else {
+        (shared as f64 / my_tag_ids.len() as f64) * 100.0
+    };
     if candidate_show_program {
         let same_program =
             my_program.is_some_and(|prog| candidate.program.as_deref() == Some(prog));
         if same_program {
-            score += 10.0;
+            score += 5.0;
         }
     }
     score
@@ -189,10 +185,64 @@ mod tests {
     }
 
     #[test]
-    fn jaccard_partial_overlap() {
-        let a: HashSet<Uuid> = [id(1), id(2), id(3)].into();
-        let b: HashSet<Uuid> = [id(2), id(3), id(4)].into();
-        assert!((jaccard(&a, &b) - 0.5).abs() < f64::EPSILON);
+    fn recall_based_profile_scoring() {
+        let my_tags: HashSet<Uuid> = [id(1), id(2), id(3), id(4), id(5)].into();
+        let candidate_3_match: HashSet<Uuid> = [id(1), id(2), id(3), id(6), id(7)].into();
+        let candidate_1_match: HashSet<Uuid> = [id(1), id(6)].into();
+        let candidate_5_match: HashSet<Uuid> = [id(1), id(2), id(3), id(4), id(5), id(6)].into();
+
+        let make_profile = || Profile {
+            id: id(99),
+            user_id: 1,
+            name: "t".to_string(),
+            bio: None,
+            profile_picture: None,
+            images: None,
+            program: None,
+            gradient_start: None,
+            gradient_end: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let p = make_profile();
+        let s3 = score_profile(&my_tags, &candidate_3_match, None, &p, false);
+        let s1 = score_profile(&my_tags, &candidate_1_match, None, &p, false);
+        let s5 = score_profile(&my_tags, &candidate_5_match, None, &p, false);
+
+        assert!((s3 - 60.0).abs() < f64::EPSILON, "3/5 = 60, got {s3}");
+        assert!((s1 - 20.0).abs() < f64::EPSILON, "1/5 = 20, got {s1}");
+        assert!((s5 - 100.0).abs() < f64::EPSILON, "5/5 = 100, got {s5}");
+        assert!(s5 > s3 && s3 > s1, "more matches = higher score");
+    }
+
+    #[test]
+    fn program_bonus_does_not_flip_one_tag_difference() {
+        let my_tags: HashSet<Uuid> = [id(1), id(2), id(3), id(4), id(5)].into();
+        let two_match: HashSet<Uuid> = [id(1), id(2), id(6)].into();
+        let one_match: HashSet<Uuid> = [id(1), id(6), id(7)].into();
+
+        let no_prog = Profile {
+            id: id(99),
+            user_id: 1,
+            name: "t".to_string(),
+            bio: None,
+            profile_picture: None,
+            images: None,
+            program: None,
+            gradient_start: None,
+            gradient_end: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let with_prog = Profile {
+            program: Some("CS".to_string()),
+            ..no_prog.clone()
+        };
+
+        let a = score_profile(&my_tags, &two_match, None, &no_prog, false);
+        let b = score_profile(&my_tags, &one_match, Some("CS"), &with_prog, true);
+        assert!(a > b, "2 match ({a}) should beat 1 match + program ({b})");
     }
 
     #[test]
