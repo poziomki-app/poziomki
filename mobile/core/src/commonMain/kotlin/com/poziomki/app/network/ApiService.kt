@@ -32,6 +32,31 @@ class ApiService(
     suspend fun deleteAccount(password: String): ApiResult<SuccessResponse> =
         client.delete("/api/v1/auth/account", DeleteAccountRequest(password))
 
+    suspend fun forgotPassword(email: String): ApiResult<SuccessResponse> =
+        client.post("/api/v1/auth/forgot-password", ForgotPasswordRequest(email))
+
+    suspend fun forgotPasswordVerify(
+        email: String,
+        otp: String,
+    ): ApiResult<ResetTokenResponse> =
+        client.post(
+            "/api/v1/auth/forgot-password/verify",
+            ForgotPasswordVerifyRequest(email, otp),
+        )
+
+    suspend fun forgotPasswordResend(email: String): ApiResult<SuccessResponse> =
+        client.post("/api/v1/auth/forgot-password/resend", ForgotPasswordRequest(email))
+
+    suspend fun resetPassword(
+        email: String,
+        resetToken: String,
+        newPassword: String,
+    ): ApiResult<AuthResponse> =
+        client.post(
+            "/api/v1/auth/reset-password",
+            ResetPasswordRequest(email, resetToken, newPassword),
+        )
+
     suspend fun changePassword(
         currentPassword: String,
         newPassword: String,
