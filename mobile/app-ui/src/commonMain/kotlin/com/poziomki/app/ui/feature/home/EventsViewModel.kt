@@ -247,6 +247,17 @@ class EventsViewModel(
         }
     }
 
+    fun toggleSave(eventId: String) {
+        viewModelScope.launch {
+            val event = _state.value.events.find { it.id == eventId } ?: return@launch
+            if (event.isSaved) {
+                eventRepository.unsaveEvent(eventId)
+            } else {
+                eventRepository.saveEvent(eventId)
+            }
+        }
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =

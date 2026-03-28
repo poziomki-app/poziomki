@@ -93,6 +93,8 @@ class ApiService(
 
     suspend fun getMyEvents(): ApiResult<List<Event>> = client.get("/api/v1/events/mine")
 
+    suspend fun getSavedEvents(): ApiResult<List<Event>> = client.get("/api/v1/events/saved")
+
     suspend fun getEvent(id: String): ApiResult<Event> = client.get("/api/v1/events/$id")
 
     suspend fun getEventAttendees(id: String): ApiResult<List<EventAttendee>> = client.get("/api/v1/events/$id/attendees")

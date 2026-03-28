@@ -9,6 +9,7 @@ import com.poziomki.app.ui.feature.home.EventsViewModel
 import com.poziomki.app.ui.feature.home.ExploreViewModel
 import com.poziomki.app.ui.feature.home.MessagesViewModel
 import com.poziomki.app.ui.feature.home.ProfileViewModel
+import com.poziomki.app.ui.feature.home.SavedViewModel
 import com.poziomki.app.ui.feature.onboarding.OnboardingViewModel
 import com.poziomki.app.ui.feature.profile.PrivacyViewModel
 import com.poziomki.app.ui.feature.profile.ProfileEditViewModel
@@ -31,4 +32,5 @@ val appModule =
         viewModelOf(::ProfileEditViewModel)
         viewModelOf(::ProfileViewViewModel)
         viewModelOf(::PrivacyViewModel)
+        viewModelOf(::SavedViewModel)
     }
