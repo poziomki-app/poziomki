@@ -31,6 +31,7 @@ class EventRepository(
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
         private const val RECOMMENDED_CACHE_KEY = "recommended_events"
+        private const val SAVED_CACHE_KEY = "saved_events"
 
         @Volatile
         private var lastLat: Double? = null
@@ -62,6 +63,13 @@ class EventRepository(
     fun observeRecommendedEvents(): Flow<List<Event>> =
         db.eventQueries
             .selectRecommended()
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { it.toApiModel() } }
+
+    fun observeSavedEvents(): Flow<List<Event>> =
+        db.eventQueries
+            .selectSaved()
             .asFlow()
             .mapToList(Dispatchers.IO)
             .map { rows -> rows.map { it.toApiModel() } }
@@ -161,6 +169,39 @@ class EventRepository(
                             eventMutationManager.upsertEvent(event, now, inListFeed = true)
                         }
                         db.cacheStateQueries.upsert(EVENTS_LIST_CACHE_KEY, now)
+                    }
+                    true
+                }
+
+                is ApiResult.Error -> {
+                    false
+                }
+            }
+        }
+
+    suspend fun refreshSavedEvents(forceRefresh: Boolean = false): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val cachedAt =
+                    db.cacheStateQueries
+                        .selectByKey(SAVED_CACHE_KEY)
+                        .executeAsOneOrNull()
+                        ?.cached_at
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+            }
+            when (val result = api.getSavedEvents()) {
+                is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.transaction {
+                        db.eventQueries.clearSavedFlags()
+                        result.data.forEachIndexed { index, event ->
+                            eventMutationManager.upsertEvent(
+                                event,
+                                now - index,
+                                inListFeed = false,
+                            )
+                        }
+                        db.cacheStateQueries.upsert(SAVED_CACHE_KEY, now)
                     }
                     true
                 }
