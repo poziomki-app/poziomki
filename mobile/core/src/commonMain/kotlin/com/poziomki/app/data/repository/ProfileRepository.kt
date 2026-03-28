@@ -6,6 +6,7 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.mapper.toApiModel
 import com.poziomki.app.data.mapper.toApiModelWithTags
+import com.poziomki.app.data.mapper.toProfile
 import com.poziomki.app.data.sync.PendingOperationsManager
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
@@ -116,7 +117,11 @@ class ProfileRepository(
                             .selectById(id)
                             .executeAsOneOrNull()
                             ?.is_own == 1L
-                    upsertProfile(result.data.toProfile(), isOwn = existingIsOwn)
+                    upsertProfile(
+                        result.data.toProfile(),
+                        isOwn = existingIsOwn,
+                        isBookmarked = result.data.isBookmarked,
+                    )
                     upsertProfileTags(result.data.id, result.data.tags)
                     true
                 }
@@ -127,20 +132,7 @@ class ProfileRepository(
             }
         }
 
-    private fun ProfileWithTags.toProfile(): Profile =
-        Profile(
-            id = id,
-            userId = userId,
-            name = name,
-            bio = bio,
-            profilePicture = profilePicture,
-            thumbhash = thumbhash,
-            images = images,
-            program = program,
-            gradientStart = gradientStart,
-            gradientEnd = gradientEnd,
-        )
-
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun updateProfile(
         id: String,
         request: UpdateProfileRequest,
@@ -167,6 +159,7 @@ class ProfileRepository(
                         request.gradientEnd?.ifEmpty { null }
                             ?: current.gradient_end,
                     is_own = current.is_own,
+                    is_bookmarked = current.is_bookmarked,
                     created_at = current.created_at,
                     updated_at = current.updated_at,
                     cached_at = current.cached_at,
@@ -183,7 +176,11 @@ class ProfileRepository(
             if (connectivityMonitor.isOnline.value) {
                 when (val result = api.updateProfile(id, request)) {
                     is ApiResult.Success -> {
-                        upsertProfile(result.data, isOwn = current?.is_own == 1L)
+                        upsertProfile(
+                            result.data,
+                            isOwn = current?.is_own == 1L,
+                            isBookmarked = current?.is_bookmarked == 1L,
+                        )
                         result
                     }
 
@@ -228,9 +225,20 @@ class ProfileRepository(
         }
     }
 
+    suspend fun updateBookmarked(
+        id: String,
+        isBookmarked: Boolean,
+    ) = withContext(Dispatchers.IO) {
+        db.profileQueries.updateBookmarked(
+            is_bookmarked = if (isBookmarked) 1L else 0L,
+            id = id,
+        )
+    }
+
     private fun upsertProfile(
         profile: Profile,
         isOwn: Boolean,
+        isBookmarked: Boolean = false,
     ) {
         val now = Clock.System.now().toEpochMilliseconds()
         db.transaction {
@@ -249,6 +257,7 @@ class ProfileRepository(
                 gradient_start = profile.gradientStart,
                 gradient_end = profile.gradientEnd,
                 is_own = if (isOwn) 1L else 0L,
+                is_bookmarked = if (isBookmarked) 1L else 0L,
                 created_at = profile.createdAt,
                 updated_at = profile.updatedAt,
                 cached_at = now,

@@ -4,6 +4,7 @@
   <CurrentIssues>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/auth/resend-otp", ResendOtpRequest(email))</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/events/$id/attendees")</ID>
+    <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles/$id/bookmark")</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles", request)</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/settings", request)</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$(email)</ID>

@@ -315,6 +315,7 @@ class SyncEngine(
             is ApiResult.Success -> {
                 val profile = result.data
                 val now = Clock.System.now().toEpochMilliseconds()
+                val existing = db.profileQueries.selectById(profile.id).executeAsOneOrNull()
                 db.profileQueries.upsert(
                     id = profile.id,
                     user_id = profile.userId,
@@ -326,12 +327,8 @@ class SyncEngine(
                     program = profile.program,
                     gradient_start = profile.gradientStart,
                     gradient_end = profile.gradientEnd,
-                    is_own =
-                        db.profileQueries
-                            .selectById(profile.id)
-                            .executeAsOneOrNull()
-                            ?.is_own
-                            ?: 0L,
+                    is_own = existing?.is_own ?: 0L,
+                    is_bookmarked = existing?.is_bookmarked ?: 0L,
                     created_at = profile.createdAt,
                     updated_at = profile.updatedAt,
                     cached_at = now,

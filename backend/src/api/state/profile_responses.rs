@@ -51,6 +51,8 @@ pub(in crate::api) struct FullProfileResponse {
     #[serde(rename = "gradientEnd")]
     pub(in crate::api) gradient_end: Option<String>,
     pub(in crate::api) tags: Vec<TagResponse>,
+    #[serde(rename = "isBookmarked")]
+    pub(in crate::api) is_bookmarked: bool,
     #[serde(rename = "createdAt")]
     pub(in crate::api) created_at: String,
     #[serde(rename = "updatedAt")]
