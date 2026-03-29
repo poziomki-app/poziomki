@@ -38,6 +38,10 @@ data class ChatUiState(
     val composerMode: ComposerMode = ComposerMode.NewMessage,
     val isLoading: Boolean = false,
     val error: String? = null,
+    val isSearchActive: Boolean = false,
+    val searchQuery: String = "",
+    val searchMatchIndices: List<Int> = emptyList(),
+    val currentSearchMatchIndex: Int = -1,
 )
 
 data class NewChatUiState(

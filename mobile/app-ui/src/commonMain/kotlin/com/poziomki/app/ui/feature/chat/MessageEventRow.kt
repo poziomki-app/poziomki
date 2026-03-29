@@ -1,6 +1,13 @@
 package com.poziomki.app.ui.feature.chat
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -31,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -79,9 +87,17 @@ internal fun MessageEventRow(
     onSwipeReply: () -> Unit,
     compactTimestamp: Boolean = false,
     avatarOverride: String? = null,
+    isHighlighted: Boolean = false,
 ) {
     val horizontalAlignment = if (event.isMine) Alignment.End else Alignment.Start
-    val bubbleColor = if (event.isMine) Primary.copy(alpha = 0.68f) else ChatBubble
+    val bubbleColor =
+        if (isHighlighted) {
+            ChatBubble
+        } else if (event.isMine) {
+            Primary.copy(alpha = 0.68f)
+        } else {
+            ChatBubble
+        }
     val canSwipeReply = event.canReply && event.eventId != null
     val density = LocalDensity.current
     val maxSwipePx = with(density) { 84.dp.toPx() }
@@ -104,6 +120,9 @@ internal fun MessageEventRow(
                 bottomStart = 18.dp,
             )
         }
+
+    val highlightBorderModifier =
+        if (isHighlighted) searchHighlightBorder(bubbleShape) else Modifier
 
     val showAvatar = showSenderMeta && !event.isMine && !groupedWithPrevious
 
@@ -180,6 +199,7 @@ internal fun MessageEventRow(
                                 shape = bubbleShape,
                                 modifier =
                                     Modifier
+                                        .then(highlightBorderModifier)
                                         .widthIn(max = maxBubbleWidth)
                                         .combinedClickable(
                                             onClick = {},
@@ -266,6 +286,7 @@ internal fun MessageEventRow(
                                     shape = bubbleShape,
                                     modifier =
                                         Modifier
+                                            .then(highlightBorderModifier)
                                             .widthIn(
                                                 max = if (showSenderMeta) maxBubbleWidth - AvatarSize - AvatarSpacing else maxBubbleWidth,
                                             ).combinedClickable(
@@ -461,4 +482,32 @@ private fun formatTime(timestampMillis: Long): String {
     val hour = localDateTime.hour.toString().padStart(2, '0')
     val minute = localDateTime.minute.toString().padStart(2, '0')
     return "$hour:$minute"
+}
+
+private const val GLOW_DURATION = 8000
+private const val GLOW_STEPS = 24
+
+@Composable
+private fun searchHighlightBorder(shape: RoundedCornerShape): Modifier {
+    val transition = rememberInfiniteTransition(label = "searchBorder")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(GLOW_DURATION, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "searchPhase",
+    )
+    val stops =
+        Array(GLOW_STEPS) { i ->
+            val pos = i.toFloat() / GLOW_STEPS
+            val d = abs(pos - phase)
+            val dist = minOf(d, 1f - d)
+            val t = (dist / 0.25f).coerceIn(0f, 1f)
+            val alpha = 0.08f + 0.27f * (1f + kotlin.math.cos(t * kotlin.math.PI.toFloat())) / 2f
+            pos to Primary.copy(alpha = alpha)
+        }
+    return Modifier.border(1.5.dp, Brush.sweepGradient(colorStops = stops), shape)
 }
