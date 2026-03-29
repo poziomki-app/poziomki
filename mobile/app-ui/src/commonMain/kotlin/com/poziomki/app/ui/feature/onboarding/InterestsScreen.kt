@@ -46,8 +46,8 @@ import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
+import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -130,15 +130,15 @@ private fun InterestsContent(
     Column(
         modifier =
             Modifier
-                .padding(horizontal = PoziomkiTheme.spacing.lg)
-                .padding(bottom = PoziomkiTheme.spacing.md),
+                .padding(horizontal = AppTheme.spacing.lg)
+                .padding(bottom = AppTheme.spacing.md),
     ) {
         Text(
             text = "zainteresowania",
             style = MaterialTheme.typography.headlineMedium,
             color = TextPrimary,
         )
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        Spacer(modifier = Modifier.height(AppTheme.spacing.sm))
 
         val countColor by animateColorAsState(
             targetValue = if (state.selectedTagIds.size >= 3) Primary else TextMuted,
@@ -148,10 +148,10 @@ private fun InterestsContent(
             style = MaterialTheme.typography.bodySmall,
             color = countColor,
         )
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        Spacer(modifier = Modifier.height(AppTheme.spacing.md))
 
         SearchBar(query = searchQuery, onQueryChange = onSearchQueryChange)
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+        Spacer(modifier = Modifier.height(AppTheme.spacing.lg))
 
         if (searchQuery.isNotBlank()) {
             SearchResults(filteredTags, state.selectedTagIds, onToggleTag)
@@ -200,7 +200,7 @@ private fun CategoryList(
 ) {
     groupedTags.forEachIndexed { index, (category, tags) ->
         if (index > 0) {
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+            Spacer(modifier = Modifier.height(AppTheme.spacing.md))
         }
         CategorySection(
             category = category,
@@ -235,7 +235,7 @@ private fun CategorySection(
                                         Color.Transparent,
                                     ),
                             ),
-                        shape = RoundedCornerShape(PoziomkiTheme.radius.sm),
+                        shape = RoundedCornerShape(AppTheme.radius.sm),
                     ).padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Icon(
@@ -244,7 +244,7 @@ private fun CategorySection(
                 modifier = Modifier.size(16.dp),
                 tint = category.color,
             )
-            Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+            Spacer(modifier = Modifier.width(AppTheme.spacing.sm))
             Text(
                 text = category.displayName,
                 fontFamily = NunitoFamily,
@@ -254,7 +254,7 @@ private fun CategorySection(
             )
         }
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        Spacer(modifier = Modifier.height(AppTheme.spacing.sm))
 
         // Tag chips
         FlowRow(
@@ -281,7 +281,7 @@ private fun SearchBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(PoziomkiTheme.radius.lg),
+        shape = RoundedCornerShape(AppTheme.radius.lg),
         color = SurfaceElevated,
     ) {
         Row(
@@ -294,7 +294,7 @@ private fun SearchBar(
                 modifier = Modifier.size(18.dp),
                 tint = TextMuted,
             )
-            Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+            Spacer(modifier = Modifier.width(AppTheme.spacing.sm))
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
@@ -317,7 +317,7 @@ private fun SearchBar(
                 )
             }
             if (query.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+                Spacer(modifier = Modifier.width(AppTheme.spacing.sm))
                 Icon(
                     imageVector = PhosphorIcons.Bold.X,
                     contentDescription = "Clear",
