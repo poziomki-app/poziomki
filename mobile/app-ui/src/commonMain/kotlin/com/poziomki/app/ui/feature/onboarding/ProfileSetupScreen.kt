@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -35,6 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -44,30 +46,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowsOut
+import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.User
 import com.poziomki.app.ui.designsystem.components.AppButton
-import com.poziomki.app.ui.designsystem.components.ConfirmDialog
+import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
+import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.PrimaryLight
 import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.decodeImageBytes
+import com.poziomki.app.ui.shared.rememberCameraCapture
 import com.poziomki.app.ui.shared.rememberMultiImagePicker
-import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import org.koin.compose.viewmodel.koinViewModel
 
 private const val BIO_MAX_LENGTH = 300
-private const val TAG_PREVIEW_LIMIT = 2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,31 +78,21 @@ fun ProfileSetupScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val nunito = NunitoFamily
     var showAvatarPicker by remember { mutableStateOf(false) }
     var showProfilePreview by remember { mutableStateOf(false) }
-    var showClearAllDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Image pickers
-    val avatarImagePicker =
-        rememberSingleImagePicker { bytes ->
-            if (bytes != null) {
-                viewModel.setAvatarImage(bytes)
-            }
+    val cameraCapture =
+        rememberCameraCapture { bytes ->
+            if (bytes != null) viewModel.addGalleryImages(listOf(bytes))
         }
     val galleryImagePicker =
         rememberMultiImagePicker { images ->
-            if (images.isNotEmpty()) {
-                viewModel.addGalleryImages(images)
-            }
+            if (images.isNotEmpty()) viewModel.addGalleryImages(images)
         }
 
-    // Get selected tags for preview
+    val displayAvatarBytes = state.galleryImages.firstOrNull()
     val selectedTags = state.availableTags.filter { it.id in state.selectedTagIds }
-
-    // Resolve the avatar image to display: explicit avatar > first gallery image > emoji > placeholder
-    val displayAvatarBytes = state.avatarImageBytes ?: state.galleryImages.firstOrNull()
 
     OnboardingLayout(
         currentStep = 3,
@@ -112,244 +103,35 @@ fun ProfileSetupScreen(
             state.error?.let { error ->
                 Text(
                     text = error,
-                    fontFamily = nunito,
+                    fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.sm),
+                    modifier = Modifier.padding(bottom = AppTheme.spacing.sm),
                 )
             }
-            AppButton(
-                text = "potwierd\u017a",
-                onClick = { viewModel.createProfile(onComplete) },
-                loading = state.isLoading,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                AppButton(
+                    text = "potwierd\u017a",
+                    onClick = { viewModel.createProfile(onComplete) },
+                    loading = state.isLoading,
+                    variant = ButtonVariant.PRIMARY,
+                )
+            }
         },
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .padding(horizontal = PoziomkiTheme.spacing.lg)
-                    .padding(bottom = PoziomkiTheme.spacing.lg),
-        ) {
-            Text(
-                text = "tw\u00f3j profil",
-                style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            // Profile preview card
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(SurfaceElevated, RoundedCornerShape(PoziomkiTheme.radius.lg))
-                        .border(
-                            width = 1.5.dp,
-                            color = PrimaryLight,
-                            shape = RoundedCornerShape(PoziomkiTheme.radius.lg),
-                        ).padding(PoziomkiTheme.spacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Avatar — no clip on outer box so edit badge isn't cropped
-                Box(
-                    modifier =
-                        Modifier
-                            .size(80.dp) // slightly larger to fit badge
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { showAvatarPicker = true },
-                    contentAlignment = Alignment.TopStart,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Surface),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        when {
-                            displayAvatarBytes != null -> {
-                                val bitmap =
-                                    remember(displayAvatarBytes) {
-                                        decodeImageBytes(displayAvatarBytes)
-                                    }
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap,
-                                        contentDescription = null,
-                                        modifier =
-                                            Modifier
-                                                .size(72.dp)
-                                                .clip(RoundedCornerShape(16.dp)),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                }
-                            }
-
-                            state.selectedAvatar != null -> {
-                                Text(
-                                    text = state.selectedAvatar.orEmpty(),
-                                    fontSize = 36.sp,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-
-                            else -> {
-                                Icon(
-                                    imageVector = PhosphorIcons.Bold.User,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = TextMuted,
-                                )
-                            }
-                        }
-                    }
-                    // Cyan edit badge — positioned at bottom-end of 72dp avatar
-                    Box(
-                        modifier =
-                            Modifier
-                                .offset(x = 60.dp, y = 60.dp)
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Primary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Bold.PencilSimple,
-                            contentDescription = "Zmie\u0144 avatar",
-                            tint = Black,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = state.name.ifBlank { "imi\u0119" },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
-                    )
-
-                    if (selectedTags.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            selectedTags.take(TAG_PREVIEW_LIMIT).forEach { tag ->
-                                MiniTagChip(label = tag.name)
-                            }
-                            val remaining = selectedTags.size - TAG_PREVIEW_LIMIT
-                            if (remaining > 0) {
-                                Text(
-                                    text = "+$remaining",
-                                    fontFamily = nunito,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = TextMuted,
-                                )
-                            }
-                        }
-                    } else if (state.program.isNotBlank()) {
-                        Text(
-                            text = state.program,
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 14.sp,
-                            color = TextSecondary,
-                        )
-                    }
-                }
-
-                // Expand icon — opens full profile preview
-                IconButton(
-                    onClick = { showProfilePreview = true },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Bold.ArrowsOut,
-                        contentDescription = "Podgl\u0105d profilu",
-                        tint = TextMuted,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            // Bio section
-            Text(
-                text = "bio",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = TextPrimary,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            )
-
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .background(Surface, RoundedCornerShape(PoziomkiTheme.radius.lg))
-                        .border(1.dp, Border, RoundedCornerShape(PoziomkiTheme.radius.lg))
-                        .padding(PoziomkiTheme.spacing.md),
-            ) {
-                BasicTextField(
-                    value = state.bio,
-                    onValueChange = { if (it.length <= BIO_MAX_LENGTH) viewModel.updateBio(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle =
-                        TextStyle(
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 16.sp,
-                            color = TextPrimary,
-                            lineHeight = 22.sp,
-                        ),
-                    cursorBrush = SolidColor(TextPrimary),
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (state.bio.isEmpty()) {
-                                Text(
-                                    text = "opowiedz co\u015b o sobie, swoich pasjach, co lubisz robi\u0107 w wolnym czasie...",
-                                    fontFamily = nunito,
-                                    fontWeight = FontWeight.Normal,
-                                    fontSize = 16.sp,
-                                    color = TextMuted,
-                                    lineHeight = 22.sp,
-                                )
-                            }
-                            innerTextField()
-                        }
-                    },
-                )
-            }
-
-            // Character counter
-            Text(
-                text = "${state.bio.length}/$BIO_MAX_LENGTH",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp,
-                color = TextMuted,
-                modifier =
-                    Modifier
-                        .align(Alignment.End)
-                        .padding(top = 4.dp, end = 4.dp),
-            )
-        }
+        ProfileSetupContent(
+            state = state,
+            displayAvatarBytes = displayAvatarBytes,
+            onAvatarClick = { showAvatarPicker = true },
+            onPreviewClick = { showProfilePreview = true },
+            onBioChange = { viewModel.updateBio(it) },
+        )
     }
 
-    // Avatar / photos picker bottom sheet
     if (showAvatarPicker) {
         ModalBottomSheet(
             onDismissRequest = { showAvatarPicker = false },
@@ -368,68 +150,257 @@ fun ProfileSetupScreen(
             },
         ) {
             AvatarPickerContent(
-                selectedAvatar = state.selectedAvatar,
                 galleryImages = state.galleryImages,
-                onPickGalleryImages = {
-                    galleryImagePicker()
-                },
-                onRemoveGalleryImage = { index ->
-                    viewModel.removeGalleryImage(index)
-                },
-                onSelectAvatar = { emoji ->
-                    viewModel.selectAvatar(emoji)
-                    showAvatarPicker = false
-                },
-                onClearAll = { showClearAllDialog = true },
-                hasContent = state.selectedAvatar != null || state.avatarImageBytes != null || state.galleryImages.isNotEmpty(),
+                onPickGalleryImages = { galleryImagePicker() },
+                onRemoveGalleryImage = { viewModel.removeGalleryImage(it) },
+                onPickAvatarImage = { cameraCapture() },
             )
         }
     }
 
-    // Profile preview dialog
     if (showProfilePreview) {
         ProfilePreviewDialog(
             name = state.name,
             program = state.program,
             bio = state.bio,
             tags = selectedTags,
-            selectedAvatar = state.selectedAvatar,
-            avatarImageBytes = state.avatarImageBytes,
             galleryImages = state.galleryImages,
             onDismiss = { showProfilePreview = false },
-        )
-    }
-
-    if (showClearAllDialog) {
-        ConfirmDialog(
-            title = "wyczy\u015b\u0107 wszystko",
-            message = "czy na pewno chcesz usun\u0105\u0107 avatar i wszystkie zdj\u0119cia?",
-            confirmText = "wyczy\u015b\u0107",
-            isDestructive = true,
-            onConfirm = {
-                viewModel.clearAll()
-                showAvatarPicker = false
-                showClearAllDialog = false
-            },
-            onDismiss = { showClearAllDialog = false },
         )
     }
 }
 
 @Composable
-private fun MiniTagChip(
-    label: String,
+private fun ProfileSetupContent(
+    state: OnboardingState,
+    displayAvatarBytes: ByteArray?,
+    onAvatarClick: () -> Unit,
+    onPreviewClick: () -> Unit,
+    onBioChange: (String) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .padding(horizontal = AppTheme.spacing.lg)
+                .padding(bottom = AppTheme.spacing.lg),
+    ) {
+        Text(
+            text = "tw\u00f3j profil",
+            style = MaterialTheme.typography.headlineMedium,
+            color = TextPrimary,
+        )
+
+        Spacer(modifier = Modifier.height(AppTheme.spacing.lg))
+
+        // Profile card — matching main app style
+        ProfilePreviewCard(
+            state = state,
+            displayAvatarBytes = displayAvatarBytes,
+            onAvatarClick = onAvatarClick,
+            onPreviewClick = onPreviewClick,
+        )
+
+        Spacer(modifier = Modifier.height(AppTheme.spacing.lg))
+
+        // Bio section
+        Text(
+            text = "bio",
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 16.sp,
+            color = TextPrimary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+
+        BioInput(bio = state.bio, onBioChange = onBioChange)
+    }
+}
+
+@Composable
+private fun ProfilePreviewCard(
+    state: OnboardingState,
+    displayAvatarBytes: ByteArray?,
+    onAvatarClick: () -> Unit,
+    onPreviewClick: () -> Unit,
+) {
+    val cardShape = RoundedCornerShape(20.dp)
+    val backgroundBrush =
+        Brush.linearGradient(
+            colors = listOf(Color(0xFF161C26), Color(0xFF080B10)),
+            start = Offset(0f, 0f),
+            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
+        )
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .border(1.dp, Border, cardShape)
+                .background(backgroundBrush)
+                .clickable(onClick = onPreviewClick),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            EditableAvatar(
+                displayAvatarBytes = displayAvatarBytes,
+                onClick = onAvatarClick,
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            CardInfoColumn(
+                name = state.name,
+                program = state.program,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                PhosphorIcons.Bold.ArrowUpRight,
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .padding(top = 12.dp, end = 12.dp)
+                        .size(20.dp)
+                        .align(Alignment.Top),
+                tint = TextMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardInfoColumn(
+    name: String,
+    program: String,
     modifier: Modifier = Modifier,
 ) {
+    Column(modifier = modifier.padding(vertical = 16.dp)) {
+        Text(
+            text = name.ifBlank { "imi\u0119" },
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 20.sp,
+            color = TextPrimary,
+        )
+        if (program.isNotBlank()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = program,
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                color = TextSecondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditableAvatar(
+    displayAvatarBytes: ByteArray?,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(98.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.TopStart,
+    ) {
+        Box(
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp).size(90.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                displayAvatarBytes != null -> {
+                    val bitmap = remember(displayAvatarBytes) { decodeImageBytes(displayAvatarBytes) }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            modifier = Modifier.size(90.dp),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Icon(PhosphorIcons.Bold.User, null, Modifier.size(42.dp), tint = TextMuted)
+                    }
+                }
+
+                else -> {
+                    Icon(PhosphorIcons.Bold.User, null, Modifier.size(42.dp), tint = TextMuted)
+                }
+            }
+        }
+        Box(
+            modifier =
+                Modifier
+                    .offset(x = 74.dp, y = 74.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(PhosphorIcons.Bold.PencilSimple, null, Modifier.size(14.dp), tint = Black)
+        }
+    }
+}
+
+@Composable
+private fun BioInput(
+    bio: String,
+    onBioChange: (String) -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(Surface, RoundedCornerShape(AppTheme.radius.lg))
+                .border(1.dp, Border, RoundedCornerShape(AppTheme.radius.lg))
+                .padding(AppTheme.spacing.md),
+    ) {
+        BasicTextField(
+            value = bio,
+            onValueChange = { if (it.length <= BIO_MAX_LENGTH) onBioChange(it) },
+            modifier = Modifier.fillMaxWidth(),
+            textStyle =
+                TextStyle(
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    color = TextPrimary,
+                    lineHeight = 22.sp,
+                ),
+            cursorBrush = SolidColor(TextPrimary),
+            decorationBox = { innerTextField ->
+                Box {
+                    if (bio.isEmpty()) {
+                        Text(
+                            text = "opowiedz co\u015b o sobie, swoich pasjach...",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16.sp,
+                            color = TextMuted,
+                            lineHeight = 22.sp,
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
+
     Text(
-        text = label,
+        text = "${bio.length}/$BIO_MAX_LENGTH",
         fontFamily = NunitoFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        color = TextSecondary,
+        fontSize = 12.sp,
+        color = TextMuted,
         modifier =
-            modifier
-                .border(1.dp, Border, RoundedCornerShape(50))
-                .padding(horizontal = 6.dp, vertical = 1.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, end = 4.dp),
+        textAlign = TextAlign.End,
     )
 }

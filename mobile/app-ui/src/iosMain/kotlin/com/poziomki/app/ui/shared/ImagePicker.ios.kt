@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 
 @Composable
+actual fun rememberCameraCapture(onResult: (ByteArray?) -> Unit): () -> Unit = { /* TODO: iOS camera */ }
+
+@Composable
 actual fun rememberSingleImagePicker(onResult: (ByteArray?) -> Unit): () -> Unit = { /* TODO: iOS image picker */ }
 
 @Composable

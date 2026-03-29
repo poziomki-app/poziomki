@@ -10,6 +10,9 @@ data class PickedFile(
 )
 
 @Composable
+expect fun rememberCameraCapture(onResult: (ByteArray?) -> Unit): () -> Unit
+
+@Composable
 expect fun rememberSingleImagePicker(onResult: (ByteArray?) -> Unit): () -> Unit
 
 @Composable
