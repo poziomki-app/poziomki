@@ -630,10 +630,12 @@ private fun ReactionBreakdownSheet(
 }
 
 @Composable
-private fun ActionMenuItem(
+internal fun ActionMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit,
+    iconTint: Color = TextSecondary,
+    labelColor: Color = TextPrimary,
 ) {
     Row(
         modifier =
@@ -646,7 +648,7 @@ private fun ActionMenuItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = TextSecondary,
+            tint = iconTint,
             modifier = Modifier.size(22.dp),
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -654,7 +656,7 @@ private fun ActionMenuItem(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
-            color = TextPrimary,
+            color = labelColor,
         )
     }
 }

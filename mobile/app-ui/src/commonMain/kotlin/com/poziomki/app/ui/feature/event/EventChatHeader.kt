@@ -21,8 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +48,15 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.Flag
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.SignOut
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.bold.UserPlus
+import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
@@ -60,6 +66,8 @@ import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.Border
+import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -67,6 +75,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.feature.chat.ActionMenuItem
 import com.poziomki.app.ui.shared.formatEventDateCompact
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.maplibre.compose.camera.CameraPosition
@@ -79,6 +88,7 @@ import org.maplibre.compose.map.OrnamentOptions
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
+import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @Composable
 fun EventCoverImage(
@@ -250,6 +260,9 @@ fun EventChatHeader(
     onLeave: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onReport: () -> Unit = {},
+    onArchive: () -> Unit = {},
+    onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -283,62 +296,18 @@ fun EventChatHeader(
             }
 
             Spacer(modifier = Modifier.weight(1f))
-            Box {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.45f),
-                ) {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            imageVector = PhosphorIcons.Bold.DotsThreeVertical,
-                            contentDescription = "Więcej",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                ) {
-                    if (isCreator) {
-                        DropdownMenuItem(
-                            text = { Text("Edytuj") },
-                            onClick = {
-                                showMenu = false
-                                onEdit()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Usuń wydarzenie",
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            },
-                            onClick = {
-                                showMenu = false
-                                showDeleteDialog = true
-                            },
-                        )
-                    } else if (event.isAttending) {
-                        DropdownMenuItem(
-                            text = { Text("Opuść wydarzenie") },
-                            onClick = {
-                                showMenu = false
-                                onLeave()
-                            },
-                        )
-                    } else {
-                        DropdownMenuItem(
-                            text = { Text("Dołącz do wydarzenia") },
-                            onClick = {
-                                showMenu = false
-                                onJoin()
-                            },
-                        )
-                    }
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.45f),
+            ) {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.DotsThreeVertical,
+                        contentDescription = "Więcej",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
             }
         }
@@ -395,6 +364,90 @@ fun EventChatHeader(
                         null
                     },
             )
+        }
+    }
+
+    if (showMenu) {
+        Dialog(
+            onDismissRequest = { showMenu = false },
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = SurfaceColor,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    if (isCreator) {
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.PencilSimple,
+                            label = "Edytuj",
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            },
+                        )
+                        HorizontalDivider(color = Border)
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Trash,
+                            label = "Usuń wydarzenie",
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                            iconTint = Error,
+                            labelColor = Error,
+                        )
+                    } else if (event.isAttending) {
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.SignOut,
+                            label = "Opuść wydarzenie",
+                            onClick = {
+                                showMenu = false
+                                onLeave()
+                            },
+                        )
+                    } else {
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.UserPlus,
+                            label = "Dołącz do wydarzenia",
+                            onClick = {
+                                showMenu = false
+                                onJoin()
+                            },
+                        )
+                    }
+                    HorizontalDivider(color = Border)
+                    ActionMenuItem(
+                        icon = PhosphorIcons.Bold.Flag,
+                        label = "Zgłoś",
+                        onClick = {
+                            showMenu = false
+                            onReport()
+                        },
+                    )
+                    HorizontalDivider(color = Border)
+                    ActionMenuItem(
+                        icon = PhosphorIcons.Bold.Archive,
+                        label = "Archiwizuj",
+                        onClick = {
+                            showMenu = false
+                            onArchive()
+                        },
+                    )
+                    HorizontalDivider(color = Border)
+                    ActionMenuItem(
+                        icon = PhosphorIcons.Bold.X,
+                        label = "Usuń",
+                        onClick = {
+                            showMenu = false
+                            onRemove()
+                        },
+                    )
+                }
+            }
         }
     }
 

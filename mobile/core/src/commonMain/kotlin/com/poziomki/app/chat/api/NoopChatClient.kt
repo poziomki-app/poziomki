@@ -3,6 +3,7 @@ package com.poziomki.app.chat.api
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+@Suppress("TooManyFunctions")
 class NoopChatClient : ChatClient {
     private val _state = MutableStateFlow<ChatClientState>(ChatClientState.Idle)
     override val state: StateFlow<ChatClientState> = _state
@@ -41,6 +42,10 @@ class NoopChatClient : ChatClient {
     override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
 
     override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun archiveConversation(roomId: String) = Unit
+
+    override suspend fun hideConversation(roomId: String) = Unit
 
     override suspend fun stop() {
         _state.value = ChatClientState.Idle

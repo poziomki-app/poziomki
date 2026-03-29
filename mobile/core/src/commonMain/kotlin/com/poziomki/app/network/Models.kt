@@ -334,6 +334,12 @@ data class ChatPushUnregisterRequest(
     val deviceId: String,
 )
 
+@Serializable
+data class ReportConversationRequest(
+    val reason: String,
+    val description: String? = null,
+)
+
 // Message search models
 
 @Serializable

@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::db::models::conversation_members::NewConversationMember;
 use crate::db::models::conversations::{Conversation, NewConversation};
-use crate::db::schema::{conversation_members, conversations, events, profiles, users};
+use crate::db::schema::{
+    conversation_members, conversations, events, profile_blocks, profiles, users,
+};
 
 /// Resolve or create a DM conversation between two users.
 /// Uses canonical pair (lower id, higher id) for uniqueness.
@@ -193,6 +195,7 @@ pub async fn list_for_user(
 
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
+        .filter(conversation_members::archived_at.is_null())
         .select(conversation_members::conversation_id)
         .load(&mut conn)
         .await?;
@@ -294,6 +297,40 @@ pub async fn list_for_user(
         .map(|(uid, pid, name, avatar)| (uid, (pid, name, avatar)))
         .collect();
 
+    // Resolve current user's profile ID for block checks
+    let my_profile_id: Option<uuid::Uuid> = profiles::table
+        .filter(profiles::user_id.eq(user_id))
+        .select(profiles::id)
+        .first(&mut conn)
+        .await
+        .optional()?;
+
+    // Batch-load blocked profile IDs (profiles I blocked or that blocked me)
+    let blocked_profile_ids: std::collections::HashSet<uuid::Uuid> =
+        if let Some(my_pid) = my_profile_id {
+            let rows: Vec<(uuid::Uuid, uuid::Uuid)> = profile_blocks::table
+                .filter(
+                    profile_blocks::blocker_id
+                        .eq(my_pid)
+                        .or(profile_blocks::blocked_id.eq(my_pid)),
+                )
+                .select((profile_blocks::blocker_id, profile_blocks::blocked_id))
+                .load(&mut conn)
+                .await?;
+            rows.into_iter()
+                .flat_map(|(a, b)| {
+                    // Return the "other" profile ID (not mine)
+                    if a == my_pid {
+                        vec![b]
+                    } else {
+                        vec![a]
+                    }
+                })
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
     let mut payloads = Vec::with_capacity(convs.len());
     for conv in &convs {
         let latest = latest_map.get(&conv.id).copied();
@@ -334,6 +371,20 @@ pub async fn list_for_user(
                 .map(|(_, name, _)| name.clone())
         });
 
+        // Check if the DM partner is blocked (either direction)
+        let is_blocked = if conv.kind == "dm" {
+            let other_id = if conv.user_low_id == Some(user_id) {
+                conv.user_high_id
+            } else {
+                conv.user_low_id
+            };
+            other_id
+                .and_then(|oid| profile_map.get(&oid))
+                .is_some_and(|(pid, _, _)| blocked_profile_ids.contains(pid))
+        } else {
+            false
+        };
+
         payloads.push(ConversationPayload {
             id: conv.id,
             kind: conv.kind.clone(),
@@ -348,6 +399,7 @@ pub async fn list_for_user(
             latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),
             latest_message_is_mine: latest.is_some_and(|m| m.sender_id == user_id),
             latest_sender_name,
+            is_blocked,
         });
     }
 

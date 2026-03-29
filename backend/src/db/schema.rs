@@ -20,6 +20,7 @@ diesel::table! {
         user_id -> Int4,
         joined_at -> Timestamptz,
         last_read_message_id -> Nullable<Uuid>,
+        archived_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -148,6 +149,14 @@ diesel::table! {
         attempts -> Int2,
         expires_at -> Timestamptz,
         last_sent_at -> Timestamptz,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    profile_blocks (blocker_id, blocked_id) {
+        blocker_id -> Uuid,
+        blocked_id -> Uuid,
         created_at -> Timestamptz,
     }
 }
@@ -315,6 +324,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     message_reactions,
     messages,
     otp_codes,
+    profile_blocks,
     profile_bookmarks,
     profile_tags,
     profiles,
