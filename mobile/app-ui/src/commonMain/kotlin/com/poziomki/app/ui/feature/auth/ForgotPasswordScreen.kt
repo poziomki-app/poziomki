@@ -26,7 +26,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -109,7 +109,7 @@ fun ForgotPasswordScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-        PoziomkiButton(
+        AppButton(
             text = "wy\u015blij kod",
             onClick = { viewModel.forgotPassword(email) { onSuccess(email) } },
             enabled = email.isNotBlank(),
