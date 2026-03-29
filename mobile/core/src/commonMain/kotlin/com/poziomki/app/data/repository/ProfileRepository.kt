@@ -294,6 +294,8 @@ class ProfileRepository(
         }
     }
 
+    suspend fun seedOwnProfile(): Boolean = refreshOwnProfile(forceRefresh = true)
+
     private fun upsertProfileTags(
         profileId: String,
         tags: List<com.poziomki.app.network.Tag>,
