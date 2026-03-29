@@ -858,6 +858,14 @@ private fun BioEditorDialog(
                                 TextMuted
                             },
                     )
+                    Text(
+                        text = "zapisz",
+                        fontFamily = nunito,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = Primary,
+                        modifier = Modifier.padding(start = 12.dp).clickable(onClick = onDismiss),
+                    )
                 }
             }
         }
