@@ -100,7 +100,7 @@ class EventsViewModel(
                     lng = location?.longitude,
                     forceRefresh = forceRefresh,
                 )
-            _state.value = _state.value.copy(recommendedEvents = recommended)
+            _state.value = _state.value.copy(recommendedEvents = recommended, dismissedEventIds = emptySet())
             filterEvents()
         }
     }
@@ -229,6 +229,7 @@ class EventsViewModel(
         eventId: String,
         feedback: String,
     ) {
+        val removedFromRecommended = _state.value.recommendedEvents.find { it.id == eventId }
         _state.value =
             _state.value.copy(
                 dismissedEventIds = _state.value.dismissedEventIds + eventId,
@@ -236,12 +237,16 @@ class EventsViewModel(
             )
         filterEvents()
 
+        // Only send feedback for events the recommendation engine actually surfaced
+        if (removedFromRecommended == null) return
+
         viewModelScope.launch {
             val result = apiService.postEventFeedback(eventId, feedback)
             if (result is ApiResult.Error) {
                 _state.value =
                     _state.value.copy(
                         dismissedEventIds = _state.value.dismissedEventIds - eventId,
+                        recommendedEvents = _state.value.recommendedEvents + removedFromRecommended,
                     )
                 filterEvents()
             }
