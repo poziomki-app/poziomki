@@ -174,6 +174,13 @@ fun RegisterScreen(
                 color = Primary,
                 modifier = Modifier.clickable { showPolicy = true },
             )
+            Text(
+                text = " *",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
@@ -235,7 +242,7 @@ fun RegisterScreen(
                             .padding(24.dp),
                 ) {
                     Text(
-                        text = "Polityka Prywatności",
+                        text = "polityka prywatności",
                         fontFamily = MontserratFamily,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 22.sp,
