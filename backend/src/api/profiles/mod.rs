@@ -1,3 +1,5 @@
+#[path = "blocks.rs"]
+pub mod profiles_blocks;
 #[path = "bookmarks.rs"]
 mod profiles_bookmarks;
 #[path = "http.rs"]
@@ -124,4 +126,30 @@ pub(super) async fn profiles_bookmarked_handler(
     };
     let data = profiles_bookmarks::profiles_bookmarked(my_profile.id, user.id).await?;
     Ok(Json(DataResponse { data }).into_response())
+}
+
+pub(super) async fn profile_block_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let target_uuid = super::parse_uuid(&id, "profile")?;
+    let Some(my_profile) = load_profile_by_user_id(user.id).await? else {
+        return Ok(not_found_profile(&headers, "me"));
+    };
+    profiles_blocks::profile_block(&headers, my_profile.id, target_uuid).await
+}
+
+pub(super) async fn profile_unblock_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let target_uuid = super::parse_uuid(&id, "profile")?;
+    let Some(my_profile) = load_profile_by_user_id(user.id).await? else {
+        return Ok(not_found_profile(&headers, "me"));
+    };
+    profiles_blocks::profile_unblock(my_profile.id, target_uuid).await
 }

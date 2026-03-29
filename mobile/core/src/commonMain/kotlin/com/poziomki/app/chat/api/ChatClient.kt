@@ -35,6 +35,7 @@ data class RoomSummary(
     val latestMessageIsMine: Boolean = false,
     val latestMessageSendStatus: EventSendStatus? = null,
     val latestMessageReadByCount: Int = 0,
+    val isBlocked: Boolean = false,
 )
 
 data class RoomTimelineCacheSnapshot(
@@ -44,6 +45,7 @@ data class RoomTimelineCacheSnapshot(
     val updatedAtMillis: Long,
 )
 
+@Suppress("TooManyFunctions")
 interface ChatClient {
     val state: StateFlow<ChatClientState>
     val rooms: StateFlow<List<RoomSummary>>
@@ -74,6 +76,10 @@ interface ChatClient {
     suspend fun registerPusher(ntfyEndpoint: String): Result<Unit>
 
     suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>
+
+    suspend fun archiveConversation(roomId: String)
+
+    suspend fun hideConversation(roomId: String)
 
     suspend fun stop()
 }

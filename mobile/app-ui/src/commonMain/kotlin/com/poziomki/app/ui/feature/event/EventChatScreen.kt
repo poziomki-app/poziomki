@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
+import com.poziomki.app.ui.designsystem.components.ReportDialog
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.feature.chat.ChatContent
@@ -36,6 +37,7 @@ fun EventChatScreen(
     val eventState by eventDetailViewModel.state.collectAsState()
     val chatState by chatViewModel.uiState.collectAsState()
     val timelineListState = rememberLazyListState()
+    var showReportDialog by remember { mutableStateOf(false) }
 
     val conversationId = eventState.event?.conversationId
 
@@ -121,8 +123,15 @@ fun EventChatScreen(
                         onLeave = eventDetailViewModel::leaveEvent,
                         onDelete = { eventDetailViewModel.deleteEvent(onBack) },
                         onEdit = { onNavigateToEditEvent(event.id) },
-                        onApprove = eventDetailViewModel::approveAttendee,
-                        onReject = eventDetailViewModel::rejectAttendee,
+                        onReport = { showReportDialog = true },
+                        onArchive = {
+                            chatViewModel.archiveConversation()
+                            onBack()
+                        },
+                        onRemove = {
+                            chatViewModel.removeConversation()
+                            onBack()
+                        },
                     )
                     ChatContent(
                         modifier = Modifier.weight(1f),
@@ -148,6 +157,16 @@ fun EventChatScreen(
                     )
                 }
             }
+        }
+
+        if (showReportDialog) {
+            ReportDialog(
+                onConfirm = { reason, description ->
+                    showReportDialog = false
+                    chatViewModel.reportConversation(reason, description)
+                },
+                onDismiss = { showReportDialog = false },
+            )
         }
 
         // Snackbar overlay
