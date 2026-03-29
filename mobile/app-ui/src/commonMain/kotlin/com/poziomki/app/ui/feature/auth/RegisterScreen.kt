@@ -190,6 +190,7 @@ fun RegisterScreen(
                     acceptedPolicy,
             loading = uiState.isLoading,
             loadingText = "tworzenie konta...",
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
