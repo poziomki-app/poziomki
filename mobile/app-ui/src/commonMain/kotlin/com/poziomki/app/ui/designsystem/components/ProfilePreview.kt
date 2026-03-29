@@ -309,7 +309,7 @@ fun ProfilePreview(
                 ) {
                     tags.forEach { tag ->
                         Text(
-                            text = "${tag.emoji ?: ""} ${tag.name}".trim(),
+                            text = tag.name.lowercase(),
                             fontFamily = nunito,
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
