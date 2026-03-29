@@ -121,6 +121,8 @@ fun EventChatScreen(
                         onLeave = eventDetailViewModel::leaveEvent,
                         onDelete = { eventDetailViewModel.deleteEvent(onBack) },
                         onEdit = { onNavigateToEditEvent(event.id) },
+                        onApprove = eventDetailViewModel::approveAttendee,
+                        onReject = eventDetailViewModel::rejectAttendee,
                     )
                     ChatContent(
                         modifier = Modifier.weight(1f),

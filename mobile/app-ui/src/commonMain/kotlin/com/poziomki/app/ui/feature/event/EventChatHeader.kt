@@ -50,7 +50,9 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
@@ -250,6 +252,8 @@ fun EventChatHeader(
     onLeave: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onApprove: (String) -> Unit = {},
+    onReject: (String) -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -415,11 +419,14 @@ fun EventChatHeader(
     if (showAttendeesDialog) {
         AttendeesDialog(
             attendees = attendees,
+            isCreator = isCreator,
             onDismiss = { showAttendeesDialog = false },
             onNavigateToProfile = { profileId ->
                 showAttendeesDialog = false
                 onNavigateToProfile(profileId)
             },
+            onApprove = onApprove,
+            onReject = onReject,
         )
     }
 
@@ -448,12 +455,18 @@ fun EventChatHeader(
 }
 
 @Composable
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 private fun AttendeesDialog(
     attendees: List<EventAttendee>,
+    isCreator: Boolean,
     onDismiss: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
+    onApprove: (String) -> Unit,
+    onReject: (String) -> Unit,
 ) {
+    val pending = attendees.filter { it.status == "pending" }
+    val confirmed = attendees.filter { it.status != "pending" }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
@@ -471,7 +484,61 @@ private fun AttendeesDialog(
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
-                attendees.forEach { attendee ->
+                if (pending.isNotEmpty() && isCreator) {
+                    Text(
+                        text = "oczekujący",
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    pending.forEach { attendee ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                        ) {
+                            UserAvatar(
+                                picture = attendee.profilePicture,
+                                displayName = attendee.name,
+                                size = 36.dp,
+                                modifier = Modifier.clickable { onNavigateToProfile(attendee.profileId) },
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = attendee.name,
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = TextPrimary,
+                                modifier = Modifier.weight(1f).clickable { onNavigateToProfile(attendee.profileId) },
+                            )
+                            IconButton(onClick = { onApprove(attendee.profileId) }) {
+                                Icon(
+                                    PhosphorIcons.Bold.Check,
+                                    contentDescription = "Zatwierdź",
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            IconButton(onClick = { onReject(attendee.profileId) }) {
+                                Icon(
+                                    PhosphorIcons.Bold.X,
+                                    contentDescription = "Odrzuć",
+                                    tint = Color(0xFFE57373),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (confirmed.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+                confirmed.forEach { attendee ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier =
