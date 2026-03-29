@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,9 +65,11 @@ import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
+import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
+import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
@@ -239,11 +240,11 @@ fun EventsScreen(
             }
 
             // FAB: create event
-            FloatingActionButton(
+            PoziomkiButton(
+                text = "nowe",
                 onClick = onNavigateToEventCreate,
-                containerColor = Primary,
-                contentColor = Color.White,
-                shape = CircleShape,
+                variant = ButtonVariant.PRIMARY,
+                icon = PhosphorIcons.Bold.PencilSimple,
                 modifier =
                     Modifier
                         .align(Alignment.BottomEnd)
@@ -251,13 +252,7 @@ fun EventsScreen(
                             end = PoziomkiTheme.spacing.lg,
                             bottom = LocalNavBarPadding.current + 24.dp,
                         ),
-            ) {
-                Icon(
-                    PhosphorIcons.Bold.PencilSimple,
-                    contentDescription = "Utw\u00f3rz wydarzenie",
-                    modifier = Modifier.size(24.dp),
-                )
-            }
+            )
 
             // Refresh error snackbar
             state.refreshError?.let { error ->
