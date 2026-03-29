@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -15,12 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,11 +36,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
@@ -43,15 +55,30 @@ import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
+import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
+import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
+import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
-import com.poziomki.app.ui.shared.formatEventDateFull
-import com.poziomki.app.ui.shared.pluralizePolish
+import com.poziomki.app.ui.shared.formatEventDateCompact
 import com.poziomki.app.ui.shared.resolveImageUrl
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.map.MapOptions
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.Position
 
 @Composable
 fun EventCoverImage(
@@ -98,77 +125,124 @@ fun EventCoverImage(
 }
 
 @Composable
-@Suppress("LongMethod")
-fun EventMetaRows(event: Event) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = PhosphorIcons.Fill.CalendarDots,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = TextSecondary,
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = formatEventDateFull(event.startsAt),
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-        )
-    }
+fun EventMetaRows(
+    event: Event,
+    onParticipantsClick: (() -> Unit)? = null,
+    onLocationClick: (() -> Unit)? = null,
+    onInfoClick: (() -> Unit)? = null,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MetaChip(icon = PhosphorIcons.Fill.CalendarDots, text = formatEventDateCompact(event.startsAt))
 
-    event.location?.let { location ->
-        Spacer(modifier = Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = PhosphorIcons.Fill.MapPin,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = TextSecondary,
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = location,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                maxLines = 1,
+        event.location?.let { location ->
+            MetaChip(
+                icon = PhosphorIcons.Fill.MapPin,
+                text = shortenLocation(location),
+                onClick = onLocationClick,
             )
         }
-    }
 
-    Spacer(modifier = Modifier.height(2.dp))
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = PhosphorIcons.Fill.UsersThree,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = TextSecondary,
+        MetaChip(
+            icon = PhosphorIcons.Fill.UsersThree,
+            text = event.attendeesCount.toString(),
+            onClick = onParticipantsClick,
+            accent = true,
         )
-        Spacer(modifier = Modifier.width(6.dp))
-        val maxAttendees = event.maxAttendees
-        val attendeesText =
-            if (maxAttendees != null) {
-                "${event.attendeesCount} / $maxAttendees " +
-                    pluralizePolish(maxAttendees, "miejsce", "miejsca", "miejsc")
-            } else {
-                pluralizePolish(
-                    event.attendeesCount,
-                    "uczestnik",
-                    "uczestników",
-                    "uczestników",
-                )
+
+        if (onInfoClick != null) {
+            val infoShape = RoundedCornerShape(50)
+            Surface(
+                onClick = onInfoClick,
+                shape = infoShape,
+                color = Primary.copy(alpha = 0.18f),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .height(32.dp)
+                            .padding(horizontal = 12.dp),
+                ) {
+                    Text(
+                        text = "i",
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                        color = Primary,
+                    )
+                }
             }
-        Text(
-            text = attendeesText,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-        )
+        }
     }
 }
 
 @Composable
-@Suppress("LongMethod", "LongParameterList")
+private fun MetaChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: (() -> Unit)? = null,
+    accent: Boolean = false,
+) {
+    val shape = RoundedCornerShape(50)
+    val bgColor = if (accent) Primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.12f)
+    val contentColor = if (accent) Primary else Color.White
+
+    if (onClick != null) {
+        Surface(onClick = onClick, shape = shape, color = bgColor) {
+            ChipContent(icon = icon, text = text, tint = contentColor)
+        }
+    } else {
+        Surface(shape = shape, color = bgColor) {
+            ChipContent(icon = icon, text = text, tint = contentColor)
+        }
+    }
+}
+
+@Composable
+private fun ChipContent(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    tint: Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .height(32.dp)
+                .padding(horizontal = 10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = tint.copy(alpha = 0.85f),
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = text,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = tint,
+            maxLines = 1,
+        )
+    }
+}
+
+private fun shortenLocation(location: String): String {
+    val parts = location.split(",").map { it.trim() }
+    if (parts.size <= 2) return location
+    return parts.dropLast(1).joinToString(", ")
+}
+
+@Composable
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 fun EventChatHeader(
     event: Event,
+    attendees: List<EventAttendee>,
     isCreator: Boolean,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
@@ -179,6 +253,9 @@ fun EventChatHeader(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showAttendeesDialog by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     EventCoverImage(event = event) {
         Row(
@@ -190,22 +267,36 @@ fun EventChatHeader(
                     .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.ArrowLeft,
-                    contentDescription = "Wstecz",
-                    tint = Color.White,
-                )
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.45f),
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.ArrowLeft,
+                        contentDescription = "Wstecz",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
             Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(
-                        imageVector = PhosphorIcons.Bold.DotsThreeVertical,
-                        contentDescription = "Więcej",
-                        tint = Color.White,
-                    )
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.45f),
+                ) {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = PhosphorIcons.Bold.DotsThreeVertical,
+                            contentDescription = "Więcej",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
                 DropdownMenu(
                     expanded = showMenu,
@@ -288,7 +379,22 @@ fun EventChatHeader(
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
             }
 
-            EventMetaRows(event = event)
+            EventMetaRows(
+                event = event,
+                onParticipantsClick = { showAttendeesDialog = true },
+                onLocationClick =
+                    if (event.latitude != null && event.longitude != null) {
+                        { showLocationDialog = true }
+                    } else {
+                        null
+                    },
+                onInfoClick =
+                    if (!event.description.isNullOrBlank()) {
+                        { showInfoDialog = true }
+                    } else {
+                        null
+                    },
+            )
         }
     }
 
@@ -304,5 +410,254 @@ fun EventChatHeader(
             },
             onDismiss = { showDeleteDialog = false },
         )
+    }
+
+    if (showAttendeesDialog) {
+        AttendeesDialog(
+            attendees = attendees,
+            onDismiss = { showAttendeesDialog = false },
+            onNavigateToProfile = { profileId ->
+                showAttendeesDialog = false
+                onNavigateToProfile(profileId)
+            },
+        )
+    }
+
+    if (showLocationDialog) {
+        val lat = event.latitude
+        val lng = event.longitude
+        val loc = event.location
+        if (lat != null && lng != null && loc != null) {
+            LocationMapDialog(
+                locationName = loc,
+                latitude = lat,
+                longitude = lng,
+                onDismiss = { showLocationDialog = false },
+            )
+        }
+    }
+
+    if (showInfoDialog) {
+        event.description?.let { description ->
+            EventInfoDialog(
+                description = description,
+                onDismiss = { showInfoDialog = false },
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("LongMethod")
+private fun AttendeesDialog(
+    attendees: List<EventAttendee>,
+    onDismiss: () -> Unit,
+    onNavigateToProfile: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = SurfaceElevated,
+        title = {
+            Text(
+                text = "uczestnicy",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = TextPrimary,
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                attendees.forEach { attendee ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onNavigateToProfile(attendee.profileId) }
+                                .padding(vertical = 6.dp),
+                    ) {
+                        UserAvatar(
+                            picture = attendee.profilePicture,
+                            displayName = attendee.name,
+                            size = 36.dp,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = attendee.name,
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = TextPrimary,
+                            )
+                            if (attendee.isCreator) {
+                                Text(
+                                    text = "organizator",
+                                    fontFamily = NunitoFamily,
+                                    fontSize = 12.sp,
+                                    color = Primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "zamknij",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun EventInfoDialog(
+    description: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = SurfaceElevated,
+        title = {
+            Text(
+                text = "opis",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = TextPrimary,
+            )
+        },
+        text = {
+            Text(
+                text = description,
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                color = TextSecondary,
+                lineHeight = 20.sp,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "zamknij",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextMuted,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+@Suppress("LongMethod")
+private fun LocationMapDialog(
+    locationName: String,
+    latitude: Double,
+    longitude: Double,
+    onDismiss: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    val mapsUrl = "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = SurfaceElevated,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = locationName,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = TextPrimary,
+                    maxLines = 2,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                ) {
+                    MaplibreMap(
+                        modifier = Modifier.fillMaxSize(),
+                        baseStyle =
+                            BaseStyle.Uri("https://tiles.openfreemap.org/styles/positron"),
+                        cameraState =
+                            rememberCameraState(
+                                firstPosition =
+                                    CameraPosition(
+                                        target = Position(latitude = latitude, longitude = longitude),
+                                        zoom = 14.0,
+                                    ),
+                            ),
+                        options =
+                            MapOptions(
+                                ornamentOptions =
+                                    OrnamentOptions(
+                                        isLogoEnabled = false,
+                                        isCompassEnabled = false,
+                                        isScaleBarEnabled = false,
+                                    ),
+                            ),
+                    ) {
+                        val source = rememberGeoJsonSource(data = pointGeoJson(latitude, longitude))
+                        CircleLayer(
+                            id = "location-marker",
+                            source = source,
+                            radius = const(8.dp),
+                            color = const(Primary),
+                            strokeColor = const(Color.White),
+                            strokeWidth = const(2.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { uriHandler.openUri(mapsUrl) }) {
+                        Icon(
+                            imageVector = PhosphorIcons.Fill.MapPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Primary,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "otwórz w mapach",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Primary,
+                        )
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "zamknij",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextMuted,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -69,6 +69,27 @@ fun formatEventDateFull(isoString: String): String {
     return "$weekday, $day $month · $hour:$minute"
 }
 
+fun formatEventDateCompact(isoString: String): String {
+    val tz = TimeZone.currentSystemDefault()
+    val instant = Instant.parse(isoString)
+    val dt = instant.toLocalDateTime(tz)
+    val today =
+        Clock.System
+            .now()
+            .toLocalDateTime(tz)
+            .date
+    val daysDiff = dt.date.toEpochDays() - today.toEpochDays()
+    val hour = dt.hour.toString().padStart(2, '0')
+    val minute = dt.minute.toString().padStart(2, '0')
+    val time = "$hour:$minute"
+    return when {
+        daysDiff == 0 -> "dziś, $time"
+        daysDiff == 1 -> "jutro, $time"
+        daysDiff in 2..6 -> "${POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]}, $time"
+        else -> "${dt.dayOfMonth} ${POLISH_MONTHS_GENITIVE[dt.monthNumber - 1]}, $time"
+    }
+}
+
 fun pluralizePolish(
     count: Int,
     one: String,
