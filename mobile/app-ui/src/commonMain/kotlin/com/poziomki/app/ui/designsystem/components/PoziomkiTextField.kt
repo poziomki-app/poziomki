@@ -40,7 +40,7 @@ import com.adamglin.phosphoricons.bold.Eye
 import com.adamglin.phosphoricons.bold.EyeSlash
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.Error
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -63,7 +63,7 @@ fun PoziomkiTextField(
     trailingContent: @Composable (() -> Unit)? = null,
     contentType: ContentType? = null,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val shape = RoundedCornerShape(PoziomkiTheme.radius.md)
     val borderColor = if (error != null) Error else Border
 

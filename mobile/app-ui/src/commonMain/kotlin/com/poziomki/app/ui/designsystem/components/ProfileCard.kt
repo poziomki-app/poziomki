@@ -32,7 +32,6 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -123,7 +122,7 @@ fun ProfileCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = program,
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 14.sp,
                         color = TextSecondary,

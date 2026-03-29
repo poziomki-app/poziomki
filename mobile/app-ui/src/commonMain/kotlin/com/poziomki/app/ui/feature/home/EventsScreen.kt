@@ -77,7 +77,6 @@ import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -453,7 +452,7 @@ private fun EventCard(
                 // Date/time
                 Text(
                     text = formatEventDate(event.startsAt),
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 15.sp,
                     color = TextSecondary,
@@ -471,7 +470,7 @@ private fun EventCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = location,
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,
                             color = TextMuted,
@@ -495,7 +494,7 @@ private fun EventCard(
                         }
                         Text(
                             text = event.attendeeUsageLabel(),
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = TextPrimary,
@@ -650,7 +649,7 @@ internal fun EventRow(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = formatEventDate(event.startsAt),
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -666,7 +665,7 @@ internal fun EventRow(
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = location,
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 13.sp,
                             color = TextMuted,
@@ -677,7 +676,7 @@ internal fun EventRow(
                 event.creator?.let { creator ->
                     Text(
                         text = "od ${creator.name}",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 14.sp,
                         color = TextMuted,

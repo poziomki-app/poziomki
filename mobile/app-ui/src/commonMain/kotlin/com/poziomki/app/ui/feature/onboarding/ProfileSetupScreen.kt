@@ -56,7 +56,6 @@ import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
@@ -103,7 +102,7 @@ fun ProfileSetupScreen(
             state.error?.let { error ->
                 Text(
                     text = error,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.error,
@@ -283,7 +282,7 @@ private fun CardInfoColumn(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = program,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
                 color = TextSecondary,
@@ -366,7 +365,7 @@ private fun BioInput(
             modifier = Modifier.fillMaxWidth(),
             textStyle =
                 TextStyle(
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 16.sp,
                     color = TextPrimary,
@@ -378,7 +377,7 @@ private fun BioInput(
                     if (bio.isEmpty()) {
                         Text(
                             text = "opowiedz co\u015b o sobie, swoich pasjach...",
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 16.sp,
                             color = TextMuted,
@@ -393,7 +392,7 @@ private fun BioInput(
 
     Text(
         text = "${bio.length}/$BIO_MAX_LENGTH",
-        fontFamily = NunitoFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         color = TextMuted,

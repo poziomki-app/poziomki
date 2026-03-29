@@ -28,7 +28,7 @@ import com.poziomki.app.network.MatchProfile
 import com.poziomki.app.ui.designsystem.components.SectionLabel
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -136,7 +136,7 @@ private fun RecommendedPersonItem(
 
         Text(
             text = firstName,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             color = TextPrimary,

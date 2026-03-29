@@ -29,7 +29,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -70,7 +70,7 @@ fun PoziomkiSearchBar(
                 if (query.isEmpty()) {
                     Text(
                         text = placeholder,
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         color = TextMuted,
                     )
                 }
@@ -80,7 +80,7 @@ fun PoziomkiSearchBar(
                     singleLine = true,
                     textStyle =
                         TextStyle(
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             color = TextPrimary,
                             fontSize = 15.sp,
                         ),

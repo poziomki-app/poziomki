@@ -7,7 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
@@ -26,7 +26,7 @@ fun EmptyView(
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = message,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             color = TextSecondary,
         )
     }

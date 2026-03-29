@@ -83,7 +83,6 @@ import com.poziomki.app.ui.designsystem.components.SectionLabel
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -103,7 +102,7 @@ fun ProfileEditScreen(
     viewModel: ProfileEditViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     var showGradientPicker by remember { mutableStateOf(false) }
     var showBioEditor by remember { mutableStateOf(false) }
 
@@ -357,7 +356,7 @@ private fun ImageGalleryRow(
     onRemoveImage: (Int) -> Unit,
     onAddImage: () -> Unit,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val imageWidth = 90.dp
     val imageHeight = 120.dp
 
@@ -491,7 +490,7 @@ private fun TagSection(
     onCreateTag: ((String) -> Unit)? = null,
     isCreatingTag: Boolean = false,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val filtered =
         searchResults.filter { tag ->
             selectedTags.none { it.id == tag.id }
@@ -566,7 +565,7 @@ private fun CreateTagChip(
     isCreating: Boolean,
     onClick: () -> Unit,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val shape = RoundedCornerShape(8.dp)
 
     Row(
@@ -611,7 +610,7 @@ private fun TagSearchBar(
     onQueryChange: (String) -> Unit,
     placeholder: String,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
 
     Row(
         modifier =
@@ -758,7 +757,7 @@ private fun BioEditorDialog(
     onAddImage: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -965,7 +964,7 @@ private fun GradientCircle(
         if (!hasGradient) {
             Text(
                 text = "—",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = (size.value * 0.3f).sp,
                 color = TextMuted,
@@ -996,7 +995,7 @@ private fun GradientPickerDialog(
     onSave: (String?, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val montserrat = MontserratFamily
 
     var selectedStart by remember { mutableStateOf(initialStart) }
@@ -1132,7 +1131,7 @@ private fun TagChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val bgColor = if (selected) PrimaryLight else Color.Transparent
     val borderColor = if (selected) Primary else Border
     val textColor = if (selected) Primary else TextSecondary

@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.Surface
@@ -103,7 +103,7 @@ fun VerifyScreen(
 
         Text(
             text = "wpisz kod wys\u0142any na",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 16.sp,
             color = TextSecondary,
@@ -112,7 +112,7 @@ fun VerifyScreen(
 
         Text(
             text = email,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 16.sp,
             color = Primary,
@@ -125,7 +125,7 @@ fun VerifyScreen(
         uiState.error?.let { error ->
             Text(
                 text = error,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.error,
@@ -154,7 +154,7 @@ fun VerifyScreen(
         if (uiState.otpResent) {
             Text(
                 text = "kod wys\u0142any ponownie",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = Primary,
@@ -173,7 +173,7 @@ fun VerifyScreen(
                     } else {
                         "wy\u015blij ponownie"
                     },
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = if (uiState.resendCooldownSeconds > 0) TextMuted else Primary,
@@ -188,7 +188,7 @@ private fun OtpInput(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
 
     BasicTextField(
         value = value,

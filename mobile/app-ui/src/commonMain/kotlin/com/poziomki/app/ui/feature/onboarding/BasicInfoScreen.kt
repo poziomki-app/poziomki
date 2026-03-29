@@ -34,7 +34,7 @@ import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
@@ -143,7 +143,7 @@ fun BasicInfoScreen(
                         state.degreeSearchResults.forEach { degree ->
                             Text(
                                 text = highlightMatch(degree.name, state.program),
-                                fontFamily = NunitoFamily,
+                                fontFamily = MontserratFamily,
                                 fontSize = 14.sp,
                                 modifier =
                                     Modifier

@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.Error
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -33,7 +33,7 @@ fun ConfirmDialog(
         title = {
             Text(
                 text = title,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = TextPrimary,
@@ -42,7 +42,7 @@ fun ConfirmDialog(
         text = {
             Text(
                 text = message,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
                 color = TextSecondary,
@@ -53,7 +53,7 @@ fun ConfirmDialog(
             TextButton(onClick = onConfirm) {
                 Text(
                     text = confirmText,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isDestructive) Error else Primary,
                 )
@@ -63,7 +63,7 @@ fun ConfirmDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = cancelText,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     color = TextMuted,
                 )

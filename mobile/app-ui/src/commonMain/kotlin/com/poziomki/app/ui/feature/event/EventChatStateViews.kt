@@ -32,7 +32,7 @@ import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -149,7 +149,7 @@ fun EventChatJoinRequiredView(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "wymaga akceptacji organizatora",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 13.sp,
                     color = TextMuted,
                 )

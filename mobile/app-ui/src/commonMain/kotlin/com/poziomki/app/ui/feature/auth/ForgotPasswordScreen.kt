@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -63,7 +63,7 @@ fun ForgotPasswordScreen(
 
         Text(
             text = "nie pami\u0119tam has\u0142a",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 20.sp,
             color = TextSecondary,
@@ -73,7 +73,7 @@ fun ForgotPasswordScreen(
 
         Text(
             text = "podaj sw\u00f3j email, a wy\u015blemy ci kod weryfikacyjny",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 14.sp,
             color = TextSecondary,
@@ -84,7 +84,7 @@ fun ForgotPasswordScreen(
         uiState.error?.let { error ->
             Text(
                 text = error,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.error,
@@ -124,7 +124,7 @@ fun ForgotPasswordScreen(
         ) {
             Text(
                 text = "wr\u00f3\u0107 do logowania",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = Primary,

@@ -35,7 +35,7 @@ import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -120,7 +120,7 @@ fun ExploreScreen(
                                                 ) {
                                                     Text(
                                                         text = "${tag.emoji ?: ""} ${tag.name}".trim(),
-                                                        fontFamily = NunitoFamily,
+                                                        fontFamily = MontserratFamily,
                                                         color = TextPrimary,
                                                         fontSize = 13.sp,
                                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -175,7 +175,7 @@ fun ExploreScreen(
                                                     text = event.title,
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = TextPrimary,
-                                                    fontFamily = NunitoFamily,
+                                                    fontFamily = MontserratFamily,
                                                 )
                                                 val loc = event.location
                                                 if (loc != null) {
@@ -183,14 +183,14 @@ fun ExploreScreen(
                                                         text = loc,
                                                         fontSize = 13.sp,
                                                         color = TextSecondary,
-                                                        fontFamily = NunitoFamily,
+                                                        fontFamily = MontserratFamily,
                                                     )
                                                 }
                                                 Text(
                                                     text = event.creatorName,
                                                     fontSize = 12.sp,
                                                     color = TextMuted,
-                                                    fontFamily = NunitoFamily,
+                                                    fontFamily = MontserratFamily,
                                                 )
                                             }
                                         }
