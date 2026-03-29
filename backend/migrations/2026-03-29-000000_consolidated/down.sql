@@ -1,0 +1,27 @@
+-- Drop everything in reverse dependency order
+DROP TRIGGER IF EXISTS set_event_interactions_updated_at ON event_interactions;
+DROP FUNCTION IF EXISTS set_updated_at();
+
+DROP TABLE IF EXISTS profile_bookmarks CASCADE;
+DROP TABLE IF EXISTS recommendation_feedback CASCADE;
+DROP TABLE IF EXISTS reports CASCADE;
+DROP TABLE IF EXISTS push_subscriptions CASCADE;
+DROP TABLE IF EXISTS message_reactions CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS conversation_members CASCADE;
+DROP TABLE IF EXISTS conversations CASCADE;
+DROP TABLE IF EXISTS job_outbox CASCADE;
+DROP TABLE IF EXISTS otp_codes CASCADE;
+DROP TABLE IF EXISTS auth_rate_limits CASCADE;
+DROP TABLE IF EXISTS uploads CASCADE;
+DROP TABLE IF EXISTS event_interactions CASCADE;
+DROP TABLE IF EXISTS profile_tags CASCADE;
+DROP TABLE IF EXISTS event_tags CASCADE;
+DROP TABLE IF EXISTS event_attendees CASCADE;
+DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
+DROP TABLE IF EXISTS degrees CASCADE;
+DROP TABLE IF EXISTS user_settings CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;

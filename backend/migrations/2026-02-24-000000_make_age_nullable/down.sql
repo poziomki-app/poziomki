@@ -1,2 +1,0 @@
-UPDATE profiles SET age = 0 WHERE age IS NULL;
-ALTER TABLE profiles ALTER COLUMN age SET NOT NULL;
