@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -129,7 +129,7 @@ fun ResetPasswordScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-        PoziomkiButton(
+        AppButton(
             text = "zapisz has\u0142o",
             onClick = {
                 viewModel.resetPassword(email, resetToken, password, onSuccess, onNeedsOnboarding)

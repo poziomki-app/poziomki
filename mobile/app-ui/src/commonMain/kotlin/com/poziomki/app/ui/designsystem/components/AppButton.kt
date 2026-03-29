@@ -63,9 +63,9 @@ private fun backgroundFor(variant: ButtonVariant): Brush =
         else -> DefaultGradient
     }
 
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
-fun PoziomkiButton(
+fun AppButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -80,14 +80,16 @@ fun PoziomkiButton(
 
     val borderModifier = animatedBorder(variant, isEnabled)
 
+    val rowModifier =
+        modifier
+            .then(borderModifier)
+            .clip(ButtonShape)
+            .background(backgroundFor(variant))
+            .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+
     Row(
-        modifier =
-            modifier
-                .then(borderModifier)
-                .clip(ButtonShape)
-                .background(backgroundFor(variant))
-                .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -138,15 +140,16 @@ private fun animatedBorder(
         return Modifier.border(1.dp, color, ButtonShape)
     }
 
+    val spec =
+        infiniteRepeatable<Float>(
+            animation = tween(ANIMATION_DURATION, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        )
     val transition = rememberInfiniteTransition(label = "border")
     val phase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(ANIMATION_DURATION, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
+        animationSpec = spec,
         label = "borderPhase",
     )
 

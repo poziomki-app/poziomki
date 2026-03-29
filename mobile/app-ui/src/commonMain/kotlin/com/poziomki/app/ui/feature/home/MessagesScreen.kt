@@ -33,11 +33,11 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.Bell
 import com.adamglin.phosphoricons.bold.PencilSimple
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -164,7 +164,7 @@ fun MessagesScreen(
         }
 
         // FAB: new message
-        PoziomkiButton(
+        AppButton(
             text = "napisz",
             onClick = onNavigateToNewChat,
             variant = ButtonVariant.PRIMARY,

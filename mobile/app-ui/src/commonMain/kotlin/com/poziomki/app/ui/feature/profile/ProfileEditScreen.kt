@@ -73,9 +73,9 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
@@ -294,7 +294,7 @@ fun ProfileEditScreen(
 
                 // Save button
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    PoziomkiButton(
+                    AppButton(
                         text = "zapisz",
                         onClick = { viewModel.save(onBack) },
                         variant = ButtonVariant.PRIMARY,
@@ -860,7 +860,7 @@ private fun BioEditorDialog(
                                 TextMuted
                             },
                     )
-                    PoziomkiButton(
+                    AppButton(
                         text = "zapisz",
                         onClick = onDismiss,
                         variant = ButtonVariant.PRIMARY,
@@ -1059,7 +1059,7 @@ private fun GradientPickerDialog(
             Spacer(modifier = Modifier.weight(1f))
 
             // Save button
-            PoziomkiButton(
+            AppButton(
                 text = "zapisz",
                 onClick = { onSave(selectedStart, selectedEnd) },
                 variant = ButtonVariant.PRIMARY,

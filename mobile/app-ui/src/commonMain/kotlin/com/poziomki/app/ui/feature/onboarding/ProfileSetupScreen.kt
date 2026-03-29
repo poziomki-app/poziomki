@@ -47,9 +47,9 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowsOut
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.User
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -119,7 +119,7 @@ fun ProfileSetupScreen(
                     modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.sm),
                 )
             }
-            PoziomkiButton(
+            AppButton(
                 text = "potwierd\u017a",
                 onClick = { viewModel.createProfile(onComplete) },
                 loading = state.isLoading,

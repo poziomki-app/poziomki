@@ -29,8 +29,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
@@ -138,7 +138,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
-        PoziomkiButton(
+        AppButton(
             text = "zaloguj si\u0119",
             onClick = {
                 viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)

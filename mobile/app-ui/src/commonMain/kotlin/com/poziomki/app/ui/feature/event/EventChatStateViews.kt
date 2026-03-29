@@ -27,8 +27,8 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.poziomki.app.network.Event
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -150,14 +150,14 @@ fun EventChatJoinRequiredView(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
             if (event.isPending) {
-                PoziomkiButton(
+                AppButton(
                     text = "oczekuje na akceptację",
                     onClick = {},
                     variant = ButtonVariant.SECONDARY,
                     enabled = false,
                 )
             } else {
-                PoziomkiButton(
+                AppButton(
                     text = "dołącz",
                     onClick = onJoin,
                     variant = ButtonVariant.PRIMARY,

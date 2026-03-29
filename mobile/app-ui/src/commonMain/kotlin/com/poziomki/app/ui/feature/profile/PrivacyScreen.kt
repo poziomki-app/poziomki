@@ -31,8 +31,8 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.DownloadSimple
 import com.adamglin.phosphoricons.bold.Trash
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
@@ -141,7 +141,7 @@ private fun PrivacyContent(
 
         SectionLabel("HASŁO", color = TextMuted)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-        PoziomkiButton(
+        AppButton(
             text = "zmień hasło",
             onClick = onOpenPasswordDialog,
             variant = ButtonVariant.OUTLINE,
@@ -205,7 +205,7 @@ private fun ExportDataSection(
         lineHeight = 20.sp,
     )
     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-    PoziomkiButton(
+    AppButton(
         text = "eksportuj dane",
         onClick = onExport,
         variant = ButtonVariant.OUTLINE,
@@ -245,7 +245,7 @@ private fun DeleteAccountSection(
         lineHeight = 20.sp,
     )
     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-    PoziomkiButton(
+    AppButton(
         text = "usuń konto",
         onClick = onDelete,
         variant = ButtonVariant.DESTRUCTIVE,
