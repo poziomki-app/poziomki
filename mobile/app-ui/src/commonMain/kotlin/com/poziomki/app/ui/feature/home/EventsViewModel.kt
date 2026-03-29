@@ -29,6 +29,7 @@ data class EventsState(
     val selectedNearbyEventId: String? = null,
     val isLocationPermissionDenied: Boolean = false,
     val isLocationUnavailable: Boolean = false,
+    val dismissedEventIds: Set<String> = emptySet(),
 )
 
 class EventsViewModel(
@@ -228,21 +229,19 @@ class EventsViewModel(
         eventId: String,
         feedback: String,
     ) {
-        val removed = _state.value.events.find { it.id == eventId }
         _state.value =
             _state.value.copy(
+                dismissedEventIds = _state.value.dismissedEventIds + eventId,
                 recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
-                allEvents = _state.value.allEvents.filter { it.id != eventId },
             )
         filterEvents()
 
         viewModelScope.launch {
             val result = apiService.postEventFeedback(eventId, feedback)
-            if (result is ApiResult.Error && removed != null) {
+            if (result is ApiResult.Error) {
                 _state.value =
                     _state.value.copy(
-                        recommendedEvents = _state.value.recommendedEvents + removed,
-                        allEvents = _state.value.allEvents + removed,
+                        dismissedEventIds = _state.value.dismissedEventIds - eventId,
                     )
                 filterEvents()
             }
@@ -270,6 +269,8 @@ class EventsViewModel(
             }
         val filtered =
             source.filter { event ->
+                val notDismissed =
+                    current.activeFilter != TimeFilter.ALL || event.id !in current.dismissedEventIds
                 val matchesSearch =
                     current.searchQuery.isBlank() ||
                         event.title.contains(current.searchQuery, ignoreCase = true)
@@ -277,7 +278,7 @@ class EventsViewModel(
                     current.activeFilter == TimeFilter.ALL ||
                         current.activeFilter == TimeFilter.NEARBY ||
                         matchesTimeFilter(event.startsAt, current.activeFilter)
-                matchesSearch && matchesTime
+                notDismissed && matchesSearch && matchesTime
             }
         _state.value = current.copy(events = filtered)
     }
