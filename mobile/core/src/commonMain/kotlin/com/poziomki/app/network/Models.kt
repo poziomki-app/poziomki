@@ -249,6 +249,7 @@ data class Tag(
 data class CreateTagRequest(
     val name: String,
     val scope: String,
+    val category: String? = null,
     val parentId: String? = null,
 )
 
