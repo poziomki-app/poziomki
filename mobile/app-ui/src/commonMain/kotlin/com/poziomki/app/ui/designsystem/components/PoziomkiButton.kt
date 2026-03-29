@@ -109,7 +109,7 @@ fun PoziomkiButton(
     }
 }
 
-private const val ANIMATION_DURATION = 2000
+private const val ANIMATION_DURATION = 6000
 
 @Composable
 private fun animatedBorder(
@@ -142,15 +142,18 @@ private fun animatedBorder(
         label = "borderAngle",
     )
 
+    val pos = angle / 360f
+    val glowSize = 0.15f
     val brush =
         Brush.sweepGradient(
-            0f to Color.Transparent,
-            angle / 360f to Primary,
-            ((angle + 60f) % 360f) / 360f to Primary.copy(alpha = 0.3f),
-            ((angle + 120f) % 360f) / 360f to Color.Transparent,
+            0f to Primary.copy(alpha = 0.15f),
+            ((pos - glowSize + 1f) % 1f) to Primary.copy(alpha = 0.15f),
+            pos to Primary.copy(alpha = 0.6f),
+            ((pos + glowSize) % 1f) to Primary.copy(alpha = 0.15f),
+            1f to Primary.copy(alpha = 0.15f),
         )
 
-    return Modifier.border(1.5.dp, brush, ButtonShape)
+    return Modifier.border(1.dp, brush, ButtonShape)
 }
 
 @Composable
