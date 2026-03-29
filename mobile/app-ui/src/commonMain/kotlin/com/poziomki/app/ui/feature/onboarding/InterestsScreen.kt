@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
@@ -89,6 +90,10 @@ fun InterestsScreen(
             searchQuery = searchQuery,
             onSearchQueryChange = { searchQuery = it },
             onToggleTag = { viewModel.toggleTag(it) },
+            onCreateTag = {
+                viewModel.createInterestTag(searchQuery)
+                searchQuery = ""
+            },
         )
     }
 }
@@ -99,6 +104,7 @@ private fun InterestsContent(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onToggleTag: (String) -> Unit,
+    onCreateTag: () -> Unit,
 ) {
     val selectableTags by remember(state.availableTags) {
         derivedStateOf { state.availableTags.filter { it.category != "root" } }
@@ -154,7 +160,7 @@ private fun InterestsContent(
         Spacer(modifier = Modifier.height(AppTheme.spacing.lg))
 
         if (searchQuery.isNotBlank()) {
-            SearchResults(filteredTags, state.selectedTagIds, onToggleTag)
+            SearchResults(filteredTags, state.selectedTagIds, searchQuery, onToggleTag, onCreateTag)
         } else {
             CategoryList(groupedTags, state.selectedTagIds, onToggleTag)
         }
@@ -166,29 +172,58 @@ private fun InterestsContent(
 private fun SearchResults(
     tags: List<Tag>,
     selectedTagIds: Set<String>,
+    query: String,
     onToggleTag: (String) -> Unit,
+    onCreateTag: () -> Unit,
 ) {
-    if (tags.isEmpty()) {
-        Text(
-            text = "brak wyników",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextMuted,
-        )
-    } else {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            tags.forEach { tag ->
-                val color = CATEGORY_MAP[tag.category]?.color ?: Primary
-                InterestChip(
-                    label = tag.name,
-                    selected = tag.id in selectedTagIds,
-                    accentColor = color,
-                    onClick = { onToggleTag(tag.id) },
-                )
-            }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tags.forEach { tag ->
+            val color = CATEGORY_MAP[tag.category]?.color ?: Primary
+            InterestChip(
+                label = tag.name,
+                selected = tag.id in selectedTagIds,
+                accentColor = color,
+                onClick = { onToggleTag(tag.id) },
+            )
         }
+    }
+    if (tags.isEmpty() || tags.none { it.name.equals(query.trim(), ignoreCase = true) }) {
+        Spacer(modifier = Modifier.height(AppTheme.spacing.md))
+        CreateTagSuggestion(name = query.trim(), onClick = onCreateTag)
+    }
+}
+
+@Composable
+private fun CreateTagSuggestion(
+    name: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .clip(ChipShape)
+                .background(Primary.copy(alpha = 0.15f))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = PhosphorIcons.Bold.Plus,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = Primary,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "dodaj \"${name.lowercase()}\"",
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            color = Primary,
+        )
     }
 }
 
