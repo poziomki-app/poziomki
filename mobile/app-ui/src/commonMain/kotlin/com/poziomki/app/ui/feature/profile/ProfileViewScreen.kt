@@ -34,8 +34,8 @@ import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -127,7 +127,7 @@ fun ProfileViewScreen(
                         }
 
                         // Message button
-                        PoziomkiButton(
+                        AppButton(
                             text = "Wiadomość",
                             onClick = { onNavigateToChat(p.userId, p.name, p.id) },
                             variant = ButtonVariant.PRIMARY,
