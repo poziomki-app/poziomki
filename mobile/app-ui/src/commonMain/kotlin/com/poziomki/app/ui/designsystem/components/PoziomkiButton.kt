@@ -117,7 +117,7 @@ fun PoziomkiButton(
 }
 
 private const val ANIMATION_DURATION = 8000
-private const val GLOW_STEPS = 12
+private const val GLOW_STEPS = 24
 
 @Composable
 private fun animatedBorder(
@@ -175,9 +175,10 @@ private fun angularDistance(
 }
 
 private fun glowAlpha(dist: Float): Float {
-    // Smooth falloff: peak at 0.35, base at 0.08, spread ~0.15
-    val t = (dist / 0.15f).coerceIn(0f, 1f)
-    return 0.08f + (0.27f * (1f - t * t))
+    // Cosine falloff for perfectly smooth gradient, spread ~0.25
+    val t = (dist / 0.25f).coerceIn(0f, 1f)
+    val smooth = (1f + kotlin.math.cos(t * kotlin.math.PI.toFloat())) / 2f
+    return 0.08f + (0.27f * smooth)
 }
 
 @Composable
