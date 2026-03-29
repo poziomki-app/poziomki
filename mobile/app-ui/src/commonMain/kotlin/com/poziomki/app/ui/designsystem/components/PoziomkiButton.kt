@@ -109,7 +109,9 @@ fun PoziomkiButton(
     }
 }
 
-private const val ANIMATION_DURATION = 6000
+private const val ANIMATION_DURATION = 8000
+private const val BASE_ALPHA = 0.12f
+private const val PEAK_ALPHA = 0.4f
 
 @Composable
 private fun animatedBorder(
@@ -131,29 +133,41 @@ private fun animatedBorder(
     }
 
     val transition = rememberInfiniteTransition(label = "border")
-    val angle by transition.animateFloat(
+    val phase by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = 1f,
         animationSpec =
             infiniteRepeatable(
                 animation = tween(ANIMATION_DURATION, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             ),
-        label = "borderAngle",
+        label = "borderPhase",
     )
 
-    val pos = angle / 360f
-    val glowSize = 0.15f
-    val brush =
-        Brush.sweepGradient(
-            0f to Primary.copy(alpha = 0.15f),
-            ((pos - glowSize + 1f) % 1f) to Primary.copy(alpha = 0.15f),
-            pos to Primary.copy(alpha = 0.6f),
-            ((pos + glowSize) % 1f) to Primary.copy(alpha = 0.15f),
-            1f to Primary.copy(alpha = 0.15f),
-        )
+    val brush = glowBrush(phase)
 
     return Modifier.border(1.dp, brush, ButtonShape)
+}
+
+private fun glowBrush(phase: Float): Brush {
+    val base = Primary.copy(alpha = BASE_ALPHA)
+    val peak = Primary.copy(alpha = PEAK_ALPHA)
+    val mid = Primary.copy(alpha = (BASE_ALPHA + PEAK_ALPHA) / 2f)
+    val spread = 0.12f
+
+    val p = phase % 1f
+    val left = (p - spread + 1f) % 1f
+    val right = (p + spread) % 1f
+
+    // Build stops that are always in ascending order to avoid sweep gradient artifacts
+    val stops =
+        if (left < right) {
+            listOf(0f to base, left to base, p to peak, right to base, 1f to base)
+        } else {
+            // Glow wraps around the 0/1 boundary — split into two halves
+            listOf(0f to mid, right to base, left to base, p to peak, 1f to mid)
+        }
+    return Brush.sweepGradient(colorStops = stops.toTypedArray())
 }
 
 @Composable

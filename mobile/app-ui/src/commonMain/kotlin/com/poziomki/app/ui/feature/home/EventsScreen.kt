@@ -58,6 +58,7 @@ import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.ThumbsDown
 import com.adamglin.phosphoricons.bold.ThumbsUp
 import com.adamglin.phosphoricons.fill.BookmarkSimple
@@ -244,7 +245,7 @@ fun EventsScreen(
                 text = "nowe",
                 onClick = onNavigateToEventCreate,
                 variant = ButtonVariant.PRIMARY,
-                icon = PhosphorIcons.Bold.PencilSimple,
+                icon = PhosphorIcons.Bold.Plus,
                 modifier =
                     Modifier
                         .align(Alignment.BottomEnd)
