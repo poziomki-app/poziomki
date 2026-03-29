@@ -438,7 +438,8 @@ INSERT INTO tags (id, name, scope, category, parent_id) VALUES
   ('566e1714-0ec4-4d52-8562-fca84e2c8419', 'Literatura', 'interest', 'root', NULL),
   ('a89488ea-43f1-4c72-94dd-fc3747fb95a0', 'Gry', 'interest', 'root', NULL),
   ('63318021-e21d-4d7d-a4cb-f5e0f15fc833', 'Społeczność', 'interest', 'root', NULL),
-  ('460c6106-6f65-4f0d-bbf8-ef49687ec0f3', 'Styl życia', 'interest', 'root', NULL);
+  ('460c6106-6f65-4f0d-bbf8-ef49687ec0f3', 'Styl życia', 'interest', 'root', NULL)
+ON CONFLICT DO NOTHING;
 
 -- Interest tags (90 curated, deterministic UUIDs)
 INSERT INTO tags (id, name, scope, category, onboarding_order, parent_id) VALUES
@@ -531,7 +532,8 @@ INSERT INTO tags (id, name, scope, category, onboarding_order, parent_id) VALUES
   ('29b5d222-4e01-53c3-b38f-2556f404be3c', 'Minimalizm', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
   ('de248dd4-203d-5408-b731-f534023c8deb', 'Moda', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
   ('f4b20bdc-a473-5b6c-a38c-d7ca291ffa38', 'Taniec', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
-  ('92ac54b5-f45e-5eef-9e01-4b78bf3802ce', 'Fitness outdoorowy', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3');
+  ('92ac54b5-f45e-5eef-9e01-4b78bf3802ce', 'Fitness outdoorowy', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3')
+ON CONFLICT DO NOTHING;
 
 -- Event tags
 INSERT INTO tags (id, name, scope, category, parent_id) VALUES
@@ -559,4 +561,5 @@ INSERT INTO tags (id, name, scope, category, parent_id) VALUES
   ('a2cdb278-fb19-48b8-8438-8110afcbdf1f', 'Wolontariat', 'event', 'spolecznosc', '63318021-e21d-4d7d-a4cb-f5e0f15fc833'),
   ('4586b307-c167-456d-abd2-0d3ef65afdc4', 'Debata', 'event', 'spolecznosc', '63318021-e21d-4d7d-a4cb-f5e0f15fc833'),
   ('182039cc-3ae5-4953-a2a1-b9b1135cd1c1', 'Krąg medytacji', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
-  ('b9c896e9-5d49-4847-8c58-9ed77efc5f0d', 'Warsztaty tańca', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3');
+  ('b9c896e9-5d49-4847-8c58-9ed77efc5f0d', 'Warsztaty tańca', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3')
+ON CONFLICT DO NOTHING;
