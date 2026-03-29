@@ -3,6 +3,7 @@ package com.poziomki.app.ui.feature.onboarding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.repository.DegreeRepository
+import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.data.repository.TagRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
@@ -34,6 +35,7 @@ data class OnboardingState(
 class OnboardingViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
+    private val profileRepository: ProfileRepository,
     private val tagRepository: TagRepository,
     private val degreeRepository: DegreeRepository,
 ) : ViewModel() {
@@ -232,6 +234,7 @@ class OnboardingViewModel(
                 return@launch
             }
 
+            profileRepository.seedOwnProfile()
             sessionManager.saveOnboardingDraft(null)
             updateState(persist = false) { it.copy(isLoading = false, error = null) }
             onComplete()
