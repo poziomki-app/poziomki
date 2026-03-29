@@ -138,16 +138,15 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            PoziomkiButton(
-                text = "zaloguj si\u0119",
-                onClick = {
-                    viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
-                },
-                enabled = email.isNotBlank() && password.isNotBlank(),
-                loading = uiState.isLoading,
-            )
-        }
+        PoziomkiButton(
+            text = "zaloguj si\u0119",
+            onClick = {
+                viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
+            },
+            enabled = email.isNotBlank() && password.isNotBlank(),
+            loading = uiState.isLoading,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         TextButton(
             onClick = onNavigateToRegister,
