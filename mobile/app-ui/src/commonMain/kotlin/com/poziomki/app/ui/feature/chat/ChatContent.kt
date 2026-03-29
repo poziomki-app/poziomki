@@ -319,7 +319,7 @@ fun ChatContent(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     BasicTextField(
@@ -327,7 +327,7 @@ fun ChatContent(
                         onValueChange = { onDraftChanged(it) },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
                         singleLine = true,
-                        modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                         decorationBox = { innerTextField ->
                             if (state.messageDraft.isBlank()) {
                                 Text(
