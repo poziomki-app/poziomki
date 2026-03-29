@@ -860,13 +860,11 @@ private fun BioEditorDialog(
                                 TextMuted
                             },
                     )
-                    Text(
+                    PoziomkiButton(
                         text = "zapisz",
-                        fontFamily = nunito,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = Primary,
-                        modifier = Modifier.padding(start = 12.dp).clickable(onClick = onDismiss),
+                        onClick = onDismiss,
+                        variant = ButtonVariant.PRIMARY,
+                        modifier = Modifier.padding(start = 12.dp),
                     )
                 }
             }
