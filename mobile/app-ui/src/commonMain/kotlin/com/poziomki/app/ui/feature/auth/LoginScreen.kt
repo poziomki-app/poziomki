@@ -125,7 +125,7 @@ fun LoginScreen(
         TextButton(
             onClick = onForgotPassword,
             modifier = Modifier.align(Alignment.Start),
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
         ) {
             Text(
                 text = "nie pami\u0119tam has\u0142a",
