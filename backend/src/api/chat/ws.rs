@@ -1,4 +1,6 @@
 use axum::extract::ws::{Message, WebSocket};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 
@@ -7,6 +9,9 @@ use super::hub::ChatHub;
 use super::messages as chat_messages;
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::api::state::hash_session_token;
+use crate::db::schema::{
+    conversation_members, conversations as conversations_table, profile_blocks, profiles,
+};
 
 const AUTH_TIMEOUT_SECS: u64 = 5;
 const DEFAULT_HISTORY_LIMIT: i64 = 50;
@@ -265,6 +270,12 @@ async fn handle_client_message(
         } => {
             handle_history(user_id, conversation_id, before, limit, outbound_tx).await;
         }
+        ClientMessage::Archive { conversation_id } => {
+            handle_archive(user_id, conversation_id, outbound_tx).await;
+        }
+        ClientMessage::Unarchive { conversation_id } => {
+            handle_unarchive(user_id, conversation_id, outbound_tx).await;
+        }
         ClientMessage::ListConversations => {
             let conv_list = conversations::list_for_user(user_id)
                 .await
@@ -329,6 +340,14 @@ async fn handle_send(
     {
         let _ = outbound_tx.send(ServerMessage::Error {
             message: "not a member of this conversation".to_string(),
+        });
+        return;
+    }
+
+    // Block check for DM conversations
+    if matches!(is_blocked_in_dm(conversation_id, user_id).await, Ok(true)) {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "blocked".to_string(),
         });
         return;
     }
@@ -644,6 +663,157 @@ async fn handle_history(
             });
         }
     }
+}
+
+async fn handle_archive(
+    user_id: i32,
+    conversation_id: uuid::Uuid,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "not a member of this conversation".to_string(),
+        });
+        return;
+    }
+
+    let result = async {
+        let mut conn = crate::db::conn().await?;
+        diesel::update(
+            conversation_members::table
+                .filter(conversation_members::conversation_id.eq(conversation_id))
+                .filter(conversation_members::user_id.eq(user_id)),
+        )
+        .set(conversation_members::archived_at.eq(chrono::Utc::now()))
+        .execute(&mut conn)
+        .await?;
+        Ok::<_, crate::error::AppError>(())
+    }
+    .await;
+
+    match result {
+        Ok(()) => {
+            let _ = outbound_tx.send(ServerMessage::Archived { conversation_id });
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("archive failed: {e}"),
+            });
+        }
+    }
+}
+
+async fn handle_unarchive(
+    user_id: i32,
+    conversation_id: uuid::Uuid,
+    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
+) {
+    if !conversations::is_member(conversation_id, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        let _ = outbound_tx.send(ServerMessage::Error {
+            message: "not a member of this conversation".to_string(),
+        });
+        return;
+    }
+
+    let result = async {
+        let mut conn = crate::db::conn().await?;
+        diesel::update(
+            conversation_members::table
+                .filter(conversation_members::conversation_id.eq(conversation_id))
+                .filter(conversation_members::user_id.eq(user_id)),
+        )
+        .set(conversation_members::archived_at.eq(None::<chrono::DateTime<chrono::Utc>>))
+        .execute(&mut conn)
+        .await?;
+        Ok::<_, crate::error::AppError>(())
+    }
+    .await;
+
+    match result {
+        Ok(()) => {
+            let _ = outbound_tx.send(ServerMessage::Unarchived { conversation_id });
+        }
+        Err(e) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("unarchive failed: {e}"),
+            });
+        }
+    }
+}
+
+/// Check if the sender is blocked in a DM conversation.
+/// Returns true if the other party has blocked the sender.
+#[allow(clippy::similar_names)]
+async fn is_blocked_in_dm(
+    conversation_id: uuid::Uuid,
+    sender_user_id: i32,
+) -> Result<bool, crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+
+    // Only check DM conversations
+    let conv: Option<crate::db::models::conversations::Conversation> = conversations_table::table
+        .find(conversation_id)
+        .first(&mut conn)
+        .await
+        .optional()?;
+
+    let Some(conv) = conv else {
+        return Ok(false);
+    };
+    if conv.kind != "dm" {
+        return Ok(false);
+    }
+
+    // Get both users' profile IDs
+    let other_user_id = if conv.user_low_id == Some(sender_user_id) {
+        conv.user_high_id
+    } else {
+        conv.user_low_id
+    };
+
+    let Some(other_user_id) = other_user_id else {
+        return Ok(false);
+    };
+
+    // Resolve both profile IDs
+    let sender_profile: Option<uuid::Uuid> = profiles::table
+        .filter(profiles::user_id.eq(sender_user_id))
+        .select(profiles::id)
+        .first(&mut conn)
+        .await
+        .optional()?;
+    let other_profile: Option<uuid::Uuid> = profiles::table
+        .filter(profiles::user_id.eq(other_user_id))
+        .select(profiles::id)
+        .first(&mut conn)
+        .await
+        .optional()?;
+
+    let (Some(sender_pid), Some(other_pid)) = (sender_profile, other_profile) else {
+        return Ok(false);
+    };
+
+    // Check if either party has blocked the other
+    let count = profile_blocks::table
+        .filter(
+            profile_blocks::blocker_id
+                .eq(sender_pid)
+                .and(profile_blocks::blocked_id.eq(other_pid))
+                .or(profile_blocks::blocker_id
+                    .eq(other_pid)
+                    .and(profile_blocks::blocked_id.eq(sender_pid))),
+        )
+        .count()
+        .get_result::<i64>(&mut conn)
+        .await?;
+
+    Ok(count > 0)
 }
 
 async fn send_json(

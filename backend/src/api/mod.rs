@@ -72,6 +72,10 @@ fn profiles_routes() -> Router<AppContext> {
             "/{id}/bookmark",
             post(profiles::profile_bookmark_handler).delete(profiles::profile_unbookmark_handler),
         )
+        .route(
+            "/{id}/block",
+            post(profiles::profile_block_handler).delete(profiles::profile_unblock_handler),
+        )
         .layer(cache_layer("no-store"))
         .merge(cached)
 }
@@ -158,6 +162,10 @@ fn chat_routes() -> Router<AppContext> {
         .route(
             "/events/{eventId}/conversation",
             get(chat::resolve_event_conversation),
+        )
+        .route(
+            "/conversations/{id}/report",
+            post(chat::report_handler::conversation_report),
         )
         .route("/push/register", post(chat::push_register))
         .route("/push/unregister", post(chat::push_unregister))

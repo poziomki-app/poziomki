@@ -12,6 +12,8 @@ import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.chat.timeline.TimelineController
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
+import com.poziomki.app.network.ApiResult
+import com.poziomki.app.network.ApiService
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
 import kotlinx.coroutines.Job
@@ -30,6 +32,7 @@ class ChatViewModel(
     private val roomComposerDraftStore: RoomComposerDraftStore,
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
+    private val apiService: ApiService,
 ) : ViewModel() {
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
@@ -313,6 +316,56 @@ class ChatViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun blockUser() {
+        val profileId = activeDirectProfileId ?: activeDirectUserId ?: return
+        viewModelScope.launch {
+            when (apiService.blockProfile(profileId)) {
+                is ApiResult.Success -> _uiState.update { it.copy(isBlocked = true) }
+                is ApiResult.Error -> _uiState.update { it.copy(error = "Nie udało się zablokować") }
+            }
+        }
+    }
+
+    fun unblockUser() {
+        val profileId = activeDirectProfileId ?: activeDirectUserId ?: return
+        viewModelScope.launch {
+            when (apiService.unblockProfile(profileId)) {
+                is ApiResult.Success -> _uiState.update { it.copy(isBlocked = false) }
+                is ApiResult.Error -> _uiState.update { it.copy(error = "Nie udało się odblokować") }
+            }
+        }
+    }
+
+    fun reportConversation(
+        reason: String,
+        description: String?,
+    ) {
+        val roomId = boundRoomId ?: return
+        viewModelScope.launch {
+            when (apiService.reportConversation(roomId, reason, description)) {
+                is ApiResult.Success -> { /* success — UI will dismiss the dialog */ }
+
+                is ApiResult.Error -> {
+                    _uiState.update { it.copy(error = "Nie udało się zgłosić") }
+                }
+            }
+        }
+    }
+
+    fun archiveConversation() {
+        val roomId = boundRoomId ?: return
+        viewModelScope.launch {
+            chatClient.archiveConversation(roomId)
+        }
+    }
+
+    fun removeConversation() {
+        val roomId = boundRoomId ?: return
+        viewModelScope.launch {
+            chatClient.hideConversation(roomId)
+        }
+    }
+
     fun toggleSearch() {
         _uiState.update {
             if (it.isSearchActive) {
@@ -529,6 +582,7 @@ class ChatViewModel(
                 roomDisplayName = initialDisplayName,
                 roomAvatarUrl = initialAvatar,
                 isDirectRoom = initialIsDirect,
+                isBlocked = initialSummary?.isBlocked ?: false,
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
