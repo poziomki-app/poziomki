@@ -1,5 +1,6 @@
 package com.poziomki.app.ui.feature.onboarding
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,19 +14,35 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.X
+import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -33,10 +50,11 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.PrimaryLight
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
+import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import org.koin.compose.viewmodel.koinViewModel
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InterestsScreen(
     onNext: () -> Unit,
@@ -44,6 +62,8 @@ fun InterestsScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    val selectedCount = state.selectedTagIds.size
 
     OnboardingLayout(
         currentStep = 2,
@@ -54,69 +74,271 @@ fun InterestsScreen(
             AppButton(
                 text = "dalej",
                 onClick = onNext,
-                enabled = state.selectedTagIds.size >= 3,
+                enabled = selectedCount >= 3,
             )
         },
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .padding(horizontal = PoziomkiTheme.spacing.lg)
-                    .padding(bottom = PoziomkiTheme.spacing.md),
-        ) {
-            Text(
-                text = "zainteresowania",
-                style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
-            )
+        InterestsContent(
+            state = state,
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
+            onToggleTag = { viewModel.toggleTag(it) },
+        )
+    }
+}
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+@Composable
+private fun InterestsContent(
+    state: OnboardingState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleTag: (String) -> Unit,
+) {
+    val selectableTags by remember(state.availableTags) {
+        derivedStateOf { state.availableTags.filter { it.category != "root" } }
+    }
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            ) {
-                state.availableTags.forEach { tag ->
-                    val isSelected = tag.id in state.selectedTagIds
-                    TagChip(
-                        label = "${tag.emoji ?: ""} ${tag.name}".trim(),
-                        selected = isSelected,
-                        onClick = { viewModel.toggleTag(tag.id) },
-                    )
+    val filteredTags by remember(selectableTags, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) {
+                selectableTags
+            } else {
+                selectableTags.filter { it.name.contains(searchQuery, ignoreCase = true) }
+            }
+        }
+    }
+
+    val groupedTags by remember(filteredTags, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) {
+                INTEREST_CATEGORIES.mapNotNull { category ->
+                    val tags = filteredTags.filter { it.category == category.key }
+                    if (tags.isNotEmpty()) category to tags else null
                 }
+            } else {
+                emptyList()
+            }
+        }
+    }
+
+    Column(
+        modifier =
+            Modifier
+                .padding(horizontal = PoziomkiTheme.spacing.lg)
+                .padding(bottom = PoziomkiTheme.spacing.md),
+    ) {
+        Text(
+            text = "zainteresowania",
+            style = MaterialTheme.typography.headlineMedium,
+            color = TextPrimary,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+        val countColor by animateColorAsState(
+            targetValue = if (state.selectedTagIds.size >= 3) Primary else TextMuted,
+        )
+        Text(
+            text = "${state.selectedTagIds.size} wybrano \u00B7 minimum 3",
+            style = MaterialTheme.typography.bodySmall,
+            color = countColor,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+        SearchBar(query = searchQuery, onQueryChange = onSearchQueryChange)
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+        if (searchQuery.isNotBlank()) {
+            SearchResults(filteredTags, state.selectedTagIds, onToggleTag)
+        } else {
+            CategoryList(groupedTags, state.selectedTagIds, onToggleTag)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchResults(
+    tags: List<Tag>,
+    selectedTagIds: Set<String>,
+    onToggleTag: (String) -> Unit,
+) {
+    if (tags.isEmpty()) {
+        Text(
+            text = "brak wyników",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMuted,
+        )
+    } else {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+        ) {
+            tags.forEach { tag ->
+                InterestChip(
+                    label = tag.name,
+                    selected = tag.id in selectedTagIds,
+                    onClick = { onToggleTag(tag.id) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TagChip(
+private fun CategoryList(
+    groupedTags: List<Pair<InterestCategoryInfo, List<Tag>>>,
+    selectedTagIds: Set<String>,
+    onToggleTag: (String) -> Unit,
+) {
+    groupedTags.forEachIndexed { index, (category, tags) ->
+        if (index > 0) {
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+        }
+        CategorySection(
+            category = category,
+            tags = tags,
+            selectedTagIds = selectedTagIds,
+            onToggleTag = onToggleTag,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategorySection(
+    category: InterestCategoryInfo,
+    tags: List<Tag>,
+    selectedTagIds: Set<String>,
+    onToggleTag: (String) -> Unit,
+) {
+    Column {
+        // Section header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.sm),
+        ) {
+            Icon(
+                imageVector = category.icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = category.color,
+            )
+            Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+            Text(
+                text = category.displayName,
+                style = MaterialTheme.typography.titleSmall,
+                color = TextMuted,
+            )
+        }
+
+        // Tag chips
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+        ) {
+            tags.forEach { tag ->
+                InterestChip(
+                    label = tag.name,
+                    selected = tag.id in selectedTagIds,
+                    onClick = { onToggleTag(tag.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(PoziomkiTheme.radius.lg),
+        color = SurfaceElevated,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.Bold.MagnifyingGlass,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = TextMuted,
+            )
+            Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+            Box(modifier = Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = "szukaj...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMuted,
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle =
+                        TextStyle(
+                            fontFamily = NunitoFamily,
+                            fontSize = 14.sp,
+                            color = TextPrimary,
+                        ),
+                    cursorBrush = SolidColor(Primary),
+                )
+            }
+            if (query.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+                Icon(
+                    imageVector = PhosphorIcons.Bold.X,
+                    contentDescription = "Clear",
+                    modifier =
+                        Modifier
+                            .size(18.dp)
+                            .clickable { onQueryChange("") },
+                    tint = TextMuted,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterestChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val nunito = NunitoFamily
     val shape = RoundedCornerShape(50)
-    val bgColor = if (selected) PrimaryLight else androidx.compose.ui.graphics.Color.Transparent
-    val borderColor = if (selected) Primary else Border
-    val textColor = if (selected) Primary else TextPrimary
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) PrimaryLight else Color.Transparent,
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) Primary else Border,
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) Primary else TextPrimary,
+    )
 
-    Row(
+    Box(
         modifier =
             modifier
                 .clip(shape)
                 .background(bgColor, shape)
                 .border(1.dp, borderColor, shape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            fontFamily = nunito,
+            fontFamily = NunitoFamily,
             fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             color = textColor,
         )
     }
