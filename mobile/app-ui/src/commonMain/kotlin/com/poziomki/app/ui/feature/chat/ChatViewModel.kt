@@ -313,6 +313,56 @@ class ChatViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun toggleSearch() {
+        _uiState.update {
+            if (it.isSearchActive) {
+                it.copy(
+                    isSearchActive = false,
+                    searchQuery = "",
+                    searchMatchIndices = emptyList(),
+                    currentSearchMatchIndex = -1,
+                )
+            } else {
+                it.copy(isSearchActive = true)
+            }
+        }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        val items = _uiState.value.timelineItems
+        val matchIndices =
+            if (query.length >= 2) {
+                items.mapIndexedNotNull { index, item ->
+                    if (item is TimelineItem.Event && item.body.contains(query, ignoreCase = true)) index else null
+                }
+            } else {
+                emptyList()
+            }
+        _uiState.update {
+            it.copy(
+                searchQuery = query,
+                searchMatchIndices = matchIndices,
+                currentSearchMatchIndex = if (matchIndices.isNotEmpty()) 0 else -1,
+            )
+        }
+    }
+
+    fun nextSearchMatch() {
+        _uiState.update {
+            if (it.searchMatchIndices.isEmpty()) return@update it
+            val next = (it.currentSearchMatchIndex + 1) % it.searchMatchIndices.size
+            it.copy(currentSearchMatchIndex = next)
+        }
+    }
+
+    fun prevSearchMatch() {
+        _uiState.update {
+            if (it.searchMatchIndices.isEmpty()) return@update it
+            val prev = (it.currentSearchMatchIndex - 1 + it.searchMatchIndices.size) % it.searchMatchIndices.size
+            it.copy(currentSearchMatchIndex = prev)
+        }
+    }
+
     suspend fun resolveDisplayNames(userIds: List<String>): Map<String, String> {
         val room = activeRoom ?: return emptyMap()
         return userIds.associateWith { userId ->

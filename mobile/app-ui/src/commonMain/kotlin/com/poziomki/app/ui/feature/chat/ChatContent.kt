@@ -107,6 +107,8 @@ fun ChatContent(
     modifier: Modifier = Modifier,
     avatarOverrides: Map<String, String> = emptyMap(),
     avatarOverridesByName: Map<String, String> = emptyMap(),
+    searchQuery: String = "",
+    currentMatchEventId: String? = null,
     headerContent: (@Composable () -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -200,6 +202,9 @@ fun ChatContent(
                                     // "Visually previous" (above) = older event = index + 1 in reversed list
                                     val previousEvent =
                                         reversedItems.getOrNull(index + 1) as? TimelineItem.Event
+                                    val isMatch =
+                                        searchQuery.length >= 2 &&
+                                            item.body.contains(searchQuery, ignoreCase = true)
                                     MessageEventRow(
                                         event = item,
                                         groupedWithPrevious = shouldGroupWithPrevious(previousEvent, item),
@@ -219,6 +224,7 @@ fun ChatContent(
                                                     ?.trim()
                                                     ?.lowercase()
                                                     ?.let { avatarOverridesByName[it] },
+                                        isHighlighted = isMatch && item.eventOrTransactionId == currentMatchEventId,
                                     )
                                 }
 
