@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
 @Composable
@@ -34,7 +34,7 @@ fun ChangePasswordDialog(
         title = {
             Text(
                 text = "Zmień hasło",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
             )
         },
@@ -42,7 +42,7 @@ fun ChangePasswordDialog(
             Column {
                 Text(
                     text = "Wpisz aktualne hasło i nowe hasło, aby je zmienić.",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -72,12 +72,12 @@ fun ChangePasswordDialog(
                 onClick = { onSubmit(current, new, confirm) },
                 enabled = current.isNotBlank() && new.isNotBlank() && confirm.isNotBlank() && !isLoading,
             ) {
-                Text("Zmień", fontFamily = NunitoFamily, fontWeight = FontWeight.Bold)
+                Text("Zmień", fontFamily = MontserratFamily, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isLoading) {
-                Text("Anuluj", fontFamily = NunitoFamily)
+                Text("Anuluj", fontFamily = MontserratFamily)
             }
         },
     )

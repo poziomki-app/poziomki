@@ -50,7 +50,6 @@ import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Surface
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -85,7 +84,7 @@ fun ProfilePreview(
     onClose: () -> Unit,
     bottomContent: @Composable (() -> Unit)? = null,
 ) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val montserrat = MontserratFamily
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -337,7 +336,7 @@ private val bioImageRegex = Regex("""!\[\]\((.*?)\)""")
 
 @Composable
 private fun RichBio(bio: String) {
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
 
     if (!bio.contains("![](")) {
         Text(

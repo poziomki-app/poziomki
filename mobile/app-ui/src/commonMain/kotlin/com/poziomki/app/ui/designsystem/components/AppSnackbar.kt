@@ -8,7 +8,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.ErrorLight
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Success
 import com.poziomki.app.ui.designsystem.theme.SuccessLight
 
@@ -37,7 +37,7 @@ fun AppSnackbar(
     ) {
         Text(
             text = message,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 14.sp,
             color = contentColor,

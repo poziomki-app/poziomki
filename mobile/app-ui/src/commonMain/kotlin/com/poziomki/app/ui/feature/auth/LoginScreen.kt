@@ -34,7 +34,7 @@ import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -73,7 +73,7 @@ fun LoginScreen(
 
         Text(
             text = "poznajmy si\u0119!",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 20.sp,
             color = TextSecondary,
@@ -85,7 +85,7 @@ fun LoginScreen(
         uiState.error?.let { error ->
             Text(
                 text = error,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.error,
@@ -129,7 +129,7 @@ fun LoginScreen(
         ) {
             Text(
                 text = "nie pami\u0119tam has\u0142a",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.sp,
                 color = TextMuted,
@@ -154,7 +154,7 @@ fun LoginScreen(
         ) {
             Text(
                 text = "zarejestruj si\u0119",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = Primary,

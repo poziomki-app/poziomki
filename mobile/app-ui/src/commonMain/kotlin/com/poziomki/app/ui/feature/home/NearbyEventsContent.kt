@@ -44,7 +44,6 @@ import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -102,7 +101,7 @@ internal fun NearbyEventsContent(
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "brak dostępu do lokalizacji",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontSize = 14.sp,
                 color = TextMuted,
             )
@@ -110,7 +109,7 @@ internal fun NearbyEventsContent(
             TextButton(onClick = onRequestPermission) {
                 Text(
                     text = "udostępnij lokalizację",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     color = Primary,
                 )
@@ -302,7 +301,7 @@ internal fun NearbyEventsContent(
 
                     Text(
                         text = formatEventDate(selectedEvent.startsAt),
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 14.sp,
                         color = TextSecondary,
@@ -315,7 +314,7 @@ internal fun NearbyEventsContent(
                     if (displayLocation != null) {
                         Text(
                             text = displayLocation,
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,
                             color = TextMuted,
@@ -328,7 +327,7 @@ internal fun NearbyEventsContent(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = description,
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,
                             color = TextSecondary,
@@ -356,7 +355,7 @@ internal fun NearbyEventsContent(
                                             "osoby",
                                             "osób",
                                         ),
-                                fontFamily = NunitoFamily,
+                                fontFamily = MontserratFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = TextPrimary,
@@ -381,7 +380,7 @@ internal fun NearbyEventsContent(
                     }
                 Text(
                     text = hint,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 14.sp,
                     color = TextMuted,
                 )

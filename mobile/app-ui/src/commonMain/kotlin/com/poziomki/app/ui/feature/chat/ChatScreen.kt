@@ -46,7 +46,7 @@ import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -262,7 +262,7 @@ private fun ChatSearchBar(
                 if (query.isEmpty()) {
                     Text(
                         text = "szukaj wiadomości...",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         color = TextMuted,
                         fontSize = 15.sp,
                     )
@@ -273,7 +273,7 @@ private fun ChatSearchBar(
                     singleLine = true,
                     textStyle =
                         TextStyle(
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             color = TextPrimary,
                             fontSize = 15.sp,
                         ),
@@ -288,7 +288,7 @@ private fun ChatSearchBar(
             if (query.length >= 2) {
                 Text(
                     text = if (matchCount > 0) "$currentMatch z $matchCount" else "0",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     color = TextMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 4.dp),

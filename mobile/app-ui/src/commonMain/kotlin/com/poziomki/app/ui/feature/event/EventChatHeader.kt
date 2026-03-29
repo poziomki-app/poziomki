@@ -60,7 +60,7 @@ import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
@@ -168,7 +168,7 @@ fun EventMetaRows(
                 ) {
                     Text(
                         text = "i",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 14.sp,
                         color = Primary,
@@ -223,7 +223,7 @@ private fun ChipContent(
         Spacer(modifier = Modifier.width(5.dp))
         Text(
             text = text,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp,
             color = tint,
@@ -461,7 +461,7 @@ private fun AttendeesDialog(
         title = {
             Text(
                 text = "uczestnicy",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = TextPrimary,
@@ -489,7 +489,7 @@ private fun AttendeesDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = attendee.name,
-                                fontFamily = NunitoFamily,
+                                fontFamily = MontserratFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
                                 color = TextPrimary,
@@ -497,7 +497,7 @@ private fun AttendeesDialog(
                             if (attendee.isCreator) {
                                 Text(
                                     text = "organizator",
-                                    fontFamily = NunitoFamily,
+                                    fontFamily = MontserratFamily,
                                     fontSize = 12.sp,
                                     color = Primary,
                                 )
@@ -511,7 +511,7 @@ private fun AttendeesDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = "zamknij",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     color = TextMuted,
                 )
@@ -532,7 +532,7 @@ private fun EventInfoDialog(
         title = {
             Text(
                 text = "opis",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = TextPrimary,
@@ -541,7 +541,7 @@ private fun EventInfoDialog(
         text = {
             Text(
                 text = description,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
                 color = TextSecondary,
@@ -552,7 +552,7 @@ private fun EventInfoDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = "zamknij",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.SemiBold,
                     color = TextMuted,
                 )
@@ -580,7 +580,7 @@ private fun LocationMapDialog(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = locationName,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = TextPrimary,
@@ -643,7 +643,7 @@ private fun LocationMapDialog(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "otwórz w mapach",
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.SemiBold,
                             color = Primary,
                         )
@@ -651,7 +651,7 @@ private fun LocationMapDialog(
                     TextButton(onClick = onDismiss) {
                         Text(
                             text = "zamknij",
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.SemiBold,
                             color = TextMuted,
                         )

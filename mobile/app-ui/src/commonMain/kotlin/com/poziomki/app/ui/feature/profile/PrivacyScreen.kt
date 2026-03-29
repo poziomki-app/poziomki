@@ -36,7 +36,7 @@ import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -52,7 +52,7 @@ fun PrivacyScreen(
     viewModel: PrivacyViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val nunito = NunitoFamily
+    val nunito = MontserratFamily
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
@@ -267,7 +267,7 @@ private fun DeleteAccountDialog(
         title = {
             Text(
                 text = "Usunąć konto?",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Bold,
             )
         },
@@ -275,7 +275,7 @@ private fun DeleteAccountDialog(
             Column {
                 Text(
                     text = "Ta operacja jest nieodwracalna. Wpisz hasło, aby potwierdzić.",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -296,7 +296,7 @@ private fun DeleteAccountDialog(
                 Text(
                     text = "Usuń",
                     color = MaterialTheme.colorScheme.error,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -308,7 +308,7 @@ private fun DeleteAccountDialog(
             ) {
                 Text(
                     text = "Anuluj",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                 )
             }
         },

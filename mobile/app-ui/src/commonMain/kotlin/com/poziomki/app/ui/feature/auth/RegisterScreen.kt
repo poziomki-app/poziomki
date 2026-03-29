@@ -35,7 +35,7 @@ import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -73,7 +73,7 @@ fun RegisterScreen(
 
         Text(
             text = "poznajmy si\u0119!",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 20.sp,
             color = TextSecondary,
@@ -85,7 +85,7 @@ fun RegisterScreen(
         uiState.error?.let { error ->
             Text(
                 text = error,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.error,
@@ -160,14 +160,14 @@ fun RegisterScreen(
             )
             Text(
                 text = "akceptuję ",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
                 color = TextSecondary,
             )
             Text(
                 text = "politykę prywatności",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = Primary,
@@ -200,7 +200,7 @@ fun RegisterScreen(
         ) {
             Text(
                 text = "zaloguj si\u0119",
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 color = Primary,
@@ -234,7 +234,7 @@ fun RegisterScreen(
                 ) {
                     Text(
                         text = "Polityka Prywatności",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
                         color = TextPrimary,
@@ -242,7 +242,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = privacyPolicyText,
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 14.sp,
                         color = TextSecondary,

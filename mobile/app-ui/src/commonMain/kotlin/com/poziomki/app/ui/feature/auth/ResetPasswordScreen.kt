@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -60,7 +60,7 @@ fun ResetPasswordScreen(
 
         Text(
             text = "nowe has\u0142o",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 20.sp,
             color = TextSecondary,
@@ -70,7 +70,7 @@ fun ResetPasswordScreen(
 
         Text(
             text = "ustaw nowe has\u0142o dla",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 14.sp,
             color = TextSecondary,
@@ -78,7 +78,7 @@ fun ResetPasswordScreen(
 
         Text(
             text = email,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             color = Primary,
@@ -89,7 +89,7 @@ fun ResetPasswordScreen(
         uiState.error?.let { error ->
             Text(
                 text = error,
-                fontFamily = NunitoFamily,
+                fontFamily = MontserratFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.error,

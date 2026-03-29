@@ -66,7 +66,7 @@ import com.poziomki.app.ui.designsystem.components.SectionLabel
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -340,7 +340,7 @@ fun EventCreateScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "dodaj zdjęcie",
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             color = Primary,
                             fontSize = 14.sp,
                         )
@@ -376,7 +376,7 @@ fun EventCreateScreen(
                 ) {
                     Text(
                         text = state.location.ifBlank { "wybierz lokalizację na mapie" },
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 16.sp,
                         color = if (state.location.isBlank()) TextMuted else TextPrimary,
                         maxLines = 2,
@@ -482,7 +482,7 @@ fun EventCreateScreen(
             ) {
                 Text(
                     text = dateDisplay.ifBlank { "wybierz datę" },
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     color = if (dateDisplay.isBlank()) TextMuted else TextPrimary,
                     fontSize = 16.sp,
                     modifier = Modifier.padding(16.dp),
@@ -499,7 +499,7 @@ fun EventCreateScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "od",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 12.sp,
                         color = TextSecondary,
                         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
@@ -514,7 +514,7 @@ fun EventCreateScreen(
                     ) {
                         Text(
                             text = timeDisplay.ifBlank { "18:00" },
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             color = if (timeDisplay.isBlank()) TextMuted else TextPrimary,
                             fontSize = 16.sp,
                             modifier = Modifier.padding(16.dp),
@@ -525,7 +525,7 @@ fun EventCreateScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "do (opcjonalnie)",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         fontSize = 12.sp,
                         color = TextSecondary,
                         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
@@ -540,7 +540,7 @@ fun EventCreateScreen(
                     ) {
                         Text(
                             text = endTimeDisplay.ifBlank { "20:00" },
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             color = if (endTimeDisplay.isBlank()) TextMuted else TextPrimary,
                             fontSize = 16.sp,
                             modifier = Modifier.padding(16.dp),
@@ -560,7 +560,7 @@ fun EventCreateScreen(
             ) {
                 Text(
                     text = "nowi uczestnicy muszą zostać zaakceptowani",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     color = TextSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.weight(1f),
@@ -579,7 +579,7 @@ fun EventCreateScreen(
                 Text(
                     text = error,
                     color = MaterialTheme.colorScheme.error,
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     fontSize = 14.sp,
                 )
                 LaunchedEffect(error) {

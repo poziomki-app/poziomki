@@ -37,7 +37,7 @@ import com.poziomki.app.network.MatchProfile
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
@@ -85,7 +85,7 @@ fun NewChatScreen(
                 ) {
                     Text(
                         text = state.error ?: "brak osób do napisania",
-                        fontFamily = NunitoFamily,
+                        fontFamily = MontserratFamily,
                         color = TextSecondary,
                     )
                 }

@@ -44,7 +44,7 @@ import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.poziomki.app.network.GeocodingResult
 import com.poziomki.app.network.GeocodingService
 import com.poziomki.app.ui.designsystem.theme.Background
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -195,7 +195,7 @@ fun LocationPickerSheet(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = {
-                        Text("szukaj miejsca...", color = TextMuted, fontFamily = NunitoFamily)
+                        Text("szukaj miejsca...", color = TextMuted, fontFamily = MontserratFamily)
                     },
                     leadingIcon = {
                         Icon(PhosphorIcons.Bold.MagnifyingGlass, contentDescription = null, tint = TextMuted)
@@ -210,7 +210,7 @@ fun LocationPickerSheet(
                             unfocusedIndicatorColor = Color.Transparent,
                             cursorColor = Primary,
                         ),
-                    textStyle = TextStyle(fontFamily = NunitoFamily, fontSize = 15.sp),
+                    textStyle = TextStyle(fontFamily = MontserratFamily, fontSize = 15.sp),
                     shape = RoundedCornerShape(14.dp),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -227,7 +227,7 @@ fun LocationPickerSheet(
                             results.forEach { result ->
                                 Text(
                                     text = result.name,
-                                    fontFamily = NunitoFamily,
+                                    fontFamily = MontserratFamily,
                                     fontSize = 14.sp,
                                     color = TextPrimary,
                                     maxLines = 1,
@@ -274,7 +274,7 @@ fun LocationPickerSheet(
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = "wybierz lokalizację",
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontWeight = FontWeight.Medium,
                             fontSize = 16.sp,
                             color = Background,

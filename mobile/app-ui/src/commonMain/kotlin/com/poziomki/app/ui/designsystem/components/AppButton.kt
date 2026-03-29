@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.Error
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
 
@@ -191,7 +191,7 @@ private fun ButtonLabel(
 ) {
     Text(
         text = text,
-        fontFamily = NunitoFamily,
+        fontFamily = MontserratFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 15.sp,
         color = color,

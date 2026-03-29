@@ -50,7 +50,6 @@ import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -231,7 +230,7 @@ private fun CreateTagSuggestion(
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = "dodaj \"${name.lowercase()}\"",
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 13.sp,
             color = Primary,
@@ -343,7 +342,7 @@ private fun SearchBar(
                     singleLine = true,
                     textStyle =
                         TextStyle(
-                            fontFamily = NunitoFamily,
+                            fontFamily = MontserratFamily,
                             fontSize = 14.sp,
                             color = TextPrimary,
                         ),
@@ -395,7 +394,7 @@ private fun InterestChip(
     ) {
         Text(
             text = label.lowercase(),
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             color = textColor,
@@ -462,7 +461,7 @@ private fun CategoryOption(
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = category.displayName,
-            fontFamily = NunitoFamily,
+            fontFamily = MontserratFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             color = TextPrimary,

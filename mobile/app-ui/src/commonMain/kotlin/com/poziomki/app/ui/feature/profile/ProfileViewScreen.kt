@@ -40,7 +40,7 @@ import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.isImageUrl
@@ -160,7 +160,7 @@ fun ProfileViewScreen(
             Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
                 Text(
                     text = "nie znaleziono profilu",
-                    fontFamily = NunitoFamily,
+                    fontFamily = MontserratFamily,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
