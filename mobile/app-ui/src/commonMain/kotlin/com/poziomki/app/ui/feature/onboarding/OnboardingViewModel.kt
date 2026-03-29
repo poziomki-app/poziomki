@@ -218,9 +218,13 @@ class OnboardingViewModel(
         }
     }
 
-    fun createInterestTag(name: String) {
+    fun createInterestTag(
+        name: String,
+        categoryKey: String,
+        parentId: String,
+    ) {
         viewModelScope.launch {
-            when (val result = tagRepository.createTag(name.trim(), "interest")) {
+            when (val result = tagRepository.createTag(name.trim(), "interest", categoryKey, parentId)) {
                 is ApiResult.Success -> {
                     val tag = result.data
                     updateState {

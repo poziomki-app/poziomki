@@ -103,10 +103,19 @@ class TagRepository(
     suspend fun createTag(
         name: String,
         scope: String,
+        category: String? = null,
         parentId: String? = null,
     ): ApiResult<Tag> =
         withContext(Dispatchers.IO) {
-            val result = api.createTag(CreateTagRequest(name = name, scope = scope, parentId = parentId))
+            val result =
+                api.createTag(
+                    CreateTagRequest(
+                        name = name,
+                        scope = scope,
+                        category = category,
+                        parentId = parentId,
+                    ),
+                )
             if (result is ApiResult.Success) {
                 val tag = result.data
                 db.tagQueries.upsert(

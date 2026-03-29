@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -63,8 +65,21 @@ fun InterestsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    var showCategoryPicker by remember { mutableStateOf(false) }
     val selectedCount = state.selectedTagIds.size
     val ready = selectedCount >= 3
+
+    if (showCategoryPicker) {
+        CategoryPickerDialog(
+            tagName = searchQuery.trim(),
+            onCategorySelected = { category ->
+                viewModel.createInterestTag(searchQuery, category.key, category.rootId)
+                searchQuery = ""
+                showCategoryPicker = false
+            },
+            onDismiss = { showCategoryPicker = false },
+        )
+    }
 
     OnboardingLayout(
         currentStep = 2,
@@ -90,10 +105,7 @@ fun InterestsScreen(
             searchQuery = searchQuery,
             onSearchQueryChange = { searchQuery = it },
             onToggleTag = { viewModel.toggleTag(it) },
-            onCreateTag = {
-                viewModel.createInterestTag(searchQuery)
-                searchQuery = ""
-            },
+            onCreateTag = { showCategoryPicker = true },
         )
     }
 }
@@ -387,6 +399,73 @@ private fun InterestChip(
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             color = textColor,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryPickerDialog(
+    tagName: String,
+    onCategorySelected: (InterestCategoryInfo) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(AppTheme.radius.lg),
+            color = SurfaceElevated,
+        ) {
+            Column(modifier = Modifier.padding(AppTheme.spacing.lg)) {
+                Text(
+                    text = "wybierz kategorię",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "dla \"${tagName.lowercase()}\"",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+                Spacer(modifier = Modifier.height(AppTheme.spacing.md))
+                INTEREST_CATEGORIES.forEach { category ->
+                    CategoryOption(
+                        category = category,
+                        onClick = { onCategorySelected(category) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryOption(
+    category: InterestCategoryInfo,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(AppTheme.radius.sm))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = category.icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = category.color,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = category.displayName,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            color = TextPrimary,
         )
     }
 }
