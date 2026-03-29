@@ -24,10 +24,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +43,9 @@ private val ButtonShape = RoundedCornerShape(28.dp)
 private val DefaultGradient =
     Brush.verticalGradient(listOf(Color(0xFF1A2029), Color(0xFF161B22)))
 
+private val PrimaryGradient =
+    Brush.verticalGradient(listOf(Color(0xFF182028), Color(0xFF141A22)))
+
 private val DestructiveGradient =
     Brush.verticalGradient(listOf(Color(0xFF2A1215), Color(0xFF1E0D0F)))
 
@@ -56,7 +57,11 @@ private fun contentColor(variant: ButtonVariant): Color =
     }
 
 private fun backgroundFor(variant: ButtonVariant): Brush =
-    if (variant == ButtonVariant.DESTRUCTIVE) DestructiveGradient else DefaultGradient
+    when (variant) {
+        ButtonVariant.PRIMARY -> PrimaryGradient
+        ButtonVariant.DESTRUCTIVE -> DestructiveGradient
+        else -> DefaultGradient
+    }
 
 @Suppress("LongMethod")
 @Composable
@@ -112,15 +117,7 @@ fun PoziomkiButton(
 }
 
 private const val ANIMATION_DURATION = 8000
-
-private val GlowBrush =
-    Brush.sweepGradient(
-        0.0f to Primary.copy(alpha = 0.35f),
-        0.15f to Primary.copy(alpha = 0.10f),
-        0.5f to Primary.copy(alpha = 0.10f),
-        0.85f to Primary.copy(alpha = 0.10f),
-        1.0f to Primary.copy(alpha = 0.35f),
-    )
+private const val GLOW_STEPS = 12
 
 @Composable
 private fun animatedBorder(
@@ -142,32 +139,46 @@ private fun animatedBorder(
     }
 
     val transition = rememberInfiniteTransition(label = "border")
-    val angle by transition.animateFloat(
+    val phase by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = 1f,
         animationSpec =
             infiniteRepeatable(
                 animation = tween(ANIMATION_DURATION, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             ),
-        label = "borderAngle",
+        label = "borderPhase",
     )
 
-    return Modifier
-        .border(1.dp, Primary.copy(alpha = 0.10f), ButtonShape)
-        .clip(ButtonShape)
-        .glowOverlay(angle)
+    val brush = glowBrush(phase)
+    return Modifier.border(1.dp, brush, ButtonShape)
 }
 
-private fun Modifier.glowOverlay(angle: Float): Modifier =
-    this.then(
-        Modifier.drawWithContent {
-            drawContent()
-            rotate(angle) {
-                drawCircle(brush = GlowBrush, radius = size.maxDimension)
-            }
-        },
-    )
+private fun glowBrush(phase: Float): Brush {
+    // Generate evenly-spaced stops and compute alpha based on angular distance to peak
+    val stops =
+        Array(GLOW_STEPS) { i ->
+            val pos = i.toFloat() / GLOW_STEPS
+            val dist = angularDistance(pos, phase)
+            val alpha = glowAlpha(dist)
+            pos to Primary.copy(alpha = alpha)
+        }
+    return Brush.sweepGradient(colorStops = stops)
+}
+
+private fun angularDistance(
+    a: Float,
+    b: Float,
+): Float {
+    val d = kotlin.math.abs(a - b)
+    return kotlin.math.min(d, 1f - d)
+}
+
+private fun glowAlpha(dist: Float): Float {
+    // Smooth falloff: peak at 0.35, base at 0.08, spread ~0.15
+    val t = (dist / 0.15f).coerceIn(0f, 1f)
+    return 0.08f + (0.27f * (1f - t * t))
+}
 
 @Composable
 private fun ButtonLabel(
