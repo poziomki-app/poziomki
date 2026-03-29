@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -820,6 +821,61 @@ private fun BioEditorDialog(
                         }
                     },
                 )
+
+                // Image previews
+                val bioImageMatches =
+                    remember(bio) {
+                        Regex("""!\[\]\((.*?)\)""").findAll(bio).toList()
+                    }
+                if (bioImageMatches.isNotEmpty()) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = PoziomkiTheme.spacing.md, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        bioImageMatches.forEachIndexed { index, match ->
+                            val url = match.groupValues[1]
+                            Box(modifier = Modifier.size(72.dp)) {
+                                AsyncImage(
+                                    model = resolveImageUrl(url),
+                                    contentDescription = "Zdjęcie ${index + 1}",
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Surface(
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(2.dp)
+                                            .size(22.dp)
+                                            .clickable {
+                                                val start = match.range.first
+                                                var end = match.range.last + 1
+                                                if (end < bio.length && bio[end] == '\n') end++
+                                                onBioChange(bio.removeRange(start, end))
+                                            },
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            PhosphorIcons.Bold.X,
+                                            contentDescription = "Usuń zdjęcie",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Bottom toolbar — image button + char counter
                 Row(
