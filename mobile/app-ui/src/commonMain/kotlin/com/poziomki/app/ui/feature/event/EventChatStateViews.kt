@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -97,19 +100,24 @@ fun EventChatJoinRequiredView(
                 .verticalScroll(rememberScrollState()),
     ) {
         EventCoverImage(event = event) {
-            IconButton(
-                onClick = onBack,
+            Surface(
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .size(40.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.45f),
             ) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.ArrowLeft,
-                    contentDescription = "Wstecz",
-                    tint = Color.White,
-                )
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.ArrowLeft,
+                        contentDescription = "Wstecz",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
 
             Column(
