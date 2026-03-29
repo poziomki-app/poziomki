@@ -26,8 +26,6 @@ data class OnboardingState(
     val selectedTagIds: Set<String> = emptySet(),
     val availableTags: List<Tag> = emptyList(),
     val degreeSearchResults: List<Degree> = emptyList(),
-    val selectedAvatar: String? = null,
-    val avatarImageBytes: ByteArray? = null,
     val galleryImages: List<ByteArray> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -45,7 +43,6 @@ class OnboardingViewModel(
         val program: String,
         val bio: String,
         val selectedTagIds: Set<String>,
-        val selectedAvatar: String?,
     )
 
     private data class MediaUploadResult(
@@ -81,7 +78,6 @@ class OnboardingViewModel(
                     program = draft.program,
                     bio = draft.bio,
                     selectedTagIds = draft.selectedTagIds,
-                    selectedAvatar = draft.selectedAvatar,
                 )
             filterDegrees(draft.program)
         }
@@ -94,7 +90,6 @@ class OnboardingViewModel(
                 program = state.program,
                 bio = state.bio,
                 selectedTagIds = state.selectedTagIds,
-                selectedAvatar = state.selectedAvatar,
             )
         viewModelScope.launch {
             sessionManager.saveOnboardingDraft(json.encodeToString(draft))
@@ -112,7 +107,7 @@ class OnboardingViewModel(
 
     private fun loadTags() {
         viewModelScope.launch {
-            tagRepository.ensureInterestSeedIfEmpty()
+            tagRepository.ensureInterestSeed()
             // Observe cached tags
             launch {
                 tagRepository.observeTags("interest").collect { tags ->
@@ -163,33 +158,6 @@ class OnboardingViewModel(
         updateState { it.copy(bio = bio, error = null) }
     }
 
-    fun selectAvatar(emoji: String) {
-        updateState { it.copy(selectedAvatar = emoji, avatarImageBytes = null, error = null) }
-    }
-
-    fun setAvatarImage(bytes: ByteArray) {
-        if (bytes.size > MAX_MEDIA_BYTES) {
-            updateState { it.copy(error = "Avatar image is too large. Choose a smaller image.") }
-            return
-        }
-        updateState { it.copy(avatarImageBytes = bytes, selectedAvatar = null, error = null) }
-    }
-
-    fun clearAvatar() {
-        updateState { it.copy(selectedAvatar = null, avatarImageBytes = null, error = null) }
-    }
-
-    fun clearAll() {
-        updateState {
-            it.copy(
-                selectedAvatar = null,
-                avatarImageBytes = null,
-                galleryImages = emptyList(),
-                error = null,
-            )
-        }
-    }
-
     fun addGalleryImages(images: List<ByteArray>) {
         val tooLarge = images.any { it.size > MAX_MEDIA_BYTES }
         if (tooLarge) {
@@ -215,6 +183,30 @@ class OnboardingViewModel(
                 selectedTagIds = if (tagId in current) current - tagId else current + tagId,
                 error = null,
             )
+        }
+    }
+
+    fun createInterestTag(
+        name: String,
+        categoryKey: String,
+        parentId: String,
+    ) {
+        viewModelScope.launch {
+            when (val result = tagRepository.createTag(name.trim(), "interest", categoryKey, parentId)) {
+                is ApiResult.Success -> {
+                    val tag = result.data
+                    updateState {
+                        it.copy(
+                            availableTags = it.availableTags + tag,
+                            selectedTagIds = it.selectedTagIds + tag.id,
+                        )
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    updateState { it.copy(error = result.message) }
+                }
+            }
         }
     }
 
@@ -276,14 +268,15 @@ class OnboardingViewModel(
     }
 
     private suspend fun uploadMedia(state: OnboardingState): MediaUploadResult {
-        var avatarUrl: String? = state.selectedAvatar
+        var avatarUrl: String? = null
         var failures = 0
 
-        if (state.avatarImageBytes != null) {
+        val avatarBytes = state.galleryImages.firstOrNull()
+        if (avatarBytes != null) {
             when (
                 val result =
                     apiService.uploadImage(
-                        state.avatarImageBytes,
+                        avatarBytes,
                         "avatar.jpg",
                         "profile_picture",
                     )

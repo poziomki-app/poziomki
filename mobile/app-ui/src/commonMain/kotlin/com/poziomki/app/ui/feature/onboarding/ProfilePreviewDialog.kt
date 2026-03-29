@@ -7,22 +7,17 @@ import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
 
+@Suppress("LongParameterList")
 @Composable
 fun ProfilePreviewDialog(
     name: String,
     program: String,
     bio: String,
     tags: List<Tag>,
-    selectedAvatar: String?,
-    avatarImageBytes: ByteArray?,
     galleryImages: List<ByteArray>,
     onDismiss: () -> Unit,
 ) {
-    val images =
-        buildList {
-            if (avatarImageBytes != null) add(ProfileImage.Bytes(avatarImageBytes))
-            galleryImages.forEach { add(ProfileImage.Bytes(it)) }
-        }
+    val images = galleryImages.map { ProfileImage.Bytes(it) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -38,7 +33,6 @@ fun ProfilePreviewDialog(
             bio = bio,
             tags = tags,
             images = images,
-            emojiAvatar = selectedAvatar,
             onClose = onDismiss,
         )
     }

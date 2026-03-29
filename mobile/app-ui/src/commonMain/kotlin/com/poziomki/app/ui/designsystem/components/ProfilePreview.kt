@@ -70,6 +70,7 @@ sealed class ProfileImage {
     ) : ProfileImage()
 }
 
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfilePreview(
@@ -78,7 +79,7 @@ fun ProfilePreview(
     bio: String?,
     tags: List<Tag>,
     images: List<ProfileImage>,
-    emojiAvatar: String?,
+    emojiAvatar: String? = null,
     gradientStart: String? = null,
     gradientEnd: String? = null,
     onClose: () -> Unit,
@@ -309,7 +310,7 @@ fun ProfilePreview(
                 ) {
                     tags.forEach { tag ->
                         Text(
-                            text = "${tag.emoji ?: ""} ${tag.name}".trim(),
+                            text = tag.name.lowercase(),
                             fontFamily = nunito,
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,

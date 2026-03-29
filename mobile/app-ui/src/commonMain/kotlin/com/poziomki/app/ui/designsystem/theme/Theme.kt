@@ -56,3 +56,5 @@ object PoziomkiTheme {
     val componentSizes: ComponentSizes
         @Composable get() = LocalComponentSizes.current
 }
+
+val AppTheme = PoziomkiTheme
