@@ -2,17 +2,13 @@ package com.poziomki.app.ui.feature.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -31,15 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
+import com.poziomki.app.ui.designsystem.components.ButtonVariant
+import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -131,7 +127,11 @@ fun ProfileViewScreen(
                         }
 
                         // Message button
-                        Surface(
+                        PoziomkiButton(
+                            text = "Wiadomość",
+                            onClick = { onNavigateToChat(p.userId, p.name, p.id) },
+                            variant = ButtonVariant.PRIMARY,
+                            icon = PhosphorIcons.Fill.PaperPlaneRight,
                             modifier =
                                 Modifier
                                     .align(Alignment.BottomEnd)
@@ -139,41 +139,7 @@ fun ProfileViewScreen(
                                         end = 16.dp,
                                         bottom = bottomInsets + 20.dp,
                                     ),
-                            shape = RoundedCornerShape(28.dp),
-                            color = Color.Transparent,
-                            border = BorderStroke(1.dp, Border),
-                        ) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors =
-                                                    listOf(
-                                                        Color(0xFF1A2029),
-                                                        Color(0xFF161B22),
-                                                    ),
-                                            ),
-                                        ).clickable { onNavigateToChat(p.userId, p.name, p.id) }
-                                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = PhosphorIcons.Fill.PaperPlaneRight,
-                                    contentDescription = null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "Wiadomość",
-                                    fontFamily = NunitoFamily,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = White,
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -144,6 +145,7 @@ fun LoginScreen(
             },
             enabled = email.isNotBlank() && password.isNotBlank(),
             loading = uiState.isLoading,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         TextButton(
