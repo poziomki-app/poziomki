@@ -8,10 +8,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
+import java.io.File
 import kotlin.math.sqrt
 
 private const val DEFAULT_MAX_DIMENSION = 1920
@@ -20,6 +25,38 @@ private const val DEFAULT_MAX_BYTES = 700 * 1024
 private const val MIN_JPEG_QUALITY = 50
 private const val QUALITY_STEP = 10
 private const val MIN_PIXEL_DIMENSION = 1
+
+@Composable
+actual fun rememberCameraCapture(onResult: (ByteArray?) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    val photoUri = rememberSaveable(stateSaver = uriSaver) { mutableStateOf<Uri?>(null) }
+    val cameraLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.TakePicture(),
+        ) { success: Boolean ->
+            if (success) {
+                val bytes = photoUri.value?.let { compressImage(context, it) }
+                onResult(bytes)
+            } else {
+                onResult(null)
+            }
+        }
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted: Boolean ->
+            if (granted) {
+                val uri = createTempImageUri(context)
+                photoUri.value = uri
+                cameraLauncher.launch(uri)
+            } else {
+                onResult(null)
+            }
+        }
+    return {
+        permissionLauncher.launch(android.Manifest.permission.CAMERA)
+    }
+}
 
 @Composable
 actual fun rememberSingleImagePicker(onResult: (ByteArray?) -> Unit): () -> Unit {
@@ -148,3 +185,19 @@ private fun readDisplayName(
             cursor.getString(index)
         }
     }.getOrNull()
+
+private fun createTempImageUri(context: android.content.Context): Uri {
+    val dir = File(context.cacheDir, "camera_photos").apply { mkdirs() }
+    val file = File(dir, "photo_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file,
+    )
+}
+
+private val uriSaver =
+    Saver<Uri?, String>(
+        save = { it?.toString() },
+        restore = { Uri.parse(it) },
+    )

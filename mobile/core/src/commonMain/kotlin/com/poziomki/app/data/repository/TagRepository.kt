@@ -45,7 +45,7 @@ class TagRepository(
     ): Boolean =
         withContext(Dispatchers.IO) {
             if (scope == "interest") {
-                ensureInterestSeedIfEmpty()
+                ensureInterestSeed()
             }
             val key = cacheKey(scope)
             val lastRefreshMs =
@@ -103,10 +103,19 @@ class TagRepository(
     suspend fun createTag(
         name: String,
         scope: String,
+        category: String? = null,
         parentId: String? = null,
     ): ApiResult<Tag> =
         withContext(Dispatchers.IO) {
-            val result = api.createTag(CreateTagRequest(name = name, scope = scope, parentId = parentId))
+            val result =
+                api.createTag(
+                    CreateTagRequest(
+                        name = name,
+                        scope = scope,
+                        category = category,
+                        parentId = parentId,
+                    ),
+                )
             if (result is ApiResult.Success) {
                 val tag = result.data
                 db.tagQueries.upsert(
@@ -133,15 +142,8 @@ class TagRepository(
             }
         }
 
-    suspend fun ensureInterestSeedIfEmpty() {
+    suspend fun ensureInterestSeed() {
         withContext(Dispatchers.IO) {
-            val hasInterestTags =
-                db.tagQueries
-                    .selectByScope("interest")
-                    .executeAsList()
-                    .isNotEmpty()
-            if (hasInterestTags) return@withContext
-
             db.transaction {
                 LOCAL_ONBOARDING_INTEREST_TAGS.forEach { tag ->
                     db.tagQueries.upsert(
