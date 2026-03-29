@@ -140,6 +140,7 @@ fun ProfileScreen(
                                         text = "wyloguj się",
                                         onClick = { showLogoutDialog = true },
                                         icon = PhosphorIcons.Bold.SignOut,
+                                        modifier = Modifier.fillMaxWidth(0.6f),
                                     )
                                 }
 
