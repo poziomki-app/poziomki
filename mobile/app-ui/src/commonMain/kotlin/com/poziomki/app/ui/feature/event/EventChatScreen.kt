@@ -113,6 +113,7 @@ fun EventChatScreen(
                     val event = requireNotNull(eventState.event)
                     EventChatHeader(
                         event = event,
+                        attendees = eventState.attendees,
                         isCreator = eventState.isCreator,
                         onBack = onBack,
                         onNavigateToProfile = onNavigateToProfile,
