@@ -2,7 +2,6 @@ package com.poziomki.app.ui.feature.onboarding
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -44,12 +44,11 @@ import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
+import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
-import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.PrimaryLight
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -64,6 +63,7 @@ fun InterestsScreen(
     val state by viewModel.state.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     val selectedCount = state.selectedTagIds.size
+    val ready = selectedCount >= 3
 
     OnboardingLayout(
         currentStep = 2,
@@ -71,11 +71,17 @@ fun InterestsScreen(
         showBack = true,
         onBack = onBack,
         footer = {
-            AppButton(
-                text = "dalej",
-                onClick = onNext,
-                enabled = selectedCount >= 3,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                AppButton(
+                    text = "dalej",
+                    onClick = onNext,
+                    enabled = ready,
+                    variant = if (ready) ButtonVariant.PRIMARY else ButtonVariant.OUTLINE,
+                )
+            }
         },
     ) {
         InterestsContent(
@@ -170,13 +176,15 @@ private fun SearchResults(
         )
     } else {
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             tags.forEach { tag ->
+                val color = CATEGORY_MAP[tag.category]?.color ?: Primary
                 InterestChip(
                     label = tag.name,
                     selected = tag.id in selectedTagIds,
+                    accentColor = color,
                     onClick = { onToggleTag(tag.id) },
                 )
             }
@@ -192,7 +200,7 @@ private fun CategoryList(
 ) {
     groupedTags.forEachIndexed { index, (category, tags) ->
         if (index > 0) {
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
         }
         CategorySection(
             category = category,
@@ -212,34 +220,52 @@ private fun CategorySection(
     onToggleTag: (String) -> Unit,
 ) {
     Column {
-        // Section header
+        // Section header with gradient
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.sm),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush =
+                            Brush.horizontalGradient(
+                                colors =
+                                    listOf(
+                                        category.color.copy(alpha = 0.15f),
+                                        Color.Transparent,
+                                    ),
+                            ),
+                        shape = RoundedCornerShape(PoziomkiTheme.radius.sm),
+                    ).padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Icon(
                 imageVector = category.icon,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
                 tint = category.color,
             )
             Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
             Text(
                 text = category.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                color = TextMuted,
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = category.color,
             )
         }
 
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
         // Tag chips
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             tags.forEach { tag ->
                 InterestChip(
                     label = tag.name,
                     selected = tag.id in selectedTagIds,
+                    accentColor = category.color,
                     onClick = { onToggleTag(tag.id) },
                 )
             }
@@ -306,39 +332,38 @@ private fun SearchBar(
     }
 }
 
+private val ChipShape = RoundedCornerShape(50)
+private val ChipUnselected = Color(0xFF1A1F26)
+
 @Composable
 private fun InterestChip(
     label: String,
     selected: Boolean,
+    accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(50)
     val bgColor by animateColorAsState(
-        targetValue = if (selected) PrimaryLight else Color.Transparent,
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) Primary else Border,
+        targetValue = if (selected) accentColor.copy(alpha = 0.25f) else ChipUnselected,
     )
     val textColor by animateColorAsState(
-        targetValue = if (selected) Primary else TextPrimary,
+        targetValue = if (selected) Color.White else Color(0xFFB0B8C4),
     )
 
     Box(
         modifier =
             modifier
-                .clip(shape)
-                .background(bgColor, shape)
-                .border(1.dp, borderColor, shape)
+                .clip(ChipShape)
+                .background(bgColor)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.Medium,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             color = textColor,
         )
     }
