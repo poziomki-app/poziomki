@@ -218,6 +218,26 @@ class OnboardingViewModel(
         }
     }
 
+    fun createInterestTag(name: String) {
+        viewModelScope.launch {
+            when (val result = tagRepository.createTag(name.trim(), "interest")) {
+                is ApiResult.Success -> {
+                    val tag = result.data
+                    updateState {
+                        it.copy(
+                            availableTags = it.availableTags + tag,
+                            selectedTagIds = it.selectedTagIds + tag.id,
+                        )
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    updateState { it.copy(error = result.message) }
+                }
+            }
+        }
+    }
+
     fun createProfile(onComplete: () -> Unit) {
         val s = _state.value
 
