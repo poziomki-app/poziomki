@@ -35,6 +35,7 @@ import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -234,8 +235,8 @@ fun RegisterScreen(
                 ) {
                     Text(
                         text = "Polityka Prywatności",
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
                         fontSize = 22.sp,
                         color = TextPrimary,
                     )
