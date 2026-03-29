@@ -220,37 +220,34 @@ private fun CategorySection(
     onToggleTag: (String) -> Unit,
 ) {
     Column {
-        // Section header with gradient
+        // Section header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush =
-                            Brush.horizontalGradient(
-                                colors =
-                                    listOf(
-                                        category.color.copy(alpha = 0.15f),
-                                        Color.Transparent,
-                                    ),
-                            ),
-                        shape = RoundedCornerShape(AppTheme.radius.sm),
-                    ).padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(bottom = AppTheme.spacing.sm),
         ) {
             Icon(
                 imageVector = category.icon,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(18.dp),
                 tint = category.color,
             )
             Spacer(modifier = Modifier.width(AppTheme.spacing.sm))
             Text(
                 text = category.displayName,
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
-                color = category.color,
+                style =
+                    TextStyle(
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        brush =
+                            Brush.horizontalGradient(
+                                colors =
+                                    listOf(
+                                        category.color,
+                                        Color(0xFF6B7280),
+                                    ),
+                            ),
+                    ),
             )
         }
 
@@ -344,7 +341,7 @@ private fun InterestChip(
     modifier: Modifier = Modifier,
 ) {
     val bgColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = 0.25f) else ChipUnselected,
+        targetValue = if (selected) accentColor else ChipUnselected,
     )
     val textColor by animateColorAsState(
         targetValue = if (selected) Color.White else Color(0xFFB0B8C4),
@@ -360,7 +357,7 @@ private fun InterestChip(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = label,
+            text = label.lowercase(),
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
