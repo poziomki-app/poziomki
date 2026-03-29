@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -137,14 +138,16 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
-        PoziomkiButton(
-            text = "zaloguj si\u0119",
-            onClick = {
-                viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
-            },
-            enabled = email.isNotBlank() && password.isNotBlank(),
-            loading = uiState.isLoading,
-        )
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            PoziomkiButton(
+                text = "zaloguj si\u0119",
+                onClick = {
+                    viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
+                },
+                enabled = email.isNotBlank() && password.isNotBlank(),
+                loading = uiState.isLoading,
+            )
+        }
 
         TextButton(
             onClick = onNavigateToRegister,

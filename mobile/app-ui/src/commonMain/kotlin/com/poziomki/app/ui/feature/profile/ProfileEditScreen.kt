@@ -293,12 +293,14 @@ fun ProfileEditScreen(
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
                 // Save button
-                PoziomkiButton(
-                    text = "zapisz",
-                    onClick = { viewModel.save(onBack) },
-                    variant = ButtonVariant.PRIMARY,
-                    loading = state.isSaving,
-                )
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    PoziomkiButton(
+                        text = "zapisz",
+                        onClick = { viewModel.save(onBack) },
+                        variant = ButtonVariant.PRIMARY,
+                        loading = state.isSaving,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
             }
