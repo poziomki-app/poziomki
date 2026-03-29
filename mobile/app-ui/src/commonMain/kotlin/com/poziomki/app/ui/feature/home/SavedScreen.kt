@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +49,7 @@ fun SavedScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         ScreenHeader(
             title = "zapisane",
             onBack = onBack,
@@ -74,7 +76,7 @@ fun SavedScreen(
                             } else {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize().padding(horizontal = PoziomkiTheme.spacing.md),
-                                    contentPadding = PaddingValues(bottom = PoziomkiTheme.spacing.md),
+                                    contentPadding = PaddingValues(bottom = navBarBottom + PoziomkiTheme.spacing.md),
                                     verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                                 ) {
                                     items(state.events, key = { it.id }) { event ->
@@ -90,7 +92,7 @@ fun SavedScreen(
                             } else {
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize().padding(horizontal = PoziomkiTheme.spacing.md),
-                                    contentPadding = PaddingValues(bottom = PoziomkiTheme.spacing.md),
+                                    contentPadding = PaddingValues(bottom = navBarBottom + PoziomkiTheme.spacing.md),
                                     verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                                 ) {
                                     items(state.profiles, key = { it.id }) { profile ->
