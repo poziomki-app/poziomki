@@ -47,6 +47,7 @@ import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
 import com.poziomki.app.ui.designsystem.theme.AppTheme
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
@@ -236,8 +237,8 @@ private fun CategorySection(
                 text = category.displayName,
                 style =
                     TextStyle(
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
                         fontSize = 14.sp,
                         brush =
                             Brush.horizontalGradient(

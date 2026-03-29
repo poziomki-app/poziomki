@@ -26,7 +26,7 @@ data class InterestCategoryInfo(
 
 val INTEREST_CATEGORIES: List<InterestCategoryInfo> =
     listOf(
-        InterestCategoryInfo("sport", "Sport i fitness", PhosphorIcons.Bold.Barbell, Color(0xFF4ADE80)),
+        InterestCategoryInfo("sport", "Sport i fitness", PhosphorIcons.Bold.Barbell, Color(0xFF6EE7B7)),
         InterestCategoryInfo("muzyka", "Muzyka", PhosphorIcons.Bold.MusicNotes, Color(0xFFA78BFA)),
         InterestCategoryInfo("sztuka", "Sztuka i design", PhosphorIcons.Bold.PaintBrush, Color(0xFFF472B6)),
         InterestCategoryInfo("film", "Film i scena", PhosphorIcons.Bold.FilmSlate, Color(0xFFFB7185)),
@@ -36,7 +36,7 @@ val INTEREST_CATEGORIES: List<InterestCategoryInfo> =
         InterestCategoryInfo("kulinaria", "Kulinaria", PhosphorIcons.Bold.CookingPot, Color(0xFFFBBF24)),
         InterestCategoryInfo("literatura", "Literatura", PhosphorIcons.Bold.BookOpen, Color(0xFF818CF8)),
         InterestCategoryInfo("gry", "Gry", PhosphorIcons.Bold.GameController, Color(0xFF34D399)),
-        InterestCategoryInfo("spolecznosc", "Społeczność", PhosphorIcons.Bold.UsersThree, Color(0xFFFDA4AF)),
+        InterestCategoryInfo("spolecznosc", "Społeczność", PhosphorIcons.Bold.UsersThree, Color(0xFFA5B4FC)),
         InterestCategoryInfo("styl_zycia", "Styl życia", PhosphorIcons.Bold.Leaf, Color(0xFF2DD4BF)),
     )
 
