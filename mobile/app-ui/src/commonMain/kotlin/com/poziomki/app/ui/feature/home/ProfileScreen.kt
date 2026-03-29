@@ -41,10 +41,10 @@ import com.adamglin.phosphoricons.bold.CaretRight
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
 import com.adamglin.phosphoricons.bold.SignOut
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -136,7 +136,7 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    PoziomkiButton(
+                                    AppButton(
                                         text = "wyloguj się",
                                         onClick = { showLogoutDialog = true },
                                         icon = PhosphorIcons.Bold.SignOut,

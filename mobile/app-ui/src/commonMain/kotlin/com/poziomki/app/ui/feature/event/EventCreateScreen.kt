@@ -57,9 +57,9 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPin
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.X
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.LocationPickerSheet
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
@@ -592,7 +592,7 @@ fun EventCreateScreen(
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
             // Submit
-            PoziomkiButton(
+            AppButton(
                 text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
                 onClick = { viewModel.saveEvent(onCreated) },
                 variant = ButtonVariant.PRIMARY,

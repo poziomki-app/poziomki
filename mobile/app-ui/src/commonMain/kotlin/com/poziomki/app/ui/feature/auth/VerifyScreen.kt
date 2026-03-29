@@ -33,7 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -142,7 +142,7 @@ fun VerifyScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-        PoziomkiButton(
+        AppButton(
             text = "potwierd\u017a",
             onClick = submit,
             enabled = otp.length == 6,

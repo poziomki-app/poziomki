@@ -26,8 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -51,7 +51,7 @@ fun InterestsScreen(
         showBack = true,
         onBack = onBack,
         footer = {
-            PoziomkiButton(
+            AppButton(
                 text = "dalej",
                 onClick = onNext,
                 enabled = state.selectedTagIds.size >= 3,

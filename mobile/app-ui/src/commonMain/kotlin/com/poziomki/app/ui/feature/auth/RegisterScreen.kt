@@ -27,7 +27,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.poziomki.app.ui.designsystem.components.PoziomkiButton
+import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
@@ -137,7 +137,7 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-        PoziomkiButton(
+        AppButton(
             text = "zarejestruj si\u0119",
             onClick = {
                 val placeholderName = email.substringBefore("@").ifBlank { "User" }
