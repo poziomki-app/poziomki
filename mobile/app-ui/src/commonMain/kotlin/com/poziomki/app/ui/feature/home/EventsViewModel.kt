@@ -228,10 +228,11 @@ class EventsViewModel(
         eventId: String,
         feedback: String,
     ) {
-        val removed = _state.value.recommendedEvents.find { it.id == eventId }
+        val removed = _state.value.events.find { it.id == eventId }
         _state.value =
             _state.value.copy(
                 recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
+                allEvents = _state.value.allEvents.filter { it.id != eventId },
             )
         filterEvents()
 
@@ -241,6 +242,7 @@ class EventsViewModel(
                 _state.value =
                     _state.value.copy(
                         recommendedEvents = _state.value.recommendedEvents + removed,
+                        allEvents = _state.value.allEvents + removed,
                     )
                 filterEvents()
             }

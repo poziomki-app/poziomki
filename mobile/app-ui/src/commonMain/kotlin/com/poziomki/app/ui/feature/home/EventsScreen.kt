@@ -192,8 +192,7 @@ fun EventsScreen(
                                 onEventClick = onNavigateToEventDetail,
                             )
                         } else {
-                            val isRecommended =
-                                state.activeFilter == TimeFilter.ALL && state.recommendedEvents.isNotEmpty()
+                            val isRecommended = state.activeFilter == TimeFilter.ALL
                             LazyColumn(
                                 modifier =
                                     Modifier
