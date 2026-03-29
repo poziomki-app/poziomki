@@ -24,8 +24,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -110,8 +112,15 @@ fun PoziomkiButton(
 }
 
 private const val ANIMATION_DURATION = 8000
-private const val BASE_ALPHA = 0.12f
-private const val PEAK_ALPHA = 0.4f
+
+private val GlowBrush =
+    Brush.sweepGradient(
+        0.0f to Primary.copy(alpha = 0.35f),
+        0.15f to Primary.copy(alpha = 0.10f),
+        0.5f to Primary.copy(alpha = 0.10f),
+        0.85f to Primary.copy(alpha = 0.10f),
+        1.0f to Primary.copy(alpha = 0.35f),
+    )
 
 @Composable
 private fun animatedBorder(
@@ -133,42 +142,32 @@ private fun animatedBorder(
     }
 
     val transition = rememberInfiniteTransition(label = "border")
-    val phase by transition.animateFloat(
+    val angle by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = 360f,
         animationSpec =
             infiniteRepeatable(
                 animation = tween(ANIMATION_DURATION, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             ),
-        label = "borderPhase",
+        label = "borderAngle",
     )
 
-    val brush = glowBrush(phase)
-
-    return Modifier.border(1.dp, brush, ButtonShape)
+    return Modifier
+        .border(1.dp, Primary.copy(alpha = 0.10f), ButtonShape)
+        .clip(ButtonShape)
+        .glowOverlay(angle)
 }
 
-private fun glowBrush(phase: Float): Brush {
-    val base = Primary.copy(alpha = BASE_ALPHA)
-    val peak = Primary.copy(alpha = PEAK_ALPHA)
-    val mid = Primary.copy(alpha = (BASE_ALPHA + PEAK_ALPHA) / 2f)
-    val spread = 0.12f
-
-    val p = phase % 1f
-    val left = (p - spread + 1f) % 1f
-    val right = (p + spread) % 1f
-
-    // Build stops that are always in ascending order to avoid sweep gradient artifacts
-    val stops =
-        if (left < right) {
-            listOf(0f to base, left to base, p to peak, right to base, 1f to base)
-        } else {
-            // Glow wraps around the 0/1 boundary — split into two halves
-            listOf(0f to mid, right to base, left to base, p to peak, 1f to mid)
-        }
-    return Brush.sweepGradient(colorStops = stops.toTypedArray())
-}
+private fun Modifier.glowOverlay(angle: Float): Modifier =
+    this.then(
+        Modifier.drawWithContent {
+            drawContent()
+            rotate(angle) {
+                drawCircle(brush = GlowBrush, radius = size.maxDimension)
+            }
+        },
+    )
 
 @Composable
 private fun ButtonLabel(
