@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -235,20 +234,10 @@ private fun CategorySection(
             Spacer(modifier = Modifier.width(AppTheme.spacing.sm))
             Text(
                 text = category.displayName,
-                style =
-                    TextStyle(
-                        fontFamily = MontserratFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp,
-                        brush =
-                            Brush.horizontalGradient(
-                                colors =
-                                    listOf(
-                                        category.color,
-                                        Color(0xFF6B7280),
-                                    ),
-                            ),
-                    ),
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                color = category.color,
             )
         }
 
