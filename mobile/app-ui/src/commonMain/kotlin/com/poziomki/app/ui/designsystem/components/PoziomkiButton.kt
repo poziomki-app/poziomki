@@ -1,7 +1,13 @@
 package com.poziomki.app.ui.designsystem.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,11 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,6 +37,8 @@ import com.poziomki.app.ui.designsystem.theme.White
 
 enum class ButtonVariant { PRIMARY, SECONDARY, OUTLINE, DESTRUCTIVE }
 
+private val ButtonShape = RoundedCornerShape(28.dp)
+
 private val DefaultGradient =
     Brush.verticalGradient(listOf(Color(0xFF1A2029), Color(0xFF161B22)))
 
@@ -43,22 +52,10 @@ private fun contentColor(variant: ButtonVariant): Color =
         ButtonVariant.DESTRUCTIVE -> Error
     }
 
-private fun borderFor(
-    variant: ButtonVariant,
-    enabled: Boolean,
-): BorderStroke {
-    val color =
-        if (variant == ButtonVariant.DESTRUCTIVE) {
-            if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.2f)
-        } else {
-            if (enabled) Border else Border.copy(alpha = 0.5f)
-        }
-    return BorderStroke(1.dp, color)
-}
-
 private fun backgroundFor(variant: ButtonVariant): Brush =
     if (variant == ButtonVariant.DESTRUCTIVE) DestructiveGradient else DefaultGradient
 
+@Suppress("LongMethod")
 @Composable
 fun PoziomkiButton(
     text: String,
@@ -73,44 +70,85 @@ fun PoziomkiButton(
     val isEnabled = enabled && !loading
     val tint = contentColor(variant).let { if (isEnabled) it else it.copy(alpha = 0.4f) }
 
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        color = Color.Transparent,
-        border = borderFor(variant, isEnabled),
+    val borderModifier = animatedBorder(variant, isEnabled)
+
+    Row(
+        modifier =
+            modifier
+                .then(borderModifier)
+                .clip(ButtonShape)
+                .background(backgroundFor(variant))
+                .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .background(backgroundFor(variant))
-                    .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = tint,
-                    strokeWidth = 2.dp,
-                )
-                if (loadingText != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    ButtonLabel(loadingText, tint)
-                }
-            } else {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = tint,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                ButtonLabel(text, tint)
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = tint,
+                strokeWidth = 2.dp,
+            )
+            if (loadingText != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                ButtonLabel(loadingText, tint)
             }
+        } else {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = tint,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            ButtonLabel(text, tint)
         }
     }
+}
+
+private const val ANIMATION_DURATION = 2000
+
+@Composable
+private fun animatedBorder(
+    variant: ButtonVariant,
+    enabled: Boolean,
+): Modifier {
+    if (variant != ButtonVariant.PRIMARY || !enabled) {
+        val color =
+            when (variant) {
+                ButtonVariant.DESTRUCTIVE -> {
+                    if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.2f)
+                }
+
+                else -> {
+                    if (enabled) Border else Border.copy(alpha = 0.5f)
+                }
+            }
+        return Modifier.border(1.dp, color, ButtonShape)
+    }
+
+    val transition = rememberInfiniteTransition(label = "border")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(ANIMATION_DURATION, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "borderAngle",
+    )
+
+    val brush =
+        Brush.sweepGradient(
+            0f to Color.Transparent,
+            angle / 360f to Primary,
+            ((angle + 60f) % 360f) / 360f to Primary.copy(alpha = 0.3f),
+            ((angle + 120f) % 360f) / 360f to Color.Transparent,
+        )
+
+    return Modifier.border(1.5.dp, brush, ButtonShape)
 }
 
 @Composable
