@@ -283,6 +283,7 @@ private fun SwipeableEventCard(
     onCreatorClick: (() -> Unit)?,
     onSwipeFeedback: (String) -> Unit,
 ) {
+    @Suppress("DEPRECATION")
     val dismissState =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { false },
