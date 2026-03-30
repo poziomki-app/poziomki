@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,163 +58,171 @@ fun RegisterScreen(
     var acceptedPolicy by remember { mutableStateOf(false) }
     var showPolicy by remember { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = PoziomkiTheme.spacing.lg)
-                .padding(bottom = PoziomkiTheme.spacing.xl),
+                .background(MaterialTheme.colorScheme.background),
     ) {
-        Spacer(modifier = Modifier.height(64.dp))
+        AuthBackgroundDecoration()
 
-        PoziomkiLogo(size = 48.dp)
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "poznajmy si\u0119!",
-            fontFamily = NunitoFamily,
-            fontWeight = FontWeight.Normal,
-            fontSize = 20.sp,
-            color = TextSecondary,
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Error banner
-        uiState.error?.let { error ->
-            Text(
-                text = error,
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
-            )
-        }
-
-        PoziomkiTextField(
-            value = email,
-            onValueChange = {
-                email = it
-                viewModel.clearError()
-            },
-            label = "email",
-            placeholder = "@example.com",
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions =
-                KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next,
-                ),
-            contentType = ContentType.EmailAddress,
-        )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-        PoziomkiPasswordField(
-            value = password,
-            onValueChange = {
-                password = it
-                viewModel.clearError()
-            },
-            label = "has\u0142o",
-            placeholder = "minimum 8 znak\u00f3w",
-            contentType = ContentType.NewPassword,
-        )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-        PoziomkiPasswordField(
-            value = confirmPassword,
-            onValueChange = {
-                confirmPassword = it
-                viewModel.clearError()
-            },
-            label = "potwierd\u017a has\u0142o",
-            placeholder = "has\u0142o",
-            error =
-                if (confirmPassword.isNotEmpty() && confirmPassword != password) {
-                    "has\u0142a nie s\u0105 takie same"
-                } else {
-                    null
-                },
-            contentType = ContentType.NewPassword,
-        )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = PoziomkiTheme.spacing.lg)
+                    .padding(bottom = PoziomkiTheme.spacing.xl),
         ) {
-            Checkbox(
-                checked = acceptedPolicy,
-                onCheckedChange = { acceptedPolicy = it },
-                colors =
-                    CheckboxDefaults.colors(
-                        checkedColor = Primary,
-                        uncheckedColor = TextSecondary,
-                        checkmarkColor = MaterialTheme.colorScheme.background,
-                    ),
-            )
+            Spacer(modifier = Modifier.height(64.dp))
+
+            PoziomkiLogo(size = 48.dp)
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = "akceptuję ",
+                text = "poznajmy si\u0119!",
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Normal,
-                fontSize = 14.sp,
+                fontSize = 20.sp,
                 color = TextSecondary,
             )
-            Text(
-                text = "politykę prywatności",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
-                modifier = Modifier.clickable { showPolicy = true },
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Error banner
+            uiState.error?.let { error ->
+                Text(
+                    text = error,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
+                )
+            }
+
+            PoziomkiTextField(
+                value = email,
+                onValueChange = {
+                    email = it
+                    viewModel.clearError()
+                },
+                label = "email",
+                placeholder = "@example.com",
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next,
+                    ),
+                contentType = ContentType.EmailAddress,
             )
-            Text(
-                text = " *",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.error,
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+            PoziomkiPasswordField(
+                value = password,
+                onValueChange = {
+                    password = it
+                    viewModel.clearError()
+                },
+                label = "has\u0142o",
+                placeholder = "minimum 8 znak\u00f3w",
+                contentType = ContentType.NewPassword,
             )
-        }
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-        AppButton(
-            text = "zarejestruj si\u0119",
-            onClick = {
-                val placeholderName = email.substringBefore("@").ifBlank { "User" }
-                viewModel.signUp(email, password, placeholderName, onRegisterSuccess, onUserExists)
-            },
-            enabled =
-                email.isNotBlank() &&
-                    password.length >= 8 &&
-                    password == confirmPassword &&
-                    acceptedPolicy,
-            loading = uiState.isLoading,
-            loadingText = "tworzenie konta...",
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-        TextButton(
-            onClick = onNavigateToLogin,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        ) {
-            Text(
-                text = "zaloguj si\u0119",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
+            PoziomkiPasswordField(
+                value = confirmPassword,
+                onValueChange = {
+                    confirmPassword = it
+                    viewModel.clearError()
+                },
+                label = "potwierd\u017a has\u0142o",
+                placeholder = "has\u0142o",
+                error =
+                    if (confirmPassword.isNotEmpty() && confirmPassword != password) {
+                        "has\u0142a nie s\u0105 takie same"
+                    } else {
+                        null
+                    },
+                contentType = ContentType.NewPassword,
             )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Checkbox(
+                    checked = acceptedPolicy,
+                    onCheckedChange = { acceptedPolicy = it },
+                    colors =
+                        CheckboxDefaults.colors(
+                            checkedColor = Primary,
+                            uncheckedColor = TextSecondary,
+                            checkmarkColor = MaterialTheme.colorScheme.background,
+                        ),
+                )
+                Text(
+                    text = "akceptuję ",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "politykę prywatności",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Primary,
+                    modifier = Modifier.clickable { showPolicy = true },
+                )
+                Text(
+                    text = " *",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+            AppButton(
+                text = "zarejestruj si\u0119",
+                onClick = {
+                    val placeholderName = email.substringBefore("@").ifBlank { "User" }
+                    viewModel.signUp(email, password, placeholderName, onRegisterSuccess, onUserExists)
+                },
+                enabled =
+                    email.isNotBlank() &&
+                        password.length >= 8 &&
+                        password == confirmPassword &&
+                        acceptedPolicy,
+                loading = uiState.isLoading,
+                loadingText = "tworzenie konta...",
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+            TextButton(
+                onClick = onNavigateToLogin,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text(
+                    text = "zaloguj si\u0119",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Primary,
+                )
+            }
         }
     }
 
