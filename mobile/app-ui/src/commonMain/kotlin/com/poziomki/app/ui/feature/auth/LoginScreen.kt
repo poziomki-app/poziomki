@@ -155,6 +155,7 @@ fun LoginScreen(
             variant = ButtonVariant.PRIMARY,
             enabled = email.isNotBlank() && password.isNotBlank(),
             loading = uiState.isLoading,
+            animateOnAppear = true,
             modifier = Modifier.fillMaxWidth(),
         )
 
