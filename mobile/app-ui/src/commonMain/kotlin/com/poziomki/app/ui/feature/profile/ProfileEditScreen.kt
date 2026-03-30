@@ -693,6 +693,18 @@ private val gradientPresets =
         GradientPreset("FFD89B", "19547B", "peach"),
         GradientPreset("8E2DE2", "4A00E0", "berry"),
         GradientPreset("FC5C7D", "6A82FB", "candy"),
+        GradientPreset("FF0080", "7928CA", "ultraviolet"),
+        GradientPreset("F7971E", "FFD200", "golden"),
+        GradientPreset("00C9FF", "92FE9D", "aurora"),
+        GradientPreset("FC466B", "3F5EFB", "electric"),
+        GradientPreset("3A1C71", "D76D77", "cosmic"),
+        GradientPreset("11998E", "38EF7D", "emerald"),
+        GradientPreset("FDC830", "F37335", "citrus"),
+        GradientPreset("C33764", "1D2671", "twilight"),
+        GradientPreset("ED4264", "FFEDBC", "flamingo"),
+        GradientPreset("654EA3", "EAAFC8", "dream"),
+        GradientPreset("F953C6", "B91D73", "magenta"),
+        GradientPreset("00B4DB", "0083B0", "arctic"),
     )
 
 private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong(16).toInt()) }.getOrDefault(Color.Gray)
