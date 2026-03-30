@@ -122,7 +122,7 @@ pub(super) async fn events_recommendations(
 
     let now = Utc::now();
 
-    // Fetch future events, exclude saved/joined and "less" feedback
+    // Fetch future events, exclude saved/joined (but keep "less" — they get a penalty instead)
     let future_events = repo
         .load_future_events(now, candidate_limit, &mut conn)
         .await?
@@ -132,7 +132,7 @@ pub(super) async fn events_recommendations(
                 event.id,
                 &user_ctx.saved_event_ids,
                 &user_ctx.joined_event_ids,
-            ) && !user_ctx.less_event_ids.contains(&event.id)
+            )
         })
         .collect::<Vec<_>>();
 
@@ -195,17 +195,19 @@ pub(super) async fn events_recommendations(
         .iter()
         .map(|event| {
             let event_tag_ids = all_event_tags.get(&event.id).cloned().unwrap_or_default();
-            (
-                score_event(
-                    &profile_affinity,
-                    &history_affinity,
-                    &event_tag_ids,
-                    event,
-                    user_geo,
-                    &tag_parent_map,
-                ),
+            let mut s = score_event(
+                &profile_affinity,
+                &history_affinity,
+                &event_tag_ids,
                 event,
-            )
+                user_geo,
+                &tag_parent_map,
+            );
+            // Soft penalty for "less" feedback — demote but don't hide
+            if user_ctx.less_event_ids.contains(&event.id) {
+                s *= 0.3;
+            }
+            (s, event)
         })
         .collect();
 
