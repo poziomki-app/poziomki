@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -477,6 +479,45 @@ private fun EventCard(
                             color = TextMuted,
                             maxLines = 1,
                         )
+                    }
+                }
+
+                // Tags
+                if (event.tags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val visibleTags = event.tags.take(3)
+                        val overflow = event.tags.size - visibleTags.size
+                        visibleTags.forEach { tag ->
+                            Text(
+                                text = "${tag.emoji.orEmpty()} ${tag.name}".trim(),
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp,
+                                color = TextMuted,
+                                modifier =
+                                    Modifier
+                                        .border(1.dp, Border, RoundedCornerShape(50))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                        if (overflow > 0) {
+                            Text(
+                                text = "+$overflow",
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp,
+                                color = TextMuted,
+                                modifier =
+                                    Modifier
+                                        .border(1.dp, Border, RoundedCornerShape(50))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
                     }
                 }
 
