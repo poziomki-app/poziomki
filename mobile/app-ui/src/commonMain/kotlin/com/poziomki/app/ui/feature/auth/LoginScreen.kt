@@ -1,9 +1,10 @@
 package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +39,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -111,38 +113,46 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-        PoziomkiPasswordField(
-            value = password,
-            onValueChange = {
-                password = it
-                viewModel.clearError()
-            },
-            label = "has\u0142o",
-            placeholder = "has\u0142o",
-            contentType = ContentType.Password,
-        )
-
-        TextButton(
-            onClick = onForgotPassword,
-            modifier = Modifier.align(Alignment.Start),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(
+                text = "has\u0142o",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = TextPrimary,
+            )
             Text(
                 text = "nie pami\u0119tam has\u0142a",
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 13.sp,
                 color = TextMuted,
+                modifier = Modifier.clickable(onClick = onForgotPassword),
             )
         }
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        PoziomkiPasswordField(
+            value = password,
+            onValueChange = {
+                password = it
+                viewModel.clearError()
+            },
+            placeholder = "has\u0142o",
+            contentType = ContentType.Password,
+        )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
         AppButton(
             text = "zaloguj si\u0119",
             onClick = {
                 viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
             },
+            variant = ButtonVariant.PRIMARY,
             enabled = email.isNotBlank() && password.isNotBlank(),
             loading = uiState.isLoading,
             modifier = Modifier.fillMaxWidth(),
