@@ -1,11 +1,14 @@
 package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -60,6 +63,7 @@ import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -395,6 +399,29 @@ fun EventChatHeader(
                         null
                     },
             )
+
+            if (event.tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    event.tags.forEach { tag ->
+                        Text(
+                            text = "${tag.emoji.orEmpty()} ${tag.name}".trim(),
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            modifier =
+                                Modifier
+                                    .border(1.dp, Border, RoundedCornerShape(50))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 
