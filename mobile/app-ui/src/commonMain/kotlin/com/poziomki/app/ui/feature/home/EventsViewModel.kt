@@ -3,9 +3,11 @@ package com.poziomki.app.ui.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.repository.EventRepository
+import com.poziomki.app.data.repository.TagRepository
 import com.poziomki.app.location.LocationProvider
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.Event
+import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.matchesTimeFilter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,12 +31,16 @@ data class EventsState(
     val selectedNearbyEventId: String? = null,
     val isLocationPermissionDenied: Boolean = false,
     val isLocationUnavailable: Boolean = false,
+    val availableTags: List<Tag> = emptyList(),
+    val selectedTagIds: Set<String> = emptySet(),
+    val showTagFilter: Boolean = false,
 )
 
 class EventsViewModel(
     private val eventRepository: EventRepository,
     private val apiService: com.poziomki.app.network.ApiService,
     private val locationProvider: LocationProvider,
+    private val tagRepository: TagRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EventsState())
     val state: StateFlow<EventsState> = _state.asStateFlow()
@@ -43,6 +49,7 @@ class EventsViewModel(
         observeEvents()
         refreshEvents()
         loadRecommendedEvents()
+        loadTags()
     }
 
     private fun observeEvents() {
@@ -244,6 +251,36 @@ class EventsViewModel(
         }
     }
 
+    private fun loadTags() {
+        viewModelScope.launch {
+            tagRepository.refreshTags(scope = "interest")
+            tagRepository.observeTags(scope = "interest").collect { tags ->
+                _state.value =
+                    _state.value.copy(
+                        availableTags = tags.filter { it.category != "root" },
+                    )
+            }
+        }
+    }
+
+    fun toggleTagFilter(tagId: String) {
+        val current = _state.value.selectedTagIds
+        _state.value =
+            _state.value.copy(
+                selectedTagIds = if (tagId in current) current - tagId else current + tagId,
+            )
+        filterEvents()
+    }
+
+    fun clearTagFilters() {
+        _state.value = _state.value.copy(selectedTagIds = emptySet())
+        filterEvents()
+    }
+
+    fun toggleShowTagFilter() {
+        _state.value = _state.value.copy(showTagFilter = !_state.value.showTagFilter)
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =
@@ -261,7 +298,10 @@ class EventsViewModel(
                     current.activeFilter == TimeFilter.ALL ||
                         current.activeFilter == TimeFilter.NEARBY ||
                         matchesTimeFilter(event.startsAt, current.activeFilter)
-                matchesSearch && matchesTime
+                val matchesTags =
+                    current.selectedTagIds.isEmpty() ||
+                        event.tags.any { it.id in current.selectedTagIds }
+                matchesSearch && matchesTime && matchesTags
             }
         _state.value = current.copy(events = filtered)
     }
