@@ -297,27 +297,13 @@ private fun SwipeableEventCard(
     onCreatorClick: (() -> Unit)?,
     onSwipeFeedback: (String) -> Unit,
 ) {
-    @Suppress("DEPRECATION")
-    val dismissState =
-        rememberSwipeToDismissBoxState(
-            confirmValueChange = { false },
-        )
+    val dismissState = rememberSwipeToDismissBoxState()
 
     LaunchedEffect(dismissState.currentValue) {
         when (dismissState.currentValue) {
-            SwipeToDismissBoxValue.StartToEnd -> {
-                onSwipeFeedback("more")
-                dismissState.reset()
-            }
-
-            SwipeToDismissBoxValue.EndToStart -> {
-                onSwipeFeedback("less")
-                dismissState.reset()
-            }
-
-            SwipeToDismissBoxValue.Settled -> {
-                Unit
-            }
+            SwipeToDismissBoxValue.StartToEnd -> onSwipeFeedback("more")
+            SwipeToDismissBoxValue.EndToStart -> onSwipeFeedback("less")
+            SwipeToDismissBoxValue.Settled -> Unit
         }
     }
 
