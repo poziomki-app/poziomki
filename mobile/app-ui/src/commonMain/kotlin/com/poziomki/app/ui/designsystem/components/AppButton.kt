@@ -1,6 +1,5 @@
 package com.poziomki.app.ui.designsystem.components
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -21,9 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,12 +74,11 @@ fun AppButton(
     loading: Boolean = false,
     loadingText: String? = null,
     icon: ImageVector? = null,
-    animateOnAppear: Boolean = false,
 ) {
     val isEnabled = enabled && !loading
     val tint = contentColor(variant).let { if (isEnabled) it else it.copy(alpha = 0.4f) }
 
-    val borderModifier = animatedBorder(variant, isEnabled, animateOnAppear)
+    val borderModifier = animatedBorder(variant, isEnabled)
 
     val rowModifier =
         modifier
@@ -123,14 +119,12 @@ fun AppButton(
 }
 
 private const val ANIMATION_DURATION = 8000
-private const val APPEAR_ANIMATION_DURATION = 1500
 private const val GLOW_STEPS = 24
 
 @Composable
 private fun animatedBorder(
     variant: ButtonVariant,
     enabled: Boolean,
-    animateOnAppear: Boolean = false,
 ): Modifier {
     if (variant != ButtonVariant.PRIMARY || !enabled) {
         val color =
@@ -159,37 +153,21 @@ private fun animatedBorder(
         label = "borderPhase",
     )
 
-    val appearBoost =
-        if (animateOnAppear) {
-            val anim = remember { Animatable(1f) }
-            LaunchedEffect(Unit) {
-                anim.animateTo(0f, tween(APPEAR_ANIMATION_DURATION))
-            }
-            anim.value
-        } else {
-            0f
-        }
-
-    val brush = glowBrush(phase, appearBoost)
+    val brush = glowBrush(phase)
     return Modifier.border(1.dp, brush, ButtonShape)
 }
 
-private fun glowBrush(
-    phase: Float,
-    appearBoost: Float = 0f,
-): Brush {
+private fun glowBrush(phase: Float): Brush {
     // Generate evenly-spaced stops and compute alpha based on angular distance to peak
     val stops =
         Array(GLOW_STEPS) { i ->
             val pos = i.toFloat() / GLOW_STEPS
             val dist = angularDistance(pos, phase)
-            val alpha = (glowAlpha(dist) + appearBoost * APPEAR_ALPHA_BOOST).coerceAtMost(1f)
+            val alpha = glowAlpha(dist)
             pos to Primary.copy(alpha = alpha)
         }
     return Brush.sweepGradient(colorStops = stops)
 }
-
-private const val APPEAR_ALPHA_BOOST = 0.5f
 
 private fun angularDistance(
     a: Float,
