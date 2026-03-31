@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.designsystem.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,16 +32,20 @@ import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @Composable
+@Suppress("LongParameterList", "LongMethod")
 fun PoziomkiSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    filterActive: Boolean = false,
+    onFilterClick: (() -> Unit)? = null,
 ) {
     Surface(
         modifier =
@@ -94,11 +99,17 @@ fun PoziomkiSearchBar(
                 color = Border,
             )
             Spacer(modifier = Modifier.width(12.dp))
+            val filterModifier =
+                if (onFilterClick != null) {
+                    Modifier.size(22.dp).clickable(onClick = onFilterClick)
+                } else {
+                    Modifier.size(22.dp)
+                }
             Icon(
                 PhosphorIcons.Bold.SlidersHorizontal,
                 contentDescription = "Filtruj",
-                modifier = Modifier.size(22.dp),
-                tint = TextMuted,
+                modifier = filterModifier,
+                tint = if (filterActive) Primary else TextMuted,
             )
         }
     }

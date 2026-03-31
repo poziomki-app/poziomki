@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.poziomki.app.ui.feature.home
 
 import androidx.compose.animation.animateColorAsState
@@ -17,13 +19,16 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,10 +68,12 @@ import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.ThumbsDown
 import com.adamglin.phosphoricons.bold.ThumbsUp
+import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
+import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
@@ -87,6 +94,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.feature.onboarding.INTEREST_CATEGORIES
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.dayLabel
@@ -134,9 +142,23 @@ fun EventsScreen(
 
         PoziomkiSearchBar(
             query = searchQuery,
-            onQueryChange = { searchQuery = it },
+            onQueryChange = {
+                searchQuery = it
+                viewModel.setSearchQuery(it)
+            },
             placeholder = "szukaj wydarzeń...",
+            filterActive = state.selectedTagIds.isNotEmpty() || state.showTagFilter,
+            onFilterClick = { viewModel.toggleShowTagFilter() },
         )
+
+        if (state.showTagFilter) {
+            TagFilterPanel(
+                availableTags = state.availableTags,
+                selectedTagIds = state.selectedTagIds,
+                onToggleTag = { viewModel.toggleTagFilter(it) },
+                onClear = { viewModel.clearTagFilters() },
+            )
+        }
 
         FilterTabs(
             tabs = timeFilterTabs,
@@ -466,25 +488,29 @@ private fun EventCard(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Date/time
-                Text(
-                    text = formatEventDate(event.startsAt),
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp,
-                    color = TextSecondary,
-                )
-
-                // Location
-                event.location?.let { location ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                // Date/time + location
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = formatEventDate(event.startsAt),
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 15.sp,
+                        color = TextSecondary,
+                    )
+                    event.location?.let { location ->
+                        Text(
+                            text = " · ",
+                            fontFamily = NunitoFamily,
+                            fontSize = 15.sp,
+                            color = TextMuted,
+                        )
                         Icon(
                             PhosphorIcons.Fill.MapPin,
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(13.dp),
                             tint = TextMuted,
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = location,
                             fontFamily = NunitoFamily,
@@ -492,6 +518,7 @@ private fun EventCard(
                             fontSize = 14.sp,
                             color = TextMuted,
                             maxLines = 1,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                     }
                 }
@@ -751,5 +778,168 @@ internal fun EventRow(
                 tint = TextMuted,
             )
         }
+    }
+}
+
+private val TagChipShape = RoundedCornerShape(50)
+private val TagChipUnselected = Color(0xFF1A1F26)
+
+@Composable
+private fun TagFilterPanel(
+    availableTags: List<Tag>,
+    selectedTagIds: Set<String>,
+    onToggleTag: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val groupedTags =
+        remember(availableTags) {
+            INTEREST_CATEGORIES.mapNotNull { category ->
+                val tags = availableTags.filter { it.category == category.key }
+                if (tags.isNotEmpty()) category to tags else null
+            }
+        }
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = PoziomkiTheme.spacing.md)
+                .padding(top = 8.dp),
+    ) {
+        if (selectedTagIds.isNotEmpty()) {
+            TagFilterHeader(count = selectedTagIds.size, onClear = onClear)
+        }
+
+        groupedTags.forEachIndexed { index, (category, tags) ->
+            if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+            TagFilterCategorySection(category, tags, selectedTagIds, onToggleTag)
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun TagFilterHeader(
+    count: Int,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$count wybrano",
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            color = Primary,
+        )
+        Row(
+            modifier =
+                Modifier
+                    .clip(TagChipShape)
+                    .background(Primary.copy(alpha = 0.15f))
+                    .clickable(onClick = onClear)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                PhosphorIcons.Bold.X,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = Primary,
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "wyczyść",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                color = Primary,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagFilterCategorySection(
+    category: com.poziomki.app.ui.feature.onboarding.InterestCategoryInfo,
+    tags: List<Tag>,
+    selectedTagIds: Set<String>,
+    onToggleTag: (String) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(bottom = 6.dp),
+    ) {
+        Icon(
+            imageVector = category.icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = category.color,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = category.displayName,
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            color = category.color,
+        )
+    }
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        tags.forEach { tag ->
+            TagFilterChip(
+                label = tag.name,
+                selected = tag.id in selectedTagIds,
+                accentColor = category.color,
+                onClick = { onToggleTag(tag.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TagFilterChip(
+    label: String,
+    selected: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) accentColor else TagChipUnselected,
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) Color.White else Color(0xFFB0B8C4),
+    )
+
+    Box(
+        modifier =
+            Modifier
+                .clip(TagChipShape)
+                .background(bgColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label.lowercase(),
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = textColor,
+        )
     }
 }
