@@ -144,7 +144,8 @@ class ProfileEditViewModel(
     }
 
     fun updateBio(bio: String) {
-        if (bio.length <= 1500) {
+        val visibleLength = bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
+        if (visibleLength <= 1500) {
             _state.value = _state.value.copy(bio = bio)
         }
     }
@@ -267,9 +268,7 @@ class ProfileEditViewModel(
                     val marker = "![](${result.data.url})"
                     val currentBio = _state.value.bio
                     val newBio = if (currentBio.isBlank()) marker else "$currentBio\n$marker"
-                    if (newBio.length <= 1500) {
-                        _state.value = _state.value.copy(bio = newBio)
-                    }
+                    _state.value = _state.value.copy(bio = newBio)
                 }
 
                 is ApiResult.Error -> {

@@ -723,7 +723,7 @@ private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong
 
 private object BioImageVisualTransformation : VisualTransformation {
     private val imageRegex = Regex("""!\[\]\([^)]*\)""")
-    private const val PLACEHOLDER = " \uD83D\uDCF7 "
+    private const val PLACEHOLDER = " "
 
     override fun filter(text: AnnotatedString): TransformedText {
         val src = text.text
@@ -928,13 +928,17 @@ private fun BioEditorDialog(
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
+                    val visibleLength =
+                        remember(bio) {
+                            bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
+                        }
                     Text(
-                        text = "${bio.length}/1500",
+                        text = "$visibleLength/1500",
                         fontFamily = nunito,
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
                         color =
-                            if (bio.length > 1400) {
+                            if (visibleLength > 1400) {
                                 com.poziomki.app.ui.designsystem.theme.Error
                             } else {
                                 TextMuted
