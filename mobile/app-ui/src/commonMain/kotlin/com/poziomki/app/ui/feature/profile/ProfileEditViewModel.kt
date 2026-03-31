@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 data class ProfileEditState(
     val isLoading: Boolean = false,
@@ -54,6 +56,7 @@ class ProfileEditViewModel(
 
     private val interestSearchFlow = MutableStateFlow("")
     private val activitySearchFlow = MutableStateFlow("")
+    private val removedImages = mutableListOf<String>()
 
     init {
         loadData()
@@ -225,6 +228,7 @@ class ProfileEditViewModel(
     fun removeImage(index: Int) {
         val current = _state.value.images.toMutableList()
         if (index in current.indices) {
+            removedImages.add(current[index])
             current.removeAt(index)
             _state.value = _state.value.copy(images = current)
         }
@@ -260,7 +264,7 @@ class ProfileEditViewModel(
             _state.value = _state.value.copy(isBioImageUploading = true)
             when (val result = apiService.uploadImage(bytes, "bio_image.jpg")) {
                 is ApiResult.Success -> {
-                    val marker = "![](${result.data.url})"
+                    val marker = "![](${result.data.filename})"
                     val currentBio = _state.value.bio
                     val newBio = if (currentBio.isBlank()) marker else "$currentBio\n$marker"
                     if (newBio.length <= 1500) {
@@ -288,7 +292,7 @@ class ProfileEditViewModel(
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
                     program = s.program.ifBlank { null },
-                    profilePicture = s.images.firstOrNull(),
+                    profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
                     images = s.images,
                     tagIds = s.selectedTags.map { it.id },
                     gradientStart = s.gradientStart ?: "",
@@ -296,6 +300,13 @@ class ProfileEditViewModel(
                 )
             when (profileRepository.updateProfile(s.profileId, request)) {
                 is ApiResult.Success -> {
+                    for (imageUrl in removedImages) {
+                        val filename = imageUrl.substringAfterLast("/").substringBefore("?")
+                        if (filename.isNotEmpty()) {
+                            launch { apiService.deleteUpload(filename) }
+                        }
+                    }
+                    removedImages.clear()
                     onSuccess()
                 }
 

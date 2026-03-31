@@ -147,6 +147,8 @@ class ApiService(
         context: String = "profile_gallery",
     ): ApiResult<UploadResponse> = client.uploadFile(bytes, fileName, context)
 
+    suspend fun deleteUpload(filename: String): ApiResult<SuccessResponse> = client.delete("/api/v1/uploads/$filename")
+
     // Tags
 
     suspend fun getTags(scope: String? = null): ApiResult<List<Tag>> {
