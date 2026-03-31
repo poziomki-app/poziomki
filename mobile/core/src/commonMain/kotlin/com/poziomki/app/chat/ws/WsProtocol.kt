@@ -74,6 +74,18 @@ sealed interface WsClientMessage {
     ) : WsClientMessage
 
     @Serializable
+    @SerialName("archive")
+    data class Archive(
+        val conversationId: String,
+    ) : WsClientMessage
+
+    @Serializable
+    @SerialName("unarchive")
+    data class Unarchive(
+        val conversationId: String,
+    ) : WsClientMessage
+
+    @Serializable
     @SerialName("listConversations")
     data object ListConversations : WsClientMessage
 
@@ -176,6 +188,18 @@ sealed interface WsServerMessage {
     ) : WsServerMessage
 
     @Serializable
+    @SerialName("archived")
+    data class Archived(
+        val conversationId: String,
+    ) : WsServerMessage
+
+    @Serializable
+    @SerialName("unarchived")
+    data class Unarchived(
+        val conversationId: String,
+    ) : WsServerMessage
+
+    @Serializable
     @SerialName("pong")
     data object Pong : WsServerMessage
 
@@ -235,4 +259,5 @@ data class WsConversationPayload(
     val latestTimestamp: String? = null,
     val latestMessageIsMine: Boolean = false,
     val latestSenderName: String? = null,
+    val isBlocked: Boolean = false,
 )

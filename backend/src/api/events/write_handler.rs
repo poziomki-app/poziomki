@@ -434,6 +434,11 @@ pub(in crate::api) async fn event_approve_attendee(
         );
     }
 
+    // Notify the approved user via ntfy
+    tokio::spawn(async move {
+        notify_event_approval(target_profile_id, &event.title, true).await;
+    });
+
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
     })
@@ -469,6 +474,11 @@ pub(in crate::api) async fn event_reject_attendee(
             "Attendee is not pending approval",
         ));
     }
+
+    // Notify the rejected user via ntfy
+    tokio::spawn(async move {
+        notify_event_approval(target_profile_id, &event.title, false).await;
+    });
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
@@ -545,4 +555,33 @@ pub(in crate::api) async fn event_unsave(
 
     let data = build_event_response(&event, &profile.id).await?;
     Ok(Json(DataResponse { data }).into_response())
+}
+
+async fn notify_event_approval(target_profile_id: Uuid, event_title: &str, approved: bool) {
+    use diesel::ExpressionMethods;
+    use diesel::QueryDsl;
+    use diesel_async::RunQueryDsl;
+
+    let user_id: i32 = {
+        let Ok(mut conn) = crate::db::conn().await else {
+            return;
+        };
+        match crate::db::schema::profiles::table
+            .filter(crate::db::schema::profiles::id.eq(target_profile_id))
+            .select(crate::db::schema::profiles::user_id)
+            .first::<i32>(&mut conn)
+            .await
+        {
+            Ok(uid) => uid,
+            Err(_) => return,
+        }
+    };
+
+    let body = if approved {
+        format!("Twoje zgloszenie na \"{event_title}\" zostalo zatwierdzone!")
+    } else {
+        format!("Twoje zgloszenie na \"{event_title}\" zostalo odrzucone.")
+    };
+
+    crate::api::chat::push::notify_push(vec![user_id], Uuid::nil(), 0, &body).await;
 }

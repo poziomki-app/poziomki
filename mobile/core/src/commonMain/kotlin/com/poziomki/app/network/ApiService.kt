@@ -80,6 +80,10 @@ class ApiService(
 
     suspend fun getBookmarkedProfiles(): ApiResult<List<Profile>> = client.get("/api/v1/profiles/bookmarked")
 
+    suspend fun blockProfile(id: String): ApiResult<SuccessResponse> = client.post("/api/v1/profiles/$id/block")
+
+    suspend fun unblockProfile(id: String): ApiResult<SuccessResponse> = client.delete("/api/v1/profiles/$id/block")
+
     suspend fun createProfile(request: CreateProfileRequest): ApiResult<Profile> = client.post("/api/v1/profiles", request)
 
     suspend fun updateProfile(
@@ -242,4 +246,14 @@ class ApiService(
 
     suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =
         client.post("/api/v1/chat/push/unregister", ChatPushUnregisterRequest(deviceId = deviceId))
+
+    suspend fun reportConversation(
+        conversationId: String,
+        reason: String,
+        description: String? = null,
+    ): ApiResult<SuccessResponse> =
+        client.post(
+            "/api/v1/chat/conversations/$conversationId/report",
+            ReportConversationRequest(reason = reason, description = description),
+        )
 }

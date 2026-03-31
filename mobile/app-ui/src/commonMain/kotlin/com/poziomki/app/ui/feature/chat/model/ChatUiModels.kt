@@ -42,6 +42,7 @@ data class ChatUiState(
     val searchQuery: String = "",
     val searchMatchIndices: List<Int> = emptyList(),
     val currentSearchMatchIndex: Int = -1,
+    val isBlocked: Boolean = false,
 )
 
 data class NewChatUiState(
