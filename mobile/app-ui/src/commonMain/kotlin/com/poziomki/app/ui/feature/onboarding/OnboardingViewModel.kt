@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 
 data class OnboardingState(
     val name: String = "",
@@ -321,7 +322,7 @@ class OnboardingViewModel(
                 apiService.updateProfile(
                     profileId,
                     UpdateProfileRequest(
-                        profilePicture = avatarUrl,
+                        profilePicture = avatarUrl?.let { JsonPrimitive(it) },
                         images = imageUrls.ifEmpty { null },
                     ),
                 )

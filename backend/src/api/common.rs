@@ -131,6 +131,36 @@ pub async fn resolve_image_urls(stored: &[String]) -> Vec<String> {
     futures_util::future::join_all(futs).await
 }
 
+/// Resolve image URLs embedded in bio markdown `![](url)` patterns.
+/// Replaces each URL (signed or plain filename) with a fresh signed URL.
+#[allow(clippy::string_slice)] // markers are ASCII; byte indices from find() are char boundaries
+pub async fn resolve_bio_image_urls(bio: &str) -> String {
+    let mut result = String::with_capacity(bio.len());
+    let mut search_from = 0;
+    let marker = "![](";
+
+    while let Some(start) = bio.get(search_from..).and_then(|s| s.find(marker)) {
+        let abs_start = search_from + start;
+        let url_start = abs_start + marker.len();
+        let Some(rel_end) = bio.get(url_start..).and_then(|s| s.find(')')) else {
+            break;
+        };
+        let url_end = url_start + rel_end;
+        // All markers are ASCII so byte indices are valid char boundaries
+        debug_assert!(bio.is_char_boundary(search_from));
+        debug_assert!(bio.is_char_boundary(url_start));
+        debug_assert!(bio.is_char_boundary(url_end));
+        let inner_url = &bio[url_start..url_end];
+        let resolved = resolve_image_url(inner_url).await;
+        result.push_str(&bio[search_from..url_start]);
+        result.push_str(&resolved);
+        result.push(')');
+        search_from = url_end + 1;
+    }
+    result.push_str(&bio[search_from..]);
+    result
+}
+
 /// Look up thumbhashes for a batch of filenames.
 /// Returns a map from filename → base64-encoded thumbhash.
 pub async fn resolve_thumbhashes(

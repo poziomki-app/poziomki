@@ -188,19 +188,43 @@ fun ProfileEditScreen(
                             color = TextMuted,
                         )
                     } else {
-                        val displayBio =
+                        val bioImageRegex = remember { Regex("""!\[\]\((.*?)\)""") }
+                        val textOnly =
                             remember(state.bio) {
-                                state.bio.replace(Regex("""!\[\]\([^)]*\)"""), "\uD83D\uDCF7")
+                                state.bio.replace(bioImageRegex, "").trim()
                             }
-                        Text(
-                            text = displayBio,
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 16.sp,
-                            color = TextPrimary,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        val imageUrls =
+                            remember(state.bio) {
+                                bioImageRegex.findAll(state.bio).map { it.groupValues[1] }.toList()
+                            }
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (textOnly.isNotEmpty()) {
+                                Text(
+                                    text = textOnly,
+                                    fontFamily = nunito,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 16.sp,
+                                    color = TextPrimary,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (imageUrls.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    imageUrls.take(4).forEach { url ->
+                                        AsyncImage(
+                                            model = resolveImageUrl(url),
+                                            contentDescription = null,
+                                            modifier =
+                                                Modifier
+                                                    .size(48.dp)
+                                                    .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

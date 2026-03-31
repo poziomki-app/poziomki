@@ -3,7 +3,7 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::api::{
-    resolve_image_url, resolve_image_urls, resolve_thumbhashes,
+    resolve_bio_image_urls, resolve_image_url, resolve_image_urls, resolve_thumbhashes,
     state::{FullProfileResponse, ProfileResponse},
 };
 use crate::db::models::profiles::Profile;
@@ -70,11 +70,16 @@ pub(in crate::api) async fn profile_to_response(
 
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
+    let bio = match &profile.bio {
+        Some(b) => Some(resolve_bio_image_urls(b).await),
+        None => None,
+    };
+
     ProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
-        bio: profile.bio.clone(),
+        bio,
         profile_picture,
         thumbhash,
         images,
@@ -105,11 +110,16 @@ pub(in crate::api) async fn full_profile_response(
 
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
+    let bio = match &profile.bio {
+        Some(b) => Some(resolve_bio_image_urls(b).await),
+        None => None,
+    };
+
     Ok(FullProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
-        bio: profile.bio.clone(),
+        bio,
         profile_picture,
         thumbhash,
         images,

@@ -1,4 +1,12 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +32,7 @@ pub(in crate::api) struct CreateProfileBody {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::option_option)]
 pub(in crate::api) struct UpdateProfileBody {
     #[serde(default)]
     pub(in crate::api) name: Option<String>,
@@ -31,8 +40,8 @@ pub(in crate::api) struct UpdateProfileBody {
     pub(in crate::api) bio: Option<String>,
     #[serde(default)]
     pub(in crate::api) program: Option<String>,
-    #[serde(default)]
-    pub(in crate::api) profile_picture: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub(in crate::api) profile_picture: Option<Option<String>>,
     #[serde(default)]
     pub(in crate::api) images: Option<Vec<String>>,
     #[serde(default)]
