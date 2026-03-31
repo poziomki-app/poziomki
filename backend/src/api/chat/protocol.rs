@@ -52,6 +52,14 @@ pub enum ClientMessage {
         before: Option<Uuid>,
         limit: Option<i64>,
     },
+    Archive {
+        #[serde(rename = "conversationId")]
+        conversation_id: Uuid,
+    },
+    Unarchive {
+        #[serde(rename = "conversationId")]
+        conversation_id: Uuid,
+    },
     ListConversations,
     Ping,
 }
@@ -129,6 +137,14 @@ pub enum ServerMessage {
     Conversations {
         conversations: Vec<ConversationPayload>,
     },
+    Archived {
+        #[serde(rename = "conversationId")]
+        conversation_id: Uuid,
+    },
+    Unarchived {
+        #[serde(rename = "conversationId")]
+        conversation_id: Uuid,
+    },
     Pong,
     Error {
         message: String,
@@ -188,4 +204,5 @@ pub struct ConversationPayload {
     pub latest_timestamp: Option<String>,
     pub latest_message_is_mine: bool,
     pub latest_sender_name: Option<String>,
+    pub is_blocked: bool,
 }

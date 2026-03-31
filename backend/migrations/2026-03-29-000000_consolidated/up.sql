@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS earthdistance;
 -- Core tables
 -- ============================================================
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     pid UUID NOT NULL DEFAULT gen_random_uuid(),
     email VARCHAR NOT NULL,
@@ -28,11 +28,11 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_users_email ON users (email);
-CREATE UNIQUE INDEX idx_users_pid ON users (pid);
-CREATE UNIQUE INDEX idx_users_api_key ON users (api_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_pid ON users (pid);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_api_key ON users (api_key);
 
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT4 NOT NULL REFERENCES users(id),
     name VARCHAR NOT NULL,
@@ -46,9 +46,9 @@ CREATE TABLE profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_profiles_user_id ON profiles (user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id);
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT4 NOT NULL REFERENCES users(id),
     token VARCHAR NOT NULL,
@@ -59,11 +59,11 @@ CREATE TABLE sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_sessions_user_id ON sessions (user_id);
-CREATE UNIQUE INDEX idx_sessions_token ON sessions (token);
-CREATE INDEX idx_sessions_expires_at ON sessions (expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
 
-CREATE TABLE user_settings (
+CREATE TABLE IF NOT EXISTS user_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT4 NOT NULL REFERENCES users(id),
     theme VARCHAR NOT NULL,
@@ -75,9 +75,9 @@ CREATE TABLE user_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_user_settings_user_id ON user_settings (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings (user_id);
 
-CREATE TABLE degrees (
+CREATE TABLE IF NOT EXISTS degrees (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -88,7 +88,7 @@ CREATE TABLE degrees (
 -- Tags
 -- ============================================================
 
-CREATE TABLE tags (
+CREATE TABLE IF NOT EXISTS tags (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR NOT NULL,
     scope VARCHAR NOT NULL,
@@ -100,14 +100,14 @@ CREATE TABLE tags (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_tags_scope ON tags (scope);
-CREATE INDEX idx_tags_parent_id ON tags (parent_id);
+CREATE INDEX IF NOT EXISTS idx_tags_scope ON tags (scope);
+CREATE INDEX IF NOT EXISTS idx_tags_parent_id ON tags (parent_id);
 
 -- ============================================================
 -- Events
 -- ============================================================
 
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR NOT NULL,
     description TEXT,
@@ -125,29 +125,29 @@ CREATE TABLE events (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_events_creator_id ON events (creator_id);
-CREATE INDEX idx_events_starts_at ON events (starts_at);
+CREATE INDEX IF NOT EXISTS idx_events_creator_id ON events (creator_id);
+CREATE INDEX IF NOT EXISTS idx_events_starts_at ON events (starts_at);
 
-CREATE TABLE event_attendees (
+CREATE TABLE IF NOT EXISTS event_attendees (
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     status VARCHAR NOT NULL,
     PRIMARY KEY (event_id, profile_id)
 );
 
-CREATE TABLE event_tags (
+CREATE TABLE IF NOT EXISTS event_tags (
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     tag_id UUID NOT NULL REFERENCES tags(id),
     PRIMARY KEY (event_id, tag_id)
 );
 
-CREATE TABLE profile_tags (
+CREATE TABLE IF NOT EXISTS profile_tags (
     profile_id UUID NOT NULL REFERENCES profiles(id),
     tag_id UUID NOT NULL REFERENCES tags(id),
     PRIMARY KEY (profile_id, tag_id)
 );
 
-CREATE TABLE event_interactions (
+CREATE TABLE IF NOT EXISTS event_interactions (
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     kind VARCHAR NOT NULL,
@@ -157,13 +157,13 @@ CREATE TABLE event_interactions (
     CONSTRAINT event_interactions_kind_check CHECK (kind IN ('saved', 'joined'))
 );
 
-CREATE INDEX idx_event_interactions_event_id ON event_interactions (event_id);
+CREATE INDEX IF NOT EXISTS idx_event_interactions_event_id ON event_interactions (event_id);
 
 -- ============================================================
 -- Uploads
 -- ============================================================
 
-CREATE TABLE uploads (
+CREATE TABLE IF NOT EXISTS uploads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filename VARCHAR NOT NULL,
     owner_id UUID REFERENCES profiles(id),
@@ -177,13 +177,13 @@ CREATE TABLE uploads (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_uploads_owner_id ON uploads (owner_id);
+CREATE INDEX IF NOT EXISTS idx_uploads_owner_id ON uploads (owner_id);
 
 -- ============================================================
 -- Auth helpers
 -- ============================================================
 
-CREATE TABLE auth_rate_limits (
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     rate_key VARCHAR NOT NULL,
     window_start TIMESTAMPTZ NOT NULL,
@@ -191,9 +191,9 @@ CREATE TABLE auth_rate_limits (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_auth_rate_limits_rate_key ON auth_rate_limits (rate_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_rate_limits_rate_key ON auth_rate_limits (rate_key);
 
-CREATE TABLE otp_codes (
+CREATE TABLE IF NOT EXISTS otp_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR NOT NULL,
     code VARCHAR NOT NULL,
@@ -203,14 +203,14 @@ CREATE TABLE otp_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_otp_codes_email ON otp_codes (email);
-CREATE INDEX idx_otp_codes_expires_at ON otp_codes (expires_at);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes (email);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_expires_at ON otp_codes (expires_at);
 
 -- ============================================================
 -- Job outbox
 -- ============================================================
 
-CREATE TABLE job_outbox (
+CREATE TABLE IF NOT EXISTS job_outbox (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     topic VARCHAR NOT NULL,
     payload JSONB NOT NULL,
@@ -225,7 +225,7 @@ CREATE TABLE job_outbox (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_job_outbox_available ON job_outbox (available_at) WHERE processed_at IS NULL AND failed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_job_outbox_available ON job_outbox (available_at) WHERE processed_at IS NULL AND failed_at IS NULL;
 
 ALTER TABLE job_outbox SET (
     autovacuum_vacuum_threshold = 50,
@@ -237,7 +237,7 @@ ALTER TABLE job_outbox SET (
 -- Chat
 -- ============================================================
 
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     kind VARCHAR(16) NOT NULL CHECK (kind IN ('dm', 'event')),
     title VARCHAR(255),
@@ -248,15 +248,15 @@ CREATE TABLE conversations (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_conversations_dm_pair
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_dm_pair
     ON conversations (user_low_id, user_high_id)
     WHERE kind = 'dm';
 
-CREATE UNIQUE INDEX idx_conversations_event
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_event
     ON conversations (event_id)
     WHERE kind = 'event';
 
-CREATE TABLE conversation_members (
+CREATE TABLE IF NOT EXISTS conversation_members (
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     user_id INT4 NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -264,9 +264,9 @@ CREATE TABLE conversation_members (
     PRIMARY KEY (conversation_id, user_id)
 );
 
-CREATE INDEX idx_conversation_members_user ON conversation_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members (user_id);
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id INT4 NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -280,16 +280,19 @@ CREATE TABLE messages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_conversation_created ON messages (conversation_id, created_at);
-CREATE INDEX idx_messages_sender ON messages (sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);
 
-CREATE UNIQUE INDEX idx_messages_client_id
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_id
     ON messages (conversation_id, sender_id, client_id)
     WHERE client_id IS NOT NULL AND deleted_at IS NULL;
 
-ALTER TABLE conversation_members
-    ADD CONSTRAINT fk_last_read_message
-    FOREIGN KEY (last_read_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+DO $$ BEGIN
+    ALTER TABLE conversation_members
+        ADD CONSTRAINT fk_last_read_message
+        FOREIGN KEY (last_read_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 ALTER TABLE messages SET (
     autovacuum_vacuum_threshold = 100,
@@ -297,7 +300,7 @@ ALTER TABLE messages SET (
     autovacuum_analyze_threshold = 100
 );
 
-CREATE TABLE message_reactions (
+CREATE TABLE IF NOT EXISTS message_reactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     user_id INT4 NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -306,9 +309,9 @@ CREATE TABLE message_reactions (
     UNIQUE (message_id, user_id, emoji)
 );
 
-CREATE INDEX idx_message_reactions_message ON message_reactions (message_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_message ON message_reactions (message_id);
 
-CREATE TABLE push_subscriptions (
+CREATE TABLE IF NOT EXISTS push_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT4 NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_id VARCHAR(64) NOT NULL,
@@ -321,7 +324,7 @@ CREATE TABLE push_subscriptions (
 -- Reports & feedback
 -- ============================================================
 
-CREATE TABLE reports (
+CREATE TABLE IF NOT EXISTS reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     reporter_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     target_type VARCHAR(16) NOT NULL CHECK (target_type IN ('event', 'profile', 'conversation')),
@@ -331,13 +334,13 @@ CREATE TABLE reports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_reports_unique_target
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_target
     ON reports (reporter_id, target_type, target_id);
 
-CREATE INDEX idx_reports_target
+CREATE INDEX IF NOT EXISTS idx_reports_target
     ON reports (target_type, target_id);
 
-CREATE TABLE recommendation_feedback (
+CREATE TABLE IF NOT EXISTS recommendation_feedback (
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     feedback VARCHAR NOT NULL CHECK (feedback IN ('more', 'less')),
@@ -345,10 +348,10 @@ CREATE TABLE recommendation_feedback (
     PRIMARY KEY (profile_id, event_id)
 );
 
-CREATE INDEX idx_recommendation_feedback_profile
+CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_profile
     ON recommendation_feedback(profile_id);
 
-CREATE TABLE profile_bookmarks (
+CREATE TABLE IF NOT EXISTS profile_bookmarks (
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     target_profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -356,49 +359,49 @@ CREATE TABLE profile_bookmarks (
     CHECK (profile_id <> target_profile_id)
 );
 
-CREATE INDEX idx_profile_bookmarks_profile ON profile_bookmarks(profile_id);
+CREATE INDEX IF NOT EXISTS idx_profile_bookmarks_profile ON profile_bookmarks(profile_id);
 
 -- ============================================================
 -- Full-text search & trigram indexes
 -- ============================================================
 
-ALTER TABLE profiles ADD COLUMN search_vector tsvector
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS search_vector tsvector
   GENERATED ALWAYS AS (
     setweight(to_tsvector('simple', COALESCE(name, '')), 'A') ||
     setweight(to_tsvector('simple', COALESCE(program, '')), 'B') ||
     setweight(to_tsvector('simple', COALESCE(bio, '')), 'C')
   ) STORED;
 
-ALTER TABLE profiles ADD COLUMN public_search_vector tsvector
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS public_search_vector tsvector
   GENERATED ALWAYS AS (
     setweight(to_tsvector('simple', COALESCE(name, '')), 'A') ||
     setweight(to_tsvector('simple', COALESCE(bio, '')), 'B')
   ) STORED;
 
-ALTER TABLE events ADD COLUMN search_vector tsvector
+ALTER TABLE events ADD COLUMN IF NOT EXISTS search_vector tsvector
   GENERATED ALWAYS AS (
     setweight(to_tsvector('simple', COALESCE(title, '')), 'A') ||
     setweight(to_tsvector('simple', COALESCE(location, '')), 'B') ||
     setweight(to_tsvector('simple', COALESCE(description, '')), 'C')
   ) STORED;
 
-ALTER TABLE tags ADD COLUMN search_vector tsvector
+ALTER TABLE tags ADD COLUMN IF NOT EXISTS search_vector tsvector
   GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(name, ''))) STORED;
 
-CREATE INDEX idx_profiles_fts ON profiles USING GIN (search_vector);
-CREATE INDEX idx_profiles_public_fts ON profiles USING GIN (public_search_vector);
-CREATE INDEX idx_events_fts ON events USING GIN (search_vector);
-CREATE INDEX idx_tags_fts ON tags USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS idx_profiles_fts ON profiles USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS idx_profiles_public_fts ON profiles USING GIN (public_search_vector);
+CREATE INDEX IF NOT EXISTS idx_events_fts ON events USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS idx_tags_fts ON tags USING GIN (search_vector);
 
-CREATE INDEX idx_profiles_name_trgm ON profiles USING GIN (name gin_trgm_ops);
-CREATE INDEX idx_profiles_bio_trgm ON profiles USING GIN (bio gin_trgm_ops);
-CREATE INDEX idx_profiles_program_trgm ON profiles USING GIN (program gin_trgm_ops);
-CREATE INDEX idx_events_title_trgm ON events USING GIN (title gin_trgm_ops);
-CREATE INDEX idx_events_description_trgm ON events USING GIN (description gin_trgm_ops);
-CREATE INDEX idx_events_location_trgm ON events USING GIN (location gin_trgm_ops);
-CREATE INDEX idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_profiles_name_trgm ON profiles USING GIN (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_profiles_bio_trgm ON profiles USING GIN (bio gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_profiles_program_trgm ON profiles USING GIN (program gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_events_title_trgm ON events USING GIN (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_events_description_trgm ON events USING GIN (description gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_events_location_trgm ON events USING GIN (location gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops);
 
-CREATE INDEX idx_events_geo_earth ON events USING GIST (ll_to_earth(latitude, longitude))
+CREATE INDEX IF NOT EXISTS idx_events_geo_earth ON events USING GIST (ll_to_earth(latitude, longitude))
   WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 -- ============================================================
@@ -413,6 +416,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS set_event_interactions_updated_at ON event_interactions;
 CREATE TRIGGER set_event_interactions_updated_at
   BEFORE UPDATE ON event_interactions
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -434,7 +438,8 @@ INSERT INTO tags (id, name, scope, category, parent_id) VALUES
   ('566e1714-0ec4-4d52-8562-fca84e2c8419', 'Literatura', 'interest', 'root', NULL),
   ('a89488ea-43f1-4c72-94dd-fc3747fb95a0', 'Gry', 'interest', 'root', NULL),
   ('63318021-e21d-4d7d-a4cb-f5e0f15fc833', 'Społeczność', 'interest', 'root', NULL),
-  ('460c6106-6f65-4f0d-bbf8-ef49687ec0f3', 'Styl życia', 'interest', 'root', NULL);
+  ('460c6106-6f65-4f0d-bbf8-ef49687ec0f3', 'Styl życia', 'interest', 'root', NULL)
+ON CONFLICT DO NOTHING;
 
 -- Interest tags (90 curated, deterministic UUIDs)
 INSERT INTO tags (id, name, scope, category, onboarding_order, parent_id) VALUES
@@ -527,7 +532,8 @@ INSERT INTO tags (id, name, scope, category, onboarding_order, parent_id) VALUES
   ('29b5d222-4e01-53c3-b38f-2556f404be3c', 'Minimalizm', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
   ('de248dd4-203d-5408-b731-f534023c8deb', 'Moda', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
   ('f4b20bdc-a473-5b6c-a38c-d7ca291ffa38', 'Taniec', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
-  ('92ac54b5-f45e-5eef-9e01-4b78bf3802ce', 'Fitness outdoorowy', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3');
+  ('92ac54b5-f45e-5eef-9e01-4b78bf3802ce', 'Fitness outdoorowy', 'interest', 'styl_zycia', '12', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3')
+ON CONFLICT DO NOTHING;
 
 -- Event tags
 INSERT INTO tags (id, name, scope, category, parent_id) VALUES
@@ -555,4 +561,5 @@ INSERT INTO tags (id, name, scope, category, parent_id) VALUES
   ('a2cdb278-fb19-48b8-8438-8110afcbdf1f', 'Wolontariat', 'event', 'spolecznosc', '63318021-e21d-4d7d-a4cb-f5e0f15fc833'),
   ('4586b307-c167-456d-abd2-0d3ef65afdc4', 'Debata', 'event', 'spolecznosc', '63318021-e21d-4d7d-a4cb-f5e0f15fc833'),
   ('182039cc-3ae5-4953-a2a1-b9b1135cd1c1', 'Krąg medytacji', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3'),
-  ('b9c896e9-5d49-4847-8c58-9ed77efc5f0d', 'Warsztaty tańca', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3');
+  ('b9c896e9-5d49-4847-8c58-9ed77efc5f0d', 'Warsztaty tańca', 'event', 'styl_zycia', '460c6106-6f65-4f0d-bbf8-ef49687ec0f3')
+ON CONFLICT DO NOTHING;

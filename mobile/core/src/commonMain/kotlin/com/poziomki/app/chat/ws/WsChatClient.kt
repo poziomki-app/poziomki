@@ -127,6 +127,18 @@ class WsChatClient(
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onHistoryResponse(msg)
             }
 
+            is WsServerMessage.Archived -> {
+                // Remove conversation from local list
+                val current = _rooms.value.toMutableList()
+                current.removeAll { it.roomId == msg.conversationId }
+                _rooms.value = current
+            }
+
+            is WsServerMessage.Unarchived -> {
+                // Refresh conversation list to get it back
+                wsConnection.send(WsClientMessage.ListConversations)
+            }
+
             else -> {}
         }
     }
@@ -290,6 +302,16 @@ class WsChatClient(
         }
     }
 
+    override suspend fun archiveConversation(roomId: String) {
+        wsConnection.send(WsClientMessage.Archive(conversationId = roomId))
+    }
+
+    override suspend fun hideConversation(roomId: String) {
+        val current = _rooms.value.toMutableList()
+        current.removeAll { it.roomId == roomId }
+        _rooms.value = current
+    }
+
     override suspend fun stop() {
         _state.value = ChatClientState.Idle
         wsConnection.disconnect()
@@ -320,6 +342,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
+        isBlocked = isBlocked,
     )
 
 internal fun parseTimestamp(iso8601: String): Long =

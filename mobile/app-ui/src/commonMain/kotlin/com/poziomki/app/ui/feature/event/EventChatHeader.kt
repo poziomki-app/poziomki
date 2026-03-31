@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +48,15 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.Flag
+import com.adamglin.phosphoricons.bold.PencilSimple
+import com.adamglin.phosphoricons.bold.SignOut
+import com.adamglin.phosphoricons.bold.Trash
+import com.adamglin.phosphoricons.bold.UserPlus
+import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
@@ -60,6 +66,7 @@ import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -67,6 +74,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.feature.chat.ActionMenuItem
 import com.poziomki.app.ui.shared.formatEventDateCompact
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.maplibre.compose.camera.CameraPosition
@@ -250,6 +258,9 @@ fun EventChatHeader(
     onLeave: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onReport: () -> Unit = {},
+    onArchive: () -> Unit = {},
+    onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -302,40 +313,67 @@ fun EventChatHeader(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                 ) {
-                    if (isCreator) {
-                        DropdownMenuItem(
-                            text = { Text("Edytuj") },
+                    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                        if (isCreator) {
+                            ActionMenuItem(
+                                icon = PhosphorIcons.Bold.PencilSimple,
+                                label = "Edytuj",
+                                onClick = {
+                                    showMenu = false
+                                    onEdit()
+                                },
+                            )
+                            ActionMenuItem(
+                                icon = PhosphorIcons.Bold.Trash,
+                                label = "Usuń wydarzenie",
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                },
+                                iconTint = Error,
+                                labelColor = Error,
+                            )
+                        } else if (event.isAttending) {
+                            ActionMenuItem(
+                                icon = PhosphorIcons.Bold.SignOut,
+                                label = "Opuść wydarzenie",
+                                onClick = {
+                                    showMenu = false
+                                    onLeave()
+                                },
+                            )
+                        } else {
+                            ActionMenuItem(
+                                icon = PhosphorIcons.Bold.UserPlus,
+                                label = "Dołącz do wydarzenia",
+                                onClick = {
+                                    showMenu = false
+                                    onJoin()
+                                },
+                            )
+                        }
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Flag,
+                            label = "Zgłoś",
                             onClick = {
                                 showMenu = false
-                                onEdit()
+                                onReport()
                             },
                         )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Usuń wydarzenie",
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            },
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Archive,
+                            label = "Archiwizuj",
                             onClick = {
                                 showMenu = false
-                                showDeleteDialog = true
+                                onArchive()
                             },
                         )
-                    } else if (event.isAttending) {
-                        DropdownMenuItem(
-                            text = { Text("Opuść wydarzenie") },
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.X,
+                            label = "Usuń",
                             onClick = {
                                 showMenu = false
-                                onLeave()
-                            },
-                        )
-                    } else {
-                        DropdownMenuItem(
-                            text = { Text("Dołącz do wydarzenia") },
-                            onClick = {
-                                showMenu = false
-                                onJoin()
+                                onRemove()
                             },
                         )
                     }

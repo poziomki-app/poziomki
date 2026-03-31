@@ -3,6 +3,7 @@ package com.poziomki.app.ui.feature.chat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +25,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -35,17 +39,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
+import com.adamglin.phosphoricons.bold.Prohibit
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.ui.designsystem.components.ConfirmDialog
+import com.poziomki.app.ui.designsystem.components.ReportDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
+import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
@@ -54,7 +64,7 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "CyclomaticComplexMethod", "LongMethod")
 fun ChatScreen(
     chatId: String,
     initialTitle: String? = null,
@@ -66,6 +76,8 @@ fun ChatScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val timelineListState = rememberLazyListState()
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showBlockDialog by remember { mutableStateOf(false) }
     LaunchedEffect(chatId, initialTitle, initialDirectUserId) {
         viewModel.loadRoom(
             roomId = chatId,
@@ -113,11 +125,22 @@ fun ChatScreen(
                             initialTitle?.trim()?.takeIf { it.isNotBlank() } ?: ""
                         },
                     avatarUrl = state.roomAvatarUrl,
+                    isBlocked = state.isBlocked,
                     onBack = onBack,
                     onSearchClick = viewModel::toggleSearch,
                     onProfileClick =
                         (initialDirectProfileId ?: state.directProfileId)
                             ?.let { id -> { onNavigateToProfile(id) } },
+                    onBlock = { showBlockDialog = true },
+                    onReport = { showReportDialog = true },
+                    onArchive = {
+                        viewModel.archiveConversation()
+                        onBack()
+                    },
+                    onRemove = {
+                        viewModel.removeConversation()
+                        onBack()
+                    },
                 )
             }
         },
@@ -154,17 +177,52 @@ fun ChatScreen(
             modifier = Modifier.padding(top = padding.calculateTopPadding()),
         )
     }
+
+    if (showBlockDialog) {
+        ConfirmDialog(
+            title = if (state.isBlocked) "odblokuj" else "zablokuj",
+            message =
+                if (state.isBlocked) {
+                    "czy na pewno chcesz odblokować tę osobę?"
+                } else {
+                    "czy na pewno chcesz zablokować tę osobę? nie będzie mogła wysyłać Ci wiadomości."
+                },
+            confirmText = if (state.isBlocked) "odblokuj" else "zablokuj",
+            isDestructive = !state.isBlocked,
+            onConfirm = {
+                showBlockDialog = false
+                if (state.isBlocked) viewModel.unblockUser() else viewModel.blockUser()
+            },
+            onDismiss = { showBlockDialog = false },
+        )
+    }
+
+    if (showReportDialog) {
+        ReportDialog(
+            onConfirm = { reason, description ->
+                showReportDialog = false
+                viewModel.reportConversation(reason, description)
+            },
+            onDismiss = { showReportDialog = false },
+        )
+    }
 }
 
 @Composable
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongParameterList", "LongMethod")
 private fun ChatTopBar(
     title: String,
     avatarUrl: String?,
+    isBlocked: Boolean,
     onBack: () -> Unit,
     onSearchClick: () -> Unit,
     onProfileClick: (() -> Unit)? = null,
+    onBlock: () -> Unit = {},
+    onReport: () -> Unit = {},
+    onArchive: () -> Unit = {},
+    onRemove: () -> Unit = {},
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     Surface(
         color = Background,
         border = BorderStroke(1.dp, Border.copy(alpha = 0.35f)),
@@ -214,12 +272,55 @@ private fun ChatTopBar(
                     tint = TextSecondary,
                 )
             }
-            IconButton(onClick = { }) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.DotsThreeVertical,
-                    contentDescription = "Więcej",
-                    tint = TextSecondary,
-                )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.DotsThreeVertical,
+                        contentDescription = "Więcej",
+                        tint = TextSecondary,
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Prohibit,
+                            label = if (isBlocked) "Odblokuj" else "Zablokuj",
+                            onClick = {
+                                showMenu = false
+                                onBlock()
+                            },
+                            iconTint = Error,
+                            labelColor = Error,
+                        )
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Flag,
+                            label = "Zgłoś",
+                            onClick = {
+                                showMenu = false
+                                onReport()
+                            },
+                        )
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.Archive,
+                            label = "Archiwizuj",
+                            onClick = {
+                                showMenu = false
+                                onArchive()
+                            },
+                        )
+                        ActionMenuItem(
+                            icon = PhosphorIcons.Bold.X,
+                            label = "Usuń",
+                            onClick = {
+                                showMenu = false
+                                onRemove()
+                            },
+                        )
+                    }
+                }
             }
         }
     }
