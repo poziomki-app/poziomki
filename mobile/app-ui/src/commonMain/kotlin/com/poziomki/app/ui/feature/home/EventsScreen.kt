@@ -10,8 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,19 +17,16 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -64,16 +59,13 @@ import com.adamglin.phosphoricons.bold.ArrowSquareOut
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
-import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.ThumbsDown
 import com.adamglin.phosphoricons.bold.ThumbsUp
-import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
-import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
@@ -147,16 +139,16 @@ fun EventsScreen(
                 viewModel.setSearchQuery(it)
             },
             placeholder = "szukaj wydarzeń...",
-            filterActive = state.selectedTagIds.isNotEmpty() || state.showTagFilter,
+            filterActive = state.selectedCategories.isNotEmpty(),
             onFilterClick = { viewModel.toggleShowTagFilter() },
         )
 
         if (state.showTagFilter) {
-            TagFilterPanel(
-                availableTags = state.availableTags,
-                selectedTagIds = state.selectedTagIds,
-                onToggleTag = { viewModel.toggleTagFilter(it) },
-                onClear = { viewModel.clearTagFilters() },
+            CategoryFilterDialog(
+                selectedCategories = state.selectedCategories,
+                onToggleCategory = { viewModel.toggleCategoryFilter(it) },
+                onClear = { viewModel.clearCategoryFilters() },
+                onDismiss = { viewModel.toggleShowTagFilter() },
             )
         }
 
@@ -523,45 +515,6 @@ private fun EventCard(
                     }
                 }
 
-                // Tags
-                if (event.tags.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    @OptIn(ExperimentalLayoutApi::class)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        val visibleTags = event.tags.take(3)
-                        val overflow = event.tags.size - visibleTags.size
-                        visibleTags.forEach { tag ->
-                            Text(
-                                text = "${tag.emoji.orEmpty()} ${tag.name}".trim(),
-                                fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp,
-                                color = TextMuted,
-                                modifier =
-                                    Modifier
-                                        .border(1.dp, Border, RoundedCornerShape(50))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                        if (overflow > 0) {
-                            Text(
-                                text = "+$overflow",
-                                fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp,
-                                color = TextMuted,
-                                modifier =
-                                    Modifier
-                                        .border(1.dp, Border, RoundedCornerShape(50))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Attendees row
@@ -781,165 +734,97 @@ internal fun EventRow(
     }
 }
 
-private val TagChipShape = RoundedCornerShape(50)
-private val TagChipUnselected = Color(0xFF1A1F26)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TagFilterPanel(
-    availableTags: List<Tag>,
-    selectedTagIds: Set<String>,
-    onToggleTag: (String) -> Unit,
+private fun CategoryFilterDialog(
+    selectedCategories: Set<String>,
+    onToggleCategory: (String) -> Unit,
     onClear: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val groupedTags =
-        remember(availableTags) {
-            INTEREST_CATEGORIES.mapNotNull { category ->
-                val tags = availableTags.filter { it.category == category.key }
-                if (tags.isNotEmpty()) category to tags else null
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = SurfaceElevated,
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "filtruj kategorie",
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = TextPrimary,
+                    )
+                    if (selectedCategories.isNotEmpty()) {
+                        Text(
+                            text = "wyczyść",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = Primary,
+                            modifier = Modifier.clickable(onClick = onClear),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                INTEREST_CATEGORIES.forEach { category ->
+                    CategoryFilterRow(
+                        category = category,
+                        selected = category.key in selectedCategories,
+                        onClick = { onToggleCategory(category.key) },
+                    )
+                }
             }
         }
-
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 280.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = PoziomkiTheme.spacing.md)
-                .padding(top = 8.dp),
-    ) {
-        if (selectedTagIds.isNotEmpty()) {
-            TagFilterHeader(count = selectedTagIds.size, onClear = onClear)
-        }
-
-        groupedTags.forEachIndexed { index, (category, tags) ->
-            if (index > 0) Spacer(modifier = Modifier.height(8.dp))
-            TagFilterCategorySection(category, tags, selectedTagIds, onToggleTag)
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
 @Composable
-private fun TagFilterHeader(
-    count: Int,
-    onClear: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "$count wybrano",
-            fontFamily = NunitoFamily,
-            fontWeight = FontWeight.Medium,
-            fontSize = 13.sp,
-            color = Primary,
-        )
-        Row(
-            modifier =
-                Modifier
-                    .clip(TagChipShape)
-                    .background(Primary.copy(alpha = 0.15f))
-                    .clickable(onClick = onClear)
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                PhosphorIcons.Bold.X,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = Primary,
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "wyczyść",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp,
-                color = Primary,
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TagFilterCategorySection(
+private fun CategoryFilterRow(
     category: com.poziomki.app.ui.feature.onboarding.InterestCategoryInfo,
-    tags: List<Tag>,
-    selectedTagIds: Set<String>,
-    onToggleTag: (String) -> Unit,
+    selected: Boolean,
+    onClick: () -> Unit,
 ) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) category.color.copy(alpha = 0.15f) else Color.Transparent,
+    )
     Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(bgColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 6.dp),
     ) {
         Icon(
             imageVector = category.icon,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = category.color,
+            modifier = Modifier.size(20.dp),
+            tint = if (selected) category.color else TextMuted,
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = category.displayName,
-            fontFamily = MontserratFamily,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 13.sp,
-            color = category.color,
+            fontFamily = NunitoFamily,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 15.sp,
+            color = if (selected) category.color else TextPrimary,
+            modifier = Modifier.weight(1f),
         )
-    }
-
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        tags.forEach { tag ->
-            TagFilterChip(
-                label = tag.name,
-                selected = tag.id in selectedTagIds,
-                accentColor = category.color,
-                onClick = { onToggleTag(tag.id) },
+        if (selected) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .background(category.color, CircleShape),
             )
         }
-    }
-}
-
-@Composable
-private fun TagFilterChip(
-    label: String,
-    selected: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (selected) accentColor else TagChipUnselected,
-    )
-    val textColor by animateColorAsState(
-        targetValue = if (selected) Color.White else Color(0xFFB0B8C4),
-    )
-
-    Box(
-        modifier =
-            Modifier
-                .clip(TagChipShape)
-                .background(bgColor)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label.lowercase(),
-            fontFamily = NunitoFamily,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            color = textColor,
-        )
     }
 }
