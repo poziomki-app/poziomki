@@ -6,7 +6,10 @@ import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.CreateEventRequest
+import com.poziomki.app.network.Tag
 import com.poziomki.app.network.UpdateEventRequest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,10 @@ data class EventCreateState(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val requiresApproval: Boolean = false,
+    val selectedTags: List<Tag> = emptyList(),
+    val tagSearchQuery: String = "",
+    val tagSearchResults: List<Tag> = emptyList(),
+    val isSearchingTags: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val eventId: String? = null,
@@ -110,6 +117,48 @@ class EventCreateViewModel(
         _state.value = _state.value.copy(coverImageUrl = null, coverImageBytes = null)
     }
 
+    private var tagSearchJob: Job? = null
+
+    fun updateTagSearch(query: String) {
+        _state.value = _state.value.copy(tagSearchQuery = query)
+        tagSearchJob?.cancel()
+        if (query.isBlank()) {
+            _state.value = _state.value.copy(tagSearchResults = emptyList(), isSearchingTags = false)
+            return
+        }
+        tagSearchJob =
+            viewModelScope.launch {
+                delay(300)
+                _state.value = _state.value.copy(isSearchingTags = true)
+                when (val result = apiService.searchTags("event", query)) {
+                    is ApiResult.Success -> {
+                        _state.value =
+                            _state.value.copy(tagSearchResults = result.data, isSearchingTags = false)
+                    }
+
+                    is ApiResult.Error -> {
+                        _state.value = _state.value.copy(isSearchingTags = false)
+                    }
+                }
+            }
+    }
+
+    fun addTag(tag: Tag) {
+        val current = _state.value.selectedTags
+        if (current.none { it.id == tag.id } && current.size < MAX_EVENT_TAGS) {
+            _state.value =
+                _state.value.copy(
+                    selectedTags = current + tag,
+                    tagSearchQuery = "",
+                    tagSearchResults = emptyList(),
+                )
+        }
+    }
+
+    fun removeTag(tag: Tag) {
+        _state.value = _state.value.copy(selectedTags = _state.value.selectedTags.filter { it.id != tag.id })
+    }
+
     fun loadEvent(eventId: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, eventId = eventId)
@@ -128,6 +177,7 @@ class EventCreateViewModel(
                         latitude = event.latitude,
                         longitude = event.longitude,
                         requiresApproval = event.requiresApproval,
+                        selectedTags = event.tags,
                         isLoading = false,
                         eventId = eventId,
                     )
@@ -188,6 +238,7 @@ class EventCreateViewModel(
                 latitude = s.latitude,
                 longitude = s.longitude,
                 maxAttendees = UpdateEventRequest.maxAttendeesValue(maxAttendees),
+                tagIds = s.selectedTags.map { it.id },
                 requiresApproval = s.requiresApproval,
             )
         when (eventRepository.updateEvent(eventId, request)) {
@@ -221,6 +272,7 @@ class EventCreateViewModel(
                 latitude = s.latitude,
                 longitude = s.longitude,
                 maxAttendees = maxAttendees,
+                tagIds = s.selectedTags.map { it.id },
                 requiresApproval = if (s.requiresApproval) true else null,
             )
         when (eventRepository.createEvent(request)) {
@@ -236,5 +288,9 @@ class EventCreateViewModel(
                     )
             }
         }
+    }
+
+    companion object {
+        private const val MAX_EVENT_TAGS = 15
     }
 }
