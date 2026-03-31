@@ -312,6 +312,8 @@ fun EventChatHeader(
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = SurfaceElevated,
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 4.dp)) {
                         if (isCreator) {
