@@ -48,7 +48,6 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
 import com.adamglin.phosphoricons.bold.Flag
@@ -259,7 +258,6 @@ fun EventChatHeader(
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onReport: () -> Unit = {},
-    onArchive: () -> Unit = {},
     onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -360,14 +358,6 @@ fun EventChatHeader(
                             onClick = {
                                 showMenu = false
                                 onReport()
-                            },
-                        )
-                        ActionMenuItem(
-                            icon = PhosphorIcons.Bold.Archive,
-                            label = "Archiwizuj",
-                            onClick = {
-                                showMenu = false
-                                onArchive()
                             },
                         )
                         ActionMenuItem(

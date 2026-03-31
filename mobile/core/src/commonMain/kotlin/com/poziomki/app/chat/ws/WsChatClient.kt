@@ -310,6 +310,13 @@ class WsChatClient(
         val current = _rooms.value.toMutableList()
         current.removeAll { it.roomId == roomId }
         _rooms.value = current
+        openedRoomsMutex.withLock {
+            openedRooms.remove(roomId)?.let {
+                it.close()
+                it.liveTimeline.close()
+            }
+        }
+        roomTimelineCacheStore.clear(roomId)
     }
 
     override suspend fun stop() {

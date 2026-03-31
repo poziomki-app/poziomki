@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
@@ -135,10 +134,6 @@ fun ChatScreen(
                             ?.let { id -> { onNavigateToProfile(id) } },
                     onBlock = { showBlockDialog = true },
                     onReport = { showReportDialog = true },
-                    onArchive = {
-                        viewModel.archiveConversation()
-                        onBack()
-                    },
                     onRemove = {
                         viewModel.removeConversation()
                         onBack()
@@ -221,7 +216,6 @@ private fun ChatTopBar(
     onProfileClick: (() -> Unit)? = null,
     onBlock: () -> Unit = {},
     onReport: () -> Unit = {},
-    onArchive: () -> Unit = {},
     onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -305,14 +299,6 @@ private fun ChatTopBar(
                             onClick = {
                                 showMenu = false
                                 onReport()
-                            },
-                        )
-                        ActionMenuItem(
-                            icon = PhosphorIcons.Bold.Archive,
-                            label = "Archiwizuj",
-                            onClick = {
-                                showMenu = false
-                                onArchive()
                             },
                         )
                         ActionMenuItem(
