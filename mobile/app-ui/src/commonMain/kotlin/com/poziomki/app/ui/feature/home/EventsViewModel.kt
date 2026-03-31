@@ -29,7 +29,8 @@ data class EventsState(
     val selectedNearbyEventId: String? = null,
     val isLocationPermissionDenied: Boolean = false,
     val isLocationUnavailable: Boolean = false,
-    val dismissedEventIds: Set<String> = emptySet(),
+    val selectedCategories: Set<String> = emptySet(),
+    val showTagFilter: Boolean = false,
 )
 
 class EventsViewModel(
@@ -100,7 +101,7 @@ class EventsViewModel(
                     lng = location?.longitude,
                     forceRefresh = forceRefresh,
                 )
-            _state.value = _state.value.copy(recommendedEvents = recommended, dismissedEventIds = emptySet())
+            _state.value = _state.value.copy(recommendedEvents = recommended)
             filterEvents()
         }
     }
@@ -229,27 +230,8 @@ class EventsViewModel(
         eventId: String,
         feedback: String,
     ) {
-        val removedFromRecommended = _state.value.recommendedEvents.find { it.id == eventId }
-        _state.value =
-            _state.value.copy(
-                dismissedEventIds = _state.value.dismissedEventIds + eventId,
-                recommendedEvents = _state.value.recommendedEvents.filter { it.id != eventId },
-            )
-        filterEvents()
-
-        // Only send feedback for events the recommendation engine actually surfaced
-        if (removedFromRecommended == null) return
-
         viewModelScope.launch {
-            val result = apiService.postEventFeedback(eventId, feedback)
-            if (result is ApiResult.Error) {
-                _state.value =
-                    _state.value.copy(
-                        dismissedEventIds = _state.value.dismissedEventIds - eventId,
-                        recommendedEvents = _state.value.recommendedEvents + removedFromRecommended,
-                    )
-                filterEvents()
-            }
+            apiService.postEventFeedback(eventId, feedback)
         }
     }
 
@@ -264,6 +246,24 @@ class EventsViewModel(
         }
     }
 
+    fun toggleCategoryFilter(category: String) {
+        val current = _state.value.selectedCategories
+        _state.value =
+            _state.value.copy(
+                selectedCategories = if (category in current) current - category else current + category,
+            )
+        filterEvents()
+    }
+
+    fun clearCategoryFilters() {
+        _state.value = _state.value.copy(selectedCategories = emptySet())
+        filterEvents()
+    }
+
+    fun toggleShowTagFilter() {
+        _state.value = _state.value.copy(showTagFilter = !_state.value.showTagFilter)
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =
@@ -274,8 +274,6 @@ class EventsViewModel(
             }
         val filtered =
             source.filter { event ->
-                val notDismissed =
-                    current.activeFilter != TimeFilter.ALL || event.id !in current.dismissedEventIds
                 val matchesSearch =
                     current.searchQuery.isBlank() ||
                         event.title.contains(current.searchQuery, ignoreCase = true)
@@ -283,7 +281,10 @@ class EventsViewModel(
                     current.activeFilter == TimeFilter.ALL ||
                         current.activeFilter == TimeFilter.NEARBY ||
                         matchesTimeFilter(event.startsAt, current.activeFilter)
-                notDismissed && matchesSearch && matchesTime
+                val matchesTags =
+                    current.selectedCategories.isEmpty() ||
+                        event.tags.any { it.category in current.selectedCategories }
+                matchesSearch && matchesTime && matchesTags
             }
         _state.value = current.copy(events = filtered)
     }
