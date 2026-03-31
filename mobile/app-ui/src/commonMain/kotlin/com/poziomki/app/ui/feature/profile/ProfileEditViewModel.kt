@@ -264,7 +264,7 @@ class ProfileEditViewModel(
             _state.value = _state.value.copy(isBioImageUploading = true)
             when (val result = apiService.uploadImage(bytes, "bio_image.jpg")) {
                 is ApiResult.Success -> {
-                    val marker = "![](${result.data.filename})"
+                    val marker = "![](${result.data.url})"
                     val currentBio = _state.value.bio
                     val newBio = if (currentBio.isBlank()) marker else "$currentBio\n$marker"
                     if (newBio.length <= 1500) {
