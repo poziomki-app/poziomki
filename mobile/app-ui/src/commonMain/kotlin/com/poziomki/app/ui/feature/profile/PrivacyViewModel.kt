@@ -37,6 +37,7 @@ class PrivacyViewModel(
     init {
         viewModelScope.launch {
             val userId = sessionManager.userId.first() ?: return@launch
+            settingsRepository.ensureDefaults(userId)
             val settings = settingsRepository.observeSettings(userId).first()
             if (settings != null) {
                 _state.value =
