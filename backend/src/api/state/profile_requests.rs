@@ -13,6 +13,8 @@ pub(in crate::api) struct CreateProfileBody {
     #[serde(default)]
     pub(in crate::api) images: Option<Vec<String>>,
     #[serde(default)]
+    pub(in crate::api) bio_images: Option<Vec<String>>,
+    #[serde(default)]
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]
     pub(in crate::api) tag_ids: Option<Vec<String>>,
@@ -35,6 +37,8 @@ pub(in crate::api) struct UpdateProfileBody {
     pub(in crate::api) profile_picture: Option<String>,
     #[serde(default)]
     pub(in crate::api) images: Option<Vec<String>>,
+    #[serde(default)]
+    pub(in crate::api) bio_images: Option<Vec<String>>,
     #[serde(default)]
     pub(in crate::api) tags: Option<Vec<String>>,
     #[serde(default, rename = "tagIds")]

@@ -179,6 +179,9 @@ class ProfileRepository(
                     images_json =
                         request.images?.let { json.encodeToString(it) }
                             ?: current.images_json,
+                    bio_images_json =
+                        request.bioImages?.let { json.encodeToString(it) }
+                            ?: current.bio_images_json,
                     program = request.program ?: current.program,
                     gradient_start =
                         request.gradientStart?.ifEmpty { null }
@@ -281,6 +284,7 @@ class ProfileRepository(
                 profile_picture = profile.profilePicture,
                 thumbhash = profile.thumbhash,
                 images_json = json.encodeToString(profile.images),
+                bio_images_json = json.encodeToString(profile.bioImages),
                 program = profile.program,
                 gradient_start = profile.gradientStart,
                 gradient_end = profile.gradientEnd,

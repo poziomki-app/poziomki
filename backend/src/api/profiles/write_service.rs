@@ -228,6 +228,10 @@ pub(super) fn build_update_changeset(
         program: payload.program.as_ref().map(|p| Some(p.clone())),
         profile_picture: profile_picture.map(Some),
         images: payload.images.as_ref().map(|imgs| build_images_json(imgs)),
+        bio_images: payload
+            .bio_images
+            .as_ref()
+            .map(|imgs| build_images_json(imgs)),
         gradient_start: payload.gradient_start.as_deref().map(non_empty_or_null),
         gradient_end: payload.gradient_end.as_deref().map(non_empty_or_null),
         updated_at: Some(chrono::Utc::now()),

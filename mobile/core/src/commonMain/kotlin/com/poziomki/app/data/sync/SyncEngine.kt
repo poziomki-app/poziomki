@@ -324,6 +324,7 @@ class SyncEngine(
                     profile_picture = profile.profilePicture,
                     thumbhash = profile.thumbhash,
                     images_json = json.encodeToString(profile.images),
+                    bio_images_json = json.encodeToString(profile.bioImages),
                     program = profile.program,
                     gradient_start = profile.gradientStart,
                     gradient_end = profile.gradientEnd,

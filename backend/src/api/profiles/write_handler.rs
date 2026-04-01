@@ -38,6 +38,9 @@ fn build_create_model(
     let images_json = payload.images.as_ref().and_then(|imgs| {
         serde_json::to_value(imgs.iter().map(|s| extract_filename(s)).collect::<Vec<_>>()).ok()
     });
+    let bio_images_json = payload.bio_images.as_ref().and_then(|imgs| {
+        serde_json::to_value(imgs.iter().map(|s| extract_filename(s)).collect::<Vec<_>>()).ok()
+    });
 
     let model = NewProfile {
         id: profile_id,
@@ -46,6 +49,7 @@ fn build_create_model(
         bio: payload.bio.clone(),
         profile_picture,
         images: images_json,
+        bio_images: bio_images_json,
         program: payload.program.clone(),
         gradient_start: payload.gradient_start.clone(),
         gradient_end: payload.gradient_end.clone(),

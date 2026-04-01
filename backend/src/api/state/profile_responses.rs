@@ -14,6 +14,8 @@ pub(in crate::api) struct ProfileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::api) thumbhash: Option<String>,
     pub(in crate::api) images: Vec<String>,
+    #[serde(rename = "bioImages")]
+    pub(in crate::api) bio_images: Vec<String>,
     pub(in crate::api) program: Option<String>,
     #[serde(rename = "gradientStart")]
     pub(in crate::api) gradient_start: Option<String>,
@@ -45,6 +47,8 @@ pub(in crate::api) struct FullProfileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::api) thumbhash: Option<String>,
     pub(in crate::api) images: Vec<String>,
+    #[serde(rename = "bioImages")]
+    pub(in crate::api) bio_images: Vec<String>,
     pub(in crate::api) program: Option<String>,
     #[serde(rename = "gradientStart")]
     pub(in crate::api) gradient_start: Option<String>,

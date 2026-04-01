@@ -54,11 +54,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -188,12 +184,8 @@ fun ProfileEditScreen(
                             color = TextMuted,
                         )
                     } else {
-                        val displayBio =
-                            remember(state.bio) {
-                                state.bio.replace(Regex("""!\[\]\([^)]*\)"""), "\uD83D\uDCF7")
-                            }
                         Text(
-                            text = displayBio,
+                            text = state.bio,
                             fontFamily = nunito,
                             fontWeight = FontWeight.Normal,
                             fontSize = 16.sp,
@@ -327,9 +319,11 @@ fun ProfileEditScreen(
     if (showBioEditor) {
         BioEditorDialog(
             bio = state.bio,
+            bioImages = state.bioImages,
             isBioImageUploading = state.isBioImageUploading,
             onBioChange = { viewModel.updateBio(it.take(1500)) },
             onAddImage = { bioImagePicker() },
+            onRemoveBioImage = { viewModel.removeBioImage(it) },
             onDismiss = { showBioEditor = false },
         )
     }
@@ -697,65 +691,15 @@ private val gradientPresets =
 
 private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong(16).toInt()) }.getOrDefault(Color.Gray)
 
-private object BioImageVisualTransformation : VisualTransformation {
-    private val imageRegex = Regex("""!\[\]\([^)]*\)""")
-    private const val PLACEHOLDER = " \uD83D\uDCF7 "
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        val src = text.text
-        val matches = imageRegex.findAll(src).toList()
-        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
-
-        val sb = StringBuilder()
-        var srcPos = 0
-        val o2t = IntArray(src.length + 1)
-
-        for (match in matches) {
-            while (srcPos < match.range.first) {
-                o2t[srcPos] = sb.length
-                sb.append(src[srcPos])
-                srcPos++
-            }
-            val pStart = sb.length
-            sb.append(PLACEHOLDER)
-            for (i in match.range) {
-                o2t[i] = pStart
-            }
-            srcPos = match.range.last + 1
-        }
-        while (srcPos < src.length) {
-            o2t[srcPos] = sb.length
-            sb.append(src[srcPos])
-            srcPos++
-        }
-        o2t[src.length] = sb.length
-
-        val transformed = sb.toString()
-        val tLen = transformed.length
-        val t2o = IntArray(tLen + 1)
-        var oSearch = 0
-        for (tIdx in 0..tLen) {
-            while (oSearch < src.length && o2t[oSearch] < tIdx) oSearch++
-            t2o[tIdx] = oSearch
-        }
-
-        return TransformedText(
-            AnnotatedString(transformed),
-            object : OffsetMapping {
-                override fun originalToTransformed(offset: Int) = o2t[offset.coerceIn(0, src.length)]
-
-                override fun transformedToOriginal(offset: Int) = t2o[offset.coerceIn(0, tLen)]
-            },
-        )
-    }
-}
-
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 private fun BioEditorDialog(
     bio: String,
+    bioImages: List<String>,
     isBioImageUploading: Boolean,
     onBioChange: (String) -> Unit,
     onAddImage: () -> Unit,
+    onRemoveBioImage: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val nunito = NunitoFamily
@@ -805,7 +749,6 @@ private fun BioEditorDialog(
                             lineHeight = 24.sp,
                         ),
                     cursorBrush = SolidColor(Primary),
-                    visualTransformation = BioImageVisualTransformation,
                     decorationBox = { innerTextField ->
                         Box {
                             if (bio.isEmpty()) {
@@ -823,11 +766,7 @@ private fun BioEditorDialog(
                 )
 
                 // Image previews
-                val bioImageMatches =
-                    remember(bio) {
-                        Regex("""!\[\]\((.*?)\)""").findAll(bio).toList()
-                    }
-                if (bioImageMatches.isNotEmpty()) {
+                if (bioImages.isNotEmpty()) {
                     Row(
                         modifier =
                             Modifier
@@ -836,8 +775,7 @@ private fun BioEditorDialog(
                                 .padding(horizontal = PoziomkiTheme.spacing.md, vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        bioImageMatches.forEachIndexed { index, match ->
-                            val url = match.groupValues[1]
+                        bioImages.forEachIndexed { index, url ->
                             Box(modifier = Modifier.size(72.dp)) {
                                 AsyncImage(
                                     model = resolveImageUrl(url),
@@ -854,12 +792,7 @@ private fun BioEditorDialog(
                                             .align(Alignment.TopEnd)
                                             .padding(2.dp)
                                             .size(22.dp)
-                                            .clickable {
-                                                val start = match.range.first
-                                                var end = match.range.last + 1
-                                                if (end < bio.length && bio[end] == '\n') end++
-                                                onBioChange(bio.removeRange(start, end))
-                                            },
+                                            .clickable { onRemoveBioImage(url) },
                                     shape = CircleShape,
                                     color = Color.Black.copy(alpha = 0.6f),
                                 ) {

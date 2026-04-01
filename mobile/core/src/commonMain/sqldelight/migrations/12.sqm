@@ -1,0 +1,1 @@
+ALTER TABLE profile ADD COLUMN bio_images_json TEXT;

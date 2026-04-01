@@ -6,6 +6,7 @@ CREATE TABLE profile (
     profile_picture TEXT,
     thumbhash TEXT,
     images_json TEXT,
+    bio_images_json TEXT,
     program TEXT,
     gradient_start TEXT,
     gradient_end TEXT,
@@ -40,10 +41,10 @@ WHERE user_id = ?;
 upsert:
 INSERT OR REPLACE INTO profile(
     id, user_id, name, bio, profile_picture, thumbhash,
-    images_json, program, gradient_start, gradient_end,
+    images_json, bio_images_json, program, gradient_start, gradient_end,
     is_own, is_bookmarked, created_at, updated_at,
     cached_at, is_dirty
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM profile

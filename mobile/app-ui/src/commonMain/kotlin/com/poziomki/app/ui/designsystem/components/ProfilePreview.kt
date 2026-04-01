@@ -77,6 +77,7 @@ fun ProfilePreview(
     name: String,
     program: String?,
     bio: String?,
+    bioImages: List<String> = emptyList(),
     tags: List<Tag>,
     images: List<ProfileImage>,
     emojiAvatar: String? = null,
@@ -280,7 +281,7 @@ fun ProfilePreview(
             }
 
             // Bio
-            if (!bio.isNullOrBlank()) {
+            if (!bio.isNullOrBlank() || bioImages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
                 Text(
                     text = "bio",
@@ -290,7 +291,7 @@ fun ProfilePreview(
                     color = TextPrimary,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                RichBio(bio = bio)
+                RichBio(bio = bio ?: "", bioImages = bioImages)
             }
 
             // Tags — compact
@@ -333,84 +334,34 @@ fun ProfilePreview(
     }
 }
 
-private val bioImageRegex = Regex("""!\[\]\((.*?)\)""")
-
 @Composable
-private fun RichBio(bio: String) {
+private fun RichBio(
+    bio: String,
+    bioImages: List<String>,
+) {
     val nunito = NunitoFamily
 
-    if (!bio.contains("![](")) {
-        Text(
-            text = bio,
-            fontFamily = nunito,
-            fontWeight = FontWeight.Normal,
-            fontSize = 15.sp,
-            color = TextPrimary,
-            lineHeight = 22.sp,
-        )
-        return
-    }
-
-    val segments = remember(bio) { parseBioSegments(bio) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        segments.forEach { segment ->
-            when (segment) {
-                is BioSegment.TextSegment -> {
-                    if (segment.text.isNotBlank()) {
-                        Text(
-                            text = segment.text,
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 15.sp,
-                            color = TextPrimary,
-                            lineHeight = 22.sp,
-                        )
-                    }
-                }
-
-                is BioSegment.ImageSegment -> {
-                    AsyncImage(
-                        model = resolveImageUrl(segment.url),
-                        contentDescription = null,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.FillWidth,
-                    )
-                }
-            }
+        if (bio.isNotBlank()) {
+            Text(
+                text = bio,
+                fontFamily = nunito,
+                fontWeight = FontWeight.Normal,
+                fontSize = 15.sp,
+                color = TextPrimary,
+                lineHeight = 22.sp,
+            )
+        }
+        bioImages.forEach { url ->
+            AsyncImage(
+                model = resolveImageUrl(url),
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.FillWidth,
+            )
         }
     }
-}
-
-private sealed class BioSegment {
-    data class TextSegment(
-        val text: String,
-    ) : BioSegment()
-
-    data class ImageSegment(
-        val url: String,
-    ) : BioSegment()
-}
-
-private fun parseBioSegments(bio: String): List<BioSegment> {
-    val segments = mutableListOf<BioSegment>()
-    var lastIndex = 0
-    bioImageRegex.findAll(bio).forEach { match ->
-        val before = bio.substring(lastIndex, match.range.first).trim()
-        if (before.isNotEmpty()) {
-            segments.add(BioSegment.TextSegment(before))
-        }
-        val url = match.groupValues[1]
-        if (url.isNotBlank()) {
-            segments.add(BioSegment.ImageSegment(url))
-        }
-        lastIndex = match.range.last + 1
-    }
-    val after = bio.substring(lastIndex).trim()
-    if (after.isNotEmpty()) {
-        segments.add(BioSegment.TextSegment(after))
-    }
-    return segments
 }

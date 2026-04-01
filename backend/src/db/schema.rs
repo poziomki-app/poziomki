@@ -205,6 +205,7 @@ diesel::table! {
         bio -> Nullable<Text>,
         profile_picture -> Nullable<Varchar>,
         images -> Nullable<Jsonb>,
+        bio_images -> Nullable<Jsonb>,
         program -> Nullable<Varchar>,
         gradient_start -> Nullable<Varchar>,
         gradient_end -> Nullable<Varchar>,

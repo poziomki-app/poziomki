@@ -20,6 +20,14 @@ fn decode_profile_images(profile: &Profile) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn decode_bio_images(profile: &Profile) -> Vec<String> {
+    profile
+        .bio_images
+        .as_ref()
+        .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        .unwrap_or_default()
+}
+
 async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
     let pic = profile_picture?;
     let map = resolve_thumbhashes(std::slice::from_ref(pic)).await;
@@ -68,6 +76,9 @@ pub(in crate::api) async fn profile_to_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
+    let raw_bio_images = decode_bio_images(profile);
+    let bio_images = resolve_image_urls(&raw_bio_images).await;
+
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
     ProfileResponse {
@@ -78,6 +89,7 @@ pub(in crate::api) async fn profile_to_response(
         profile_picture,
         thumbhash,
         images,
+        bio_images,
         program,
         gradient_start: profile.gradient_start.clone(),
         gradient_end: profile.gradient_end.clone(),
@@ -103,6 +115,9 @@ pub(in crate::api) async fn full_profile_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
+    let raw_bio_images = decode_bio_images(profile);
+    let bio_images = resolve_image_urls(&raw_bio_images).await;
+
     let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
 
     Ok(FullProfileResponse {
@@ -113,6 +128,7 @@ pub(in crate::api) async fn full_profile_response(
         profile_picture,
         thumbhash,
         images,
+        bio_images,
         program,
         gradient_start: profile.gradient_start.clone(),
         gradient_end: profile.gradient_end.clone(),

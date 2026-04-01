@@ -28,6 +28,8 @@ data class ProfileEditState(
     val bio: String = "",
     val program: String = "",
     val images: List<String> = emptyList(),
+    val bioImages: List<String> = emptyList(),
+    val removedBioImages: List<String> = emptyList(),
     val allTags: List<Tag> = emptyList(),
     val selectedTags: List<Tag> = emptyList(),
     val interestQuery: String = "",
@@ -123,14 +125,26 @@ class ProfileEditViewModel(
             profileRepository.refreshOwnProfile()
             profileRepository.observeOwnProfileWithTags().collect { profile ->
                 if (profile != null) {
+                    // Migrate legacy markdown bio images to the bioImages list
+                    val rawBio = profile.bio ?: ""
+                    val markdownRegex = Regex("""!\[\]\((.*?)\)""")
+                    val legacyUrls = markdownRegex.findAll(rawBio).map { it.groupValues[1] }.toList()
+                    val cleanBio =
+                        if (legacyUrls.isNotEmpty()) {
+                            rawBio.replace(markdownRegex, "").trim()
+                        } else {
+                            rawBio
+                        }
+                    val mergedBioImages = (profile.bioImages + legacyUrls).distinct()
                     _state.value =
                         _state.value.copy(
                             isLoading = false,
                             profileId = profile.id,
                             name = profile.name,
-                            bio = profile.bio ?: "",
+                            bio = cleanBio,
                             program = profile.program ?: "",
                             images = profile.images,
+                            bioImages = mergedBioImages,
                             selectedTags = profile.tags,
                             gradientStart = profile.gradientStart,
                             gradientEnd = profile.gradientEnd,
@@ -260,12 +274,10 @@ class ProfileEditViewModel(
             _state.value = _state.value.copy(isBioImageUploading = true)
             when (val result = apiService.uploadImage(bytes, "bio_image.jpg")) {
                 is ApiResult.Success -> {
-                    val marker = "![](${result.data.url})"
-                    val currentBio = _state.value.bio
-                    val newBio = if (currentBio.isBlank()) marker else "$currentBio\n$marker"
-                    if (newBio.length <= 1500) {
-                        _state.value = _state.value.copy(bio = newBio)
-                    }
+                    _state.value =
+                        _state.value.copy(
+                            bioImages = _state.value.bioImages + result.data.url,
+                        )
                 }
 
                 is ApiResult.Error -> {
@@ -280,6 +292,14 @@ class ProfileEditViewModel(
         }
     }
 
+    fun removeBioImage(url: String) {
+        _state.value =
+            _state.value.copy(
+                bioImages = _state.value.bioImages.filter { it != url },
+                removedBioImages = _state.value.removedBioImages + url,
+            )
+    }
+
     fun save(onSuccess: () -> Unit) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
@@ -290,6 +310,7 @@ class ProfileEditViewModel(
                     program = s.program.ifBlank { null },
                     profilePicture = s.images.firstOrNull(),
                     images = s.images,
+                    bioImages = s.bioImages,
                     tagIds = s.selectedTags.map { it.id },
                     gradientStart = s.gradientStart ?: "",
                     gradientEnd = s.gradientEnd ?: "",
