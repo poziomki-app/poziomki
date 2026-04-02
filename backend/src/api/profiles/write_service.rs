@@ -178,19 +178,30 @@ pub(super) async fn resolve_picture_filename(
     }
 }
 
+#[allow(clippy::option_option)]
 pub(super) async fn validate_and_prepare_update(
     headers: &HeaderMap,
     id: &str,
     payload: &UpdateProfileBody,
-) -> std::result::Result<(Profile, crate::db::models::users::User, Option<String>), Box<Response>> {
+) -> std::result::Result<
+    (
+        Profile,
+        crate::db::models::users::User,
+        Option<Option<String>>,
+    ),
+    Box<Response>,
+> {
     let (profile, user) = load_and_verify_profile(headers, id).await?;
     validate_update_payload(headers, payload)?;
-    let picture = resolve_picture_filename(
-        headers,
-        Some(profile.id),
-        payload.profile_picture.as_deref(),
-    )
-    .await?;
+    let picture = match &payload.profile_picture {
+        None => None,             // absent → don't change
+        Some(None) => Some(None), // explicit null → clear
+        Some(Some(raw)) => {
+            let filename =
+                resolve_picture_filename(headers, Some(profile.id), Some(raw.as_str())).await?;
+            Some(filename) // Some(Some(filename))
+        }
+    };
     Ok((profile, user, picture))
 }
 
@@ -218,15 +229,16 @@ fn build_images_json(images: &[String]) -> Option<serde_json::Value> {
     serde_json::to_value(filenames).ok()
 }
 
+#[allow(clippy::option_option)]
 pub(super) fn build_update_changeset(
     payload: &UpdateProfileBody,
-    profile_picture: Option<String>,
+    profile_picture: Option<Option<String>>,
 ) -> ProfileChangeset {
     ProfileChangeset {
         name: payload.name.as_ref().map(|n| n.trim().to_string()),
         bio: payload.bio.as_ref().map(|b| Some(b.clone())),
         program: payload.program.as_ref().map(|p| Some(p.clone())),
-        profile_picture: profile_picture.map(Some),
+        profile_picture,
         images: payload.images.as_ref().map(|imgs| build_images_json(imgs)),
         gradient_start: payload.gradient_start.as_deref().map(non_empty_or_null),
         gradient_end: payload.gradient_end.as_deref().map(non_empty_or_null),

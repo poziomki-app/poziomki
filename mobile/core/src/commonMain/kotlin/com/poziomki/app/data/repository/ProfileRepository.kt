@@ -23,6 +23,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 @Suppress("TooManyFunctions")
 class ProfileRepository(
@@ -174,7 +176,12 @@ class ProfileRepository(
                     user_id = current.user_id,
                     name = request.name ?: current.name,
                     bio = request.bio ?: current.bio,
-                    profile_picture = request.profilePicture ?: current.profile_picture,
+                    profile_picture =
+                        when (request.profilePicture) {
+                            is JsonNull -> null
+                            is JsonPrimitive -> request.profilePicture.content
+                            else -> current.profile_picture
+                        },
                     thumbhash = current.thumbhash,
                     images_json =
                         request.images?.let { json.encodeToString(it) }
