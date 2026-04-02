@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.poziomki.app.ui.feature.home
 
 import androidx.compose.animation.animateColorAsState
@@ -22,9 +24,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -57,7 +59,6 @@ import com.adamglin.phosphoricons.bold.ArrowSquareOut
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
-import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.ThumbsDown
 import com.adamglin.phosphoricons.bold.ThumbsUp
@@ -85,6 +86,7 @@ import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import com.poziomki.app.ui.feature.onboarding.INTEREST_CATEGORIES
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.dayLabel
@@ -132,9 +134,23 @@ fun EventsScreen(
 
         PoziomkiSearchBar(
             query = searchQuery,
-            onQueryChange = { searchQuery = it },
+            onQueryChange = {
+                searchQuery = it
+                viewModel.setSearchQuery(it)
+            },
             placeholder = "szukaj wydarzeń...",
+            filterActive = state.selectedCategories.isNotEmpty(),
+            onFilterClick = { viewModel.toggleShowTagFilter() },
         )
+
+        if (state.showTagFilter) {
+            CategoryFilterDialog(
+                selectedCategories = state.selectedCategories,
+                onToggleCategory = { viewModel.toggleCategoryFilter(it) },
+                onClear = { viewModel.clearCategoryFilters() },
+                onDismiss = { viewModel.toggleShowTagFilter() },
+            )
+        }
 
         FilterTabs(
             tabs = timeFilterTabs,
@@ -450,25 +466,29 @@ private fun EventCard(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Date/time
-                Text(
-                    text = formatEventDate(event.startsAt),
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp,
-                    color = TextSecondary,
-                )
-
-                // Location
-                event.location?.let { location ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                // Date/time + location
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = formatEventDate(event.startsAt),
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 15.sp,
+                        color = TextSecondary,
+                    )
+                    event.location?.let { location ->
+                        Text(
+                            text = " · ",
+                            fontFamily = NunitoFamily,
+                            fontSize = 15.sp,
+                            color = TextMuted,
+                        )
                         Icon(
                             PhosphorIcons.Fill.MapPin,
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(13.dp),
                             tint = TextMuted,
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = location,
                             fontFamily = NunitoFamily,
@@ -476,6 +496,7 @@ private fun EventCard(
                             fontSize = 14.sp,
                             color = TextMuted,
                             maxLines = 1,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                     }
                 }
@@ -694,6 +715,101 @@ internal fun EventRow(
                         .size(20.dp)
                         .align(Alignment.Top),
                 tint = TextMuted,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryFilterDialog(
+    selectedCategories: Set<String>,
+    onToggleCategory: (String) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = SurfaceElevated,
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "filtruj kategorie",
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = TextPrimary,
+                    )
+                    if (selectedCategories.isNotEmpty()) {
+                        Text(
+                            text = "wyczyść",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = Primary,
+                            modifier = Modifier.clickable(onClick = onClear),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                INTEREST_CATEGORIES.forEach { category ->
+                    CategoryFilterRow(
+                        category = category,
+                        selected = category.key in selectedCategories,
+                        onClick = { onToggleCategory(category.key) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryFilterRow(
+    category: com.poziomki.app.ui.feature.onboarding.InterestCategoryInfo,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) category.color.copy(alpha = 0.15f) else Color.Transparent,
+    )
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(bgColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = category.icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (selected) category.color else TextMuted,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = category.displayName,
+            fontFamily = NunitoFamily,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 15.sp,
+            color = if (selected) category.color else TextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .background(category.color, CircleShape),
             )
         }
     }

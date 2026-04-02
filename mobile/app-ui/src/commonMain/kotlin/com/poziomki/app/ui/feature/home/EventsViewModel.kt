@@ -30,6 +30,8 @@ data class EventsState(
     val isLocationPermissionDenied: Boolean = false,
     val isLocationUnavailable: Boolean = false,
     val dismissedEventIds: Set<String> = emptySet(),
+    val selectedCategories: Set<String> = emptySet(),
+    val showTagFilter: Boolean = false,
 )
 
 class EventsViewModel(
@@ -264,6 +266,24 @@ class EventsViewModel(
         }
     }
 
+    fun toggleCategoryFilter(category: String) {
+        val current = _state.value.selectedCategories
+        _state.value =
+            _state.value.copy(
+                selectedCategories = if (category in current) current - category else current + category,
+            )
+        filterEvents()
+    }
+
+    fun clearCategoryFilters() {
+        _state.value = _state.value.copy(selectedCategories = emptySet())
+        filterEvents()
+    }
+
+    fun toggleShowTagFilter() {
+        _state.value = _state.value.copy(showTagFilter = !_state.value.showTagFilter)
+    }
+
     private fun filterEvents() {
         val current = _state.value
         val source =
@@ -283,7 +303,10 @@ class EventsViewModel(
                     current.activeFilter == TimeFilter.ALL ||
                         current.activeFilter == TimeFilter.NEARBY ||
                         matchesTimeFilter(event.startsAt, current.activeFilter)
-                notDismissed && matchesSearch && matchesTime
+                val matchesTags =
+                    current.selectedCategories.isEmpty() ||
+                        event.tags.any { it.category in current.selectedCategories }
+                notDismissed && matchesSearch && matchesTime && matchesTags
             }
         _state.value = current.copy(events = filtered)
     }
