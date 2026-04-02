@@ -43,8 +43,6 @@ class NoopChatClient : ChatClient {
 
     override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
 
-    override suspend fun archiveConversation(roomId: String) = Unit
-
     override suspend fun hideConversation(roomId: String) = Unit
 
     override suspend fun stop() {

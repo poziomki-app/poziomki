@@ -7,6 +7,3 @@ CREATE TABLE profile_blocks (
 );
 
 CREATE INDEX idx_profile_blocks_blocked ON profile_blocks(blocked_id);
-
--- Archive support on conversation_members
-ALTER TABLE conversation_members ADD COLUMN archived_at TIMESTAMPTZ;

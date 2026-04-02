@@ -74,18 +74,6 @@ sealed interface WsClientMessage {
     ) : WsClientMessage
 
     @Serializable
-    @SerialName("archive")
-    data class Archive(
-        val conversationId: String,
-    ) : WsClientMessage
-
-    @Serializable
-    @SerialName("unarchive")
-    data class Unarchive(
-        val conversationId: String,
-    ) : WsClientMessage
-
-    @Serializable
     @SerialName("listConversations")
     data object ListConversations : WsClientMessage
 
@@ -185,18 +173,6 @@ sealed interface WsServerMessage {
     @SerialName("conversations")
     data class Conversations(
         val conversations: List<WsConversationPayload>,
-    ) : WsServerMessage
-
-    @Serializable
-    @SerialName("archived")
-    data class Archived(
-        val conversationId: String,
-    ) : WsServerMessage
-
-    @Serializable
-    @SerialName("unarchived")
-    data class Unarchived(
-        val conversationId: String,
     ) : WsServerMessage
 
     @Serializable
