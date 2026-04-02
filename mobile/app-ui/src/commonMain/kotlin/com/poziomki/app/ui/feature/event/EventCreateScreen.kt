@@ -2,10 +2,13 @@ package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -47,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,6 +61,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPin
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.X
+import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.LocationPickerSheet
@@ -70,6 +75,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.PrimaryLight
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -98,7 +104,7 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 fun EventCreateScreen(
@@ -457,6 +463,52 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            // Tags
+            SectionLabel("tagi")
+            PoziomkiTextField(
+                value = state.tagSearchQuery,
+                onValueChange = viewModel::updateTagSearch,
+                placeholder = "szukaj tagów...",
+            )
+
+            if (state.tagSearchQuery.isNotBlank()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                if (state.isSearchingTags) {
+                    CircularProgressIndicator(
+                        color = Primary,
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    val filtered =
+                        state.tagSearchResults.filter { tag ->
+                            state.selectedTags.none { it.id == tag.id }
+                        }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                    ) {
+                        filtered.take(10).forEach { tag ->
+                            EventTagChip(tag = tag, selected = false, onClick = { viewModel.addTag(tag) })
+                        }
+                    }
+                }
+            }
+
+            if (state.selectedTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
+                ) {
+                    state.selectedTags.forEach { tag ->
+                        EventTagChip(tag = tag, selected = true, onClick = { viewModel.removeTag(tag) })
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             SectionLabel("limit uczestników")
             PoziomkiTextField(
                 value = state.attendeeLimit,
@@ -776,4 +828,43 @@ private fun toIsoString(
             .plus(hour.toLong(), DateTimeUnit.HOUR)
             .plus(minute.toLong(), DateTimeUnit.MINUTE)
     return instant.toString()
+}
+
+@Composable
+private fun EventTagChip(
+    tag: Tag,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) PrimaryLight else androidx.compose.ui.graphics.Color.Transparent
+    val textColor = if (selected) Primary else TextSecondary
+    val borderColor = if (selected) Primary else Border
+    val label = "${tag.emoji.orEmpty()} ${tag.name}".trim()
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(bg)
+                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            color = textColor,
+        )
+        if (selected) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = PhosphorIcons.Bold.X,
+                contentDescription = "Usuń tag",
+                tint = Primary,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
 }
