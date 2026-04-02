@@ -9,9 +9,7 @@ use super::hub::ChatHub;
 use super::messages as chat_messages;
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::api::state::hash_session_token;
-use crate::db::schema::{
-    conversation_members, conversations as conversations_table, profile_blocks, profiles,
-};
+use crate::db::schema::{conversations as conversations_table, profile_blocks, profiles};
 
 const AUTH_TIMEOUT_SECS: u64 = 5;
 const DEFAULT_HISTORY_LIMIT: i64 = 50;
@@ -269,12 +267,6 @@ async fn handle_client_message(
             limit,
         } => {
             handle_history(user_id, conversation_id, before, limit, outbound_tx).await;
-        }
-        ClientMessage::Archive { conversation_id } => {
-            handle_archive(user_id, conversation_id, outbound_tx).await;
-        }
-        ClientMessage::Unarchive { conversation_id } => {
-            handle_unarchive(user_id, conversation_id, outbound_tx).await;
         }
         ClientMessage::ListConversations => {
             let conv_list = conversations::list_for_user(user_id)
@@ -660,88 +652,6 @@ async fn handle_history(
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: format!("history failed: {e}"),
-            });
-        }
-    }
-}
-
-async fn handle_archive(
-    user_id: i32,
-    conversation_id: uuid::Uuid,
-    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
-) {
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        let _ = outbound_tx.send(ServerMessage::Error {
-            message: "not a member of this conversation".to_string(),
-        });
-        return;
-    }
-
-    let result = async {
-        let mut conn = crate::db::conn().await?;
-        diesel::update(
-            conversation_members::table
-                .filter(conversation_members::conversation_id.eq(conversation_id))
-                .filter(conversation_members::user_id.eq(user_id)),
-        )
-        .set(conversation_members::archived_at.eq(chrono::Utc::now()))
-        .execute(&mut conn)
-        .await?;
-        Ok::<_, crate::error::AppError>(())
-    }
-    .await;
-
-    match result {
-        Ok(()) => {
-            let _ = outbound_tx.send(ServerMessage::Archived { conversation_id });
-        }
-        Err(e) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: format!("archive failed: {e}"),
-            });
-        }
-    }
-}
-
-async fn handle_unarchive(
-    user_id: i32,
-    conversation_id: uuid::Uuid,
-    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
-) {
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        let _ = outbound_tx.send(ServerMessage::Error {
-            message: "not a member of this conversation".to_string(),
-        });
-        return;
-    }
-
-    let result = async {
-        let mut conn = crate::db::conn().await?;
-        diesel::update(
-            conversation_members::table
-                .filter(conversation_members::conversation_id.eq(conversation_id))
-                .filter(conversation_members::user_id.eq(user_id)),
-        )
-        .set(conversation_members::archived_at.eq(None::<chrono::DateTime<chrono::Utc>>))
-        .execute(&mut conn)
-        .await?;
-        Ok::<_, crate::error::AppError>(())
-    }
-    .await;
-
-    match result {
-        Ok(()) => {
-            let _ = outbound_tx.send(ServerMessage::Unarchived { conversation_id });
-        }
-        Err(e) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: format!("unarchive failed: {e}"),
             });
         }
     }

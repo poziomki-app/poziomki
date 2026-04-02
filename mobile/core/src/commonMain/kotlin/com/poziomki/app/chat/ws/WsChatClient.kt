@@ -127,18 +127,6 @@ class WsChatClient(
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onHistoryResponse(msg)
             }
 
-            is WsServerMessage.Archived -> {
-                // Remove conversation from local list
-                val current = _rooms.value.toMutableList()
-                current.removeAll { it.roomId == msg.conversationId }
-                _rooms.value = current
-            }
-
-            is WsServerMessage.Unarchived -> {
-                // Refresh conversation list to get it back
-                wsConnection.send(WsClientMessage.ListConversations)
-            }
-
             else -> {}
         }
     }
@@ -300,10 +288,6 @@ class WsChatClient(
             is ApiResult.Success -> Result.success(Unit)
             is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
         }
-    }
-
-    override suspend fun archiveConversation(roomId: String) {
-        wsConnection.send(WsClientMessage.Archive(conversationId = roomId))
     }
 
     override suspend fun hideConversation(roomId: String) {
