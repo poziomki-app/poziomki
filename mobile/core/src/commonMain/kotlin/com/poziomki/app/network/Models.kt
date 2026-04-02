@@ -130,7 +130,7 @@ data class UpdateProfileRequest(
     val name: String? = null,
     val bio: String? = null,
     val program: String? = null,
-    val profilePicture: String? = null,
+    val profilePicture: JsonElement? = null,
     val images: List<String>? = null,
     val tagIds: List<String>? = null,
     val gradientStart: String? = null,

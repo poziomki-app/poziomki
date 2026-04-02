@@ -188,19 +188,43 @@ fun ProfileEditScreen(
                             color = TextMuted,
                         )
                     } else {
-                        val displayBio =
+                        val bioImageRegex = remember { Regex("""!\[\]\((.*?)\)""") }
+                        val textOnly =
                             remember(state.bio) {
-                                state.bio.replace(Regex("""!\[\]\([^)]*\)"""), "\uD83D\uDCF7")
+                                state.bio.replace(bioImageRegex, "").trim()
                             }
-                        Text(
-                            text = displayBio,
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 16.sp,
-                            color = TextPrimary,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        val imageUrls =
+                            remember(state.bio) {
+                                bioImageRegex.findAll(state.bio).map { it.groupValues[1] }.toList()
+                            }
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (textOnly.isNotEmpty()) {
+                                Text(
+                                    text = textOnly,
+                                    fontFamily = nunito,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 16.sp,
+                                    color = TextPrimary,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (imageUrls.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    imageUrls.take(4).forEach { url ->
+                                        AsyncImage(
+                                            model = resolveImageUrl(url),
+                                            contentDescription = null,
+                                            modifier =
+                                                Modifier
+                                                    .size(48.dp)
+                                                    .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -711,7 +735,7 @@ private fun parseHex(hex: String): Color = runCatching { Color(("FF$hex").toLong
 
 private object BioImageVisualTransformation : VisualTransformation {
     private val imageRegex = Regex("""!\[\]\([^)]*\)""")
-    private const val PLACEHOLDER = " \uD83D\uDCF7 "
+    private const val PLACEHOLDER = " "
 
     override fun filter(text: AnnotatedString): TransformedText {
         val src = text.text
@@ -916,13 +940,17 @@ private fun BioEditorDialog(
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
+                    val visibleLength =
+                        remember(bio) {
+                            bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
+                        }
                     Text(
-                        text = "${bio.length}/1500",
+                        text = "$visibleLength/1500",
                         fontFamily = nunito,
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
                         color =
-                            if (bio.length > 1400) {
+                            if (visibleLength > 1400) {
                                 com.poziomki.app.ui.designsystem.theme.Error
                             } else {
                                 TextMuted
