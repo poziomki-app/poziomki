@@ -23,6 +23,35 @@ class SettingsRepository(
 ) {
     private val json = Json { explicitNulls = false }
 
+    private fun defaultSettings(userId: String): User_settings =
+        User_settings(
+            user_id = userId,
+            theme = "system",
+            language = "system",
+            notifications_enabled = 1L,
+            privacy_show_program = 1L,
+            privacy_discoverable = 1L,
+            cached_at = Clock.System.now().toEpochMilliseconds(),
+            is_dirty = 0L,
+        )
+
+    private fun upsertSettings(settings: User_settings) {
+        db.userSettingsQueries.upsert(
+            user_id = settings.user_id,
+            theme = settings.theme,
+            language = settings.language,
+            notifications_enabled = settings.notifications_enabled,
+            privacy_show_program = settings.privacy_show_program,
+            privacy_discoverable = settings.privacy_discoverable,
+            cached_at = settings.cached_at,
+            is_dirty = settings.is_dirty,
+        )
+    }
+
+    private fun getOrCreateSettings(userId: String): User_settings =
+        db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull()
+            ?: defaultSettings(userId).also(::upsertSettings)
+
     fun observeSettings(userId: String): Flow<User_settings?> =
         db.userSettingsQueries
             .selectByUserId(userId)
@@ -31,19 +60,7 @@ class SettingsRepository(
 
     suspend fun ensureDefaults(userId: String) {
         withContext(Dispatchers.IO) {
-            val existing = db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull()
-            if (existing == null) {
-                db.userSettingsQueries.upsert(
-                    user_id = userId,
-                    theme = "system",
-                    language = "system",
-                    notifications_enabled = 1L,
-                    privacy_show_program = 1L,
-                    privacy_discoverable = 1L,
-                    cached_at = Clock.System.now().toEpochMilliseconds(),
-                    is_dirty = 0L,
-                )
-            }
+            getOrCreateSettings(userId)
         }
     }
 
@@ -52,16 +69,12 @@ class SettingsRepository(
         theme: String,
     ) {
         withContext(Dispatchers.IO) {
-            val current = db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull() ?: return@withContext
-            db.userSettingsQueries.upsert(
-                user_id = userId,
-                theme = theme,
-                language = current.language,
-                notifications_enabled = current.notifications_enabled,
-                privacy_show_program = current.privacy_show_program,
-                privacy_discoverable = current.privacy_discoverable,
-                cached_at = current.cached_at,
-                is_dirty = 1L,
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    theme = theme,
+                    is_dirty = 1L,
+                ),
             )
             pendingOps.enqueue("update_settings", userId, json.encodeToString(UpdateSettingsRequest(theme = theme)))
         }
@@ -72,16 +85,12 @@ class SettingsRepository(
         language: String,
     ) {
         withContext(Dispatchers.IO) {
-            val current = db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull() ?: return@withContext
-            db.userSettingsQueries.upsert(
-                user_id = userId,
-                theme = current.theme,
-                language = language,
-                notifications_enabled = current.notifications_enabled,
-                privacy_show_program = current.privacy_show_program,
-                privacy_discoverable = current.privacy_discoverable,
-                cached_at = current.cached_at,
-                is_dirty = 1L,
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    language = language,
+                    is_dirty = 1L,
+                ),
             )
             pendingOps.enqueue("update_settings", userId, json.encodeToString(UpdateSettingsRequest(language = language)))
         }
@@ -92,16 +101,12 @@ class SettingsRepository(
         enabled: Boolean,
     ) {
         withContext(Dispatchers.IO) {
-            val current = db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull() ?: return@withContext
-            db.userSettingsQueries.upsert(
-                user_id = userId,
-                theme = current.theme,
-                language = current.language,
-                notifications_enabled = if (enabled) 1L else 0L,
-                privacy_show_program = current.privacy_show_program,
-                privacy_discoverable = current.privacy_discoverable,
-                cached_at = current.cached_at,
-                is_dirty = 1L,
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    notifications_enabled = if (enabled) 1L else 0L,
+                    is_dirty = 1L,
+                ),
             )
             pendingOps.enqueue("update_settings", userId, json.encodeToString(UpdateSettingsRequest(notificationsEnabled = enabled)))
         }
@@ -113,16 +118,13 @@ class SettingsRepository(
         discoverable: Boolean? = null,
     ) {
         withContext(Dispatchers.IO) {
-            val current = db.userSettingsQueries.selectByUserId(userId).executeAsOneOrNull() ?: return@withContext
-            db.userSettingsQueries.upsert(
-                user_id = userId,
-                theme = current.theme,
-                language = current.language,
-                notifications_enabled = current.notifications_enabled,
-                privacy_show_program = showProgram?.let { if (it) 1L else 0L } ?: current.privacy_show_program,
-                privacy_discoverable = discoverable?.let { if (it) 1L else 0L } ?: current.privacy_discoverable,
-                cached_at = current.cached_at,
-                is_dirty = 1L,
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    privacy_show_program = showProgram?.let { if (it) 1L else 0L } ?: current.privacy_show_program,
+                    privacy_discoverable = discoverable?.let { if (it) 1L else 0L } ?: current.privacy_discoverable,
+                    is_dirty = 1L,
+                ),
             )
             pendingOps.enqueue(
                 "update_settings",

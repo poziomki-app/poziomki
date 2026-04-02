@@ -3,12 +3,14 @@ package com.poziomki.app.ui.feature.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.CacheManager
+import com.poziomki.app.data.repository.SettingsRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class PrivacyState(
@@ -19,15 +21,49 @@ data class PrivacyState(
     val exportSuccess: Boolean = false,
     val passwordSuccessMessage: String? = null,
     val error: String? = null,
+    val discoverable: Boolean = true,
+    val showProgram: Boolean = true,
 )
 
 class PrivacyViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
     private val cacheManager: CacheManager,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PrivacyState())
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val userId = sessionManager.userId.first() ?: return@launch
+            settingsRepository.ensureDefaults(userId)
+            val settings = settingsRepository.observeSettings(userId).first()
+            if (settings != null) {
+                _state.value =
+                    _state.value.copy(
+                        discoverable = settings.privacy_discoverable != 0L,
+                        showProgram = settings.privacy_show_program != 0L,
+                    )
+            }
+        }
+    }
+
+    fun toggleDiscoverable(enabled: Boolean) {
+        _state.value = _state.value.copy(discoverable = enabled)
+        viewModelScope.launch {
+            val userId = sessionManager.userId.first() ?: return@launch
+            settingsRepository.updatePrivacy(userId, discoverable = enabled)
+        }
+    }
+
+    fun toggleShowProgram(enabled: Boolean) {
+        _state.value = _state.value.copy(showProgram = enabled)
+        viewModelScope.launch {
+            val userId = sessionManager.userId.first() ?: return@launch
+            settingsRepository.updatePrivacy(userId, showProgram = enabled)
+        }
+    }
 
     fun exportData() {
         if (_state.value.isExporting || _state.value.exportSuccess || _state.value.exportBytes != null) return
