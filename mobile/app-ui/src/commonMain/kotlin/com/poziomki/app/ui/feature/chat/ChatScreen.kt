@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
@@ -39,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Archive
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
@@ -58,6 +58,7 @@ import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -133,10 +134,6 @@ fun ChatScreen(
                             ?.let { id -> { onNavigateToProfile(id) } },
                     onBlock = { showBlockDialog = true },
                     onReport = { showReportDialog = true },
-                    onArchive = {
-                        viewModel.archiveConversation()
-                        onBack()
-                    },
                     onRemove = {
                         viewModel.removeConversation()
                         onBack()
@@ -219,7 +216,6 @@ private fun ChatTopBar(
     onProfileClick: (() -> Unit)? = null,
     onBlock: () -> Unit = {},
     onReport: () -> Unit = {},
-    onArchive: () -> Unit = {},
     onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -283,6 +279,8 @@ private fun ChatTopBar(
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = SurfaceElevated,
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 4.dp)) {
                         ActionMenuItem(
@@ -301,14 +299,6 @@ private fun ChatTopBar(
                             onClick = {
                                 showMenu = false
                                 onReport()
-                            },
-                        )
-                        ActionMenuItem(
-                            icon = PhosphorIcons.Bold.Archive,
-                            label = "Archiwizuj",
-                            onClick = {
-                                showMenu = false
-                                onArchive()
                             },
                         )
                         ActionMenuItem(

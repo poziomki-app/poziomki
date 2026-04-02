@@ -20,7 +20,6 @@ diesel::table! {
         user_id -> Int4,
         joined_at -> Timestamptz,
         last_read_message_id -> Nullable<Uuid>,
-        archived_at -> Nullable<Timestamptz>,
     }
 }
 

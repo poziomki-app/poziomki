@@ -124,10 +124,6 @@ fun EventChatScreen(
                         onDelete = { eventDetailViewModel.deleteEvent(onBack) },
                         onEdit = { onNavigateToEditEvent(event.id) },
                         onReport = { showReportDialog = true },
-                        onArchive = {
-                            chatViewModel.archiveConversation()
-                            onBack()
-                        },
                         onRemove = {
                             chatViewModel.removeConversation()
                             onBack()

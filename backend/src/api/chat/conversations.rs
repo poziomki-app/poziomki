@@ -195,7 +195,6 @@ pub async fn list_for_user(
 
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
-        .filter(conversation_members::archived_at.is_null())
         .select(conversation_members::conversation_id)
         .load(&mut conn)
         .await?;
