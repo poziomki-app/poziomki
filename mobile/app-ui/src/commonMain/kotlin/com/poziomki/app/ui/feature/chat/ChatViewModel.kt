@@ -352,13 +352,6 @@ class ChatViewModel(
         }
     }
 
-    fun archiveConversation() {
-        val roomId = boundRoomId ?: return
-        viewModelScope.launch {
-            chatClient.archiveConversation(roomId)
-        }
-    }
-
     fun removeConversation() {
         val roomId = boundRoomId ?: return
         viewModelScope.launch {

@@ -77,8 +77,6 @@ interface ChatClient {
 
     suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>
 
-    suspend fun archiveConversation(roomId: String)
-
     suspend fun hideConversation(roomId: String)
 
     suspend fun stop()
