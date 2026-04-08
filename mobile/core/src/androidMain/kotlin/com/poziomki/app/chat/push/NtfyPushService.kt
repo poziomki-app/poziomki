@@ -18,6 +18,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -120,11 +121,19 @@ class NtfyPushService :
         val roomId = pushData?.get("room_id")?.jsonPrimitive?.content
         val body = pushData?.get("body")?.jsonPrimitive?.content
         val avatar = pushData?.get("avatar")?.jsonPrimitive?.content
+        val timestampMs =
+            parsed["time"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()?.times(1_000)
 
         // Suppress notification if the user is viewing this chat
         if (roomId != null && roomId == ActiveChat.roomId) return
 
-        notificationHelper.showMessageNotification(sender, roomId, body, avatar)
+        notificationHelper.showMessageNotification(
+            sender = sender,
+            roomId = roomId,
+            body = body,
+            avatarUrl = avatar,
+            timestampMs = timestampMs,
+        )
     }
 
     companion object {
