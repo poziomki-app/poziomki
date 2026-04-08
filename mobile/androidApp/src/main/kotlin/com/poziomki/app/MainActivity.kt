@@ -11,7 +11,9 @@ import com.poziomki.app.chat.push.NotificationChatTarget
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
         enableEdgeToEdge()
         setContent {
             // Remove when https://issuetracker.google.com/issues/364713509 is fixed
