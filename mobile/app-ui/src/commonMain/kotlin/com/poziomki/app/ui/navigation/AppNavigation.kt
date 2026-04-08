@@ -69,6 +69,7 @@ import com.adamglin.phosphoricons.regular.CalendarDots
 import com.adamglin.phosphoricons.regular.ChatCircle
 import com.adamglin.phosphoricons.regular.UsersThree
 import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
 import com.poziomki.app.ui.designsystem.components.UserAvatar
@@ -155,6 +156,17 @@ fun AppNavigation(
             }
         }
         wasLoggedIn = isLoggedIn
+    }
+
+    val notificationChatTarget by NotificationChatTarget.roomId.collectAsState()
+    LaunchedEffect(isLoggedIn, notificationChatTarget) {
+        val roomId = notificationChatTarget ?: return@LaunchedEffect
+        if (!isLoggedIn || startDestination == Route.OnboardingGraph) return@LaunchedEffect
+        navController.navigate(Route.MainGraph) {
+            popUpTo(0) { inclusive = true }
+        }
+        navController.navigate(Route.Chat(roomId))
+        NotificationChatTarget.consume(roomId)
     }
 
     val navigateToChat: (String) -> Unit = navigateToChat@{ chatTargetId ->
