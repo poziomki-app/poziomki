@@ -100,7 +100,11 @@ async fn validate_event_tag_ids(
     headers: &HeaderMap,
     ids: Vec<String>,
 ) -> std::result::Result<Vec<Uuid>, HandlerError> {
-    let mut parsed = Vec::with_capacity(ids.len().min(MAX_EVENT_TAGS));
+    if ids.len() > MAX_EVENT_TAGS {
+        return Err(Box::new(validation_error(headers, "Too many tags")));
+    }
+
+    let mut parsed = Vec::new();
     for raw in ids {
         let uuid = Uuid::parse_str(&raw)
             .map_err(|_| Box::new(validation_error(headers, "All tagIds must be valid UUIDs")))?;
