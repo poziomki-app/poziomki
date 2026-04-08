@@ -161,7 +161,7 @@ fun AppNavigation(
     val notificationChatTarget by NotificationChatTarget.roomId.collectAsState()
     LaunchedEffect(isLoggedIn, notificationChatTarget) {
         val roomId = notificationChatTarget ?: return@LaunchedEffect
-        if (!isLoggedIn) return@LaunchedEffect
+        if (!isLoggedIn || startDestination == Route.OnboardingGraph) return@LaunchedEffect
         navController.navigate(Route.MainGraph) {
             popUpTo(0) { inclusive = true }
         }
