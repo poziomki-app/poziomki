@@ -122,7 +122,11 @@ class NtfyPushService :
         val body = pushData?.get("body")?.jsonPrimitive?.content
         val avatar = pushData?.get("avatar")?.jsonPrimitive?.content
         val timestampMs =
-            parsed["time"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()?.times(1_000)
+            parsed["time"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.toLongOrNull()
+                ?.times(1_000)
 
         // Suppress notification if the user is viewing this chat
         if (roomId != null && roomId == ActiveChat.roomId) return
