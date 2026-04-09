@@ -284,6 +284,21 @@ fun EventsScreen(
                     viewModel.clearRefreshError()
                 }
             }
+
+            // Sync error snackbar
+            state.syncError?.let { error ->
+                AppSnackbar(
+                    message = error,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(PoziomkiTheme.spacing.md),
+                )
+                LaunchedEffect(error) {
+                    delay(3000)
+                    viewModel.clearSyncError()
+                }
+            }
         }
     }
 }

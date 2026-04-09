@@ -6,7 +6,9 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.mapper.toApiModel
+import com.poziomki.app.data.sync.OperationType
 import com.poziomki.app.data.sync.PendingOperationsManager
+import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
@@ -27,6 +29,7 @@ class EventRepository(
     private val connectivityMonitor: ConnectivityMonitor,
     private val pendingOps: PendingOperationsManager,
     private val chatClient: ChatClient,
+    syncEngine: SyncEngine,
 ) {
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
@@ -52,6 +55,19 @@ class EventRepository(
             pendingOps = pendingOps,
             eventRoomManager = eventRoomManager,
         )
+
+    val syncErrors: Flow<String> =
+        syncEngine.permanentFailures.map { op ->
+            when (op.type) {
+                OperationType.ATTEND_EVENT -> "Nie udało się zapisać na wydarzenie"
+                OperationType.LEAVE_EVENT -> "Nie udało się wypisać z wydarzenia"
+                OperationType.CREATE_EVENT -> "Nie udało się utworzyć wydarzenia"
+                OperationType.DELETE_EVENT -> "Nie udało się usunąć wydarzenia"
+                OperationType.SAVE_EVENT -> "Nie udało się zapisać wydarzenia"
+                OperationType.UNSAVE_EVENT -> "Nie udało się usunąć z zapisanych"
+                else -> "Nie udało się zsynchronizować danych"
+            }
+        }
 
     fun observeEvents(): Flow<List<Event>> =
         db.eventQueries
