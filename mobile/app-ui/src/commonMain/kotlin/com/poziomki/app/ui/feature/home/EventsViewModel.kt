@@ -319,7 +319,6 @@ class EventsViewModel(
                         matchesTimeFilter(event.startsAt, current.activeFilter)
                 val matchesTags =
                     current.selectedCategories.isEmpty() ||
-                        event.category in current.selectedCategories ||
                         event.tags.any { it.category in current.selectedCategories }
                 notDismissed && matchesSearch && matchesTime && matchesTags
             }
