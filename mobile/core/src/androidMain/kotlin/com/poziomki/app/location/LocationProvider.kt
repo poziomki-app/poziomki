@@ -3,17 +3,21 @@ package com.poziomki.app.location
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
+import android.os.Looper
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
-import kotlinx.coroutines.tasks.await
+import androidx.core.location.LocationListenerCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.location.LocationRequestCompat
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 actual class LocationProvider(
     private val context: Context,
 ) {
-    private val client = LocationServices.getFusedLocationProviderClient(context)
+    private val locationManager = context.getSystemService(LocationManager::class.java)
 
     actual fun isPermissionGranted(): Boolean =
         ContextCompat.checkSelfPermission(
@@ -23,20 +27,40 @@ actual class LocationProvider(
 
     @Suppress("MissingPermission")
     actual suspend fun getCurrentLocation(): LocationResult? {
-        if (!isPermissionGranted()) return null
+        if (!isPermissionGranted() || locationManager == null) return null
         return try {
-            // Try last known location first (instant, works without GPS)
-            val last = client.lastLocation.await()
-            if (last != null) return LocationResult(last.latitude, last.longitude)
+            lastKnownLocation()?.let { return it.toLocationResult() }
 
-            // Fall back to active location request with timeout
+            val provider = activeProvider() ?: return null
             withTimeoutOrNull(LOCATION_TIMEOUT_MS) {
-                val cts = CancellationTokenSource()
-                val location =
-                    client
-                        .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
-                        .await()
-                location?.let { LocationResult(it.latitude, it.longitude) }
+                suspendCancellableCoroutine { continuation ->
+                    val request =
+                        LocationRequestCompat
+                            .Builder(LOCATION_TIMEOUT_MS)
+                            .setQuality(LocationRequestCompat.QUALITY_BALANCED_POWER_ACCURACY)
+                            .setMaxUpdates(1)
+                            .setDurationMillis(LOCATION_TIMEOUT_MS)
+                            .build()
+                    val listener =
+                        object : LocationListenerCompat {
+                            override fun onLocationChanged(location: Location) {
+                                LocationManagerCompat.removeUpdates(locationManager, this)
+                                if (continuation.isActive) {
+                                    continuation.resume(location.toLocationResult())
+                                }
+                            }
+                        }
+                    continuation.invokeOnCancellation {
+                        LocationManagerCompat.removeUpdates(locationManager, listener)
+                    }
+                    LocationManagerCompat.requestLocationUpdates(
+                        locationManager,
+                        provider,
+                        request,
+                        listener,
+                        Looper.getMainLooper(),
+                    )
+                }
             }
         } catch (
             @Suppress("TooGenericExceptionCaught") _: Exception,
@@ -45,7 +69,38 @@ actual class LocationProvider(
         }
     }
 
+    private fun lastKnownLocation(): Location? =
+        LAST_KNOWN_PROVIDERS
+            .filter { provider ->
+                locationManager
+                    ?.let { manager -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
+                    ?: false
+            }.mapNotNull { provider ->
+                runCatching { locationManager?.getLastKnownLocation(provider) }.getOrNull()
+            }.maxByOrNull(Location::getTime)
+
+    private fun activeProvider(): String? =
+        ACTIVE_PROVIDERS.firstOrNull { provider ->
+            locationManager
+                ?.let { manager -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
+                ?: false
+        }
+
     private companion object {
         const val LOCATION_TIMEOUT_MS = 5_000L
+        val ACTIVE_PROVIDERS =
+            listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER,
+            )
+        val LAST_KNOWN_PROVIDERS =
+            listOf(
+                LocationManager.PASSIVE_PROVIDER,
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+            )
     }
 }
+
+private fun Location.toLocationResult(): LocationResult = LocationResult(latitude, longitude)
