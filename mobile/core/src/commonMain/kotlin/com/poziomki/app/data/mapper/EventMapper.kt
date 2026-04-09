@@ -20,7 +20,6 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         longitude = longitude,
         startsAt = starts_at,
         endsAt = ends_at,
-        creatorId = creator_id,
         createdAt = created_at,
         attendeesCount = attendees_count.toInt(),
         maxAttendees = max_attendees?.toInt(),
