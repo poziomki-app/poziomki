@@ -176,12 +176,20 @@ class SyncEngine(
                 db.eventQueries.deleteById(entityId)
             }
 
+            OperationType.UPDATE_EVENT -> {
+                db.eventQueries.clearDirty(entityId)
+            }
+
             OperationType.SAVE_EVENT -> {
                 db.eventQueries.updateSaved(is_saved = 0L, id = entityId)
             }
 
             OperationType.UNSAVE_EVENT -> {
                 db.eventQueries.updateSaved(is_saved = 1L, id = entityId)
+            }
+
+            OperationType.UPDATE_PROFILE -> {
+                db.profileQueries.clearDirty(entityId)
             }
         }
     }
