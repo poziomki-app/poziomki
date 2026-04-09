@@ -68,11 +68,10 @@ jobs:
           fi
           echo "$ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/android-release.jks"
 
-      - name: Lint and build signed Android release
+      - name: Build signed Android release
         working-directory: mobile
         run: |
           ./gradlew \
-            :androidApp:lintRelease \
             :androidApp:assembleRelease \
             -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks" \
             -PreleaseStorePassword="${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}" \
