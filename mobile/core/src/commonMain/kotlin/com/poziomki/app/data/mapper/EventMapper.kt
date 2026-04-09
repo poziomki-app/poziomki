@@ -15,7 +15,6 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         title = title,
         description = description,
         coverImage = cover_image,
-        category = category,
         location = location,
         latitude = latitude,
         longitude = longitude,
