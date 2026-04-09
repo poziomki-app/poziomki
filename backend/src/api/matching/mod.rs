@@ -198,6 +198,7 @@ pub(super) async fn events_recommendations(
             let mut s = score_event(
                 &profile_affinity,
                 &history_affinity,
+                &user_ctx.interest_categories,
                 &event_tag_ids,
                 event,
                 user_geo,

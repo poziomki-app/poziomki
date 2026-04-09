@@ -79,6 +79,7 @@ fn build_from_context(
         title: event.title.clone(),
         description: event.description.clone(),
         cover_image: event.cover_image.clone(),
+        category: event.category.clone(),
         location: event.location.clone(),
         latitude: event.latitude,
         longitude: event.longitude,
