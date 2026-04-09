@@ -147,7 +147,7 @@ pub(in crate::api) async fn check_capacity_and_upsert(
         match result {
             Ok(val) => return Ok(val),
             Err(ref e) if attempts < MAX_ATTEMPTS && is_serialization_failure(e) => {
-                tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(10u64 << attempts)).await;
             }
             Err(e) => return Err(e.into()),
         }

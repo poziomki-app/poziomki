@@ -234,7 +234,7 @@ pub(in crate::api) async fn event_update(
                 if attempts < events_write_repo::MAX_ATTEMPTS
                     && events_write_repo::is_serialization_failure_app(e) =>
             {
-                tokio::time::sleep(std::time::Duration::from_millis(attempts as u64 * 5)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(10u64 << attempts)).await;
             }
             Err(e) => return Err(e),
         }
