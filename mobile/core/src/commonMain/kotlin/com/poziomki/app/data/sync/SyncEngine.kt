@@ -16,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -31,6 +33,8 @@ class SyncEngine(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private var syncJob: Job? = null
+    private val _permanentFailures = MutableSharedFlow<Pending_operation>(extraBufferCapacity = 16)
+    val permanentFailures: SharedFlow<Pending_operation> = _permanentFailures
 
     companion object {
         private const val MAX_RETRIES = 5
@@ -137,7 +141,48 @@ class SyncEngine(
                 "ERROR/SyncEngine: permanently retiring ${op.type}" +
                     " (entity=${op.entity_id}) after $MAX_RETRIES retries",
             )
+            revertOptimisticState(op)
+            _permanentFailures.tryEmit(op)
             pendingOps.complete(op.id)
+        }
+    }
+
+    private fun revertOptimisticState(op: Pending_operation) {
+        val entityId = op.entity_id ?: return
+        when (op.type) {
+            OperationType.ATTEND_EVENT -> {
+                val current = db.eventQueries.selectById(entityId).executeAsOneOrNull() ?: return
+                if (current.is_attending == 1L) {
+                    db.eventQueries.updateAttendance(
+                        is_attending = 0L,
+                        attendees_count = maxOf(0L, current.attendees_count - 1),
+                        id = entityId,
+                    )
+                }
+            }
+
+            OperationType.LEAVE_EVENT -> {
+                val current = db.eventQueries.selectById(entityId).executeAsOneOrNull() ?: return
+                if (current.is_attending == 0L) {
+                    db.eventQueries.updateAttendance(
+                        is_attending = 1L,
+                        attendees_count = current.attendees_count + 1,
+                        id = entityId,
+                    )
+                }
+            }
+
+            OperationType.CREATE_EVENT -> {
+                db.eventQueries.deleteById(entityId)
+            }
+
+            OperationType.SAVE_EVENT -> {
+                db.eventQueries.updateSaved(is_saved = 0L, id = entityId)
+            }
+
+            OperationType.UNSAVE_EVENT -> {
+                db.eventQueries.updateSaved(is_saved = 1L, id = entityId)
+            }
         }
     }
 

@@ -22,6 +22,7 @@ data class EventsState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val refreshError: String? = null,
+    val syncError: String? = null,
     val searchQuery: String = "",
     val activeFilter: TimeFilter = TimeFilter.ALL,
     val userLat: Double? = null,
@@ -46,6 +47,7 @@ class EventsViewModel(
         observeEvents()
         refreshEvents()
         loadRecommendedEvents()
+        observeSyncErrors()
     }
 
     private fun observeEvents() {
@@ -146,6 +148,18 @@ class EventsViewModel(
 
     fun clearRefreshError() {
         _state.value = _state.value.copy(refreshError = null)
+    }
+
+    fun clearSyncError() {
+        _state.value = _state.value.copy(syncError = null)
+    }
+
+    private fun observeSyncErrors() {
+        viewModelScope.launch {
+            eventRepository.syncErrors.collect { error ->
+                _state.value = _state.value.copy(syncError = error)
+            }
+        }
     }
 
     fun setSearchQuery(query: String) {
@@ -305,6 +319,7 @@ class EventsViewModel(
                         matchesTimeFilter(event.startsAt, current.activeFilter)
                 val matchesTags =
                     current.selectedCategories.isEmpty() ||
+                        event.category in current.selectedCategories ||
                         event.tags.any { it.category in current.selectedCategories }
                 notDismissed && matchesSearch && matchesTime && matchesTags
             }
