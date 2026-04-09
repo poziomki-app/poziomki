@@ -1,0 +1,47 @@
+Android distribution setup
+==========================
+
+Canonical release flow
+----------------------
+1. Update `versionCode` and `versionName` in `mobile/androidApp/build.gradle.kts`.
+2. Commit the release.
+3. Create and push a tag named `vX.Y.Z` that matches `versionName`.
+4. The `Android Release` GitHub Actions workflow builds signed APKs, checks lint, writes SHA-256 sums, and publishes a GitHub Release.
+5. The same workflow exports a tarball of the static site bundle and metadata bundle.
+
+Required GitHub Actions secrets
+-------------------------------
+- `ANDROID_RELEASE_KEYSTORE_B64`
+- `ANDROID_RELEASE_STORE_PASSWORD`
+- `ANDROID_RELEASE_KEY_ALIAS`
+- `ANDROID_RELEASE_KEY_PASSWORD`
+
+Recommended F-Droid repo secrets
+--------------------------------
+- `FDROID_KEYSTORE_B64`
+- `FDROID_KEYSTORE_PASSWORD`
+- `FDROID_KEY_ALIAS`
+- `FDROID_KEY_PASSWORD`
+
+Release asset naming
+--------------------
+- `poziomki-<version>-universal.apk`
+- `poziomki-<version>-arm64-v8a.apk`
+- `poziomki-<version>-armeabi-v7a.apk`
+- `poziomki-<version>-x86_64.apk`
+- `poziomki-<version>-sha256.txt`
+
+Public site deployment
+----------------------
+Static site files are stored in `docs/site/`.
+
+Expected deployment paths:
+- `https://poziomki.app/` -> `docs/site/index.html`
+- `https://poziomki.app/privacy/`
+- `https://poziomki.app/terms/`
+- `https://poziomki.app/download/android/`
+- `https://poziomki.app/fdroid/`
+
+F-Droid repo generation
+-----------------------
+Use `scripts/build_fdroid_repo.sh` after a signed Android release is available. The script expects APKs in a directory and generates a self-hosted repo bundle suitable for deployment under `https://poziomki.app/fdroid/repo/`.

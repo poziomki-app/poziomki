@@ -1,0 +1,93 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to publish, for example v0.18.1
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate tag matches versionName
+        run: |
+          version_name="$(sed -n 's/.*versionName = "\(.*\)"/\1/p' mobile/androidApp/build.gradle.kts | head -n1)"
+          if [[ -z "$version_name" ]]; then
+            echo "Could not read versionName" >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${{ github.event.inputs.tag_name }}"
+            if [[ -z "$release_tag" ]]; then
+              release_tag="v${version_name}"
+            fi
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ "$release_tag" != "v${version_name}" ]]; then
+            echo "Release tag ${release_tag} does not match versionName ${version_name}" >&2
+            exit 1
+          fi
+          echo "VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+
+      - name: Decode Android signing key
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+        run: |
+          if [[ -z "${ANDROID_RELEASE_KEYSTORE_B64}" ]]; then
+            echo "ANDROID_RELEASE_KEYSTORE_B64 is not configured" >&2
+            exit 1
+          fi
+          echo "$ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/android-release.jks"
+
+      - name: Lint and build signed Android release
+        working-directory: mobile
+        run: |
+          ./gradlew \
+            :androidApp:lintRelease \
+            :androidApp:assembleRelease \
+            -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks" \
+            -PreleaseStorePassword="${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}" \
+            -PreleaseKeyAlias="${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}" \
+            -PreleaseKeyPassword="${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}"
+
+      - name: Prepare release assets
+        run: bash scripts/prepare_android_release.sh
+
+      - name: Upload GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/android-release/*.apk
+            dist/android-release/*.txt
+            dist/android-release/*.tar.gz

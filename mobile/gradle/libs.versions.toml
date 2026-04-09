@@ -1,6 +1,7 @@
 [versions]
 agp = "9.0.1"
 androidx-activityCompose = "1.12.4"
+androidx-core = "1.17.0"
 androidx-ui-tooling = "1.10.4"
 coil = "3.4.0"
 compose-multiplatform = "1.10.1"
@@ -23,6 +24,7 @@ sqldelight = "2.2.1"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "androidx-ui-tooling" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "androidx-ui-tooling" }
 coil = { group = "io.coil-kt.coil3", name = "coil", version.ref = "coil" }
@@ -50,8 +52,6 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphorIcons" }
 
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
-kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version = "1.10.2" }
-play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
