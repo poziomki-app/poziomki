@@ -149,7 +149,6 @@ class SyncEngine(
             title = event.title,
             description = event.description,
             cover_image = event.coverImage,
-            category = event.category,
             location = event.location,
             latitude = event.latitude,
             longitude = event.longitude,
