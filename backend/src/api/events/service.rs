@@ -150,6 +150,16 @@ pub(in crate::api) fn validate_event_location(
     }
 }
 
+pub(in crate::api) fn validate_event_category(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 64) {
+        Err("Category must be at most 64 characters")
+    } else {
+        Ok(())
+    }
+}
+
 pub(in crate::api) fn validate_max_attendees(
     value: Option<i32>,
 ) -> std::result::Result<(), &'static str> {
@@ -217,6 +227,8 @@ pub(in crate::api) fn parse_create_dates(
     let title = parse_valid_title(headers, &payload.title)?;
 
     validate_event_description(payload.description.as_ref())
+        .map_err(|msg| Box::new(validation_error(headers, msg)))?;
+    validate_event_category(payload.category.as_ref())
         .map_err(|msg| Box::new(validation_error(headers, msg)))?;
     validate_event_location(payload.location.as_ref())
         .map_err(|msg| Box::new(validation_error(headers, msg)))?;
