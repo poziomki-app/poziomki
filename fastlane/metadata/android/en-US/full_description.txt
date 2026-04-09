@@ -1,0 +1,15 @@
+Poziomki is a university-focused social app that helps students meet through shared interests and local activity.
+
+What the Android app currently includes:
+
+- profiles with privacy controls
+- recommendations based on shared interests
+- event discovery and event creation
+- direct messaging
+- account export and account deletion tools
+
+Public resources:
+
+- privacy policy: https://poziomki.app/privacy
+- terms and moderation rules: https://poziomki.app/terms
+- source code: https://github.com/poziomki-app/poziomki

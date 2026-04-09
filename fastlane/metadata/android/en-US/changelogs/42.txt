@@ -1,0 +1,6 @@
+Initial Android distribution baseline for Obtainium and F-Droid preparation.
+
+- removed Google Play Services location dependency from Android runtime code
+- enabled a universal APK alongside split APKs for easier external installs
+- added public privacy, terms, download, and F-Droid site content
+- added GitHub release workflow and F-Droid metadata scaffolding

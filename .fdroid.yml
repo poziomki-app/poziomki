@@ -1,0 +1,41 @@
+Categories:
+  - Internet
+  - Social
+License: AGPL-3.0-only
+AuthorName: Poziomki
+AuthorEmail: kontakt@poziomki.app
+WebSite: https://poziomki.app
+SourceCode: https://github.com/poziomki-app/poziomki
+IssueTracker: https://github.com/poziomki-app/poziomki/issues
+Changelog: https://github.com/poziomki-app/poziomki/releases
+Summary: Social app for university students
+Description: |-
+  Poziomki is a student social app focused on matching by shared interests and getting people into local events.
+
+  The Android app includes:
+
+  * profile creation with university-focused visibility controls
+  * event discovery and creation
+  * direct messaging
+  * local profile and event recommendations
+  * account export and deletion tools
+
+  Distribution notes:
+
+  * canonical binaries are published on GitHub Releases
+  * the public privacy policy lives at https://poziomki.app/privacy
+  * the public terms and moderation rules live at https://poziomki.app/terms
+RepoType: git
+Repo: https://github.com/poziomki-app/poziomki
+CurrentVersion: 0.18.1
+CurrentVersionCode: 42
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+UpdateCheckData: mobile/androidApp/build.gradle.kts|versionCode = ([0-9]+)|mobile/androidApp/build.gradle.kts|versionName = \"([^\\\"]+)\"
+Binaries: https://github.com/poziomki-app/poziomki/releases/download/v%v/poziomki-%v-universal.apk
+MaintainerNotes: |-
+  Android release artifacts are built from the `mobile` Gradle project, with the app module at `mobile/androidApp`.
+
+  The F-Droid blocker around Google Play Services location was removed by switching to the Android framework location APIs.
+
+  Release tags are expected to be in the form `vX.Y.Z`.

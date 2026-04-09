@@ -22,9 +22,9 @@ android {
     defaultConfig {
         applicationId = "com.poziomki.rs.app"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 41
-        versionName = "0.18"
+        targetSdk = 36
+        versionCode = 42
+        versionName = "0.18.1"
 
         val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
@@ -43,7 +43,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
     buildTypes {

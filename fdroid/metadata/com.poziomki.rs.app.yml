@@ -1,0 +1,28 @@
+Categories:
+  - Internet
+  - Social
+License: AGPL-3.0-only
+AuthorName: Poziomki
+AuthorEmail: kontakt@poziomki.app
+WebSite: https://poziomki.app
+SourceCode: https://github.com/poziomki-app/poziomki
+IssueTracker: https://github.com/poziomki-app/poziomki/issues
+Changelog: https://github.com/poziomki-app/poziomki/releases
+Summary: Social app for university students
+Description: |-
+  Poziomki helps university students meet through shared interests and nearby events.
+
+  Core features:
+
+  * profiles and privacy controls
+  * recommendations based on shared interests
+  * local event creation and discovery
+  * direct messaging
+  * account export and deletion
+
+  Public policy pages:
+
+  * privacy policy: https://poziomki.app/privacy
+  * terms and moderation rules: https://poziomki.app/terms
+CurrentVersion: 0.18.1
+CurrentVersionCode: 42
