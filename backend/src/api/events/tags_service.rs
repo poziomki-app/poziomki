@@ -36,6 +36,8 @@ pub(in crate::api) async fn resolve_event_tag_ids(
         }
         if let Some(id) = find_or_create_event_tag(trimmed).await {
             resolved.push(id);
+        } else {
+            return Err(Box::new(validation_error(headers, "Invalid tag name")));
         }
     }
     resolved.sort_unstable();
@@ -59,7 +61,7 @@ pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
                 .collect();
             if matched.len() != ids.len() {
                 return Err(crate::error::AppError::Validation(
-                    "All tagIds must reference existing event tags".to_string(),
+                    "All tagIds must reference existing interest tags".to_string(),
                 ));
             }
         }
@@ -126,7 +128,7 @@ async fn validate_event_tag_ids(
     if matched.len() != parsed.len() {
         return Err(Box::new(validation_error(
             headers,
-            "All tagIds must reference existing event tags",
+            "All tagIds must reference existing interest tags",
         )));
     }
 

@@ -7,8 +7,8 @@ use crate::db::models::events::{Event, EventChangeset};
 use crate::db::models::profiles::Profile;
 
 use super::events_service::{
-    self, forbidden, load_event, require_auth_profile, validate_event_description,
-    validate_event_location, validate_max_attendees,
+    self, forbidden, load_event, require_auth_profile, validate_event_category,
+    validate_event_description, validate_event_location, validate_max_attendees,
 };
 
 type EventDates = (chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>);
@@ -36,6 +36,7 @@ fn validate_event_basic_fields(
         .map_err(val_err)?;
     validate_event_description(payload.description.as_ref().and_then(|d| d.as_ref()))
         .map_err(val_err)?;
+    validate_event_category(payload.category.as_ref().and_then(|c| c.as_ref())).map_err(val_err)?;
     validate_event_location(payload.location.as_ref().and_then(|l| l.as_ref())).map_err(val_err)?;
     validate_max_attendees(payload.max_attendees.flatten()).map_err(val_err)?;
 
@@ -91,6 +92,9 @@ fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> Event
     }
     if let Some(desc) = &payload.description {
         changeset.description = Some(desc.clone());
+    }
+    if let Some(category) = &payload.category {
+        changeset.category = Some(category.clone());
     }
     if let Some(loc) = &payload.location {
         changeset.location = Some(loc.clone());

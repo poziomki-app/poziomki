@@ -1,11 +1,10 @@
-use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
 use crate::db::models::event_tags::EventTag;
-use crate::db::models::tags::{NewTag, Tag};
+use crate::db::models::tags::Tag;
 use crate::db::schema::{event_attendees, event_tags, tags};
 
 pub(in crate::api) async fn find_or_create_event_tag(name: String) -> Option<Uuid> {
@@ -20,7 +19,7 @@ pub(in crate::api) async fn find_or_create_event_tag_with_conn(
     name: String,
 ) -> std::result::Result<Uuid, crate::error::AppError> {
     if let Some(tag) = tags::table
-        .filter(tags::scope.eq("event"))
+        .filter(tags::scope.eq("interest"))
         .filter(tags::name.eq(&name))
         .first::<Tag>(conn)
         .await
@@ -28,25 +27,9 @@ pub(in crate::api) async fn find_or_create_event_tag_with_conn(
     {
         return Ok(tag.id);
     }
-
-    let new_id = Uuid::new_v4();
-    let now = Utc::now();
-    let new_tag = NewTag {
-        id: new_id,
-        name,
-        scope: "event".to_string(),
-        category: None,
-        emoji: None,
-        parent_id: None,
-        onboarding_order: None,
-        created_at: now,
-        updated_at: now,
-    };
-    diesel::insert_into(tags::table)
-        .values(&new_tag)
-        .execute(conn)
-        .await?;
-    Ok(new_id)
+    Err(crate::error::AppError::Validation(
+        "All event tags must reference existing interest tags".to_string(),
+    ))
 }
 
 pub(in crate::api) async fn load_existing_event_tag_ids(
@@ -58,7 +41,7 @@ pub(in crate::api) async fn load_existing_event_tag_ids(
     }
 
     tags::table
-        .filter(tags::scope.eq("event"))
+        .filter(tags::scope.eq("interest"))
         .filter(tags::id.eq_any(tag_ids))
         .select(tags::id)
         .load::<Uuid>(conn)
