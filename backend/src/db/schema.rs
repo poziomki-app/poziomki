@@ -109,6 +109,7 @@ diesel::table! {
         title -> Varchar,
         description -> Nullable<Text>,
         cover_image -> Nullable<Varchar>,
+        category -> Nullable<Varchar>,
         location -> Nullable<Varchar>,
         starts_at -> Timestamptz,
         ends_at -> Nullable<Timestamptz>,

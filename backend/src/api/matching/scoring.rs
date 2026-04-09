@@ -154,6 +154,7 @@ fn affinity_score(
 pub(super) fn score_event(
     profile_affinity: &HashMap<Uuid, f64>,
     history_affinity: &HashMap<Uuid, f64>,
+    interest_categories: &HashSet<String>,
     event_tag_ids: &HashSet<Uuid>,
     event: &Event,
     user_geo: Option<(f64, f64, f64)>,
@@ -161,6 +162,11 @@ pub(super) fn score_event(
 ) -> f64 {
     let content_score = affinity_score(profile_affinity, event_tag_ids, tag_parent_map);
     let history_score = affinity_score(history_affinity, event_tag_ids, tag_parent_map);
+    let category_bonus = event
+        .category
+        .as_ref()
+        .filter(|category| interest_categories.contains(category.as_str()))
+        .map_or(0.0, |_| 12.0);
 
     if let Some((ulat, ulng, max_km)) = user_geo {
         let geo_bonus = match (event.latitude, event.longitude) {
@@ -169,9 +175,9 @@ pub(super) fn score_event(
             }
             _ => 0.0,
         };
-        content_score.mul_add(0.65, history_score * 0.20) + geo_bonus
+        content_score.mul_add(0.65, history_score * 0.20) + geo_bonus + category_bonus
     } else {
-        content_score.mul_add(0.65, history_score * 0.20)
+        content_score.mul_add(0.65, history_score * 0.20) + category_bonus
     }
 }
 
@@ -297,6 +303,7 @@ mod tests {
             title: "Test".to_string(),
             description: None,
             cover_image: None,
+            category: None,
             location: None,
             starts_at: chrono::Utc::now(),
             ends_at: None,
@@ -313,6 +320,7 @@ mod tests {
         let score = score_event(
             &profile_affinity,
             &history_affinity,
+            &HashSet::new(),
             &event_tags,
             &event,
             None,

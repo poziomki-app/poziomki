@@ -29,6 +29,7 @@ pub(super) struct MatchingProfileContext {
 pub(super) struct MatchingUserContext {
     pub(super) profile: Option<Profile>,
     pub(super) profile_tag_ids: HashSet<Uuid>,
+    pub(super) interest_categories: HashSet<String>,
     pub(super) saved_event_ids: HashSet<Uuid>,
     pub(super) joined_event_ids: HashSet<Uuid>,
     pub(super) more_event_ids: HashSet<Uuid>,
@@ -46,6 +47,23 @@ impl MatchingRepository {
             .load::<ProfileTag>(conn)
             .await?;
         Ok(tag_links.iter().map(|link| link.tag_id).collect())
+    }
+
+    async fn load_profile_interest_categories(
+        &self,
+        profile_id: Uuid,
+        conn: &mut crate::db::DbConn,
+    ) -> std::result::Result<HashSet<String>, crate::error::AppError> {
+        let rows = profile_tags::table
+            .inner_join(tags::table.on(tags::id.eq(profile_tags::tag_id)))
+            .filter(profile_tags::profile_id.eq(profile_id))
+            .filter(tags::scope.eq("interest"))
+            .filter(tags::category.is_not_null())
+            .select(tags::category)
+            .load::<Option<String>>(conn)
+            .await?;
+
+        Ok(rows.into_iter().flatten().collect())
     }
 
     async fn load_interaction_event_ids(
@@ -118,31 +136,41 @@ impl MatchingRepository {
             .first::<Profile>(conn)
             .await
             .optional()?;
-        let (profile_tag_ids, saved_event_ids, joined_event_ids, more_event_ids, less_event_ids) =
-            match &profile {
-                Some(profile) => {
-                    let (more, less) = self.load_feedback_event_ids(profile.id, conn).await?;
-                    (
-                        self.load_profile_tag_ids(profile.id, conn).await?,
-                        self.load_interaction_event_ids(profile.id, "saved", conn)
-                            .await?,
-                        self.load_interaction_event_ids(profile.id, "joined", conn)
-                            .await?,
-                        more,
-                        less,
-                    )
-                }
-                None => (
-                    HashSet::new(),
-                    HashSet::new(),
-                    HashSet::new(),
-                    HashSet::new(),
-                    HashSet::new(),
-                ),
-            };
+        let (
+            profile_tag_ids,
+            interest_categories,
+            saved_event_ids,
+            joined_event_ids,
+            more_event_ids,
+            less_event_ids,
+        ) = match &profile {
+            Some(profile) => {
+                let (more, less) = self.load_feedback_event_ids(profile.id, conn).await?;
+                (
+                    self.load_profile_tag_ids(profile.id, conn).await?,
+                    self.load_profile_interest_categories(profile.id, conn)
+                        .await?,
+                    self.load_interaction_event_ids(profile.id, "saved", conn)
+                        .await?,
+                    self.load_interaction_event_ids(profile.id, "joined", conn)
+                        .await?,
+                    more,
+                    less,
+                )
+            }
+            None => (
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ),
+        };
         Ok(MatchingUserContext {
             profile,
             profile_tag_ids,
+            interest_categories,
             saved_event_ids,
             joined_event_ids,
             more_event_ids,

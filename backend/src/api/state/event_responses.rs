@@ -12,6 +12,7 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) description: Option<String>,
     #[serde(rename = "coverImage")]
     pub(in crate::api) cover_image: Option<String>,
+    pub(in crate::api) category: Option<String>,
     pub(in crate::api) location: Option<String>,
     pub(in crate::api) latitude: Option<f64>,
     pub(in crate::api) longitude: Option<f64>,

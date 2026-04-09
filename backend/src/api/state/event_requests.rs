@@ -28,6 +28,8 @@ pub(in crate::api) struct CreateEventBody {
     #[serde(default)]
     pub(in crate::api) cover_image: Option<String>,
     #[serde(default)]
+    pub(in crate::api) category: Option<String>,
+    #[serde(default)]
     pub(in crate::api) location: Option<String>,
     pub(in crate::api) starts_at: String,
     #[serde(default)]
@@ -56,6 +58,8 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) description: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::api) cover_image: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub(in crate::api) category: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_some")]
     pub(in crate::api) location: Option<Option<String>>,
     #[serde(default)]
