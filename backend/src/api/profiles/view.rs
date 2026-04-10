@@ -86,6 +86,9 @@ pub(in crate::api) async fn profile_to_response(
         program,
         gradient_start: profile.gradient_start.clone(),
         gradient_end: profile.gradient_end.clone(),
+        xp: profile.xp,
+        streak_current: profile.streak_current,
+        streak_longest: profile.streak_longest,
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
     }
@@ -128,6 +131,9 @@ pub(in crate::api) async fn full_profile_response(
         gradient_end: profile.gradient_end.clone(),
         tags: profile_tags,
         is_bookmarked: false,
+        xp: profile.xp,
+        streak_current: profile.streak_current,
+        streak_longest: profile.streak_longest,
         created_at: profile.created_at.to_rfc3339(),
         updated_at: profile.updated_at.to_rfc3339(),
     })

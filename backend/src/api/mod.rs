@@ -23,6 +23,7 @@ mod search;
 mod settings;
 mod state;
 mod uploads;
+mod xp;
 
 pub(crate) use common::{
     auth_or_respond, env_non_empty, error_response, extract_filename, parse_uuid,
@@ -241,6 +242,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/settings", settings_routes())
         .nest("/api/v1", search_routes())
         .nest("/api/v1/chat", chat_routes())
+        .nest("/api/v1/xp", xp::handler::routes())
         .nest("/api/v1/ops", ops_routes())
         .layer(middleware::from_fn(observe_http_metrics))
         .layer(

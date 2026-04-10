@@ -7,6 +7,21 @@
 	}
 }
 
+poziomki.app, www.poziomki.app {
+	import secure_headers
+
+	handle_path /fdroid/repo/* {
+		root * /var/www/fdroid
+		file_server
+	}
+
+	handle {
+		root * /var/www/poziomki-app
+		try_files {path} {path}/ /index.html
+		file_server
+	}
+}
+
 mobile.poziomki.app {
 	import secure_headers
 

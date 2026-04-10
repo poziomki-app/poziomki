@@ -19,6 +19,11 @@ pub(in crate::api) struct ProfileResponse {
     pub(in crate::api) gradient_start: Option<String>,
     #[serde(rename = "gradientEnd")]
     pub(in crate::api) gradient_end: Option<String>,
+    pub(in crate::api) xp: i32,
+    #[serde(rename = "streakCurrent")]
+    pub(in crate::api) streak_current: i32,
+    #[serde(rename = "streakLongest")]
+    pub(in crate::api) streak_longest: i32,
     #[serde(rename = "createdAt")]
     pub(in crate::api) created_at: String,
     #[serde(rename = "updatedAt")]
@@ -53,6 +58,11 @@ pub(in crate::api) struct FullProfileResponse {
     pub(in crate::api) tags: Vec<TagResponse>,
     #[serde(rename = "isBookmarked")]
     pub(in crate::api) is_bookmarked: bool,
+    pub(in crate::api) xp: i32,
+    #[serde(rename = "streakCurrent")]
+    pub(in crate::api) streak_current: i32,
+    #[serde(rename = "streakLongest")]
+    pub(in crate::api) streak_longest: i32,
     #[serde(rename = "createdAt")]
     pub(in crate::api) created_at: String,
     #[serde(rename = "updatedAt")]

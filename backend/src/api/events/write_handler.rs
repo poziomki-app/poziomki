@@ -359,6 +359,12 @@ pub(in crate::api) async fn event_attend(
                 "failed to enqueue chat membership sync after attend"
             );
         }
+        let profile_id = profile.id;
+        tokio::spawn(async move {
+            if let Err(e) = crate::api::xp::service::award_xp(profile_id, 10).await {
+                tracing::warn!(error = %e, %profile_id, "failed to award XP for event attendance");
+            }
+        });
     }
 
     let data = build_event_response(&event, &profile.id).await?;
@@ -437,8 +443,11 @@ pub(in crate::api) async fn event_approve_attendee(
         );
     }
 
-    // Notify the approved user via ntfy
+    // Award XP to the approved attendee
     tokio::spawn(async move {
+        if let Err(e) = crate::api::xp::service::award_xp(target_profile_id, 10).await {
+            tracing::warn!(error = %e, profile_id = %target_profile_id, "failed to award XP for event approval");
+        }
         notify_event_approval(target_profile_id, &event.title, true).await;
     });
 

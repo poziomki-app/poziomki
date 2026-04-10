@@ -209,6 +209,10 @@ mod tests {
             gradient_end: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            xp: 0,
+            streak_current: 0,
+            streak_longest: 0,
+            streak_last_active: None,
         };
 
         let p = make_profile();
@@ -240,6 +244,10 @@ mod tests {
             gradient_end: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            xp: 0,
+            streak_current: 0,
+            streak_longest: 0,
+            streak_last_active: None,
         };
         let with_prog = Profile {
             program: Some("CS".to_string()),
