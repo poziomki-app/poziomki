@@ -21,10 +21,34 @@ type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;
 use crate::db::models::profiles::Profile;
+use crate::db::models::user_audit_log::NewUserAuditLog;
 use crate::db::schema::{
     conversations, event_attendees, events, profile_tags, profiles, sessions, uploads,
-    user_settings, users,
+    user_audit_log, user_settings, users,
 };
+
+/// Record a GDPR-relevant action on an account (deletion, export, password
+/// change). Best-effort: logs a warning on failure but never blocks the
+/// originating operation.
+async fn write_audit(user_pid: uuid::Uuid, action: &'static str) {
+    let Ok(mut conn) = crate::db::conn().await else {
+        tracing::warn!(action, "audit log skipped: no DB conn");
+        return;
+    };
+    let entry = NewUserAuditLog {
+        id: uuid::Uuid::new_v4(),
+        user_pid,
+        action: action.to_string(),
+        created_at: Utc::now(),
+    };
+    if let Err(e) = diesel::insert_into(user_audit_log::table)
+        .values(&entry)
+        .execute(&mut conn)
+        .await
+    {
+        tracing::warn!(action, error = %e, "audit log insert failed");
+    }
+}
 
 async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
@@ -171,6 +195,9 @@ pub(in crate::api) async fn delete_account(
         return Ok(unauthorized_error(&headers, "Invalid password"));
     }
 
+    // Record deletion request before wiping the user record so the audit
+    // entry survives the cascade.
+    write_audit(user.pid, "account_delete").await;
     delete_user_data(user.id).await?;
     invalidate_auth_cache_for_user_id(user.id).await;
 
@@ -224,6 +251,7 @@ pub(in crate::api) async fn change_password(
     .await?;
 
     invalidate_auth_cache_for_user_id(user.id).await;
+    write_audit(user.pid, "password_change").await;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
@@ -326,6 +354,8 @@ pub(in crate::api) async fn export_data(
         .finish()
         .map_err(|e| crate::error::AppError::message(format!("zip finish error: {e}")))?;
     let zip_bytes = cursor.into_inner();
+
+    write_audit(user.pid, "data_export").await;
 
     Ok((
         [

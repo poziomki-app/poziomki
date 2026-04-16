@@ -21,5 +21,6 @@ pub mod reports;
 pub mod sessions;
 pub mod tags;
 pub mod uploads;
+pub mod user_audit_log;
 pub mod user_settings;
 pub mod users;
