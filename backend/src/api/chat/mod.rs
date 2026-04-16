@@ -8,8 +8,9 @@ pub mod report_repo;
 pub mod ws;
 
 use axum::{
-    extract::{ws::WebSocketUpgrade, Path, State},
+    extract::{ws::WebSocketUpgrade, Path, Request, State},
     http::{HeaderMap, StatusCode},
+    middleware::Next,
     response::{IntoResponse, Response},
     Json,
 };
@@ -25,20 +26,24 @@ type Result<T> = crate::error::AppResult<T>;
 // WebSocket upgrade
 // ---------------------------------------------------------------------------
 
-pub async fn ws_upgrade(
-    State(ctx): State<AppContext>,
-    headers: HeaderMap,
-    upgrade: WebSocketUpgrade,
-) -> Response {
+pub async fn ws_upgrade(State(ctx): State<AppContext>, upgrade: WebSocketUpgrade) -> Response {
+    upgrade.on_upgrade(move |socket| ws::handle_socket(socket, ctx.chat_hub))
+}
+
+/// Route-level gate for the `/chat/ws` endpoint. Runs on the raw `Request`
+/// before any extractors, so the rate-limit check fires even in harnesses
+/// that can't satisfy Axum's `WebSocketUpgrade` preconditions (e.g. the
+/// in-process transport used by integration tests).
+pub async fn ws_upgrade_gate(req: Request, next: Next) -> Response {
     if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
-        &headers,
+        req.headers(),
         crate::api::ip_rate_limit::IpRateLimitAction::ChatWsUpgrade,
     )
     .await
     {
         return *response;
     }
-    upgrade.on_upgrade(move |socket| ws::handle_socket(socket, ctx.chat_hub))
+    next.run(req).await
 }
 
 // ---------------------------------------------------------------------------
