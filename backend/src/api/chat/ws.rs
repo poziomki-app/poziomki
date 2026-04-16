@@ -33,6 +33,11 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     // --- Step 2: Register in hub ---
     let mut hub_rx = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
+    // Separate channel for WS protocol-level Ping frames. Using the standard
+    // control frame (rather than an app-level Pong JSON) means the client's
+    // WebSocket stack auto-responds at the framing layer and no app code
+    // sees the heartbeat.
+    let (ping_tx, mut ping_rx) = mpsc::unbounded_channel::<()>();
 
     // Send initial conversation list
     let conv_list = conversations::list_for_user(user_id)
@@ -48,7 +53,9 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     }
 
     // --- Step 3: Main loop ---
-    // Spawn a writer task that drains hub messages + outbound messages
+    // Spawn a writer task that drains hub messages, outbound messages, and
+    // heartbeat pings. It owns `ws_tx` so all writes go through a single
+    // place.
     let writer_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -59,6 +66,11 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
                 }
                 Some(msg) = outbound_rx.recv() => {
                     if send_json(&mut ws_tx, &msg).await.is_err() {
+                        break;
+                    }
+                }
+                Some(()) = ping_rx.recv() => {
+                    if ws_tx.send(Message::Ping(Vec::new().into())).await.is_err() {
                         break;
                     }
                 }
@@ -120,10 +132,11 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
                     tracing::info!(user_id, "ws idle timeout; closing");
                     break;
                 }
-                // Nudge the client to prove liveness. We route through the
-                // same outbound channel the writer drains, so we don't need
-                // to share the sink.
-                let _ = outbound_tx.send(ServerMessage::Pong);
+                // Signal the writer task to send a WS-level Ping. The
+                // client's WebSocket library replies with Pong at the
+                // framing layer, which resets `last_seen` via the reader
+                // arm above without surfacing to app code.
+                let _ = ping_tx.send(());
             }
         }
     }
