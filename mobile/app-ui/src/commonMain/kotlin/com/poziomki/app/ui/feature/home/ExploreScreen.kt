@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Sparkle
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
@@ -37,6 +42,7 @@ import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -47,9 +53,11 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun ExploreScreen(
     onNavigateToProfile: (String) -> Unit,
     onNavigateToEventDetail: (String) -> Unit = {},
+    onNavigateToToday: () -> Unit = {},
     profileAvatarAction: @Composable () -> Unit = {},
     viewModel: ExploreViewModel = koinViewModel(),
 ) {
@@ -63,6 +71,13 @@ fun ExploreScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         ScreenHeader(title = "poznaj") {
+            IconButton(onClick = onNavigateToToday) {
+                Icon(
+                    imageVector = PhosphorIcons.Bold.Sparkle,
+                    contentDescription = "dzisiaj",
+                    tint = Primary,
+                )
+            }
             profileAvatarAction()
         }
 

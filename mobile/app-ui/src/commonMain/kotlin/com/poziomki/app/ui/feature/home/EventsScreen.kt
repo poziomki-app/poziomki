@@ -185,6 +185,7 @@ fun EventsScreen(
                             onEventSelected = { viewModel.selectNearbyEvent(it) },
                             onEventClick = onNavigateToEventDetail,
                             onRequestPermission = requestLocationPermission,
+                            onRetryLocation = { viewModel.retryNearby() },
                         )
                     }
                 }

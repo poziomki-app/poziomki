@@ -76,9 +76,9 @@ class WsConnection(
                     } catch (_: CancellationException) {
                         break
                     } catch (
-                        @Suppress("TooGenericExceptionCaught") e: Exception,
+                        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
                     ) {
-                        println("[WsConnection] error: ${e.message}")
+                        // connection error, will reconnect after backoff
                     }
                     _isConnected.value = false
                     sendChannel = null
@@ -150,7 +150,7 @@ class WsConnection(
                         }
                         delay(10_000L)
                         if (!pongReceived.value) {
-                            println("[WsConnection] pong timeout, reconnecting")
+                            // pong timeout, reconnecting
                             close()
                             break
                         }
@@ -175,13 +175,10 @@ class WsConnection(
                         }
 
                         is Frame.Close -> {
-                            println("[WsConnection] received close frame")
                             break
                         }
 
-                        is Frame.Binary -> {
-                            println("[WsConnection] unexpected binary frame, ignoring")
-                        }
+                        is Frame.Binary -> {}
 
                         else -> {}
                     }

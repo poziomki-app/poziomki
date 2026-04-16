@@ -46,7 +46,7 @@ private fun parseAttendeesPreview(jsonStr: String?): List<EventAttendeePreview> 
         emptyList()
     } else {
         runCatching { json.decodeFromString<List<EventAttendeePreview>>(jsonStr) }
-            .onFailure { println("ERROR/EventMapper: failed to parse attendees_preview — ${it.message}") }
+            .onFailure { /* parse error, return empty */ }
             .getOrDefault(emptyList())
     }
 
@@ -55,7 +55,7 @@ private fun parseTags(jsonStr: String?): List<Tag> =
         emptyList()
     } else {
         runCatching { json.decodeFromString<List<Tag>>(jsonStr) }
-            .onFailure { println("ERROR/EventMapper: failed to parse tags — ${it.message}") }
+            .onFailure { /* parse error, return empty */ }
             .getOrDefault(emptyList())
     }
 

@@ -40,7 +40,6 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPinLine
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
-import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -76,6 +75,7 @@ private const val MAP_HEIGHT_DP = 280
 private const val TAP_THRESHOLD_DEG = 0.005
 
 @Composable
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 internal fun NearbyEventsContent(
     events: List<Event>,
     selectedEventId: String?,
@@ -86,6 +86,7 @@ internal fun NearbyEventsContent(
     onEventSelected: (String) -> Unit,
     onEventClick: (String) -> Unit,
     onRequestPermission: () -> Unit = {},
+    onRetryLocation: () -> Unit = {},
 ) {
     if (isPermissionDenied) {
         Column(
@@ -120,7 +121,34 @@ internal fun NearbyEventsContent(
     }
 
     if (isLocationUnavailable) {
-        EmptyView("nie udało się pobrać lokalizacji")
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                PhosphorIcons.Bold.MapPinLine,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = TextMuted,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "nie udało się pobrać lokalizacji",
+                fontFamily = NunitoFamily,
+                fontSize = 14.sp,
+                color = TextMuted,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onRetryLocation) {
+                Text(
+                    text = "spróbuj ponownie",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    color = Primary,
+                )
+            }
+        }
         return
     }
 

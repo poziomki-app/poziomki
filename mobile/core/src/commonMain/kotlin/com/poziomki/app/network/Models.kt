@@ -83,6 +83,34 @@ data class SuccessResponse(
     val success: Boolean? = null,
 )
 
+// XP / gamification
+
+@Serializable
+data class XpTokenResponse(
+    val token: String,
+    val expiresAt: Long,
+)
+
+@Serializable
+data class ScanXpRequest(
+    val token: String,
+)
+
+@Serializable
+data class ScanXpResponse(
+    val xpGained: Int,
+)
+
+@Serializable
+data class ClaimTaskRequest(
+    val taskId: String,
+)
+
+@Serializable
+data class ClaimTaskResponse(
+    val xpGained: Int,
+)
+
 // Profile models
 
 @Serializable
@@ -99,6 +127,9 @@ data class Profile(
     val gradientEnd: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    val xp: Int = 0,
+    val streakCurrent: Int = 0,
+    val streakLongest: Int = 0,
 )
 
 @Serializable
@@ -115,6 +146,9 @@ data class ProfileWithTags(
     val gradientEnd: String? = null,
     val tags: List<Tag> = emptyList(),
     val isBookmarked: Boolean = false,
+    val xp: Int = 0,
+    val streakCurrent: Int = 0,
+    val streakLongest: Int = 0,
 )
 
 @Serializable

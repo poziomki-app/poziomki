@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
-import java.net.URL
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class NotificationHelper(
@@ -80,8 +82,14 @@ class NotificationHelper(
 
         if (avatarUrl != null) {
             runCatching {
-                val bitmap = URL(avatarUrl).openStream().use { BitmapFactory.decodeStream(it) }
-                if (bitmap != null) builder.setLargeIcon(bitmap)
+                val request = Request.Builder().url(avatarUrl).build()
+                avatarClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val bytes = response.body.byteStream().readNBytes(MAX_AVATAR_BYTES)
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (bitmap != null) builder.setLargeIcon(bitmap)
+                    }
+                }
             }
         }
 
@@ -124,8 +132,16 @@ class NotificationHelper(
 
     companion object {
         private const val GROUP_SUMMARY_BASE = 500
+        private const val MAX_AVATAR_BYTES = 512 * 1024
         const val CHANNEL_MESSAGES = "poz_messages"
         const val CHANNEL_SERVICE = "poz_push_service"
         const val SERVICE_NOTIFICATION_ID = 900
+
+        private val avatarClient =
+            OkHttpClient
+                .Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .build()
     }
 }

@@ -258,4 +258,20 @@ class ApiService(
             "/api/v1/chat/conversations/$conversationId/report",
             ReportConversationRequest(reason = reason, description = description),
         )
+
+    // XP / gamification
+
+    suspend fun getXpToken(): ApiResult<XpTokenResponse> = client.get("/api/v1/xp/token")
+
+    suspend fun scanXpToken(token: String): ApiResult<ScanXpResponse> =
+        client.post(
+            "/api/v1/xp/scan",
+            ScanXpRequest(token),
+        )
+
+    suspend fun claimTask(taskId: String): ApiResult<ClaimTaskResponse> =
+        client.post(
+            "/api/v1/xp/task",
+            ClaimTaskRequest(taskId),
+        )
 }
