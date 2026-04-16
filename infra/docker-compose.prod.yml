@@ -161,7 +161,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-    command: ["worker"]
+    entrypoint: ["/usr/local/bin/worker"]
     restart: unless-stopped
     depends_on:
       postgres:
