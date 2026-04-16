@@ -89,10 +89,10 @@ cdn.poziomki.app {
 	respond 404
 }
 
-rs.poziomki.app {
+api.poziomki.app {
 	import secure_headers
 	log {
-		output file /var/log/caddy/rs-access.log {
+		output file /var/log/caddy/api-access.log {
 			roll_size 50MiB
 			roll_keep 3
 			roll_keep_for 720h

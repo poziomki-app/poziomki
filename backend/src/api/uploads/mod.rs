@@ -40,7 +40,6 @@ use super::state::{
     DirectUploadPresignBody, DirectUploadPresignResponse, SuccessResponse, UploadResponse,
     UploadStatusResponse,
 };
-use super::{error_response, ErrorSpec};
 use crate::db::models::uploads::{NewUpload, UploadChangeset};
 use crate::jobs::enqueue_upload_variants_generation;
 use uploads_auth_service::{
@@ -53,7 +52,9 @@ use uploads_http::{
 use uploads_multipart::HandlerError;
 pub(super) use uploads_read_handler::{auth_check, file_get, file_status};
 use uploads_url_service::{encode_thumbhash, fallback_variant_urls, public_upload_url};
-use uploads_validation_service::{extract_filename_from_original_uri, validate_presign_payload};
+use uploads_validation_service::{
+    extract_filename_from_original_uri, validate_completed_upload_bytes, validate_presign_payload,
+};
 pub(super) use uploads_write_handler::{
     file_delete, file_upload, file_upload_complete, file_upload_presign,
 };

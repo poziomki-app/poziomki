@@ -1,12 +1,11 @@
 use super::{
-    bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
-    fallback_variant_urls, internal_upload_error, load_owned_upload, not_found, public_upload_url,
-    require_auth_profile, storage_delete, storage_signed_put_url, storage_upload,
-    uploads_multipart, uploads_resize, uploads_storage, validate_filename,
-    validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
-    DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
-    Multipart, NewUpload, Path, Response, Result, State, SuccessResponse, UploadChangeset,
-    UploadResponse, Utc, Uuid,
+    bad_request, create_upload_filename, enqueue_upload_variants_generation, fallback_variant_urls,
+    internal_upload_error, load_owned_upload, not_found, public_upload_url, require_auth_profile,
+    storage_delete, storage_signed_put_url, storage_upload, uploads_multipart, uploads_resize,
+    uploads_storage, validate_completed_upload_bytes, validate_filename, validate_presign_payload,
+    AppContext, DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody,
+    DirectUploadPresignResponse, HandlerError, HeaderMap, Json, Multipart, NewUpload, Path,
+    Response, Result, State, SuccessResponse, UploadChangeset, UploadResponse, Utc, Uuid,
 };
 use axum::response::IntoResponse;
 
@@ -148,22 +147,16 @@ pub(in crate::api) async fn file_upload_complete(
         let profile = require_auth_profile(&headers).await?;
         let upload = load_owned_upload(&headers, &payload.filename, profile.id).await?;
 
-        let exists = uploads_storage::exists(&payload.filename)
-            .await
-            .map_err(|_error| {
-                Box::new(error_response(
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    &headers,
-                    ErrorSpec {
-                        error: "Upload storage is unavailable".to_string(),
-                        code: "INTERNAL_ERROR",
-                        details: None,
-                    },
-                )) as HandlerError
-            })?;
-        if !exists {
-            return Err(Box::new(not_found(&headers)));
-        }
+        let bytes =
+            uploads_storage::read(&payload.filename)
+                .await
+                .map_err(|error| match error.kind {
+                    Some(uploads_storage::StorageErrorKind::NotFound) => {
+                        Box::new(not_found(&headers)) as HandlerError
+                    }
+                    _ => internal_upload_error(&headers, "Upload storage is unavailable"),
+                })?;
+        validate_completed_upload_bytes(&headers, &upload.mime_type, &bytes)?;
 
         if let Err(error) = enqueue_upload_variants_generation(&upload.id).await {
             tracing::warn!(
@@ -182,7 +175,7 @@ pub(in crate::api) async fn file_upload_complete(
                 id: upload.id.to_string(),
                 url,
                 filename: upload.filename,
-                size: 0,
+                size: bytes.len(),
                 mime_type: upload.mime_type,
                 thumbnail_url,
                 standard_url,

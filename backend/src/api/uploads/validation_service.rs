@@ -4,7 +4,8 @@ use super::uploads_http::bad_request;
 use super::uploads_multipart::HandlerError;
 use crate::api::state::{
     allowed_upload_mime, is_chat_context, is_s3_storage_configured, max_upload_size_bytes,
-    parse_upload_context, validate_filename, DirectUploadPresignBody, UploadContext,
+    parse_upload_context, validate_filename, validate_image_dimensions, validate_magic_bytes,
+    DirectUploadPresignBody, UploadContext,
 };
 
 pub(super) fn extract_filename_from_original_uri(
@@ -93,4 +94,21 @@ pub(super) fn check_upload_constraints(
         )));
     }
     Ok(())
+}
+
+pub(super) fn validate_completed_upload_bytes(
+    headers: &HeaderMap,
+    mime_type: &str,
+    bytes: &[u8],
+) -> std::result::Result<(), HandlerError> {
+    check_upload_constraints(headers, mime_type, bytes.len())?;
+    if !validate_magic_bytes(bytes, mime_type) {
+        return Err(Box::new(bad_request(
+            headers,
+            "INVALID_FILE_CONTENT",
+            "Content does not match type",
+        )));
+    }
+    validate_image_dimensions(bytes, mime_type)
+        .map_err(|message| Box::new(bad_request(headers, "IMAGE_TOO_LARGE", message)))
 }

@@ -1,5 +1,6 @@
 use axum::http::{header, HeaderMap, HeaderValue};
 use s3::{creds::Credentials, error::S3Error, Bucket, Region};
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use url::Url;
 
@@ -8,8 +9,14 @@ const DEFAULT_PRESIGN_EXPIRY_SECS: u64 = 3600;
 const MAX_PRESIGN_EXPIRY_SECS: u32 = 604_800;
 
 #[derive(Clone)]
+enum StorageBackend {
+    S3(Box<Bucket>),
+    Local { root: PathBuf },
+}
+
+#[derive(Clone)]
 struct StorageConfig {
-    bucket: Box<Bucket>,
+    backend: StorageBackend,
     public_url: Option<String>,
     presign_expiry_secs: u64,
     object_prefix: String,
@@ -70,7 +77,41 @@ fn object_path(object_prefix: &str, filename: &str) -> String {
     format!("/{object_prefix}{filename}")
 }
 
-fn build_bucket() -> Result<StorageConfig, String> {
+fn local_storage_root() -> Option<PathBuf> {
+    env_any(&["UPLOAD_STORAGE_DIR"])
+        .map(PathBuf::from)
+        .or_else(|| {
+            let is_test_database = std::env::var("DATABASE_URL")
+                .ok()
+                .is_some_and(|url| url.contains("poziomki-backend_development"));
+            if cfg!(debug_assertions) && is_test_database {
+                Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-uploads"))
+            } else {
+                None
+            }
+        })
+}
+
+fn local_object_path(root: &Path, object_prefix: &str, filename: &str) -> PathBuf {
+    root.join(object_prefix.trim_matches('/')).join(filename)
+}
+
+fn build_storage() -> Result<StorageConfig, String> {
+    let object_prefix = normalize_prefix(
+        env_any(&["IMGPROXY_ALLOWED_PREFIX"])
+            .as_deref()
+            .unwrap_or("uploads/"),
+    )?;
+
+    if let Some(root) = local_storage_root() {
+        return Ok(StorageConfig {
+            backend: StorageBackend::Local { root },
+            public_url: None,
+            presign_expiry_secs: parse_presign_expiry_secs(),
+            object_prefix,
+        });
+    }
+
     let endpoint = env_any(&["GARAGE_S3_ENDPOINT"])
         .ok_or_else(|| "Missing S3 endpoint. Set GARAGE_S3_ENDPOINT.".to_string())?;
     let bucket_name = env_any(&["GARAGE_S3_BUCKET"])
@@ -82,11 +123,6 @@ fn build_bucket() -> Result<StorageConfig, String> {
     let region_name = env_any(&["GARAGE_S3_REGION"]).unwrap_or_else(|| DEFAULT_REGION.to_string());
     let public_url = env_any(&["GARAGE_S3_PUBLIC_URL"]);
     let virtual_host = parse_bool_env("GARAGE_S3_VIRTUAL_HOST_STYLE", false);
-    let object_prefix = normalize_prefix(
-        env_any(&["IMGPROXY_ALLOWED_PREFIX"])
-            .as_deref()
-            .unwrap_or("uploads/"),
-    )?;
 
     let region = Region::Custom {
         region: region_name,
@@ -103,7 +139,7 @@ fn build_bucket() -> Result<StorageConfig, String> {
     };
 
     Ok(StorageConfig {
-        bucket,
+        backend: StorageBackend::S3(bucket),
         public_url,
         presign_expiry_secs: parse_presign_expiry_secs(),
         object_prefix,
@@ -111,7 +147,7 @@ fn build_bucket() -> Result<StorageConfig, String> {
 }
 
 fn load_storage() -> Result<StorageConfig, String> {
-    build_bucket()
+    build_storage()
 }
 
 fn storage() -> Result<&'static StorageConfig, String> {
@@ -164,53 +200,101 @@ pub(super) async fn upload(
     mime_type: &str,
 ) -> Result<(), StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
-    let response = config
-        .bucket
-        .put_object_with_content_type(
-            object_path(&config.object_prefix, filename),
-            bytes,
-            mime_type,
-        )
-        .await
-        .map_err(|err| map_s3_error(&err))?;
-    ensure_ok_status(response.status_code())
+    match &config.backend {
+        StorageBackend::S3(bucket) => {
+            let response = bucket
+                .put_object_with_content_type(
+                    object_path(&config.object_prefix, filename),
+                    bytes,
+                    mime_type,
+                )
+                .await
+                .map_err(|err| map_s3_error(&err))?;
+            ensure_ok_status(response.status_code())
+        }
+        StorageBackend::Local { root } => {
+            let path = local_object_path(root, &config.object_prefix, filename);
+            if let Some(parent) = path.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|_err| storage_error(None))?;
+            }
+            tokio::fs::write(path, bytes)
+                .await
+                .map_err(|_err| storage_error(None))
+        }
+    }
 }
 
 pub(in crate::api) async fn read(filename: &str) -> Result<Vec<u8>, StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
-    let response = config
-        .bucket
-        .get_object(object_path(&config.object_prefix, filename))
-        .await
-        .map_err(|err| map_s3_error(&err))?;
-    ensure_ok_status(response.status_code())?;
-    Ok(response.to_vec())
+    match &config.backend {
+        StorageBackend::S3(bucket) => {
+            let response = bucket
+                .get_object(object_path(&config.object_prefix, filename))
+                .await
+                .map_err(|err| map_s3_error(&err))?;
+            ensure_ok_status(response.status_code())?;
+            Ok(response.to_vec())
+        }
+        StorageBackend::Local { root } => {
+            tokio::fs::read(local_object_path(root, &config.object_prefix, filename))
+                .await
+                .map_err(|err| {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        storage_error(Some(StorageErrorKind::NotFound))
+                    } else {
+                        storage_error(None)
+                    }
+                })
+        }
+    }
 }
 
 pub(in crate::api) async fn exists(filename: &str) -> Result<bool, StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
-    let (_head, status_code) = config
-        .bucket
-        .head_object(object_path(&config.object_prefix, filename))
-        .await
-        .map_err(|err| map_s3_error(&err))?;
-    if (200..300).contains(&status_code) {
-        return Ok(true);
+    match &config.backend {
+        StorageBackend::S3(bucket) => {
+            let (_head, status_code) = bucket
+                .head_object(object_path(&config.object_prefix, filename))
+                .await
+                .map_err(|err| map_s3_error(&err))?;
+            if (200..300).contains(&status_code) {
+                return Ok(true);
+            }
+            if status_code == 404 {
+                return Ok(false);
+            }
+            Err(storage_error(None))
+        }
+        StorageBackend::Local { root } => {
+            tokio::fs::try_exists(local_object_path(root, &config.object_prefix, filename))
+                .await
+                .map_err(|_err| storage_error(None))
+        }
     }
-    if status_code == 404 {
-        return Ok(false);
-    }
-    Err(storage_error(None))
 }
 
 pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
-    let response = config
-        .bucket
-        .delete_object(object_path(&config.object_prefix, filename))
-        .await
-        .map_err(|err| map_s3_error(&err))?;
-    ensure_ok_status(response.status_code())
+    match &config.backend {
+        StorageBackend::S3(bucket) => {
+            let response = bucket
+                .delete_object(object_path(&config.object_prefix, filename))
+                .await
+                .map_err(|err| map_s3_error(&err))?;
+            ensure_ok_status(response.status_code())
+        }
+        StorageBackend::Local { root } => {
+            match tokio::fs::remove_file(local_object_path(root, &config.object_prefix, filename))
+                .await
+            {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(_err) => Err(storage_error(None)),
+            }
+        }
+    }
 }
 
 pub(in crate::api) async fn signed_put_url(
@@ -218,6 +302,9 @@ pub(in crate::api) async fn signed_put_url(
     mime_type: &str,
 ) -> Result<String, StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
+    let StorageBackend::S3(bucket) = &config.backend else {
+        return Err(storage_error(None));
+    };
     let mut headers = HeaderMap::new();
     let content_type = HeaderValue::from_str(mime_type).map_err(|_err| storage_error(None))?;
     headers.insert(header::CONTENT_TYPE, content_type);
@@ -226,8 +313,7 @@ pub(in crate::api) async fn signed_put_url(
         HeaderValue::from_static("private, max-age=31536000"),
     );
 
-    let signed = config
-        .bucket
+    let signed = bucket
         .presign_put(
             object_path(&config.object_prefix, filename),
             presign_expiry_secs_u32(config.presign_expiry_secs),

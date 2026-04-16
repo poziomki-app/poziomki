@@ -112,7 +112,7 @@ services:
       PORT: 5150
       METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      SERVER_HOST: ${SERVER_HOST:-https://api.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-16}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
@@ -171,7 +171,7 @@ services:
     environment:
       RUST_ENV: production
       METRICS_PORT: 9093
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      SERVER_HOST: ${SERVER_HOST:-https://api.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
