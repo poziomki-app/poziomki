@@ -171,7 +171,10 @@ fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str) -> Option<M
 
 pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), String> {
     if !super::env_truthy("SMTP_ENABLE") {
-        tracing::debug!("Mail disabled, skipping OTP email to {to}");
+        tracing::debug!(
+            "Mail disabled, skipping OTP email to {}",
+            crate::api::redact_email(to)
+        );
         return Ok(());
     }
 
@@ -212,7 +215,10 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
             .build();
         match mailer.send_raw(&envelope, &body).await {
             Ok(_) => {
-                tracing::info!("OTP email delivered to {to} via {mx_host}");
+                tracing::info!(
+                    "OTP email delivered to {} via {mx_host}",
+                    crate::api::redact_email(to)
+                );
                 return Ok(());
             }
             Err(e) => last_err = format!("{mx_host}: {e}"),
