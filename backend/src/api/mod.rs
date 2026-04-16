@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
@@ -244,6 +245,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/chat", chat_routes())
         .nest("/api/v1/xp", xp::handler::routes())
         .nest("/api/v1/ops", ops_routes())
+        .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
         .layer(middleware::from_fn(observe_http_metrics))
         .layer(
             TraceLayer::new_for_http()

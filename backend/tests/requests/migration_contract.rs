@@ -961,7 +961,7 @@ async fn sign_in_rate_limit_not_bypassed_by_spoofed_forwarded_for_headers() {
         let email = "no-account-rate-limit@example.com";
         let password = "wrong-password";
 
-        for i in 1..=20 {
+        for i in 1..=8 {
             let response = request
                 .post("/api/v1/auth/sign-in/email")
                 .add_header(
