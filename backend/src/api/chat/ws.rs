@@ -15,6 +15,11 @@ const AUTH_TIMEOUT_SECS: u64 = 5;
 const DEFAULT_HISTORY_LIMIT: i64 = 50;
 const MAX_HISTORY_LIMIT: i64 = 200;
 const SEND_RATE_LIMIT: u32 = 10;
+/// Interval at which the server pings idle sockets so half-open TCP
+/// connections are reaped without waiting on kernel keepalive.
+const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+/// Close the socket if no frame (including pong) arrives within this window.
+const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
 
 /// Handle a WebSocket connection after Axum upgrade.
 pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
@@ -62,41 +67,64 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         }
     });
 
-    // Reader loop: process incoming client messages
+    // Reader loop: process incoming client messages + server heartbeat.
     let mut send_count: u32 = 0;
     let mut send_window = tokio::time::Instant::now();
+    let mut last_seen = tokio::time::Instant::now();
+    let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
+    // First tick fires immediately — skip it so we don't ping a freshly-
+    // opened socket before the client has settled.
+    heartbeat.tick().await;
 
-    while let Some(Ok(frame)) = ws_rx.next().await {
-        match frame {
-            Message::Text(text) => {
-                let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
-                match parsed {
-                    Ok(client_msg) => {
-                        // Rate-limit Send messages (10/sec)
-                        if matches!(&client_msg, ClientMessage::Send { .. }) {
-                            if send_window.elapsed() >= std::time::Duration::from_secs(1) {
-                                send_count = 0;
-                                send_window = tokio::time::Instant::now();
+    loop {
+        tokio::select! {
+            frame = ws_rx.next() => {
+                let Some(Ok(frame)) = frame else { break };
+                last_seen = tokio::time::Instant::now();
+                match frame {
+                    Message::Text(text) => {
+                        let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
+                        match parsed {
+                            Ok(client_msg) => {
+                                // Rate-limit Send messages (10/sec)
+                                if matches!(&client_msg, ClientMessage::Send { .. }) {
+                                    if send_window.elapsed() >= std::time::Duration::from_secs(1) {
+                                        send_count = 0;
+                                        send_window = tokio::time::Instant::now();
+                                    }
+                                    send_count += 1;
+                                    if send_count > SEND_RATE_LIMIT {
+                                        let _ = outbound_tx.send(ServerMessage::Error {
+                                            message: "rate limited: too many messages".to_string(),
+                                        });
+                                        continue;
+                                    }
+                                }
+                                handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
                             }
-                            send_count += 1;
-                            if send_count > SEND_RATE_LIMIT {
+                            Err(e) => {
                                 let _ = outbound_tx.send(ServerMessage::Error {
-                                    message: "rate limited: too many messages".to_string(),
+                                    message: format!("invalid message: {e}"),
                                 });
-                                continue;
                             }
                         }
-                        handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
                     }
-                    Err(e) => {
-                        let _ = outbound_tx.send(ServerMessage::Error {
-                            message: format!("invalid message: {e}"),
-                        });
-                    }
+                    Message::Close(_) => break,
+                    // Pong / Ping / Binary all count as "still alive" via the
+                    // last_seen update above; we don't otherwise act on them.
+                    _ => {}
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            _ = heartbeat.tick() => {
+                if last_seen.elapsed() > IDLE_TIMEOUT {
+                    tracing::info!(user_id, "ws idle timeout; closing");
+                    break;
+                }
+                // Nudge the client to prove liveness. We route through the
+                // same outbound channel the writer drains, so we don't need
+                // to share the sink.
+                let _ = outbound_tx.send(ServerMessage::Pong);
+            }
         }
     }
 
