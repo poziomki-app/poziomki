@@ -17,6 +17,7 @@ pub(crate) mod chat;
 mod common;
 mod events;
 pub(crate) mod imgproxy_signing;
+pub mod ip_rate_limit;
 mod matching;
 mod profiles;
 mod root;

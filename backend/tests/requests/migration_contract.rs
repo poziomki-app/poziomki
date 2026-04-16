@@ -575,6 +575,34 @@ async fn matching_and_uploads_endpoints_available() {
 
 #[tokio::test]
 #[serial]
+async fn ws_upgrade_is_rate_limited_per_ip() {
+    request(|request, _ctx| async move {
+        // Cap is 60/min (CHAT_WS_UPGRADE_MAX_PER_MIN). The 61st request from
+        // the same forwarded IP should receive 429 even though each request
+        // targets a different pretend-user.
+        let ip_header = (
+            HeaderName::from_static("x-forwarded-for"),
+            HeaderValue::from_static("203.0.113.200"),
+        );
+
+        let mut last_status = 0;
+        for _ in 0..61 {
+            let response = request
+                .get("/api/v1/chat/ws")
+                .add_header(ip_header.0.clone(), ip_header.1.clone())
+                .await;
+            last_status = response.status_code().as_u16();
+        }
+        assert_eq!(
+            last_status, 429,
+            "expected the 61st ws_upgrade to be rate-limited"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn sign_in_verifies_hashed_password() {
     request(|request, _ctx| async move {
         let sign_up = request

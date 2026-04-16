@@ -25,7 +25,19 @@ type Result<T> = crate::error::AppResult<T>;
 // WebSocket upgrade
 // ---------------------------------------------------------------------------
 
-pub async fn ws_upgrade(State(ctx): State<AppContext>, upgrade: WebSocketUpgrade) -> Response {
+pub async fn ws_upgrade(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::ChatWsUpgrade,
+    )
+    .await
+    {
+        return *response;
+    }
     upgrade.on_upgrade(move |socket| ws::handle_socket(socket, ctx.chat_hub))
 }
 
