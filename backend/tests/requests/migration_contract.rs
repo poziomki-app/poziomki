@@ -797,6 +797,59 @@ async fn uploads_auth_check_accepts_owned_variant_url() {
 
 #[tokio::test]
 #[serial]
+async fn uploads_auth_check_rejects_other_users_variant_url() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "idor-owner@example.com", "Owner").await;
+        let (attacker_key, attacker_value) =
+            create_user_with_profile(&request, "idor-attacker@example.com", "Attacker").await;
+
+        let upload_payload = upload_png(&request, &owner_key, &owner_value).await;
+        let owner_filename = upload_payload["data"]["filename"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .expect("filename should be present");
+        let thumb_filename = upload_payload["data"]["thumbnail_url"]
+            .as_str()
+            .and_then(|url| url.strip_prefix("/api/v1/uploads/"))
+            .map(ToOwned::to_owned)
+            .expect("dev thumbnail URL shape");
+
+        // Attacker tries to auth-check the original: must not succeed.
+        let auth_check_original = request
+            .get("/api/v1/uploads/auth-check")
+            .add_header(attacker_key.clone(), attacker_value.clone())
+            .add_header(
+                HeaderName::from_static("x-original-uri"),
+                HeaderValue::from_str(&format!("/uploads/{owner_filename}")).expect("valid header"),
+            )
+            .await;
+        assert_ne!(
+            auth_check_original.status_code(),
+            200,
+            "attacker must not auth-check owner's original file"
+        );
+
+        // Attacker tries to auth-check the thumb variant: must not succeed.
+        let auth_check_variant = request
+            .get("/api/v1/uploads/auth-check")
+            .add_header(attacker_key, attacker_value)
+            .add_header(
+                HeaderName::from_static("x-original-uri"),
+                HeaderValue::from_str(&format!("/uploads/{thumb_filename}")).expect("valid header"),
+            )
+            .await;
+        assert_ne!(
+            auth_check_variant.status_code(),
+            200,
+            "attacker must not auth-check owner's variant file"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn upload_returns_error_when_upload_row_insert_fails() {
     request(|request, _ctx| async move {
         use diesel_async::RunQueryDsl;
