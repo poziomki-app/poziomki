@@ -63,7 +63,7 @@ pub(super) async fn sign_up(
         let code = generate_otp_code();
         upsert_otp(&normalized_email, &code).await?;
         if let Err(error) = enqueue_otp_email(&normalized_email, &code).await {
-            tracing::error!(%error, email = %normalized_email, "failed to enqueue OTP email after sign up");
+            tracing::error!(%error, email = %crate::api::redact_email(&normalized_email), "failed to enqueue OTP email after sign up");
         }
     }
 
@@ -125,7 +125,7 @@ async fn maybe_resend_otp(email: &str) -> crate::error::AppResult<()> {
     let code = generate_otp_code();
     upsert_otp(email, &code).await?;
     if let Err(error) = enqueue_otp_email(email, &code).await {
-        tracing::error!(%error, email = %email, "failed to enqueue OTP email after resend");
+        tracing::error!(%error, email = %crate::api::redact_email(email), "failed to enqueue OTP email after resend");
     }
     Ok(())
 }
@@ -166,7 +166,7 @@ pub(super) async fn forgot_password(
             let code = generate_otp_code();
             if upsert_otp(&email, &code).await.is_ok() {
                 if let Err(error) = enqueue_otp_email(&email, &code).await {
-                    tracing::error!(%error, email = %email, "failed to enqueue OTP for forgot password");
+                    tracing::error!(%error, email = %crate::api::redact_email(&email), "failed to enqueue OTP for forgot password");
                 }
             }
         }
@@ -202,7 +202,7 @@ async fn maybe_resend_forgot_password_otp(email: &str) -> crate::error::AppResul
     let code = generate_otp_code();
     upsert_otp(email, &code).await?;
     if let Err(error) = enqueue_otp_email(email, &code).await {
-        tracing::error!(%error, email = %email, "failed to enqueue OTP for forgot password resend");
+        tracing::error!(%error, email = %crate::api::redact_email(email), "failed to enqueue OTP for forgot password resend");
     }
     Ok(())
 }
