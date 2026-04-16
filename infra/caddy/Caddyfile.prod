@@ -3,6 +3,21 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# Clickjacking: refuse to be framed, in both the legacy and
+		# modern dialects so older clients respect at least one.
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		# Deny sensor / payment capabilities the web app doesn't use.
+		# The mobile clients call native APIs directly, so this has no
+		# effect on them.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+		# COOP isolates the top-level browsing context; CORP keeps
+		# assets opt-in-loadable within the poziomki.app family (any
+		# *.poziomki.app subdomain — so cdn.poziomki.app images still
+		# render in the poziomki.app web shell) but blocks fetches
+		# from unrelated origins.
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-site"
 		-Server
 	}
 }
