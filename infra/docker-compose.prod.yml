@@ -136,7 +136,7 @@ services:
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
+      test: ["CMD", "/usr/local/bin/poziomki_backend-cli", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -161,7 +161,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-    command: ["worker"]
+    entrypoint: ["/usr/local/bin/worker"]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -199,11 +199,7 @@ services:
     volumes:
       - ./ops/dkim/private.key:/etc/dkim/private.key:ro
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "test -f /tmp/poziomki-outbox-worker-heartbeat && test $(( $(date +%s) - $(cat /tmp/poziomki-outbox-worker-heartbeat) )) -lt 30",
-        ]
+      test: ["CMD", "/usr/local/bin/worker", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -253,7 +249,7 @@ services:
       GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
       IMGPROXY_PURGE_SECRET: ${IMGPROXY_PURGE_SECRET:-}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3080/health"]
+      test: ["CMD", "/usr/local/bin/healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 5

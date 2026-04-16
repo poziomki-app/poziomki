@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static OUTBOX_WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 pub(super) const OUTBOX_LOCK_TIMEOUT_SECS: i64 = 300;
 const OUTBOX_DEFAULT_MAX_ATTEMPTS: i32 = 10;
-pub(super) const OUTBOX_WORKER_HEARTBEAT_PATH: &str = "/tmp/poziomki-outbox-worker-heartbeat";
+pub const OUTBOX_WORKER_HEARTBEAT_PATH: &str = "/tmp/poziomki-outbox-worker-heartbeat";
 
 #[derive(Debug, Clone)]
 pub(super) struct OutboxJob {
