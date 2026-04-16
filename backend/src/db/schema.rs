@@ -234,6 +234,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_audit_log (id) {
+        id -> Uuid,
+        user_pid -> Uuid,
+        action -> Text,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     sessions (id) {
         id -> Uuid,
         user_id -> Int4,
@@ -359,5 +368,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_settings,
     users,
     task_completions,
+    user_audit_log,
     xp_scans,
 );
