@@ -1,4 +1,5 @@
-FROM rust:1.93-bookworm AS chef
+# rust:1.93-bookworm
+FROM rust@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app/backend
 
@@ -15,12 +16,11 @@ COPY --from=planner /app/backend/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY . /app/
-RUN cargo build --release --bin poziomki_backend-cli --bin worker \
-    && strip /app/backend/target/release/poziomki_backend-cli /app/backend/target/release/worker
+RUN cargo build --release --bin poziomki_backend-cli --bin worker
 
-FROM debian:bookworm-slim AS runtime-deps
+# debian:bookworm-slim
+FROM debian@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d AS runtime-deps
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libpq5 libwebp7 ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
@@ -28,24 +28,24 @@ RUN apt-get update \
 RUN set -eux; \
     mkdir -p /staging/usr/lib/x86_64-linux-gnu /staging/etc/ssl/certs; \
     cp -aL /etc/ssl/certs/ca-certificates.crt /staging/etc/ssl/certs/; \
-    for lib in /usr/lib/x86_64-linux-gnu/libpq.so* \
-               /usr/lib/x86_64-linux-gnu/libwebp.so* \
-               /usr/lib/x86_64-linux-gnu/libsharpyuv.so*; do \
-        [ -e "$lib" ] && cp -aL "$lib" /staging/usr/lib/x86_64-linux-gnu/ || true; \
+    for soname in libpq.so.5 libwebp.so.7 libsharpyuv.so.0; do \
+        cp -aL /usr/lib/x86_64-linux-gnu/${soname}* /staging/usr/lib/x86_64-linux-gnu/; \
     done; \
-    for root in /staging/usr/lib/x86_64-linux-gnu/libpq.so* \
-                /staging/usr/lib/x86_64-linux-gnu/libwebp.so*; do \
-        [ -e "$root" ] || continue; \
+    for root in /staging/usr/lib/x86_64-linux-gnu/libpq.so.5 \
+                /staging/usr/lib/x86_64-linux-gnu/libwebp.so.7; do \
         ldd "$root" | awk '/=>/ && $3 ~ /^\// { print $3 }'; \
     done | sort -u | while read -r dep; do \
-        [ -f "$dep" ] && cp -aL "$dep" /staging/usr/lib/x86_64-linux-gnu/ || true; \
+        dest="/staging${dep}"; \
+        [ -e "$dest" ] && continue; \
+        mkdir -p "$(dirname "$dest")"; \
+        cp -aL "$dep" "$dest"; \
     done
 
-FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+# gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian12@sha256:e2d29aec8061843706b7e484c444f78fafb05bfe47745505252b1769a05d14f1 AS runtime
 WORKDIR /app
 
 COPY --from=runtime-deps /staging/ /
-COPY --from=ghcr.io/tarampampam/curl:8.6.0 /bin/curl /usr/local/bin/curl
 COPY --from=builder /app/backend/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
 COPY --from=builder /app/backend/target/release/worker /usr/local/bin/worker
 
