@@ -45,6 +45,7 @@ class PushManager(
             }
 
         val ntfyServer = config.ntfyServer ?: return
+        if (!isAllowedNtfyServer(ntfyServer)) return
         val ntfyTopic = "poz_$deviceId"
 
         // Register push subscription with backend
@@ -61,5 +62,15 @@ class PushManager(
     private fun stopPushService() {
         val intent = Intent(appContext, NtfyPushService::class.java)
         appContext.stopService(intent)
+    }
+
+    companion object {
+        private val ALLOWED_NTFY_HOSTS = setOf("ntfy.poziomki.app")
+
+        private fun isAllowedNtfyServer(url: String): Boolean =
+            url.startsWith("https://") &&
+                ALLOWED_NTFY_HOSTS.any { host ->
+                    url == "https://$host" || url.startsWith("https://$host/")
+                }
     }
 }
