@@ -1,5 +1,21 @@
 [advisories]
 version = 2
+ignore = [
+    # RUSTSEC-2023-0071: Marvin timing side-channel in the `rsa` crate
+    # (pulled in transitively by lettre for SMTP). Exploitation requires an
+    # attacker able to observe RSA signing timing over the network — which
+    # applies to servers exposing RSA endpoints, not an SMTP *client*
+    # performing TLS to a trusted provider. No patched `rsa` release
+    # exists; re-evaluate when RustCrypto/RSA lands constant-time fixes
+    # or when lettre drops the rsa dependency.
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0097: rand 0.8 is unsound when a custom logger calls
+    # `rand::rng()`. We do not install a custom logger that calls into rand,
+    # and the dependency is only transitively pulled in by lettre → rsa →
+    # num-bigint-dig for email crypto. Re-evaluate when lettre ships an
+    # update that no longer depends on rand 0.8.
+    "RUSTSEC-2026-0097",
+]
 
 [licenses]
 version = 2
