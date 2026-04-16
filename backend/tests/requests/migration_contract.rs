@@ -587,6 +587,26 @@ async fn matching_and_uploads_endpoints_available() {
 
 #[tokio::test]
 #[serial]
+async fn ws_upgrade_rejects_foreign_origin() {
+    request(|request, _ctx| async move {
+        // The origin gate is a route-layer middleware, so it runs on the
+        // raw Request before Axum's WebSocketUpgrade extractor performs
+        // its own HTTP-version check. A plain GET with a foreign Origin
+        // therefore reaches the gate and returns 403.
+        let response = request
+            .get("/api/v1/chat/ws")
+            .add_header(
+                HeaderName::from_static("origin"),
+                HeaderValue::from_static("https://evil.example.com"),
+            )
+            .await;
+        assert_eq!(response.status_code(), 403);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn sign_in_verifies_hashed_password() {
     request(|request, _ctx| async move {
         let sign_up = request

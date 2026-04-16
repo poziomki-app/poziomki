@@ -8,8 +8,9 @@ pub mod report_repo;
 pub mod ws;
 
 use axum::{
-    extract::{ws::WebSocketUpgrade, Path, State},
+    extract::{ws::WebSocketUpgrade, Path, Request, State},
     http::{HeaderMap, StatusCode},
+    middleware::Next,
     response::{IntoResponse, Response},
     Json,
 };
@@ -25,8 +26,71 @@ type Result<T> = crate::error::AppResult<T>;
 // WebSocket upgrade
 // ---------------------------------------------------------------------------
 
+/// Origins the browser-side app is allowed to open a chat socket from.
+/// Native mobile clients typically omit `Origin`; that is accepted. Any
+/// *present* Origin that doesn't match the allowlist is rejected with 403
+/// before we even start the upgrade, so a malicious page can't hold the
+/// socket open during the 5s auth window.
+const ALLOWED_WS_ORIGINS: &[&str] = &[
+    "https://poziomki.app",
+    "https://www.poziomki.app",
+    "https://mobile.poziomki.app",
+    "http://localhost",
+    "http://127.0.0.1",
+];
+
+fn is_allowed_ws_origin(origin: &str) -> bool {
+    ALLOWED_WS_ORIGINS.iter().any(|allowed| {
+        // Exact match (`https://poziomki.app`) *or* a localhost-with-port
+        // prefix (`http://localhost:5173`). We deliberately don't match
+        // other schemes or subdomain suffixes.
+        origin == *allowed
+            || ((allowed.starts_with("http://localhost")
+                || allowed.starts_with("http://127.0.0.1"))
+                && origin.starts_with(&format!("{allowed}:")))
+    })
+}
+
 pub async fn ws_upgrade(State(ctx): State<AppContext>, upgrade: WebSocketUpgrade) -> Response {
     upgrade.on_upgrade(move |socket| ws::handle_socket(socket, ctx.chat_hub))
+}
+
+/// Route-level gate for the `/chat/ws` endpoint. Runs on the raw `Request`
+/// before any extractors, so it can reject hostile origins *before* Axum's
+/// `WebSocketUpgrade` extractor runs its own preconditions — which matters
+/// both for security (reject early, no socket work) and for testability
+/// (in-process test harnesses can't satisfy the WebSocket extractor's HTTP
+/// version check, so any gate that lives *inside* the handler body is
+/// unreachable from integration tests).
+pub async fn ws_upgrade_gate(req: Request, next: Next) -> Response {
+    if let Some(origin) = req.headers().get("origin").and_then(|v| v.to_str().ok()) {
+        if !is_allowed_ws_origin(origin) {
+            tracing::warn!(origin = %origin, "ws_upgrade: rejected origin");
+            return (StatusCode::FORBIDDEN, "forbidden origin").into_response();
+        }
+    }
+    next.run(req).await
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::is_allowed_ws_origin;
+
+    #[test]
+    fn accepts_allowlisted() {
+        assert!(is_allowed_ws_origin("https://poziomki.app"));
+        assert!(is_allowed_ws_origin("https://mobile.poziomki.app"));
+        assert!(is_allowed_ws_origin("http://localhost:5173"));
+        assert!(is_allowed_ws_origin("http://127.0.0.1:3000"));
+    }
+
+    #[test]
+    fn rejects_unrelated() {
+        assert!(!is_allowed_ws_origin("https://evil.com"));
+        assert!(!is_allowed_ws_origin("https://poziomki.app.evil.com"));
+        assert!(!is_allowed_ws_origin("http://poziomki.app"));
+        assert!(!is_allowed_ws_origin("capacitor://localhost"));
+    }
 }
 
 // ---------------------------------------------------------------------------
