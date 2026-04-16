@@ -333,8 +333,7 @@ pub async fn push_unregister(
 pub async fn chat_config(State(_ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
     let _ = auth_or_respond!(headers);
 
-    let ntfy_server = crate::api::common::env_non_empty("NTFY_SERVER")
-        .unwrap_or_else(|| "https://ntfy.poziomki.app".to_string());
+    let ntfy_server = crate::api::chat::push::resolved_ntfy_server();
 
     Ok((
         StatusCode::OK,
