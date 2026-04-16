@@ -38,6 +38,21 @@ pub fn env_non_empty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
 
+/// Render an email for log output as `abc***@domain`, keeping the domain
+/// (useful when triaging deployment-specific issues) while dropping most of
+/// the local-part. Malformed addresses collapse to `***` so nothing sneaks
+/// through in raw form.
+pub fn redact_email(email: &str) -> String {
+    let Some((local, domain)) = email.split_once('@') else {
+        return "***".to_string();
+    };
+    let prefix: String = local.chars().take(3).collect();
+    if prefix.is_empty() {
+        return format!("***@{domain}");
+    }
+    format!("{prefix}***@{domain}")
+}
+
 fn request_id(headers: &HeaderMap) -> String {
     headers
         .get("x-request-id")
@@ -189,4 +204,29 @@ pub async fn resolve_thumbhashes(
     rows.into_iter()
         .map(|(name, raw)| (name, base64::engine::general_purpose::STANDARD.encode(&raw)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_email;
+
+    #[test]
+    fn keeps_three_char_prefix_and_domain() {
+        assert_eq!(redact_email("adam@ibims.pl"), "ada***@ibims.pl");
+    }
+
+    #[test]
+    fn handles_short_local_part() {
+        assert_eq!(redact_email("ab@example.com"), "ab***@example.com");
+    }
+
+    #[test]
+    fn collapses_malformed_address() {
+        assert_eq!(redact_email("no-at-sign"), "***");
+    }
+
+    #[test]
+    fn handles_empty_local_part() {
+        assert_eq!(redact_email("@example.com"), "***@example.com");
+    }
 }

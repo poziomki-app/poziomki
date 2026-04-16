@@ -173,7 +173,7 @@ pub(super) async fn sign_in_success_or_unauthorized(
         let code = generate_otp_code();
         upsert_otp(email, &code).await?;
         if let Err(error) = enqueue_otp_email(email, &code).await {
-            tracing::error!(%error, email = %email, "failed to enqueue OTP email for unverified sign in");
+            tracing::error!(%error, email = %crate::api::redact_email(email), "failed to enqueue OTP email for unverified sign in");
         }
 
         return Ok(error_response(
