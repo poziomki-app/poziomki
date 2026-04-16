@@ -4,6 +4,34 @@ use uuid::Uuid;
 
 use crate::db::schema::push_subscriptions;
 
+const ALLOWED_NTFY_HOSTS: &[&str] = &["ntfy.poziomki.app"];
+const DEFAULT_NTFY_SERVER: &str = "https://ntfy.poziomki.app";
+
+fn is_allowed_ntfy_server(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let host = rest.split('/').next().unwrap_or("");
+    ALLOWED_NTFY_HOSTS.contains(&host)
+}
+
+/// Return the configured ntfy server if it passes the allowlist, otherwise the
+/// safe default. A poisoned `NTFY_SERVER` env must not redirect push traffic to
+/// an attacker-controlled host.
+pub fn resolved_ntfy_server() -> String {
+    match crate::api::common::env_non_empty("NTFY_SERVER") {
+        Some(configured) if is_allowed_ntfy_server(&configured) => configured,
+        Some(configured) => {
+            tracing::warn!(
+                configured = %configured,
+                "NTFY_SERVER rejected by allowlist; falling back to default"
+            );
+            DEFAULT_NTFY_SERVER.to_string()
+        }
+        None => DEFAULT_NTFY_SERVER.to_string(),
+    }
+}
+
 fn push_client() -> &'static reqwest::Client {
     use std::sync::OnceLock;
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -75,8 +103,7 @@ async fn resolve_ntfy_topics(
         return Ok(Vec::new());
     }
 
-    let ntfy_server = crate::api::common::env_non_empty("NTFY_SERVER")
-        .unwrap_or_else(|| "https://ntfy.poziomki.app".to_string());
+    let ntfy_server = resolved_ntfy_server();
 
     let mut conn = crate::db::conn().await?;
     let topics: Vec<String> = push_subscriptions::table
@@ -89,4 +116,39 @@ async fn resolve_ntfy_topics(
         .into_iter()
         .map(|topic| (topic, ntfy_server.clone()))
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_allowed_ntfy_server;
+
+    #[test]
+    fn accepts_allowlisted_host() {
+        assert!(is_allowed_ntfy_server("https://ntfy.poziomki.app"));
+        assert!(is_allowed_ntfy_server("https://ntfy.poziomki.app/"));
+        assert!(is_allowed_ntfy_server("https://ntfy.poziomki.app/topic"));
+    }
+
+    #[test]
+    fn rejects_non_https() {
+        assert!(!is_allowed_ntfy_server("http://ntfy.poziomki.app"));
+    }
+
+    #[test]
+    fn rejects_other_hosts() {
+        assert!(!is_allowed_ntfy_server("https://evil.example.com"));
+        assert!(!is_allowed_ntfy_server(
+            "https://ntfy.poziomki.app.evil.com"
+        ));
+        assert!(!is_allowed_ntfy_server(
+            "https://evil.com/ntfy.poziomki.app"
+        ));
+    }
+
+    #[test]
+    fn rejects_userinfo_smuggling() {
+        assert!(!is_allowed_ntfy_server(
+            "https://ntfy.poziomki.app@evil.com"
+        ));
+    }
 }
