@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::api::state::DataResponse;
 use crate::api::{error_response, ErrorSpec};
 use crate::app::AppContext;
 
@@ -81,8 +82,10 @@ async fn claim_task(headers: HeaderMap, Json(body): Json<ClaimTaskBody>) -> Resu
         });
     }
 
-    Ok(Json(ClaimTaskResponse {
-        xp_gained: if awarded { 5 } else { 0 },
+    Ok(Json(DataResponse {
+        data: ClaimTaskResponse {
+            xp_gained: if awarded { 5 } else { 0 },
+        },
     })
     .into_response())
 }
@@ -94,9 +97,11 @@ pub(in crate::api) async fn get_token(headers: HeaderMap) -> Result<Response> {
     };
 
     match token::generate(profile.id) {
-        Ok((tok, expires_at)) => Ok(Json(TokenResponse {
-            token: tok,
-            expires_at,
+        Ok((tok, expires_at)) => Ok(Json(DataResponse {
+            data: TokenResponse {
+                token: tok,
+                expires_at,
+            },
         })
         .into_response()),
         Err(e) => {
@@ -175,8 +180,10 @@ pub(in crate::api) async fn scan_token(
         });
     }
 
-    Ok(Json(ScanResponse {
-        xp_gained: if awarded { 5 } else { 0 },
+    Ok(Json(DataResponse {
+        data: ScanResponse {
+            xp_gained: if awarded { 5 } else { 0 },
+        },
     })
     .into_response())
 }
