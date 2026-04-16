@@ -15,6 +15,11 @@ const AUTH_TIMEOUT_SECS: u64 = 5;
 const DEFAULT_HISTORY_LIMIT: i64 = 50;
 const MAX_HISTORY_LIMIT: i64 = 200;
 const SEND_RATE_LIMIT: u32 = 10;
+/// Interval at which the server pings idle sockets so half-open TCP
+/// connections are reaped without waiting on kernel keepalive.
+const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+/// Close the socket if no frame (including pong) arrives within this window.
+const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
 
 /// Handle a WebSocket connection after Axum upgrade.
 pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
@@ -28,6 +33,11 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     // --- Step 2: Register in hub ---
     let mut hub_rx = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
+    // Separate channel for WS protocol-level Ping frames. Using the standard
+    // control frame (rather than an app-level Pong JSON) means the client's
+    // WebSocket stack auto-responds at the framing layer and no app code
+    // sees the heartbeat.
+    let (ping_tx, mut ping_rx) = mpsc::unbounded_channel::<()>();
 
     // Send initial conversation list
     let conv_list = conversations::list_for_user(user_id)
@@ -43,7 +53,9 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     }
 
     // --- Step 3: Main loop ---
-    // Spawn a writer task that drains hub messages + outbound messages
+    // Spawn a writer task that drains hub messages, outbound messages, and
+    // heartbeat pings. It owns `ws_tx` so all writes go through a single
+    // place.
     let writer_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -57,46 +69,75 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
                         break;
                     }
                 }
+                Some(()) = ping_rx.recv() => {
+                    if ws_tx.send(Message::Ping(Vec::new().into())).await.is_err() {
+                        break;
+                    }
+                }
                 else => break,
             }
         }
     });
 
-    // Reader loop: process incoming client messages
+    // Reader loop: process incoming client messages + server heartbeat.
     let mut send_count: u32 = 0;
     let mut send_window = tokio::time::Instant::now();
+    let mut last_seen = tokio::time::Instant::now();
+    let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
+    // First tick fires immediately — skip it so we don't ping a freshly-
+    // opened socket before the client has settled.
+    heartbeat.tick().await;
 
-    while let Some(Ok(frame)) = ws_rx.next().await {
-        match frame {
-            Message::Text(text) => {
-                let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
-                match parsed {
-                    Ok(client_msg) => {
-                        // Rate-limit Send messages (10/sec)
-                        if matches!(&client_msg, ClientMessage::Send { .. }) {
-                            if send_window.elapsed() >= std::time::Duration::from_secs(1) {
-                                send_count = 0;
-                                send_window = tokio::time::Instant::now();
+    loop {
+        tokio::select! {
+            frame = ws_rx.next() => {
+                let Some(Ok(frame)) = frame else { break };
+                last_seen = tokio::time::Instant::now();
+                match frame {
+                    Message::Text(text) => {
+                        let parsed: Result<ClientMessage, _> = serde_json::from_str(&text);
+                        match parsed {
+                            Ok(client_msg) => {
+                                // Rate-limit Send messages (10/sec)
+                                if matches!(&client_msg, ClientMessage::Send { .. }) {
+                                    if send_window.elapsed() >= std::time::Duration::from_secs(1) {
+                                        send_count = 0;
+                                        send_window = tokio::time::Instant::now();
+                                    }
+                                    send_count += 1;
+                                    if send_count > SEND_RATE_LIMIT {
+                                        let _ = outbound_tx.send(ServerMessage::Error {
+                                            message: "rate limited: too many messages".to_string(),
+                                        });
+                                        continue;
+                                    }
+                                }
+                                handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
                             }
-                            send_count += 1;
-                            if send_count > SEND_RATE_LIMIT {
+                            Err(e) => {
                                 let _ = outbound_tx.send(ServerMessage::Error {
-                                    message: "rate limited: too many messages".to_string(),
+                                    message: format!("invalid message: {e}"),
                                 });
-                                continue;
                             }
                         }
-                        handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
                     }
-                    Err(e) => {
-                        let _ = outbound_tx.send(ServerMessage::Error {
-                            message: format!("invalid message: {e}"),
-                        });
-                    }
+                    Message::Close(_) => break,
+                    // Pong / Ping / Binary all count as "still alive" via the
+                    // last_seen update above; we don't otherwise act on them.
+                    _ => {}
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            _ = heartbeat.tick() => {
+                if last_seen.elapsed() > IDLE_TIMEOUT {
+                    tracing::info!(user_id, "ws idle timeout; closing");
+                    break;
+                }
+                // Signal the writer task to send a WS-level Ping. The
+                // client's WebSocket library replies with Pong at the
+                // framing layer, which resets `last_seen` via the reader
+                // arm above without surfacing to app code.
+                let _ = ping_tx.send(());
+            }
         }
     }
 

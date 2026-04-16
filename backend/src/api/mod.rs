@@ -172,7 +172,10 @@ fn search_routes() -> Router<AppContext> {
 
 fn chat_routes() -> Router<AppContext> {
     Router::new()
-        .route("/ws", get(chat::ws_upgrade))
+        .route(
+            "/ws",
+            get(chat::ws_upgrade).route_layer(middleware::from_fn(chat::ws_upgrade_gate)),
+        )
         .route("/config", get(chat::chat_config))
         .route("/dms", post(chat::resolve_dm))
         .route(
