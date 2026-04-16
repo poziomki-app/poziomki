@@ -60,7 +60,10 @@ fn auth_routes() -> Router<AppContext> {
 }
 
 fn profiles_routes() -> Router<AppContext> {
-    let cached = Router::new()
+    // Every route here returns user-private data (own profile, bookmark
+    // state, blocks, or another user's profile annotated with "is blocked by
+    // me" flags). Default to no-store to keep that data off shared caches.
+    Router::new()
         .route("/me", get(profiles::profile_me))
         .route("/bookmarked", get(profiles::profiles_bookmarked_handler))
         .route("/", post(profiles::profile_create))
@@ -68,9 +71,6 @@ fn profiles_routes() -> Router<AppContext> {
         .route("/{id}", patch(profiles::profile_update))
         .route("/{id}", delete(profiles::profile_delete))
         .route("/{id}/full", get(profiles::profile_get_full))
-        .layer(cache_layer("private, max-age=60"));
-
-    Router::new()
         .route(
             "/{id}/bookmark",
             post(profiles::profile_bookmark_handler).delete(profiles::profile_unbookmark_handler),
@@ -80,7 +80,6 @@ fn profiles_routes() -> Router<AppContext> {
             post(profiles::profile_block_handler).delete(profiles::profile_unblock_handler),
         )
         .layer(cache_layer("no-store"))
-        .merge(cached)
 }
 
 fn degrees_routes() -> Router<AppContext> {
@@ -100,10 +99,17 @@ fn tags_routes() -> Router<AppContext> {
 }
 
 fn events_routes() -> Router<AppContext> {
-    Router::new()
-        .route("/", get(events::events_list).post(events::event_create))
+    // Personal feeds (/mine, /saved) must never sit in a shared cache.
+    let personal = Router::new()
         .route("/mine", get(events::events_mine))
         .route("/saved", get(events::events_saved))
+        .layer(cache_layer("no-store"));
+
+    // Public-ish event metadata — returned to any authenticated user — may
+    // still enjoy a short private cache window to smooth over repeated reads
+    // from the mobile app.
+    let shared = Router::new()
+        .route("/", get(events::events_list).post(events::event_create))
         .route("/{id}", get(events::event_get))
         .route("/{id}", patch(events::event_update))
         .route("/{id}", delete(events::event_delete))
@@ -121,15 +127,20 @@ fn events_routes() -> Router<AppContext> {
             post(events::event_reject_attendee),
         )
         .route("/{id}/report", post(events::event_report))
-        .layer(cache_layer("private, max-age=60"))
+        .layer(cache_layer("private, max-age=60"));
+
+    personal.merge(shared)
 }
 
 fn matching_routes() -> Router<AppContext> {
+    // Recommendations are derived from the caller's profile/history — never
+    // cache them, even privately (any proxy misbehaviour could cross-serve
+    // recommendations between users).
     Router::new()
         .route("/profiles", get(matching::profiles_recommendations))
         .route("/events", get(matching::events_recommendations))
         .route("/events/{id}/feedback", post(matching::event_feedback))
-        .layer(cache_layer("private, max-age=300"))
+        .layer(cache_layer("no-store"))
 }
 
 fn uploads_routes() -> Router<AppContext> {
@@ -151,10 +162,12 @@ fn settings_routes() -> Router<AppContext> {
 }
 
 fn search_routes() -> Router<AppContext> {
+    // Search results reflect the caller's permissions (messages they can
+    // see, events they can discover) — treat as per-user secret material.
     Router::new()
         .route("/search", get(search::search))
         .route("/messages/search", get(search::search_messages))
-        .layer(cache_layer("private, max-age=60"))
+        .layer(cache_layer("no-store"))
 }
 
 fn chat_routes() -> Router<AppContext> {
