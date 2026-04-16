@@ -18,6 +18,27 @@ use crate::db::schema::{sessions, users};
 
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
+/// Hard cap from session creation: renewals cannot extend a session past this
+/// absolute age, even if the user stays active. Limits how long a stolen
+/// token can be kept alive by an attacker touching the API once a day.
+const SESSION_MAX_ABSOLUTE_SECS: i64 = 60 * 60 * 24 * 30;
+
+fn session_hard_expiry(created_at: DateTime<Utc>) -> DateTime<Utc> {
+    created_at + Duration::seconds(SESSION_MAX_ABSOLUTE_SECS)
+}
+
+fn is_past_absolute_cap(session: &Session, now: DateTime<Utc>) -> bool {
+    now >= session_hard_expiry(session.created_at)
+}
+
+fn capped_expiry(session_created_at: DateTime<Utc>, sliding: DateTime<Utc>) -> DateTime<Utc> {
+    let hard = session_hard_expiry(session_created_at);
+    if sliding < hard {
+        sliding
+    } else {
+        hard
+    }
+}
 const AUTH_CACHE_TTL_DEFAULT_SECS: i64 = 15;
 const SESSION_TOKEN_HASH_PREFIX: &str = "st2:";
 
@@ -85,7 +106,10 @@ async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
         guard.get(hashed_token).cloned()
     };
     let entry = cached?;
-    if entry.cached_until <= now || entry.session.expires_at <= now {
+    if entry.cached_until <= now
+        || entry.session.expires_at <= now
+        || is_past_absolute_cap(&entry.session, now)
+    {
         auth_cache().write().await.remove(hashed_token);
         return None;
     }
@@ -173,7 +197,7 @@ pub(in crate::api) async fn require_auth_context(
         .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
 
     let now = Utc::now();
-    if session.expires_at <= now {
+    if session.expires_at <= now || is_past_absolute_cap(&session, now) {
         let _ = diesel::delete(sessions::table.find(session.id))
             .execute(&mut conn)
             .await;
@@ -190,7 +214,10 @@ async fn maybe_renew_session(session: &Session) {
     let now = Utc::now();
     let elapsed = now - session.updated_at;
     if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
-        let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
+        let new_expires = capped_expiry(
+            session.created_at,
+            now + Duration::seconds(SESSION_DURATION_SECS),
+        );
         if let Ok(mut conn) = crate::db::conn().await {
             let _ = diesel::update(sessions::table.find(session.id))
                 .set(&SessionUpdate {
@@ -209,7 +236,10 @@ async fn maybe_renew_session_on_conn(session: Session, conn: &mut crate::db::DbC
         return session;
     }
 
-    let new_expires = now + Duration::seconds(SESSION_DURATION_SECS);
+    let new_expires = capped_expiry(
+        session.created_at,
+        now + Duration::seconds(SESSION_DURATION_SECS),
+    );
     let _ = diesel::update(sessions::table.find(session.id))
         .set(&SessionUpdate {
             updated_at: Some(now),
