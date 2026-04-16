@@ -160,13 +160,17 @@ pub(in crate::api) fn validate_event_category(
     }
 }
 
-pub(in crate::api) fn validate_max_attendees(
+pub(in crate::api) const MAX_ATTENDEES_UPPER_BOUND: i32 = 10_000;
+
+pub(in crate::api) const fn validate_max_attendees(
     value: Option<i32>,
 ) -> std::result::Result<(), &'static str> {
-    if value.is_some_and(|limit| limit <= 0) {
-        Err("Attendee limit must be greater than 0")
-    } else {
-        Ok(())
+    match value {
+        Some(limit) if limit <= 0 => Err("Attendee limit must be greater than 0"),
+        Some(limit) if limit > MAX_ATTENDEES_UPPER_BOUND => {
+            Err("Attendee limit must be at most 10000")
+        }
+        _ => Ok(()),
     }
 }
 
