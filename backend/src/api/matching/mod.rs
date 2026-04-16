@@ -49,6 +49,17 @@ pub(super) async fn profiles_recommendations(
     headers: HeaderMap,
     Query(query): Query<MatchingQuery>,
 ) -> Result<Response> {
+    // IP-keyed limit runs before auth so unauthenticated scrape attempts
+    // don't touch the DB auth path.
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::MatchingProfiles,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
+
     let repo = MatchingRepository;
     let (_session, user) = auth_or_respond!(headers);
 
