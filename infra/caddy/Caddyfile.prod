@@ -33,6 +33,12 @@ mobile.poziomki.app {
 
 	handle {
 		reverse_proxy localhost:5150 {
+			# Set an authoritative client-IP header the backend rate
+			# limiter can trust. We also replace X-Forwarded-For
+			# (Caddy would otherwise append, letting a client forge
+			# the first hop).
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
 			header_down -X-Powered-By
 		}
 	}
@@ -94,6 +100,10 @@ rs.poziomki.app {
 
 	handle {
 		reverse_proxy localhost:5150 {
+			# See comment on mobile.poziomki.app for rationale —
+			# authoritative client IP for the backend limiter.
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
 			header_down -X-Powered-By
 		}
 	}

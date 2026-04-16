@@ -1,12 +1,17 @@
 //! IP-keyed rate limits for non-auth endpoints.
 //!
 //! This mirrors the DB-backed limiter in `api::auth::rate_limit` but keys on
-//! the client IP from the reverse proxy instead of the per-user subject that
-//! the auth limiter uses. We *do* trust `x-forwarded-for` here because this
-//! limiter is concerned with raw request volume from a network peer, not
-//! with denying access to a specific user (the auth limiter's threat model).
-//! In prod Caddy is always the hop setting that header; if it's missing we
-//! fall back to the same bucket so misconfigured traffic still gets capped.
+//! the client IP from the reverse proxy instead of the per-user subject.
+//!
+//! **Header choice matters for exploitability.** Caddy's default
+//! `reverse_proxy` behaviour *appends* the client IP to any existing
+//! `X-Forwarded-For`, which means an attacker who sends
+//! `X-Forwarded-For: 1.2.3.4` can control the first hop. So we prefer
+//! `X-Real-IP`, which Caddy sets authoritatively on the API hosts
+//! (`infra/caddy/Caddyfile.prod` configures `header_up X-Real-IP
+//! {client_ip}`). We still read XFF as a fallback, but take the *last* hop —
+//! the one Caddy appended — rather than the first, so a spoofed XFF value
+//! can't bypass the limit.
 use axum::http::HeaderMap;
 use axum::response::Response;
 use diesel::deserialize::QueryableByName;
@@ -41,22 +46,27 @@ impl IpRateLimitAction {
     }
 }
 
-/// Extract the first hop from `x-forwarded-for`, which in our deployment is
-/// set by Caddy and corresponds to the real client IP. Fall back to
-/// `x-real-ip`, then to the `"unknown"` bucket.
+/// Resolve the client IP from proxy headers, in order of trustworthiness:
+///
+/// 1. `X-Real-IP` — Caddy sets this authoritatively; no client input can
+///    forge it past the proxy boundary.
+/// 2. `X-Forwarded-For` last hop — Caddy appends, so the rightmost value is
+///    what Caddy saw. Reading the first hop would be spoofable.
+/// 3. `"unknown"` — a single shared bucket, so the endpoint is still capped
+///    when headers are missing.
 fn client_ip(headers: &HeaderMap) -> String {
-    if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
-        if let Some(first) = value.split(',').next() {
-            let trimmed = first.trim();
-            if !trimmed.is_empty() {
-                return trimmed.to_string();
-            }
-        }
-    }
     if let Some(value) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
             return trimmed.to_string();
+        }
+    }
+    if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        if let Some(last) = value.split(',').next_back() {
+            let trimmed = last.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
         }
     }
     "unknown".to_string()
@@ -153,15 +163,33 @@ mod tests {
     }
 
     #[test]
-    fn prefers_first_xff_hop() {
-        let h = headers_with("x-forwarded-for", "203.0.113.5, 10.0.0.1");
-        assert_eq!(client_ip(&h), "203.0.113.5");
+    fn prefers_x_real_ip_over_xff() {
+        // If Caddy sets both (which it does), X-Real-IP wins because it
+        // isn't appended to by convention and can't be spoofed past Caddy.
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-real-ip",
+            "198.51.100.7".parse().expect("valid header value"),
+        );
+        h.insert(
+            "x-forwarded-for",
+            "1.2.3.4, 10.0.0.1".parse().expect("valid header value"),
+        );
+        assert_eq!(client_ip(&h), "198.51.100.7");
     }
 
     #[test]
-    fn falls_back_to_x_real_ip() {
-        let h = headers_with("x-real-ip", "198.51.100.7");
-        assert_eq!(client_ip(&h), "198.51.100.7");
+    fn uses_xff_last_hop_when_no_real_ip() {
+        // A malicious client sending X-Forwarded-For: 1.2.3.4 gets appended
+        // to by Caddy, so the last hop is the one the proxy observed.
+        let h = headers_with("x-forwarded-for", "1.2.3.4, 203.0.113.9");
+        assert_eq!(client_ip(&h), "203.0.113.9");
+    }
+
+    #[test]
+    fn handles_single_xff_hop() {
+        let h = headers_with("x-forwarded-for", "203.0.113.5");
+        assert_eq!(client_ip(&h), "203.0.113.5");
     }
 
     #[test]
