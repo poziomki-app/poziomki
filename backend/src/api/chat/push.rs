@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::db::schema::{profiles, push_subscriptions, users};
+use crate::db::schema::push_subscriptions;
 
 fn push_client() -> &'static reqwest::Client {
     use std::sync::OnceLock;
@@ -19,16 +19,11 @@ fn push_client() -> &'static reqwest::Client {
 }
 
 /// Send push notifications to conversation members for a new message.
-pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i32, body: &str) {
-    // Resolve sender name + avatar
-    let Some((sender_name, sender_avatar)) = resolve_sender_profile(sender_id).await else {
-        tracing::warn!(
-            sender_id,
-            "push: could not resolve sender profile, skipping"
-        );
-        return;
-    };
-
+///
+/// Only the conversation ID is sent through ntfy — no message content, sender
+/// names, or avatar URLs. The client uses this as a wake-up signal and fetches
+/// actual message data through the authenticated WebSocket/API.
+pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, _sender_id: i32, _body: &str) {
     // Resolve ntfy topics for target users
     let topics = match resolve_ntfy_topics(&user_ids).await {
         Ok(t) => t,
@@ -41,23 +36,8 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
     let client = push_client();
     let ntfy_token = crate::api::common::env_non_empty("NTFY_TOKEN");
 
-    // Truncate body for push
-    let push_body = if body.chars().count() > 200 {
-        let truncated: String = body.chars().take(197).collect();
-        format!("{truncated}...")
-    } else {
-        body.to_string()
-    };
-
-    let avatar_url = sender_avatar
-        .as_ref()
-        .and_then(|filename| crate::api::imgproxy_signing::signed_avatar_url(filename));
-
     let push_data = serde_json::json!({
         "room_id": conversation_id.to_string(),
-        "sender": sender_name,
-        "body": push_body,
-        "avatar": avatar_url,
     });
 
     for (ntfy_topic, ntfy_server) in &topics {
@@ -65,7 +45,7 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
         let url = format!("{ntfy_server}/{ntfy_topic}");
         let mut req = client
             .post(&url)
-            .header("Title", &sender_name)
+            .header("Title", "new_message")
             .json(&push_data);
         if let Some(ref token) = ntfy_token {
             req = req.header("Authorization", format!("Bearer {token}"));
@@ -86,17 +66,6 @@ pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, sender_id: i
             }
         }
     }
-}
-
-async fn resolve_sender_profile(sender_id: i32) -> Option<(String, Option<String>)> {
-    let mut conn = crate::db::conn().await.ok()?;
-    profiles::table
-        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-        .filter(users::id.eq(sender_id))
-        .select((profiles::name, profiles::profile_picture))
-        .first::<(String, Option<String>)>(&mut conn)
-        .await
-        .ok()
 }
 
 async fn resolve_ntfy_topics(

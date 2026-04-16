@@ -115,12 +115,7 @@ class NtfyPushService :
                 json.decodeFromString<JsonObject>(message)
             }.getOrNull()
 
-        val sender =
-            parsed["title"]?.jsonPrimitive?.content
-                ?: pushData?.get("sender")?.jsonPrimitive?.content
         val roomId = pushData?.get("room_id")?.jsonPrimitive?.content
-        val body = pushData?.get("body")?.jsonPrimitive?.content
-        val avatar = pushData?.get("avatar")?.jsonPrimitive?.content
         val timestampMs =
             parsed["time"]
                 ?.jsonPrimitive
@@ -132,10 +127,10 @@ class NtfyPushService :
         if (roomId != null && roomId == ActiveChat.roomId) return
 
         notificationHelper.showMessageNotification(
-            sender = sender,
+            sender = null,
             roomId = roomId,
-            body = body,
-            avatarUrl = avatar,
+            body = null,
+            avatarUrl = null,
             timestampMs = timestampMs,
         )
     }
