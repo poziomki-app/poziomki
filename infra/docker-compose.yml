@@ -43,7 +43,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
+      test: ["CMD", "/usr/local/bin/poziomki_backend-cli", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 5
