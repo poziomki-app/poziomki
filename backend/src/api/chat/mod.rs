@@ -56,18 +56,25 @@ pub async fn ws_upgrade(State(ctx): State<AppContext>, upgrade: WebSocketUpgrade
 }
 
 /// Route-level gate for the `/chat/ws` endpoint. Runs on the raw `Request`
-/// before any extractors, so it can reject hostile origins *before* Axum's
-/// `WebSocketUpgrade` extractor runs its own preconditions — which matters
-/// both for security (reject early, no socket work) and for testability
-/// (in-process test harnesses can't satisfy the WebSocket extractor's HTTP
-/// version check, so any gate that lives *inside* the handler body is
-/// unreachable from integration tests).
+/// before any extractors, so both the Origin check and the IP rate-limit
+/// fire even in harnesses that can't satisfy Axum's `WebSocketUpgrade`
+/// preconditions (e.g. the in-process transport used by integration tests).
+/// Origin is checked first — it's cheap and local, and keeps hostile pages
+/// from burning a rate-limit slot.
 pub async fn ws_upgrade_gate(req: Request, next: Next) -> Response {
     if let Some(origin) = req.headers().get("origin").and_then(|v| v.to_str().ok()) {
         if !is_allowed_ws_origin(origin) {
             tracing::warn!(origin = %origin, "ws_upgrade: rejected origin");
             return (StatusCode::FORBIDDEN, "forbidden origin").into_response();
         }
+    }
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        req.headers(),
+        crate::api::ip_rate_limit::IpRateLimitAction::ChatWsUpgrade,
+    )
+    .await
+    {
+        return *response;
     }
     next.run(req).await
 }
