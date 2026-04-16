@@ -3,6 +3,7 @@ pub mod app;
 mod app_support;
 pub mod db;
 pub mod error;
+pub mod healthcheck;
 pub mod jobs;
 pub mod search;
 pub mod security;
