@@ -573,29 +573,83 @@ async fn matching_and_uploads_endpoints_available() {
     .await;
 }
 
+/// Attach the minimal set of RFC 6455 headers that make `WebSocketUpgrade`'s
+/// extractor accept the request so the `ws_upgrade` handler body runs.
+/// Without these the extractor rejects with 400 before the rate-limit gate
+/// fires, which would give the test a false pass.
+fn attach_ws_upgrade_headers(req: axum_test::TestRequest) -> axum_test::TestRequest {
+    req.add_header(
+        HeaderName::from_static("upgrade"),
+        HeaderValue::from_static("websocket"),
+    )
+    .add_header(
+        HeaderName::from_static("connection"),
+        HeaderValue::from_static("Upgrade"),
+    )
+    .add_header(
+        HeaderName::from_static("sec-websocket-version"),
+        HeaderValue::from_static("13"),
+    )
+    .add_header(
+        HeaderName::from_static("sec-websocket-key"),
+        HeaderValue::from_static("dGhlIHNhbXBsZSBub25jZQ=="),
+    )
+}
+
 #[tokio::test]
 #[serial]
 async fn ws_upgrade_is_rate_limited_per_ip() {
     request(|request, _ctx| async move {
         // Cap is 60/min (CHAT_WS_UPGRADE_MAX_PER_MIN). The 61st request from
-        // the same forwarded IP should receive 429 even though each request
-        // targets a different pretend-user.
+        // the same forwarded IP should receive 429. We attach valid upgrade
+        // headers so WebSocketUpgrade's extractor doesn't short-circuit the
+        // handler with 400 before the rate-limit check runs.
         let ip_header = (
-            HeaderName::from_static("x-forwarded-for"),
+            HeaderName::from_static("x-real-ip"),
             HeaderValue::from_static("203.0.113.200"),
         );
 
         let mut last_status = 0;
         for _ in 0..61 {
+            let response = attach_ws_upgrade_headers(
+                request
+                    .get("/api/v1/chat/ws")
+                    .add_header(ip_header.0.clone(), ip_header.1.clone()),
+            )
+            .await;
+            last_status = response.status_code().as_u16();
+        }
+        assert_eq!(
+            last_status, 429,
+            "expected the 61st ws_upgrade to be rate-limited"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn matching_profiles_is_rate_limited_per_ip() {
+    request(|request, _ctx| async move {
+        // Cap is 30/min (MATCHING_PROFILES_MAX_PER_MIN). The rate-limit
+        // check fires before auth, so no session is needed. The 31st
+        // request from the same forwarded IP should receive 429.
+        let ip_header = (
+            HeaderName::from_static("x-real-ip"),
+            HeaderValue::from_static("203.0.113.201"),
+        );
+
+        let mut last_status = 0;
+        for _ in 0..31 {
             let response = request
-                .get("/api/v1/chat/ws")
+                .get("/api/v1/matching/profiles?limit=1")
                 .add_header(ip_header.0.clone(), ip_header.1.clone())
                 .await;
             last_status = response.status_code().as_u16();
         }
         assert_eq!(
             last_status, 429,
-            "expected the 61st ws_upgrade to be rate-limited"
+            "expected the 31st /matching/profiles to be rate-limited"
         );
     })
     .await;
