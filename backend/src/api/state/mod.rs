@@ -111,16 +111,38 @@ async fn load_valid_otp(email: &str) -> Option<(OtpCode, crate::db::DbConn)> {
 
 /// Verify an OTP code against the database. Returns true if valid.
 /// On success, deletes the OTP row. On failure, increments attempts.
+///
+/// All failure branches perform the same constant-time comparison and an
+/// equivalent DB round-trip so an attacker cannot distinguish "email has no
+/// OTP row" (i.e. unknown account) from "bad code" via timing.
 pub(super) async fn verify_otp_db(email: &str, otp: &str) -> bool {
     use subtle::ConstantTimeEq;
 
-    let Some((saved, mut conn)) = load_valid_otp(email).await else {
+    let loaded = load_valid_otp(email).await;
+
+    // Always compare in constant time against something of the requested
+    // length — even when no OTP exists — so CPU-side timing is uniform.
+    let ct_match = if let Some((saved, _)) = loaded.as_ref() {
+        saved.code.len() == otp.len() && bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes()))
+    } else {
+        let dummy = vec![0u8; otp.len()];
+        let _ = bool::from(dummy.as_slice().ct_eq(otp.as_bytes()));
+        false
+    };
+
+    let Some((saved, mut conn)) = loaded else {
+        // No valid OTP row. Issue a no-op write to match the DB round-trip
+        // of the "bad code" path, then fail.
+        if let Ok(mut conn) = crate::db::conn().await {
+            let _ = diesel::update(otp_codes::table.find(Uuid::nil()))
+                .set(otp_codes::attempts.eq(0))
+                .execute(&mut conn)
+                .await;
+        }
         return false;
     };
 
-    // Constant-time comparison
-    if saved.code.len() != otp.len() || !bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes())) {
-        // Increment attempts
+    if !ct_match {
         let new_attempts = saved.attempts.saturating_add(1);
         let _ = diesel::update(otp_codes::table.find(saved.id))
             .set(otp_codes::attempts.eq(new_attempts))
