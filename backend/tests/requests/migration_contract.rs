@@ -254,6 +254,18 @@ async fn events_flow_matches_phase_3_contract() {
             .await;
         assert_eq!(invalid_tag_create.status_code(), 400);
 
+        // Absurdly high max_attendees is rejected — 10 000 is the upper bound.
+        let over_cap_create = request
+            .post("/api/v1/events")
+            .add_header(owner_auth_key.clone(), owner_auth_value.clone())
+            .json(&serde_json::json!({
+                "title": "Stadium event",
+                "startsAt": "2030-01-02T14:00:00Z",
+                "maxAttendees": 10_001,
+            }))
+            .await;
+        assert_eq!(over_cap_create.status_code(), 400);
+
         let owner_list_after_invalid = request
             .get("/api/v1/events")
             .add_header(owner_auth_key.clone(), owner_auth_value.clone())
