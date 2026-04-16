@@ -61,6 +61,7 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.bold.Flame
 import com.adamglin.phosphoricons.bold.GearSix
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.ChatCircle
@@ -98,6 +99,7 @@ import com.poziomki.app.ui.feature.onboarding.ProfileSetupScreen
 import com.poziomki.app.ui.feature.profile.PrivacyScreen
 import com.poziomki.app.ui.feature.profile.ProfileEditScreen
 import com.poziomki.app.ui.feature.profile.ProfileViewScreen
+import com.poziomki.app.ui.feature.xp.QrMeetScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -371,6 +373,7 @@ fun AppNavigation(
                 onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
                 onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
                 onNavigateToSaved = { navController.navigate(Route.Saved) },
+                onNavigateToToday = { navController.navigate(Route.Today) },
                 onNavigateToChat = navigateToChat,
                 onNavigateToNewChat = { navController.navigate(Route.NewChat) },
                 onSignOut = {
@@ -409,6 +412,9 @@ fun AppNavigation(
                 onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
                 onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
             )
+        }
+        composable<Route.Today> {
+            QrMeetScreen(onBack = { navController.popBackStack() })
         }
         composable<Route.ProfileView> {
             ProfileViewScreen(
@@ -460,6 +466,7 @@ fun AppNavigation(
 }
 
 @Composable
+@Suppress("LongMethod", "LongParameterList")
 fun MainScreen(
     onNavigateToEventDetail: (String) -> Unit,
     onNavigateToEventCreate: () -> Unit,
@@ -467,6 +474,7 @@ fun MainScreen(
     onNavigateToProfileEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
     onNavigateToSaved: () -> Unit,
+    onNavigateToToday: () -> Unit,
     onNavigateToChat: (String) -> Unit,
     onNavigateToNewChat: () -> Unit,
     onSignOut: () -> Unit,
@@ -493,9 +501,12 @@ fun MainScreen(
         }
     }
 
+    val streakCurrent = profileState.profile?.streakCurrent ?: 0
+
     val profileAvatarAction: @Composable () -> Unit = {
         ProfileAvatarButton(
             profilePicture = profilePicture,
+            streakCurrent = streakCurrent,
             onClick = navigateToProfileTab,
         )
     }
@@ -522,6 +533,7 @@ fun MainScreen(
                             ExploreScreen(
                                 onNavigateToProfile = onNavigateToProfileView,
                                 onNavigateToEventDetail = onNavigateToEventDetail,
+                                onNavigateToToday = onNavigateToToday,
                                 profileAvatarAction = profileAvatarAction,
                             )
                         }
@@ -623,23 +635,48 @@ fun MainScreen(
 @Composable
 private fun ProfileAvatarButton(
     profilePicture: String?,
+    streakCurrent: Int = 0,
     onClick: () -> Unit,
 ) {
-    val avatarSize = 28.dp
-    IconButton(onClick = onClick) {
-        if (profilePicture != null) {
-            UserAvatar(
-                picture = profilePicture,
-                displayName = null,
-                size = avatarSize,
-            )
-        } else {
-            Icon(
-                PhosphorIcons.Bold.GearSix,
-                contentDescription = "Profil",
-                modifier = Modifier.size(22.dp),
-                tint = TextMuted,
-            )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (streakCurrent > 0) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Icon(
+                    PhosphorIcons.Bold.Flame,
+                    contentDescription = "Streak",
+                    modifier = Modifier.size(16.dp),
+                    tint = Color(0xFFFF9500),
+                )
+                Text(
+                    text = "$streakCurrent",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFF9500),
+                )
+            }
+        }
+        val avatarSize = 28.dp
+        IconButton(onClick = onClick) {
+            if (profilePicture != null) {
+                UserAvatar(
+                    picture = profilePicture,
+                    displayName = null,
+                    size = avatarSize,
+                )
+            } else {
+                Icon(
+                    PhosphorIcons.Bold.GearSix,
+                    contentDescription = "Profil",
+                    modifier = Modifier.size(22.dp),
+                    tint = TextMuted,
+                )
+            }
         }
     }
 }

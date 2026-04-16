@@ -70,6 +70,8 @@ sealed interface Route {
 
     @Serializable data object Saved : Route
 
+    @Serializable data object Today : Route
+
     @Serializable data class Chat(
         val id: String,
         val title: String? = null,

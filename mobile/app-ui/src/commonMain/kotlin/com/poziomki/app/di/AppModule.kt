@@ -14,6 +14,8 @@ import com.poziomki.app.ui.feature.onboarding.OnboardingViewModel
 import com.poziomki.app.ui.feature.profile.PrivacyViewModel
 import com.poziomki.app.ui.feature.profile.ProfileEditViewModel
 import com.poziomki.app.ui.feature.profile.ProfileViewViewModel
+import com.poziomki.app.ui.feature.xp.QrMeetViewModel
+import com.poziomki.app.ui.feature.xp.TasksViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -33,4 +35,6 @@ val appModule =
         viewModelOf(::ProfileViewViewModel)
         viewModelOf(::PrivacyViewModel)
         viewModelOf(::SavedViewModel)
+        viewModelOf(::QrMeetViewModel)
+        viewModelOf(::TasksViewModel)
     }

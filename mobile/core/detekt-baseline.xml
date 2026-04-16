@@ -4,8 +4,8 @@
   <CurrentIssues>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/auth/resend-otp", ResendOtpRequest(email))</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/events/$id/attendees")</ID>
-    <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles/$id/bookmark")</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles", request)</ID>
+    <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/profiles/$id/bookmark")</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$("/api/v1/settings", request)</ID>
     <ID>ArgumentListWrapping:ApiService.kt$ApiService$(email)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$("update_settings", userId, json.encodeToString(UpdateSettingsRequest(language = language)))</ID>
@@ -14,7 +14,6 @@
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(UpdateSettingsRequest(notificationsEnabled = enabled))</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(language = language)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(notificationsEnabled = enabled)</ID>
-    <ID>CyclomaticComplexMethod:ProfileRepository.kt$ProfileRepository$suspend fun updateProfile( id: String, request: UpdateProfileRequest, ): ApiResult&lt;Profile&gt;</ID>
     <ID>CyclomaticComplexMethod:WsConnection.kt$WsConnection$private suspend fun connectOnce()</ID>
     <ID>Indentation:EventMapper.kt$ </ID>
     <ID>Indentation:ProfileRepository.kt$ProfileRepository$ </ID>

@@ -52,7 +52,7 @@ class SqlDelightRoomTimelineCacheStore(
                     .decodeFromString(ListSerializer(CachedTimelineItem.serializer()), row.payload_json)
                     .map(CachedTimelineItem::toDomain)
             }.getOrElse {
-                println("[TimelineCache] WARN: timeline cache corrupted for $roomId, clearing")
+                // cache corrupted, clearing
                 runCatching { db.roomTimelineCacheQueries.deleteByRoomId(roomId) }
                 emptyList()
             }
