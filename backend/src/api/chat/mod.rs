@@ -25,8 +25,64 @@ type Result<T> = crate::error::AppResult<T>;
 // WebSocket upgrade
 // ---------------------------------------------------------------------------
 
-pub async fn ws_upgrade(State(ctx): State<AppContext>, upgrade: WebSocketUpgrade) -> Response {
+/// Origins the browser-side app is allowed to open a chat socket from.
+/// Native mobile clients typically omit `Origin`; that is accepted. Any
+/// *present* Origin that doesn't match the allowlist is rejected with 403
+/// before we even start the upgrade, so a malicious page can't hold the
+/// socket open during the 5s auth window.
+const ALLOWED_WS_ORIGINS: &[&str] = &[
+    "https://poziomki.app",
+    "https://www.poziomki.app",
+    "https://mobile.poziomki.app",
+    "http://localhost",
+    "http://127.0.0.1",
+];
+
+fn is_allowed_ws_origin(origin: &str) -> bool {
+    ALLOWED_WS_ORIGINS.iter().any(|allowed| {
+        // Exact match (`https://poziomki.app`) *or* a localhost-with-port
+        // prefix (`http://localhost:5173`). We deliberately don't match
+        // other schemes or subdomain suffixes.
+        origin == *allowed
+            || ((allowed.starts_with("http://localhost")
+                || allowed.starts_with("http://127.0.0.1"))
+                && origin.starts_with(&format!("{allowed}:")))
+    })
+}
+
+pub async fn ws_upgrade(
+    State(ctx): State<AppContext>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        if !is_allowed_ws_origin(origin) {
+            tracing::warn!(origin = %origin, "ws_upgrade: rejected origin");
+            return (StatusCode::FORBIDDEN, "forbidden origin").into_response();
+        }
+    }
     upgrade.on_upgrade(move |socket| ws::handle_socket(socket, ctx.chat_hub))
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::is_allowed_ws_origin;
+
+    #[test]
+    fn accepts_allowlisted() {
+        assert!(is_allowed_ws_origin("https://poziomki.app"));
+        assert!(is_allowed_ws_origin("https://mobile.poziomki.app"));
+        assert!(is_allowed_ws_origin("http://localhost:5173"));
+        assert!(is_allowed_ws_origin("http://127.0.0.1:3000"));
+    }
+
+    #[test]
+    fn rejects_unrelated() {
+        assert!(!is_allowed_ws_origin("https://evil.com"));
+        assert!(!is_allowed_ws_origin("https://poziomki.app.evil.com"));
+        assert!(!is_allowed_ws_origin("http://poziomki.app"));
+        assert!(!is_allowed_ws_origin("capacitor://localhost"));
+    }
 }
 
 // ---------------------------------------------------------------------------
