@@ -136,7 +136,7 @@ services:
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5150/health"]
+      test: ["CMD", "/usr/local/bin/curl", "-fsS", "http://localhost:5150/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -253,7 +253,7 @@ services:
       GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
       IMGPROXY_PURGE_SECRET: ${IMGPROXY_PURGE_SECRET:-}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3080/health"]
+      test: ["CMD", "/usr/local/bin/curl", "-fsS", "http://localhost:3080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
