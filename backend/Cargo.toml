@@ -69,7 +69,7 @@ fast_image_resize = "=6.0.0"
 webp = "=0.3.1"
 thumbhash = "=0.1.0"
 base64 = "=0.22.1"
-tower-http = { version = "=0.6.8", features = ["set-header", "trace"] }
+tower-http = { version = "=0.6.8", features = ["limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 jsonwebtoken = "=10.3.0"
