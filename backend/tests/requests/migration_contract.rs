@@ -573,20 +573,42 @@ async fn matching_and_uploads_endpoints_available() {
     .await;
 }
 
+/// Add the minimal set of RFC 6455 headers that make `WebSocketUpgrade`
+/// satisfy its extractor requirements so the handler body actually runs.
+/// Without these the extractor rejects with 400 before our Origin / rate
+/// limit checks fire, giving the tests a false green.
+fn attach_ws_upgrade_headers(req: axum_test::TestRequest) -> axum_test::TestRequest {
+    req.add_header(
+        HeaderName::from_static("upgrade"),
+        HeaderValue::from_static("websocket"),
+    )
+    .add_header(
+        HeaderName::from_static("connection"),
+        HeaderValue::from_static("Upgrade"),
+    )
+    .add_header(
+        HeaderName::from_static("sec-websocket-version"),
+        HeaderValue::from_static("13"),
+    )
+    .add_header(
+        HeaderName::from_static("sec-websocket-key"),
+        HeaderValue::from_static("dGhlIHNhbXBsZSBub25jZQ=="),
+    )
+}
+
 #[tokio::test]
 #[serial]
 async fn ws_upgrade_rejects_foreign_origin() {
     request(|request, _ctx| async move {
         // No Bearer token needed — the origin check fires before we look at
-        // auth. The upgrade handshake itself isn't completed by TestServer,
-        // but Axum still runs the handler and the returned 403 lands here.
-        let response = request
-            .get("/api/v1/chat/ws")
-            .add_header(
-                HeaderName::from_static("origin"),
-                HeaderValue::from_static("https://evil.example.com"),
-            )
-            .await;
+        // auth. We also don't finish the WS handshake, but with the RFC 6455
+        // headers attached the handler body does run and returns 403 before
+        // any upgrade is attempted.
+        let response = attach_ws_upgrade_headers(request.get("/api/v1/chat/ws").add_header(
+            HeaderName::from_static("origin"),
+            HeaderValue::from_static("https://evil.example.com"),
+        ))
+        .await;
         assert_eq!(response.status_code(), 403);
     })
     .await;
