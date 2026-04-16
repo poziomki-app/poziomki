@@ -28,7 +28,7 @@ RUN apt-get update \
 RUN set -eux; \
     mkdir -p /staging/usr/lib/x86_64-linux-gnu /staging/etc/ssl/certs; \
     cp -aL /etc/ssl/certs/ca-certificates.crt /staging/etc/ssl/certs/; \
-    for soname in libpq.so.5 libwebp.so.7 libsharpyuv.so.0; do \
+    for soname in libpq.so.5 libwebp.so.7; do \
         cp -aL /usr/lib/x86_64-linux-gnu/${soname}* /staging/usr/lib/x86_64-linux-gnu/; \
     done; \
     for root in /staging/usr/lib/x86_64-linux-gnu/libpq.so.5 \
