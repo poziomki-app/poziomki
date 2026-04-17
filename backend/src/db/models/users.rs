@@ -22,6 +22,7 @@ pub struct User {
     pub magic_link_expiration: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_review_stub: bool,
 }
 
 #[derive(Debug, Insertable)]

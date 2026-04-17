@@ -193,6 +193,14 @@ pub async fn list_for_user(
 
     let mut conn = crate::db::conn().await?;
 
+    let viewer_is_stub = users::table
+        .filter(users::id.eq(user_id))
+        .select(users::is_review_stub)
+        .first::<bool>(&mut conn)
+        .await
+        .optional()?
+        .unwrap_or(false);
+
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
         .select(conversation_members::conversation_id)
@@ -203,10 +211,59 @@ pub async fn list_for_user(
         return Ok(Vec::new());
     }
 
-    let convs: Vec<Conversation> = conversations::table
+    let all_convs: Vec<Conversation> = conversations::table
         .filter(conversations::id.eq_any(&conv_ids))
         .load(&mut conn)
         .await?;
+
+    // Collect the "other participant" id for every DM so we can batch-load
+    // their is_review_stub flags in a single query.
+    let other_ids: Vec<i32> = all_convs
+        .iter()
+        .filter(|c| c.kind == "dm")
+        .filter_map(|c| {
+            if c.user_low_id == Some(user_id) {
+                c.user_high_id
+            } else {
+                c.user_low_id
+            }
+        })
+        .collect();
+
+    let stub_flags: std::collections::HashMap<i32, bool> = if other_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        users::table
+            .filter(users::id.eq_any(&other_ids))
+            .select((users::id, users::is_review_stub))
+            .load::<(i32, bool)>(&mut conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
+    // Hide DMs where the other participant has a different is_review_stub
+    // value so stub accounts stay invisible to real users (and vice versa).
+    let convs: Vec<Conversation> = all_convs
+        .into_iter()
+        .filter(|conv| {
+            if conv.kind != "dm" {
+                return true;
+            }
+            let other_id = if conv.user_low_id == Some(user_id) {
+                conv.user_high_id
+            } else {
+                conv.user_low_id
+            };
+            other_id
+                .is_none_or(|id| stub_flags.get(&id).copied().unwrap_or(false) == viewer_is_stub)
+        })
+        .collect();
+
+    let conv_ids: Vec<Uuid> = convs.iter().map(|c| c.id).collect();
+    if conv_ids.is_empty() {
+        return Ok(Vec::new());
+    }
 
     // Batch-load latest message per conversation (DISTINCT ON)
     let latest_messages: Vec<crate::db::models::messages::Message> = diesel::sql_query(

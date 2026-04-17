@@ -16,7 +16,7 @@ COPY --from=planner /app/backend/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY . /app/
-RUN cargo build --release --bin poziomki_backend-cli --bin worker
+RUN cargo build --release --bin poziomki_backend-cli --bin worker --bin seed_reviewer
 
 # debian:bookworm-slim
 FROM debian@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d AS runtime-deps
@@ -48,6 +48,7 @@ WORKDIR /app
 COPY --from=runtime-deps /staging/ /
 COPY --from=builder /app/backend/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
 COPY --from=builder /app/backend/target/release/worker /usr/local/bin/worker
+COPY --from=builder /app/backend/target/release/seed_reviewer /usr/local/bin/seed_reviewer
 
 USER nonroot
 EXPOSE 5150

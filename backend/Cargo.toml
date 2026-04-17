@@ -90,6 +90,10 @@ required-features = []
 name = "worker"
 path = "src/bin/worker.rs"
 
+[[bin]]
+name = "seed_reviewer"
+path = "src/bin/seed_reviewer.rs"
+
 [dev-dependencies]
 serial_test = { version = "=3.4.0" }
 axum-test = { version = "=19.0.0" }
