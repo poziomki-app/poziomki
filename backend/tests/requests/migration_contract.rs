@@ -639,23 +639,36 @@ async fn matching_profiles_is_rate_limited_per_ip() {
     request(|request, _ctx| async move {
         // Cap is 30/min (MATCHING_PROFILES_MAX_PER_MIN). The rate-limit
         // check fires before auth, so no session is needed. The 31st
-        // request from the same forwarded IP should receive 429.
+        // request from the same forwarded IP should receive 429 with a
+        // Retry-After hint in the 1..=60 range.
         let ip_header = (
             HeaderName::from_static("x-real-ip"),
             HeaderValue::from_static("203.0.113.201"),
         );
 
         let mut last_status = 0;
+        let mut last_retry_after: Option<String> = None;
         for _ in 0..31 {
             let response = request
                 .get("/api/v1/matching/profiles?limit=1")
                 .add_header(ip_header.0.clone(), ip_header.1.clone())
                 .await;
             last_status = response.status_code().as_u16();
+            last_retry_after = response
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .map(ToOwned::to_owned);
         }
         assert_eq!(
             last_status, 429,
             "expected the 31st /matching/profiles to be rate-limited"
+        );
+        let retry_after = last_retry_after.expect("Retry-After header must be set on 429");
+        let secs: u32 = retry_after.parse().expect("Retry-After must be an integer");
+        assert!(
+            (1..=60).contains(&secs),
+            "Retry-After should be in (0, 60]s window, got {secs}"
         );
     })
     .await;
