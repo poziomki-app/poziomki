@@ -106,6 +106,15 @@ pub(super) async fn search_messages(
     headers: HeaderMap,
     Query(query): Query<MessageSearchQuery>,
 ) -> Result<Response> {
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::Search,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
+
     let (_session, user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(20).clamp(1, 50));
@@ -140,6 +149,15 @@ pub(super) async fn search(
     headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> Result<Response> {
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::Search,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
+
     let (_session, user) = auth_or_respond!(headers);
 
     let limit = usize::from(query.limit.unwrap_or(10).clamp(1, 50));
