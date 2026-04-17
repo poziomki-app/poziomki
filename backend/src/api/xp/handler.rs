@@ -52,6 +52,15 @@ struct ClaimTaskResponse {
 }
 
 async fn claim_task(headers: HeaderMap, Json(body): Json<ClaimTaskBody>) -> Result<Response> {
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::XpAction,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
+
     let profile = match service::load_profile_for(&headers).await {
         Ok(p) => p,
         Err(response) => return Ok(*response),
@@ -132,6 +141,15 @@ pub(in crate::api) async fn scan_token(
     headers: HeaderMap,
     Json(body): Json<ScanBody>,
 ) -> Result<Response> {
+    if let Err(response) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::XpAction,
+    )
+    .await
+    {
+        return Ok(*response);
+    }
+
     let scanner = match service::load_profile_for(&headers).await {
         Ok(p) => p,
         Err(response) => return Ok(*response),
