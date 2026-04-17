@@ -20,6 +20,12 @@ pub(in crate::api) async fn file_upload(
     multipart: Multipart,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
+        crate::api::ip_rate_limit::enforce_ip_rate_limit(
+            &headers,
+            crate::api::ip_rate_limit::IpRateLimitAction::UploadWrite,
+        )
+        .await?;
+
         let profile = require_auth_profile(&headers).await?;
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
@@ -90,6 +96,12 @@ pub(in crate::api) async fn file_upload_presign(
     Json(payload): Json<DirectUploadPresignBody>,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
+        crate::api::ip_rate_limit::enforce_ip_rate_limit(
+            &headers,
+            crate::api::ip_rate_limit::IpRateLimitAction::UploadWrite,
+        )
+        .await?;
+
         let context = validate_presign_payload(&headers, &payload)?;
         let profile = require_auth_profile(&headers).await?;
 
@@ -141,6 +153,12 @@ pub(in crate::api) async fn file_upload_complete(
     Json(payload): Json<DirectUploadCompleteBody>,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
+        crate::api::ip_rate_limit::enforce_ip_rate_limit(
+            &headers,
+            crate::api::ip_rate_limit::IpRateLimitAction::UploadWrite,
+        )
+        .await?;
+
         if let Err(message) = validate_filename(&payload.filename) {
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
