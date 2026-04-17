@@ -184,9 +184,19 @@ impl MatchingRepository {
         limit: i64,
         conn: &mut crate::db::DbConn,
     ) -> std::result::Result<Vec<Profile>, crate::error::AppError> {
+        let viewer_is_stub = users::table
+            .filter(users::id.eq(user_id))
+            .select(users::is_review_stub)
+            .first::<bool>(conn)
+            .await
+            .optional()?
+            .unwrap_or(false);
+
         profiles::table
+            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
             .left_join(user_settings::table.on(user_settings::user_id.eq(profiles::user_id)))
             .filter(profiles::user_id.ne(user_id))
+            .filter(users::is_review_stub.eq(viewer_is_stub))
             .filter(
                 user_settings::privacy_discoverable
                     .eq(true)

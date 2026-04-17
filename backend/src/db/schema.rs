@@ -316,6 +316,7 @@ diesel::table! {
         magic_link_expiration -> Nullable<Timestamptz>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        is_review_stub -> Bool,
     }
 }
 
