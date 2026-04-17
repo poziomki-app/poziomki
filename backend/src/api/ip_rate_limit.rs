@@ -35,6 +35,7 @@ use super::{error_response, ErrorSpec};
 const IP_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const MATCHING_PROFILES_MAX_PER_MIN: u32 = 30;
 const CHAT_WS_UPGRADE_MAX_PER_MIN: u32 = 60;
+const SEARCH_MAX_PER_MIN: u32 = 20;
 
 /// Bucket name used when no trustworthy client IP can be parsed from the
 /// proxy headers. A shared bucket still caps the endpoint, so missing
@@ -45,6 +46,7 @@ const UNKNOWN_BUCKET: &str = "unknown";
 pub enum IpRateLimitAction {
     MatchingProfiles,
     ChatWsUpgrade,
+    Search,
 }
 
 impl IpRateLimitAction {
@@ -52,6 +54,7 @@ impl IpRateLimitAction {
         match self {
             Self::MatchingProfiles => MATCHING_PROFILES_MAX_PER_MIN,
             Self::ChatWsUpgrade => CHAT_WS_UPGRADE_MAX_PER_MIN,
+            Self::Search => SEARCH_MAX_PER_MIN,
         }
     }
 
@@ -59,6 +62,7 @@ impl IpRateLimitAction {
         match self {
             Self::MatchingProfiles => "ip_matching_profiles",
             Self::ChatWsUpgrade => "ip_chat_ws_upgrade",
+            Self::Search => "ip_search",
         }
     }
 }
@@ -361,5 +365,12 @@ mod tests {
         let h = headers_with("x-real-ip", "2001:db8:abcd:0012:aaaa:bbbb:cccc:dddd");
         let key = rate_key_for(IpRateLimitAction::MatchingProfiles, &h);
         assert_eq!(key, "ip_matching_profiles:2001:db8:abcd:12::/64");
+    }
+
+    #[test]
+    fn rate_key_scopes_search_per_action() {
+        let h = headers_with("x-real-ip", "198.51.100.7");
+        let key = rate_key_for(IpRateLimitAction::Search, &h);
+        assert_eq!(key, "ip_search:198.51.100.7");
     }
 }
