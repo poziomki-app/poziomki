@@ -35,6 +35,7 @@ use super::{error_response, ErrorSpec};
 const IP_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const MATCHING_PROFILES_MAX_PER_MIN: u32 = 30;
 const CHAT_WS_UPGRADE_MAX_PER_MIN: u32 = 60;
+const XP_TOKEN_GEN_MAX_PER_MIN: u32 = 10;
 const UPLOAD_WRITE_MAX_PER_MIN: u32 = 30;
 
 /// Bucket name used when no trustworthy client IP can be parsed from the
@@ -46,6 +47,7 @@ const UNKNOWN_BUCKET: &str = "unknown";
 pub enum IpRateLimitAction {
     MatchingProfiles,
     ChatWsUpgrade,
+    XpTokenGen,
     UploadWrite,
 }
 
@@ -54,6 +56,7 @@ impl IpRateLimitAction {
         match self {
             Self::MatchingProfiles => MATCHING_PROFILES_MAX_PER_MIN,
             Self::ChatWsUpgrade => CHAT_WS_UPGRADE_MAX_PER_MIN,
+            Self::XpTokenGen => XP_TOKEN_GEN_MAX_PER_MIN,
             Self::UploadWrite => UPLOAD_WRITE_MAX_PER_MIN,
         }
     }
@@ -62,6 +65,7 @@ impl IpRateLimitAction {
         match self {
             Self::MatchingProfiles => "ip_matching_profiles",
             Self::ChatWsUpgrade => "ip_chat_ws_upgrade",
+            Self::XpTokenGen => "ip_xp_token_gen",
             Self::UploadWrite => "ip_upload_write",
         }
     }
@@ -365,6 +369,13 @@ mod tests {
         let h = headers_with("x-real-ip", "2001:db8:abcd:0012:aaaa:bbbb:cccc:dddd");
         let key = rate_key_for(IpRateLimitAction::MatchingProfiles, &h);
         assert_eq!(key, "ip_matching_profiles:2001:db8:abcd:12::/64");
+    }
+
+    #[test]
+    fn rate_key_scopes_xp_token_gen_per_action() {
+        let h = headers_with("x-real-ip", "198.51.100.7");
+        let key = rate_key_for(IpRateLimitAction::XpTokenGen, &h);
+        assert_eq!(key, "ip_xp_token_gen:198.51.100.7");
     }
 
     #[test]
