@@ -1,13 +1,21 @@
 //! Reusable helpers for the RLS test suite.
 //!
-//! These helpers never depend on a specific policy being enabled — they
-//! return raw catalog facts (`pg_class.relrowsecurity`, role
-//! privileges, SD function `proconfig`, etc.). Tier-A/B/C policy PRs
-//! build on top of them.
+//! Two connection flavours, used for different purposes:
 //!
-//! The harness intentionally connects via the shared test pool (API role
-//! via `API_DATABASE_URL`, falling back to `DATABASE_URL`) so what the
-//! tests observe matches what production code sees at runtime.
+//! - **Catalog queries** (`table_rls_enabled`, `role_privileges`,
+//!   `sd_function_configs`, etc.) go through the shared test pool
+//!   (`db::conn()`). The pool resolves to `DATABASE_URL` in CI (owner
+//!   role), which is fine — catalog reads are role-agnostic and the
+//!   owner can see everything these helpers ask about.
+//!
+//! - **Visibility tests** (`open_api_role_conn`, `with_api_viewer_tx`)
+//!   open a raw `AsyncPgConnection` against `TEST_API_DATABASE_URL`,
+//!   which the CI workflow wires to `poziomki_api`. This is the role
+//!   the API uses in prod; running visibility assertions against the
+//!   owner would silently bypass RLS and let tier tests pass against
+//!   permissions that don't match runtime. The first test in
+//!   `rls_visibility.rs` asserts `current_user = 'poziomki_api'` so
+//!   any wiring regression fails loudly.
 
 use std::collections::{BTreeMap, BTreeSet};
 
