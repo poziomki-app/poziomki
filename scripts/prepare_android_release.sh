@@ -56,7 +56,6 @@ done
 tar -C "$ROOT_DIR" -czf "$OUTPUT_DIR/poziomki-${version_name}-metadata.tar.gz" \
   .fdroid.yml \
   docs/android-distribution.txt \
-  docs/site \
   fastlane \
   fdroid
 
