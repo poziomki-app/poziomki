@@ -24,19 +24,24 @@ pub(super) fn internal_upload_error(headers: &HeaderMap, message: &str) -> Handl
 }
 
 /// Load the caller's profile inside an existing viewer-scoped transaction.
-/// Returns a `HandlerError` matching the prior behaviour — 403 `ACCESS_DENIED`
-/// when the user has no profile yet.
+/// A missing profile row is a 403 `ACCESS_DENIED` ("Profile not found");
+/// a Diesel-level failure (connection drop, timeout, etc.) surfaces as a
+/// 500 `INTERNAL_ERROR` so real DB problems don't get masked as a client
+/// permission issue.
 pub(super) async fn load_profile_for_user(
     conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     user_id: i32,
 ) -> std::result::Result<Profile, HandlerError> {
-    load_profile_by_user_id(conn, user_id)
-        .await
-        .map_err(|_| {
-            Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")) as HandlerError
-        })?
-        .ok_or_else(|| Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")))
+    match load_profile_by_user_id(conn, user_id).await {
+        Ok(Some(profile)) => Ok(profile),
+        Ok(None) => Err(Box::new(forbidden(
+            headers,
+            "ACCESS_DENIED",
+            "Profile not found",
+        ))),
+        Err(_) => Err(internal_upload_error(headers, "Failed to load profile")),
+    }
 }
 
 pub(super) async fn load_owned_upload(
