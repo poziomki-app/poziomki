@@ -122,4 +122,19 @@ jobs:
           docker exec garage /garage bucket create test-uploads
           docker exec garage /garage bucket allow --read --write --owner test-uploads --key ci-key
 
+      - name: Bootstrap least-privilege DB roles
+        # Mirrors infra/ops/postgres/setup-roles.sql so the RLS baseline tests
+        # (tests/requests/rls_baseline.rs) can observe poziomki_api /
+        # poziomki_worker grants and flags. Passwords are test-only; the CI
+        # postgres service isn't exposed outside the job.
+        working-directory: .
+        env:
+          PGPASSWORD: poziomki
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql -h localhost -U poziomki -d poziomki_test \
+            -v api_password=poziomki_api_ci \
+            -v worker_password=poziomki_worker_ci \
+            -f infra/ops/postgres/setup-roles.sql
+
       - run: cargo test --all-targets

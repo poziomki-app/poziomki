@@ -18,9 +18,10 @@ use super::rls_harness;
 /// `EXPECTED_RLS_DISABLED_TABLES` into the tier-specific expected set in
 /// that PR's test file.
 const EXPECTED_RLS_DISABLED_TABLES: &[&str] = &[
-    // Tier A
+    // Tier A — user/profile-owned rows
     "users",
     "profiles",
+    "profile_tags",
     "sessions",
     "user_settings",
     "user_audit_log",
@@ -30,13 +31,14 @@ const EXPECTED_RLS_DISABLED_TABLES: &[&str] = &[
     "profile_bookmarks",
     "profile_blocks",
     "recommendation_feedback",
+    "event_interactions",
     "reports",
-    // Tier B
+    // Tier B — conversation/message membership-scoped
     "conversations",
     "conversation_members",
     "messages",
     "message_reactions",
-    // Tier C
+    // Tier C — events, attendance, uploads
     "events",
     "event_attendees",
     "uploads",
