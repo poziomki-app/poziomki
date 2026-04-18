@@ -378,7 +378,7 @@ struct SendOutcome {
     created: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::items_after_statements)]
 async fn handle_send(
     viewer: SocketViewer,
     conversation_id: uuid::Uuid,
@@ -425,8 +425,14 @@ async fn handle_send(
     let kind_owned = kind.to_string();
     let client_id_for_tx = client_id.clone();
 
+    enum SendFailure {
+        NotMember,
+        Blocked,
+        Failed(String),
+    }
+
     let result: std::result::Result<
-        std::result::Result<SendOutcome, &'static str>,
+        std::result::Result<SendOutcome, SendFailure>,
         diesel::result::Error,
     > = db::with_viewer_tx(viewer.into(), move |conn| {
         async move {
@@ -434,8 +440,8 @@ async fn handle_send(
                 .await
                 .map_err(into_diesel)?
             {
-                return Ok::<std::result::Result<SendOutcome, &'static str>, diesel::result::Error>(
-                    Err("not_member"),
+                return Ok::<std::result::Result<SendOutcome, SendFailure>, diesel::result::Error>(
+                    Err(SendFailure::NotMember),
                 );
             }
 
@@ -443,10 +449,13 @@ async fn handle_send(
                 .await
                 .map_err(into_diesel)?
             {
-                return Ok(Err("blocked"));
+                return Ok(Err(SendFailure::Blocked));
             }
 
-            let (_msg, payload, created) = chat_messages::create_message(
+            // create_message surfaces semantic errors ("reply_to does not
+            // belong", dedup race recoveries); capture so the client sees
+            // the actual message.
+            let (_msg, payload, created) = match chat_messages::create_message(
                 conn,
                 conversation_id,
                 user_id,
@@ -456,7 +465,10 @@ async fn handle_send(
                 client_id_for_tx,
             )
             .await
-            .map_err(into_diesel)?;
+            {
+                Ok(v) => v,
+                Err(e) => return Ok(Err(SendFailure::Failed(e.to_string()))),
+            };
 
             let members = if created {
                 conversations::member_user_ids(conn, conversation_id)
@@ -506,17 +518,21 @@ async fn handle_send(
                 let _ = outbound_tx.send(server_msg);
             }
         }
-        Ok(Err("not_member")) => {
+        Ok(Err(SendFailure::NotMember)) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: "not a member of this conversation".to_string(),
             });
         }
-        Ok(Err("blocked")) => {
+        Ok(Err(SendFailure::Blocked)) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: "blocked".to_string(),
             });
         }
-        Ok(Err(_)) => {}
+        Ok(Err(SendFailure::Failed(msg))) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("send failed: {msg}"),
+            });
+        }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: format!("send failed: {e}"),
@@ -559,6 +575,7 @@ async fn handle_edit(
         },
         NotMember,
         NotFound,
+        Failed(String),
     }
 
     let result: std::result::Result<Outcome, diesel::result::Error> =
@@ -576,9 +593,15 @@ async fn handle_edit(
                 {
                     return Ok(Outcome::NotMember);
                 }
-                let msg = chat_messages::edit_message(conn, message_id, user_id, &body_owned)
+                // edit_message can fail with semantic errors ("message not
+                // found or not editable", body validation); capture those as
+                // Failed so the client sees the actual message.
+                let msg = match chat_messages::edit_message(conn, message_id, user_id, &body_owned)
                     .await
-                    .map_err(into_diesel)?;
+                {
+                    Ok(m) => m,
+                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
                     .map_err(into_diesel)?;
@@ -620,6 +643,11 @@ async fn handle_edit(
                 message: "message not found".into(),
             });
         }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("edit failed: {msg}"),
+            });
+        }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: format!("edit failed: {e}"),
@@ -645,6 +673,7 @@ async fn handle_delete(
         },
         NotMember,
         NotFound,
+        Failed(String),
     }
 
     let result: std::result::Result<Outcome, diesel::result::Error> =
@@ -662,9 +691,12 @@ async fn handle_delete(
                 {
                     return Ok(Outcome::NotMember);
                 }
-                let msg = chat_messages::delete_message(conn, message_id, user_id)
-                    .await
-                    .map_err(into_diesel)?;
+                // delete_message surfaces "message not found or already
+                // deleted" — capture so the client sees the real message.
+                let msg = match chat_messages::delete_message(conn, message_id, user_id).await {
+                    Ok(m) => m,
+                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
                     .map_err(into_diesel)?;
@@ -700,6 +732,11 @@ async fn handle_delete(
                 message: "message not found".into(),
             });
         }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("delete failed: {msg}"),
+            });
+        }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: format!("delete failed: {e}"),
@@ -732,6 +769,7 @@ async fn handle_react(
         Reacted(ReactRow),
         NotMember,
         NotFound,
+        Failed(String),
     }
 
     let result: std::result::Result<Outcome, diesel::result::Error> =
@@ -750,9 +788,12 @@ async fn handle_react(
                     return Ok(Outcome::NotMember);
                 }
                 let (added, msg) =
-                    chat_messages::toggle_reaction(conn, message_id, user_id, &emoji_owned)
+                    match chat_messages::toggle_reaction(conn, message_id, user_id, &emoji_owned)
                         .await
-                        .map_err(into_diesel)?;
+                    {
+                        Ok(v) => v,
+                        Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                    };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
                     .map_err(into_diesel)?;
@@ -791,6 +832,11 @@ async fn handle_react(
         Ok(Outcome::NotFound) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: "message not found".into(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("react failed: {msg}"),
             });
         }
         Err(e) => {
@@ -917,6 +963,7 @@ async fn handle_history(
             has_more: bool,
         },
         NotMember,
+        Failed(String),
     }
 
     let result: std::result::Result<Outcome, diesel::result::Error> =
@@ -928,10 +975,20 @@ async fn handle_history(
                 {
                     return Ok::<Outcome, diesel::result::Error>(Outcome::NotMember);
                 }
-                let (messages, has_more) =
-                    chat_messages::load_history(conn, conversation_id, before, limit, user_id)
-                        .await
-                        .map_err(into_diesel)?;
+                // load_history can surface semantic errors (invalid cursor,
+                // etc.); capture so the client sees the actual message.
+                let (messages, has_more) = match chat_messages::load_history(
+                    conn,
+                    conversation_id,
+                    before,
+                    limit,
+                    user_id,
+                )
+                .await
+                {
+                    Ok(v) => v,
+                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                };
                 Ok(Outcome::Ok { messages, has_more })
             }
             .scope_boxed()
@@ -949,6 +1006,11 @@ async fn handle_history(
         Ok(Outcome::NotMember) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: "not a member of this conversation".to_string(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("history failed: {msg}"),
             });
         }
         Err(e) => {
