@@ -69,3 +69,28 @@ ALTER DEFAULT PRIVILEGES FOR ROLE poziomki IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE poziomki IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES
   TO poziomki_api, poziomki_worker;
+
+-- ---------------------------------------------------------------------------
+-- Catch-up grants for the `app` schema
+--
+-- The `app` schema is created by later migrations (SECURITY DEFINER helpers
+-- for the auth path). When setup-roles.sh runs AFTER those migrations have
+-- applied, we still need to grant USAGE + EXECUTE on everything the API role
+-- should call. The DO block is a no-op on pristine databases where the
+-- schema doesn't exist yet — the corresponding migration does the grants on
+-- first run, and re-running this script after any future app.* function
+-- lands picks up the new grants.
+-- ---------------------------------------------------------------------------
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'app') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA app TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO poziomki_api';
+        -- Prospective: any function added to `app` by a future migration
+        -- auto-grants EXECUTE to poziomki_api without operator intervention.
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE poziomki IN SCHEMA app '
+             || 'GRANT EXECUTE ON FUNCTIONS TO poziomki_api';
+    END IF;
+END
+$$;
