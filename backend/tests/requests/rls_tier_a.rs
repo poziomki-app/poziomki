@@ -198,7 +198,14 @@ async fn user_settings_viewer_sees_only_own_row() {
         let mut conn = db::conn().await.expect("pool");
         for u in [&alice.user, &bob.user] {
             diesel::insert_into(user_settings::table)
-                .values((user_settings::user_id.eq(u.id),))
+                .values((
+                    user_settings::user_id.eq(u.id),
+                    user_settings::theme.eq("system"),
+                    user_settings::language.eq("en"),
+                    user_settings::notifications_enabled.eq(true),
+                    user_settings::privacy_show_program.eq(true),
+                    user_settings::privacy_discoverable.eq(true),
+                ))
                 .execute(&mut conn)
                 .await
                 .expect("seed settings");
@@ -258,6 +265,7 @@ async fn push_subscriptions_viewer_sees_only_own_row() {
             diesel::insert_into(push_subscriptions::table)
                 .values((
                     push_subscriptions::user_id.eq(u.id),
+                    push_subscriptions::device_id.eq(format!("device-{}", u.id)),
                     push_subscriptions::ntfy_topic.eq(format!("topic-{}", u.id)),
                 ))
                 .execute(&mut conn)

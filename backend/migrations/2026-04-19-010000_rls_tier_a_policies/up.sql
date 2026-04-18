@@ -54,9 +54,18 @@ $$;
 COMMENT ON FUNCTION app.current_is_stub() IS
     'Viewer stub flag from the app.is_stub GUC. Defaults to false; review-stub and real-user buckets never mix.';
 
+-- `viewer_profile_ids()` is SECURITY DEFINER so policies that reference it
+-- (xp_scans, task_completions, profile_bookmarks, profile_blocks,
+-- recommendation_feedback, event_interactions, reports) aren't blocked by
+-- the recursive `profiles` RLS check when the policy body evaluates.
+-- Without BYPASSRLS here, "SELECT id FROM profiles WHERE user_id = me"
+-- would be filtered to the viewer's own row (fine for own-scoped
+-- policies) but also trips when evaluating table policies that share
+-- the subquery — cleanest is a definer-level helper.
 CREATE OR REPLACE FUNCTION app.viewer_profile_ids()
 RETURNS TABLE (id uuid)
 LANGUAGE sql
+SECURITY DEFINER
 STABLE
 SET search_path = pg_catalog, pg_temp
 AS $$
@@ -64,11 +73,33 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION app.viewer_profile_ids() IS
-    'Profile ids owned by the current viewer. Consumed by policies that scope access to "profiles I own" (profile_tags, profile_bookmarks, profile_blocks, xp_scans, task_completions, recommendation_feedback, event_interactions, reports).';
+    'Profile ids owned by the current viewer. SECURITY DEFINER so policy expressions that embed it aren''t re-filtered by the profiles RLS policy.';
+
+-- `profiles_in_current_bucket()` is the cross-user read primitive. Its
+-- SECURITY DEFINER bypass lets policies on profiles + profile_tags see
+-- every profile in the same stub bucket (matching / attendee previews
+-- / DM resolution depend on this). Narrow returns — only `id` — so no
+-- sensitive column leaks even if a caller could invoke it unexpectedly.
+CREATE OR REPLACE FUNCTION app.profiles_in_current_bucket()
+RETURNS TABLE (id uuid)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT p.id
+    FROM public.profiles p
+    JOIN public.users u ON u.id = p.user_id
+    WHERE u.is_review_stub = app.current_is_stub()
+$$;
+
+COMMENT ON FUNCTION app.profiles_in_current_bucket() IS
+    'All profile ids whose owner is in the viewer''s stub bucket. Bypasses RLS on users + profiles so policies that embed it don''t recursively self-filter.';
 
 REVOKE EXECUTE ON FUNCTION app.current_user_id() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.current_is_stub() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_profile_ids() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.profiles_in_current_bucket() FROM PUBLIC;
 
 DO $$
 BEGIN
@@ -77,6 +108,7 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.current_user_id() TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.current_is_stub() TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_profile_ids() TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.profiles_in_current_bucket() TO poziomki_api';
     END IF;
 END
 $$;
@@ -108,13 +140,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 CREATE POLICY profiles_viewer ON public.profiles
     FOR ALL TO poziomki_api
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.users u
-            WHERE u.id = profiles.user_id
-              AND u.is_review_stub = app.current_is_stub()
-        )
-    )
+    USING (id IN (SELECT id FROM app.profiles_in_current_bucket()))
     WITH CHECK (user_id = app.current_user_id());
 
 -- ---------------------------------------------------------------------------
@@ -128,13 +154,7 @@ ALTER TABLE public.profile_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_tags FORCE ROW LEVEL SECURITY;
 CREATE POLICY profile_tags_viewer ON public.profile_tags
     FOR ALL TO poziomki_api
-    USING (
-        profile_id IN (
-            SELECT p.id FROM public.profiles p
-            JOIN public.users u ON u.id = p.user_id
-            WHERE u.is_review_stub = app.current_is_stub()
-        )
-    )
+    USING (profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
     WITH CHECK (profile_id IN (SELECT id FROM app.viewer_profile_ids()));
 
 -- ---------------------------------------------------------------------------

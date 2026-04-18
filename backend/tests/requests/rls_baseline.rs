@@ -64,6 +64,10 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "mark_email_verified",
     "profile_owner_user_id",
     "profile_program_visibility",
+    // Tier-A policy-support helpers. These return narrow viewer-scoped
+    // row sets and are SECURITY DEFINER so policy expressions that embed
+    // them don't recursively self-filter against RLS.
+    "profiles_in_current_bucket",
     "push_topics_for_users",
     "resolve_session",
     "set_password_reset_token",
@@ -71,14 +75,14 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "user_pid_for_id",
     "user_pids_for_ids",
     "user_review_stubs",
+    "viewer_profile_ids",
 ];
 
-/// Policy-support helpers added by the Tier-A migration. These run as
-/// the caller (not SECURITY DEFINER) so they show up in a separate
-/// catalog scan; the hardened-search_path test would ignore them, but
-/// we still assert their presence so a dropped helper surfaces here.
-const EXPECTED_POLICY_HELPERS: &[&str] =
-    &["current_is_stub", "current_user_id", "viewer_profile_ids"];
+/// Non-SECURITY-DEFINER helpers in schema `app`. These only consult GUCs
+/// (no table reads), so they don't need definer rights. Listed
+/// separately so a dropped helper surfaces loudly even though it won't
+/// appear in the hardened-search_path test.
+const EXPECTED_POLICY_HELPERS: &[&str] = &["current_is_stub", "current_user_id"];
 
 fn setup() {
     let _ = dotenvy::dotenv();

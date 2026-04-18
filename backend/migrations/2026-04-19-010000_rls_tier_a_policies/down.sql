@@ -45,6 +45,7 @@ ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 
+DROP FUNCTION IF EXISTS app.profiles_in_current_bucket();
 DROP FUNCTION IF EXISTS app.viewer_profile_ids();
 DROP FUNCTION IF EXISTS app.current_is_stub();
 DROP FUNCTION IF EXISTS app.current_user_id();
