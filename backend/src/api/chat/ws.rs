@@ -174,12 +174,22 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     hub.unregister(user_id);
 }
 
-/// Wrap an `AppError` into a `diesel::result::Error` that preserves the
-/// original message through the transaction boundary. The outer handler
-/// `format!("{e}")`s it, so semantic errors like "message not found or not
-/// editable" surface to the client instead of a generic `RollbackTransaction`.
+/// Convert an `AppError` from a library helper into a `diesel::result::Error`
+/// that rolls back the transaction.
+///
+/// `AppError::Any` carries diesel / Postgres / pool errors — those collapse
+/// to an opaque `RollbackTransaction` so raw database error text (column
+/// names, constraint names, etc.) never leaks over the WebSocket. The
+/// `Message` / `Validation` variants are intentional, application-level
+/// strings and are safe to surface to clients, so they flow through
+/// `QueryBuilderError` and render via `format!("{e}")` at the outer match.
 fn into_diesel(e: crate::error::AppError) -> diesel::result::Error {
-    diesel::result::Error::QueryBuilderError(Box::new(e))
+    match e {
+        crate::error::AppError::Message(_) | crate::error::AppError::Validation(_) => {
+            diesel::result::Error::QueryBuilderError(Box::new(e))
+        }
+        crate::error::AppError::Any(_) => diesel::result::Error::RollbackTransaction,
+    }
 }
 
 /// Authenticate the first message. Returns a `SocketViewer` + user pid, or
@@ -428,7 +438,6 @@ async fn handle_send(
     enum SendFailure {
         NotMember,
         Blocked,
-        Failed(String),
     }
 
     let result: std::result::Result<
@@ -452,10 +461,14 @@ async fn handle_send(
                 return Ok(Err(SendFailure::Blocked));
             }
 
-            // create_message surfaces semantic errors ("reply_to does not
-            // belong", dedup race recoveries); capture so the client sees
-            // the actual message.
-            let (_msg, payload, created) = match chat_messages::create_message(
+            // create_message does INSERT-then-payload-construction. If
+            // payload construction fails post-INSERT, we MUST roll back,
+            // otherwise the row sits committed without a broadcast. Route
+            // any error through `?` + into_diesel so that happens — the
+            // cost is that pre-write semantic errors (e.g. "reply_to does
+            // not belong") also roll back (harmless) and render via the
+            // `Message`/`Validation` preservation in into_diesel.
+            let (_msg, payload, created) = chat_messages::create_message(
                 conn,
                 conversation_id,
                 user_id,
@@ -465,10 +478,7 @@ async fn handle_send(
                 client_id_for_tx,
             )
             .await
-            {
-                Ok(v) => v,
-                Err(e) => return Ok(Err(SendFailure::Failed(e.to_string()))),
-            };
+            .map_err(into_diesel)?;
 
             let members = if created {
                 conversations::member_user_ids(conn, conversation_id)
@@ -526,11 +536,6 @@ async fn handle_send(
         Ok(Err(SendFailure::Blocked)) => {
             let _ = outbound_tx.send(ServerMessage::Error {
                 message: "blocked".to_string(),
-            });
-        }
-        Ok(Err(SendFailure::Failed(msg))) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: format!("send failed: {msg}"),
             });
         }
         Err(e) => {
@@ -593,14 +598,19 @@ async fn handle_edit(
                 {
                     return Ok(Outcome::NotMember);
                 }
-                // edit_message can fail with semantic errors ("message not
-                // found or not editable", body validation); capture those as
-                // Failed so the client sees the actual message.
+                // edit_message returns AppError::Message for semantic
+                // failures ("not editable", body validation) and
+                // AppError::Any for DB errors. Surface the semantic text
+                // via Outcome::Failed; let DB errors roll back + render
+                // generically via into_diesel.
                 let msg = match chat_messages::edit_message(conn, message_id, user_id, &body_owned)
                     .await
                 {
                     Ok(m) => m,
-                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
                 };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
@@ -691,11 +701,14 @@ async fn handle_delete(
                 {
                     return Ok(Outcome::NotMember);
                 }
-                // delete_message surfaces "message not found or already
-                // deleted" — capture so the client sees the real message.
+                // "message not found or already deleted" is AppError::Message;
+                // DB failures are AppError::Any and get rolled back + generic.
                 let msg = match chat_messages::delete_message(conn, message_id, user_id).await {
                     Ok(m) => m,
-                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
                 };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
@@ -792,7 +805,11 @@ async fn handle_react(
                         .await
                     {
                         Ok(v) => v,
-                        Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                        Err(
+                            crate::error::AppError::Message(m)
+                            | crate::error::AppError::Validation(m),
+                        ) => return Ok(Outcome::Failed(m)),
+                        Err(e) => return Err(into_diesel(e)),
                     };
                 let members = conversations::member_user_ids(conn, msg.conversation_id)
                     .await
@@ -975,8 +992,9 @@ async fn handle_history(
                 {
                     return Ok::<Outcome, diesel::result::Error>(Outcome::NotMember);
                 }
-                // load_history can surface semantic errors (invalid cursor,
-                // etc.); capture so the client sees the actual message.
+                // Semantic errors from load_history surface through
+                // Outcome::Failed; internal DB errors get a rollback +
+                // generic message.
                 let (messages, has_more) = match chat_messages::load_history(
                     conn,
                     conversation_id,
@@ -987,7 +1005,10 @@ async fn handle_history(
                 .await
                 {
                     Ok(v) => v,
-                    Err(e) => return Ok(Outcome::Failed(e.to_string())),
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
                 };
                 Ok(Outcome::Ok { messages, has_more })
             }
