@@ -226,9 +226,9 @@ pub(super) async fn events_recommendations(
     let top = rank_events_and_take(&mut scored, limit);
 
     let top_models: Vec<Event> = top.iter().map(|(_, event)| (*event).clone()).collect();
-    let base =
-        super::events::build_event_responses_with_conn(&top_models, &my_profile_id, &mut conn)
-            .await?;
+    let mut base =
+        super::events::build_event_responses_raw(&mut conn, &top_models, &my_profile_id).await?;
+    super::events::resolve_event_images_for_responses(&mut base).await;
     let score_by_event: HashMap<Uuid, f64> = top
         .iter()
         .map(|(score, event)| (event.id, *score))

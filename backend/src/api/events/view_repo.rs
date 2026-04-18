@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use super::status_from_str;
@@ -36,8 +36,8 @@ fn scope_from_str(s: &str) -> TagScope {
 }
 
 async fn load_profiles_by_ids(
+    conn: &mut AsyncPgConnection,
     ids: &[Uuid],
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Profile>, crate::error::AppError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
@@ -51,8 +51,8 @@ async fn load_profiles_by_ids(
 }
 
 pub(super) async fn load_attendee_rows(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<Vec<AttendeeRow>, crate::error::AppError> {
     let links = event_attendees::table
         .filter(event_attendees::event_id.eq(event_id))
@@ -65,7 +65,7 @@ pub(super) async fn load_attendee_rows(
     }
 
     let profiles_map =
-        load_profiles_by_ids(&profile_ids.into_iter().collect::<Vec<_>>(), conn).await?;
+        load_profiles_by_ids(conn, &profile_ids.into_iter().collect::<Vec<_>>()).await?;
 
     let mut rows: Vec<AttendeeRow> = links
         .iter()
@@ -85,12 +85,12 @@ pub(super) async fn load_attendee_rows(
 }
 
 async fn load_creator_previews(
+    conn: &mut AsyncPgConnection,
     events_list: &[Event],
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, ProfilePreview>, crate::error::AppError> {
     let creator_ids: HashSet<Uuid> = events_list.iter().map(|event| event.creator_id).collect();
     let creator_models =
-        load_profiles_by_ids(&creator_ids.into_iter().collect::<Vec<_>>(), conn).await?;
+        load_profiles_by_ids(conn, &creator_ids.into_iter().collect::<Vec<_>>()).await?;
 
     Ok(creator_models
         .into_values()
@@ -108,8 +108,8 @@ async fn load_creator_previews(
 }
 
 async fn load_event_attendee_map(
+    conn: &mut AsyncPgConnection,
     event_ids: &[Uuid],
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Vec<AttendeeRow>>, crate::error::AppError> {
     let attendee_links = event_attendees::table
         .filter(event_attendees::event_id.eq_any(event_ids))
@@ -121,7 +121,7 @@ async fn load_event_attendee_map(
         .map(|attendee| attendee.profile_id)
         .collect();
     let attendee_profiles =
-        load_profiles_by_ids(&attendee_profile_ids.into_iter().collect::<Vec<_>>(), conn).await?;
+        load_profiles_by_ids(conn, &attendee_profile_ids.into_iter().collect::<Vec<_>>()).await?;
 
     let mut attendees: HashMap<Uuid, Vec<AttendeeRow>> = HashMap::new();
     for link in &attendee_links {
@@ -144,8 +144,8 @@ async fn load_event_attendee_map(
 }
 
 async fn load_event_tag_map(
+    conn: &mut AsyncPgConnection,
     event_ids: &[Uuid],
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashMap<Uuid, Vec<EventTagResponse>>, crate::error::AppError> {
     let tag_links = event_tags::table
         .filter(event_tags::event_id.eq_any(event_ids))
@@ -184,9 +184,9 @@ async fn load_event_tag_map(
 }
 
 async fn load_saved_event_ids(
+    conn: &mut AsyncPgConnection,
     event_ids: &[Uuid],
     profile_id: Uuid,
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
     if event_ids.is_empty() {
         return Ok(HashSet::new());
@@ -203,9 +203,9 @@ async fn load_saved_event_ids(
 }
 
 pub(super) async fn load_event_batch_context(
+    conn: &mut AsyncPgConnection,
     event_models: &[Event],
     profile_id: Uuid,
-    conn: &mut crate::db::DbConn,
 ) -> std::result::Result<EventBatchContext, crate::error::AppError> {
     if event_models.is_empty() {
         return Ok(EventBatchContext {
@@ -217,10 +217,10 @@ pub(super) async fn load_event_batch_context(
     }
 
     let event_ids: Vec<Uuid> = event_models.iter().map(|event| event.id).collect();
-    let creators = load_creator_previews(event_models, conn).await?;
-    let attendees = load_event_attendee_map(&event_ids, conn).await?;
-    let tags = load_event_tag_map(&event_ids, conn).await?;
-    let saved_event_ids = load_saved_event_ids(&event_ids, profile_id, conn).await?;
+    let creators = load_creator_previews(conn, event_models).await?;
+    let attendees = load_event_attendee_map(conn, &event_ids).await?;
+    let tags = load_event_tag_map(conn, &event_ids).await?;
+    let saved_event_ids = load_saved_event_ids(conn, &event_ids, profile_id).await?;
 
     Ok(EventBatchContext {
         creators,

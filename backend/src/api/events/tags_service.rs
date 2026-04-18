@@ -1,48 +1,34 @@
 use axum::http::HeaderMap;
-use axum::response::IntoResponse;
 use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use super::events_service::{validation_error, HandlerError};
 use super::events_tags_repo::{
-    find_or_create_event_tag, find_or_create_event_tag_with_conn, load_existing_event_tag_ids,
-    sync_event_tags_with_conn,
+    find_or_create_event_tag_with_conn, load_existing_event_tag_ids, sync_event_tags_with_conn,
 };
 
 const MAX_EVENT_TAGS: usize = 15;
 
-pub(in crate::api) async fn resolve_event_tag_ids(
+/// Parse and deduplicate a list of tag id strings. Returns a handler error
+/// response on invalid input. Caller must then validate the parsed ids
+/// exist via `validate_event_tag_ids_with_conn` inside a viewer tx.
+pub(in crate::api) fn parse_event_tag_ids(
     headers: &HeaderMap,
-    tag_names: Option<Vec<String>>,
-    tag_ids: Option<Vec<String>>,
+    ids: Vec<String>,
 ) -> std::result::Result<Vec<Uuid>, HandlerError> {
-    if let Some(ids) = tag_ids {
-        if ids.len() > MAX_EVENT_TAGS {
-            return Err(Box::new(validation_error(headers, "Too many tags")));
-        }
-        return validate_event_tag_ids(headers, ids).await;
-    }
-
-    let names = tag_names.unwrap_or_default();
-    if names.len() > MAX_EVENT_TAGS {
+    if ids.len() > MAX_EVENT_TAGS {
         return Err(Box::new(validation_error(headers, "Too many tags")));
     }
 
-    let mut resolved = Vec::new();
-    for raw in names {
-        let trimmed = raw.trim().to_string();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if let Some(id) = find_or_create_event_tag(trimmed).await {
-            resolved.push(id);
-        } else {
-            return Err(Box::new(validation_error(headers, "Invalid tag name")));
-        }
+    let mut parsed = Vec::new();
+    for raw in ids {
+        let uuid = Uuid::parse_str(&raw)
+            .map_err(|_| Box::new(validation_error(headers, "All tagIds must be valid UUIDs")))?;
+        parsed.push(uuid);
     }
-    resolved.sort_unstable();
-    resolved.dedup();
-    Ok(resolved)
+    parsed.sort_unstable();
+    parsed.dedup();
+    Ok(parsed)
 }
 
 pub(in crate::api) async fn resolve_event_tag_ids_with_conn(
@@ -96,45 +82,4 @@ pub(in crate::api) async fn maybe_sync_tags_with_conn(
         sync_event_tags_with_conn(conn, event_id, &resolved).await?;
     }
     Ok(())
-}
-
-async fn validate_event_tag_ids(
-    headers: &HeaderMap,
-    ids: Vec<String>,
-) -> std::result::Result<Vec<Uuid>, HandlerError> {
-    if ids.len() > MAX_EVENT_TAGS {
-        return Err(Box::new(validation_error(headers, "Too many tags")));
-    }
-
-    let mut parsed = Vec::new();
-    for raw in ids {
-        let uuid = Uuid::parse_str(&raw)
-            .map_err(|_| Box::new(validation_error(headers, "All tagIds must be valid UUIDs")))?;
-        parsed.push(uuid);
-    }
-
-    parsed.sort_unstable();
-    parsed.dedup();
-
-    if parsed.is_empty() {
-        return Ok(parsed);
-    }
-
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|e| Box::new(crate::error::AppError::from(e).into_response()))?;
-    let matched: std::collections::HashSet<Uuid> = load_existing_event_tag_ids(&mut conn, &parsed)
-        .await
-        .map_err(|e| Box::new(e.into_response()))?
-        .into_iter()
-        .collect();
-
-    if matched.len() != parsed.len() {
-        return Err(Box::new(validation_error(
-            headers,
-            "All tagIds must reference existing interest tags",
-        )));
-    }
-
-    Ok(parsed)
 }
