@@ -65,6 +65,10 @@ services:
       DB_NAME: ${POSTGRES_DB:-poziomki}
       DB_USER: ${POSTGRES_USER:-poziomki}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      API_DB_USER: ${POSTGRES_API_USER:-poziomki_api}
+      API_DB_PASSWORD: ${POSTGRES_API_PASSWORD:-}
+      WORKER_DB_USER: ${POSTGRES_WORKER_USER:-poziomki_worker}
+      WORKER_DB_PASSWORD: ${POSTGRES_WORKER_PASSWORD:-}
       DEFAULT_POOL_SIZE: ${PGDOG_POOL_SIZE:-20}
       POOL_MODE: transaction
       LISTEN_PORT: 6432
@@ -113,7 +117,12 @@ services:
       METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      # Owner URL used ONLY for migrations (schema changes need the owner role).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+      # Least-privilege URL the API pool connects as. Leave unset in .env until
+      # roles have been bootstrapped via infra/ops/postgres/setup-roles.sh; the
+      # Rust pool falls back to DATABASE_URL when this is empty.
+      API_DATABASE_URL: ${API_DATABASE_URL:-}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-16}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
@@ -172,7 +181,13 @@ services:
       RUST_ENV: production
       METRICS_PORT: 9093
       SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      # Owner URL used ONLY for migrations (worker also runs pending migrations
+      # on boot via build_app_context).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+      # Worker pool URL. Worker has BYPASSRLS because outbox dispatch and
+      # cleanup legitimately act across users. Leave unset in .env until roles
+      # have been bootstrapped; Rust falls back to DATABASE_URL when empty.
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:-}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${WORKER_DB_POOL_CREATE_TIMEOUT_MS:-5000}

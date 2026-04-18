@@ -120,24 +120,47 @@ fn load_runtime_config() -> crate::error::AppResult<RuntimeConfig> {
     Ok(RuntimeConfig { binding, port })
 }
 
-fn init_diesel_pool() -> crate::error::AppResult<()> {
-    let url = std::env::var("DATABASE_URL")
-        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
+#[derive(Clone, Copy)]
+enum PoolRole {
+    Api,
+    Worker,
+}
+
+// The pool URL is chosen per-process so the API and worker can connect as
+// least-privilege roles (poziomki_api / poziomki_worker) while migrations
+// keep using the owner role via DATABASE_URL. When the role-specific var is
+// unset we fall back to DATABASE_URL, which preserves current dev behaviour.
+fn resolve_pool_url(role: PoolRole) -> crate::error::AppResult<String> {
+    let primary = match role {
+        PoolRole::Api => "API_DATABASE_URL",
+        PoolRole::Worker => "WORKER_DATABASE_URL",
+    };
+    if let Ok(value) = std::env::var(primary) {
+        if !value.trim().is_empty() {
+            return Ok(value);
+        }
+    }
+    std::env::var("DATABASE_URL")
+        .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))
+}
+
+fn init_diesel_pool(role: PoolRole) -> crate::error::AppResult<()> {
+    let url = resolve_pool_url(role)?;
     crate::db::init_pool(&url).map_err(crate::error::AppError::Message)
 }
 
-fn build_app_context() -> crate::error::AppResult<AppContext> {
-    let url = std::env::var("DATABASE_URL")
+fn build_app_context(role: PoolRole) -> crate::error::AppResult<AppContext> {
+    let migration_url = std::env::var("DATABASE_URL")
         .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))?;
-    crate::db::run_migrations(&url).map_err(crate::error::AppError::Message)?;
-    init_diesel_pool()?;
+    crate::db::run_migrations(&migration_url).map_err(crate::error::AppError::Message)?;
+    init_diesel_pool(role)?;
     Ok(AppContext {
         chat_hub: crate::api::chat::hub::ChatHub::new(),
     })
 }
 
 pub fn build_test_app_context() -> crate::error::AppResult<AppContext> {
-    build_app_context()
+    build_app_context(PoolRole::Api)
 }
 
 pub async fn reset_test_database() -> crate::error::AppResult<()> {
@@ -153,7 +176,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     init_tracing_once()?;
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Api)?;
     let cfg = load_runtime_config()?;
-    let ctx = build_app_context()?;
+    let ctx = build_app_context(PoolRole::Api)?;
     let router = build_router_with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
@@ -178,7 +201,7 @@ pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     init_tracing_once()?;
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     let _cfg = load_runtime_config()?;
-    let ctx = build_app_context()?;
+    let ctx = build_app_context(PoolRole::Worker)?;
 
     crate::jobs::start_background_workers(&ctx)?;
     tracing::info!("Poziomki outbox worker process started");
