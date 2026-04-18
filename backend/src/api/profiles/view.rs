@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::{
@@ -27,6 +27,7 @@ async fn lookup_thumbhash(profile_picture: Option<&String>) -> Option<String> {
 }
 
 async fn resolve_program(
+    conn: &mut AsyncPgConnection,
     program: Option<String>,
     viewer_user_id: Option<i32>,
     profile_user_id: i32,
@@ -34,18 +35,13 @@ async fn resolve_program(
     if viewer_user_id == Some(profile_user_id) {
         return program;
     }
-    let show = {
-        let Ok(mut conn) = crate::db::conn().await else {
-            return None;
-        };
-        user_settings::table
-            .filter(user_settings::user_id.eq(profile_user_id))
-            .first::<UserSetting>(&mut conn)
-            .await
-            .optional()
-            .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
-            .unwrap_or(false)
-    };
+    let show = user_settings::table
+        .filter(user_settings::user_id.eq(profile_user_id))
+        .first::<UserSetting>(conn)
+        .await
+        .optional()
+        .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
+        .unwrap_or(false);
     if show {
         program
     } else {
@@ -54,6 +50,7 @@ async fn resolve_program(
 }
 
 pub(in crate::api) async fn profile_to_response(
+    conn: &mut AsyncPgConnection,
     profile: &Profile,
     user_pid: &Uuid,
     viewer_user_id: Option<i32>,
@@ -68,7 +65,13 @@ pub(in crate::api) async fn profile_to_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
+    let program = resolve_program(
+        conn,
+        profile.program.clone(),
+        viewer_user_id,
+        profile.user_id,
+    )
+    .await;
 
     let bio = match &profile.bio {
         Some(b) => Some(resolve_bio_image_urls(b).await),
@@ -95,11 +98,12 @@ pub(in crate::api) async fn profile_to_response(
 }
 
 pub(in crate::api) async fn full_profile_response(
+    conn: &mut AsyncPgConnection,
     profile: &Profile,
     user_pid: &Uuid,
     viewer_user_id: Option<i32>,
 ) -> std::result::Result<FullProfileResponse, crate::error::AppError> {
-    let profile_tags = load_profile_tags(profile.id).await?;
+    let profile_tags = load_profile_tags(conn, profile.id).await?;
 
     let profile_picture = match &profile.profile_picture {
         Some(pic) => Some(resolve_image_url(pic).await),
@@ -111,7 +115,13 @@ pub(in crate::api) async fn full_profile_response(
     let raw_images = decode_profile_images(profile);
     let images = resolve_image_urls(&raw_images).await;
 
-    let program = resolve_program(profile.program.clone(), viewer_user_id, profile.user_id).await;
+    let program = resolve_program(
+        conn,
+        profile.program.clone(),
+        viewer_user_id,
+        profile.user_id,
+    )
+    .await;
 
     let bio = match &profile.bio {
         Some(b) => Some(resolve_bio_image_urls(b).await),

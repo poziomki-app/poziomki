@@ -3,7 +3,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::state::{DataResponse, SuccessResponse};
@@ -16,6 +16,7 @@ use super::profiles_view::profile_to_response;
 use crate::api::state::ProfileResponse;
 
 pub(in crate::api) async fn profile_bookmark(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     my_profile: &Profile,
     target_id: Uuid,
@@ -32,13 +33,11 @@ pub(in crate::api) async fn profile_bookmark(
         ));
     }
 
-    let mut conn = crate::db::conn().await?;
-
     // Verify target profile exists
     let target_exists = profiles::table
         .find(target_id)
         .select(profiles::id)
-        .first::<Uuid>(&mut conn)
+        .first::<Uuid>(conn)
         .await
         .optional()?;
     if target_exists.is_none() {
@@ -65,7 +64,7 @@ pub(in crate::api) async fn profile_bookmark(
             profile_bookmarks::target_profile_id,
         ))
         .do_nothing()
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     Ok(Json(DataResponse {
@@ -75,17 +74,16 @@ pub(in crate::api) async fn profile_bookmark(
 }
 
 pub(in crate::api) async fn profile_unbookmark(
+    conn: &mut AsyncPgConnection,
     my_profile_id: Uuid,
     target_id: Uuid,
 ) -> crate::error::AppResult<Response> {
-    let mut conn = crate::db::conn().await?;
-
     diesel::delete(
         profile_bookmarks::table
             .filter(profile_bookmarks::profile_id.eq(my_profile_id))
             .filter(profile_bookmarks::target_profile_id.eq(target_id)),
     )
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
 
     Ok(Json(DataResponse {
@@ -95,11 +93,10 @@ pub(in crate::api) async fn profile_unbookmark(
 }
 
 pub(in crate::api) async fn profiles_bookmarked(
+    conn: &mut AsyncPgConnection,
     my_profile_id: Uuid,
     viewer_user_id: i32,
 ) -> crate::error::AppResult<Vec<ProfileResponse>> {
-    let mut conn = crate::db::conn().await?;
-
     let bookmarked_profiles: Vec<(ProfileBookmark, (Profile, Uuid))> = profile_bookmarks::table
         .inner_join(
             profiles::table
@@ -112,26 +109,26 @@ pub(in crate::api) async fn profiles_bookmarked(
             profile_bookmarks::all_columns,
             (profiles::all_columns, users::pid),
         ))
-        .load(&mut conn)
+        .load(conn)
         .await?;
 
     let mut responses = Vec::with_capacity(bookmarked_profiles.len());
     for (_bookmark, (profile, user_pid)) in bookmarked_profiles {
-        let response = profile_to_response(&profile, &user_pid, Some(viewer_user_id)).await;
+        let response = profile_to_response(conn, &profile, &user_pid, Some(viewer_user_id)).await;
         responses.push(response);
     }
     Ok(responses)
 }
 
 pub(in crate::api) async fn is_bookmarked(
+    conn: &mut AsyncPgConnection,
     my_profile_id: Uuid,
     target_profile_id: Uuid,
 ) -> crate::error::AppResult<bool> {
-    let mut conn = crate::db::conn().await?;
     let exists = profile_bookmarks::table
         .find((my_profile_id, target_profile_id))
         .select(profile_bookmarks::profile_id)
-        .first::<Uuid>(&mut conn)
+        .first::<Uuid>(conn)
         .await
         .optional()?;
     Ok(exists.is_some())

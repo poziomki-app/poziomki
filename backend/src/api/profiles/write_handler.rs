@@ -10,7 +10,8 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use super::{full_profile_response, parse_tag_uuids, sync_profile_tags};
@@ -18,6 +19,7 @@ use crate::api::{
     extract_filename,
     state::{CreateProfileBody, DataResponse, SuccessResponse, UpdateProfileBody},
 };
+use crate::db;
 use crate::db::models::profiles::{NewProfile, Profile};
 use crate::db::schema::profiles;
 
@@ -56,19 +58,19 @@ fn build_create_model(
 }
 
 async fn insert_profile(
+    conn: &mut AsyncPgConnection,
     new_profile: &NewProfile,
     profile_id: Uuid,
     payload: &CreateProfileBody,
 ) -> Result<Profile> {
-    let mut conn = crate::db::conn().await?;
     let inserted = diesel::insert_into(profiles::table)
         .values(new_profile)
-        .get_result::<Profile>(&mut conn)
+        .get_result::<Profile>(conn)
         .await?;
 
     let tag_ids = parse_tag_uuids(payload.tags.clone().or_else(|| payload.tag_ids.clone()));
     if !tag_ids.is_empty() {
-        sync_profile_tags(profile_id, &tag_ids).await?;
+        sync_profile_tags(conn, profile_id, &tag_ids).await?;
     }
 
     Ok(inserted)
@@ -79,37 +81,72 @@ pub(in crate::api) async fn profile_create(
     headers: HeaderMap,
     Json(payload): Json<CreateProfileBody>,
 ) -> Result<Response> {
-    let user = match validate_create(&headers, &payload).await {
-        Ok(u) => u,
+    let (_session, user) = match crate::api::state::require_auth_db(&headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
-    let picture =
-        match resolve_picture_filename(&headers, None, payload.profile_picture.as_deref()).await {
-            Ok(p) => p,
-            Err(response) => return Ok(*response),
-        };
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
 
-    let (new_profile, profile_id) = build_create_model(&user, &payload, picture);
-    let inserted = insert_profile(&new_profile, profile_id, &payload).await?;
+    let user_clone = user.clone();
+    let payload_clone = payload.clone();
+    let headers_clone = headers.clone();
 
-    let data = full_profile_response(&inserted, &user.pid, Some(user.id)).await?;
-    Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
+    let result: Result<Response> = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            // validate_create re-verifies auth (cheap, uses cache) but we want
+            // the existence check to run inside this viewer transaction.
+            let user = match validate_create(conn, &headers_clone, &payload_clone).await {
+                Ok(u) => u,
+                Err(response) => return Ok::<Response, diesel::result::Error>(*response),
+            };
+            let picture = match resolve_picture_filename(
+                conn,
+                &headers_clone,
+                None,
+                payload_clone.profile_picture.as_deref(),
+            )
+            .await
+            {
+                Ok(p) => p,
+                Err(response) => return Ok(*response),
+            };
+
+            let (new_profile, profile_id) = build_create_model(&user, &payload_clone, picture);
+            let inserted = insert_profile(conn, &new_profile, profile_id, &payload_clone)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            let data = full_profile_response(conn, &inserted, &user.pid, Some(user.id))
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok((axum::http::StatusCode::CREATED, Json(DataResponse { data })).into_response())
+        }
+        .scope_boxed()
+    })
+    .await
+    .map_err(Into::into);
+
+    let _ = user_clone;
+    result
 }
 
 async fn apply_update(
+    conn: &mut AsyncPgConnection,
     profile: &Profile,
     payload: &UpdateProfileBody,
     changeset: crate::db::models::profiles::ProfileChangeset,
 ) -> Result<Profile> {
-    let mut conn = crate::db::conn().await?;
     let updated = diesel::update(profiles::table.find(profile.id))
         .set(&changeset)
-        .get_result::<Profile>(&mut conn)
+        .get_result::<Profile>(conn)
         .await?;
 
     if payload.tags.is_some() || payload.tag_ids.is_some() {
         let resolved = parse_tag_uuids(payload.tags.clone().or_else(|| payload.tag_ids.clone()));
-        sync_profile_tags(profile.id, &resolved).await?;
+        sync_profile_tags(conn, profile.id, &resolved).await?;
     }
 
     Ok(updated)
@@ -121,16 +158,46 @@ pub(in crate::api) async fn profile_update(
     Path(id): Path<String>,
     Json(payload): Json<UpdateProfileBody>,
 ) -> Result<Response> {
-    let (profile, user, picture) = match validate_and_prepare_update(&headers, &id, &payload).await
-    {
-        Ok(data) => data,
+    let (_session, user) = match crate::api::state::require_auth_db(&headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
-    let changeset = build_update_changeset(&payload, picture);
-    let updated = apply_update(&profile, &payload, changeset).await?;
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let headers_clone = headers.clone();
+    let payload_clone = payload.clone();
 
-    let data = full_profile_response(&updated, &user.pid, Some(user.id)).await?;
-    Ok(Json(DataResponse { data }).into_response())
+    db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let (profile, user, picture) = match validate_and_prepare_update(
+                conn,
+                &headers_clone,
+                &id,
+                &payload_clone,
+            )
+            .await
+            {
+                Ok(data) => data,
+                Err(response) => {
+                    return Ok::<Response, diesel::result::Error>(*response);
+                }
+            };
+            let changeset = build_update_changeset(&payload_clone, picture);
+            let updated = apply_update(conn, &profile, &payload_clone, changeset)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            let data = full_profile_response(conn, &updated, &user.pid, Some(user.id))
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok(Json(DataResponse { data }).into_response())
+        }
+        .scope_boxed()
+    })
+    .await
+    .map_err(Into::into)
 }
 
 pub(in crate::api) async fn profile_delete(
@@ -138,15 +205,31 @@ pub(in crate::api) async fn profile_delete(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response> {
-    let (profile, _user) = match load_and_verify_profile(&headers, &id).await {
-        Ok(p) => p,
+    let (_session, user) = match crate::api::state::require_auth_db(&headers).await {
+        Ok(auth) => auth,
         Err(response) => return Ok(*response),
     };
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let headers_clone = headers.clone();
 
-    let mut conn = crate::db::conn().await?;
-    diesel::delete(profiles::table.find(profile.id))
-        .execute(&mut conn)
-        .await?;
+    db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let (profile, _user) = match load_and_verify_profile(conn, &headers_clone, &id).await {
+                Ok(p) => p,
+                Err(response) => return Ok::<Response, diesel::result::Error>(*response),
+            };
 
-    Ok(Json(SuccessResponse { success: true }).into_response())
+            diesel::delete(profiles::table.find(profile.id))
+                .execute(conn)
+                .await?;
+
+            Ok(Json(SuccessResponse { success: true }).into_response())
+        }
+        .scope_boxed()
+    })
+    .await
+    .map_err(Into::into)
 }

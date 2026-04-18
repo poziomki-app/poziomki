@@ -3,7 +3,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::state::{DataResponse, SuccessResponse};
@@ -12,6 +12,7 @@ use crate::db::models::profile_blocks::ProfileBlock;
 use crate::db::schema::{profile_blocks, profiles};
 
 pub(in crate::api) async fn profile_block(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     my_profile_id: Uuid,
     target_id: Uuid,
@@ -28,13 +29,11 @@ pub(in crate::api) async fn profile_block(
         ));
     }
 
-    let mut conn = crate::db::conn().await?;
-
     // Verify target profile exists
     let target_exists = profiles::table
         .find(target_id)
         .select(profiles::id)
-        .first::<Uuid>(&mut conn)
+        .first::<Uuid>(conn)
         .await
         .optional()?;
     if target_exists.is_none() {
@@ -58,7 +57,7 @@ pub(in crate::api) async fn profile_block(
         })
         .on_conflict((profile_blocks::blocker_id, profile_blocks::blocked_id))
         .do_nothing()
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     Ok(Json(DataResponse {
@@ -68,17 +67,16 @@ pub(in crate::api) async fn profile_block(
 }
 
 pub(in crate::api) async fn profile_unblock(
+    conn: &mut AsyncPgConnection,
     my_profile_id: Uuid,
     target_id: Uuid,
 ) -> crate::error::AppResult<Response> {
-    let mut conn = crate::db::conn().await?;
-
     diesel::delete(
         profile_blocks::table
             .filter(profile_blocks::blocker_id.eq(my_profile_id))
             .filter(profile_blocks::blocked_id.eq(target_id)),
     )
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
 
     Ok(Json(DataResponse {

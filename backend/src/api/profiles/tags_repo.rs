@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::state::{TagResponse, TagScope};
@@ -15,16 +15,15 @@ fn scope_from_str(s: &str) -> TagScope {
 }
 
 pub(in crate::api) async fn load_profile_tags(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<TagResponse>, crate::error::AppError> {
     use crate::db::models::tags::Tag;
     use crate::db::schema::tags;
 
-    let mut conn = crate::db::conn().await?;
-
     let tag_links = profile_tags::table
         .filter(profile_tags::profile_id.eq(profile_id))
-        .load::<ProfileTag>(&mut conn)
+        .load::<ProfileTag>(conn)
         .await?;
 
     let tag_ids: Vec<Uuid> = tag_links.iter().map(|link| link.tag_id).collect();
@@ -34,7 +33,7 @@ pub(in crate::api) async fn load_profile_tags(
 
     let tag_models = tags::table
         .filter(tags::id.eq_any(&tag_ids))
-        .load::<Tag>(&mut conn)
+        .load::<Tag>(conn)
         .await?;
 
     Ok(tag_models
@@ -52,13 +51,12 @@ pub(in crate::api) async fn load_profile_tags(
 }
 
 pub(in crate::api) async fn sync_profile_tags(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
     tag_ids: &[Uuid],
 ) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     diesel::delete(profile_tags::table.filter(profile_tags::profile_id.eq(profile_id)))
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     let new_tags: Vec<ProfileTag> = tag_ids
@@ -72,7 +70,7 @@ pub(in crate::api) async fn sync_profile_tags(
     if !new_tags.is_empty() {
         diesel::insert_into(profile_tags::table)
             .values(&new_tags)
-            .execute(&mut conn)
+            .execute(conn)
             .await?;
     }
 
