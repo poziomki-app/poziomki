@@ -257,9 +257,7 @@ pub(super) async fn sign_out(
     if let Some(token) = extract_bearer_token(&headers) {
         let hashed = hash_session_token(&token);
         if let Ok(mut conn) = crate::db::conn().await {
-            let _ = diesel::delete(sessions::table.filter(sessions::token.eq(&hashed)))
-                .execute(&mut conn)
-                .await;
+            let _ = crate::db::delete_session_by_token(&mut conn, &hashed).await;
         }
         invalidate_auth_cache_for_token(&token).await;
     }
@@ -271,21 +269,32 @@ pub(super) async fn sessions(
     headers: HeaderMap,
 ) -> Result<Response> {
     let (_session, user) = auth_or_respond!(headers);
-
+    let viewer = crate::db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let caller_user_id = user.id;
     let now = Utc::now();
-    let mut conn = crate::db::conn().await?;
-    let user_sessions = sessions::table
-        .filter(sessions::user_id.eq(user.id))
-        .filter(sessions::expires_at.gt(now))
-        .load::<Session>(&mut conn)
-        .await?;
 
-    let user_pid = user.pid.to_string();
+    let user_sessions = crate::db::with_viewer_tx(viewer, |conn| {
+        use diesel_async::scoped_futures::ScopedFutureExt;
+        async move {
+            sessions::table
+                .filter(sessions::user_id.eq(caller_user_id))
+                .filter(sessions::expires_at.gt(now))
+                .load::<Session>(conn)
+                .await
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    let caller_pid = user.pid.to_string();
     let data = user_sessions
         .iter()
         .map(|s| SessionListItem {
             id: s.id.to_string(),
-            user_id: user_pid.clone(),
+            user_id: caller_pid.clone(),
             expires_at: s.expires_at.to_rfc3339(),
             created_at: s.created_at.to_rfc3339(),
             ip_address: s.ip_address.clone(),

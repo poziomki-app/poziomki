@@ -131,12 +131,78 @@ $$;
 COMMENT ON FUNCTION app.complete_password_reset(int, text, timestamptz) IS
     'Rotate password hash, clear reset token, and invalidate all sessions for a user.';
 
+-- Create a session row for a user who has just been authenticated (sign-in,
+-- OTP verify, password reset). Called before the caller has set a viewer
+-- context. The caller provides the session id so it can embed it in the
+-- bearer token without an extra round-trip. Returns the inserted row.
+CREATE OR REPLACE FUNCTION app.create_session_for_user(
+    p_id uuid,
+    p_user_id int,
+    p_token_hash text,
+    p_ip_address varchar,
+    p_user_agent varchar,
+    p_now timestamptz,
+    p_expires_at timestamptz
+)
+RETURNS TABLE (
+    id uuid,
+    user_id int,
+    token varchar,
+    ip_address varchar,
+    user_agent varchar,
+    expires_at timestamptz,
+    created_at timestamptz,
+    updated_at timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    INSERT INTO sessions (id, user_id, token, ip_address, user_agent, expires_at, created_at, updated_at)
+    VALUES (p_id, p_user_id, p_token_hash, p_ip_address, p_user_agent, p_expires_at, p_now, p_now)
+    RETURNING id, user_id, token, ip_address, user_agent, expires_at, created_at, updated_at;
+$$;
+
+COMMENT ON FUNCTION app.create_session_for_user(uuid, int, text, varchar, varchar, timestamptz, timestamptz) IS
+    'Insert a session row with a caller-supplied id. Caller must have verified credentials/OTP/reset-token first.';
+
+-- Delete a session by exact hashed token (sign-out path). Idempotent.
+CREATE OR REPLACE FUNCTION app.delete_session_by_token(p_token_hash text)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    DELETE FROM sessions WHERE token = p_token_hash;
+$$;
+
+COMMENT ON FUNCTION app.delete_session_by_token(text) IS
+    'Delete the session matching a hashed bearer token. Idempotent; used by sign-out.';
+
 REVOKE EXECUTE ON FUNCTION app.create_user_for_signup(uuid, text, text, text, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.mark_email_verified(int, timestamptz) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.set_password_reset_token(int, text, timestamptz) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_user_for_password_reset(text, text, timestamptz) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.complete_password_reset(int, text, timestamptz) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.create_session_for_user(uuid, int, text, varchar, varchar, timestamptz, timestamptz) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.delete_session_by_token(text) FROM PUBLIC;
 
--- Grants to poziomki_api are covered by the ALTER DEFAULT PRIVILEGES clause
--- applied in the earlier auth_security_definer migration; any new function in
--- the `app` schema is auto-granted EXECUTE. Nothing extra is needed here.
+-- Defensive grants. The earlier auth_security_definer migration already
+-- installed ALTER DEFAULT PRIVILEGES for functions in `app`, so a matching
+-- owner role will pick these up automatically. We repeat the explicit grant
+-- block here so this migration is self-contained on any environment where
+-- the prior default-privileges entry wasn't applied (e.g. the owner role
+-- was renamed, a pristine dev clone bootstrapped the API role later, etc.).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.create_user_for_signup(uuid, text, text, text, text) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.mark_email_verified(int, timestamptz) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.set_password_reset_token(int, text, timestamptz) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_user_for_password_reset(text, text, timestamptz) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.complete_password_reset(int, text, timestamptz) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.create_session_for_user(uuid, int, text, varchar, varchar, timestamptz, timestamptz) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.delete_session_by_token(text) TO poziomki_api';
+    END IF;
+END
+$$;

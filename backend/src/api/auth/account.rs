@@ -299,25 +299,89 @@ pub(in crate::api) async fn export_data(
         is_review_stub: user.is_review_stub,
     };
     let user_id = user.id;
+    let user_pid_str = user.pid.to_string();
 
-    let profile = db::with_viewer_tx(viewer, |conn| {
+    // Run every export read inside one viewer-scoped transaction so future
+    // RLS policies scope every SELECT to this user's own rows.
+    let (
+        profile,
+        tags,
+        created_events,
+        attended_events,
+        event_interactions,
+        user_uploads,
+        rec_feedback,
+        user_sessions,
+        settings,
+        upload_filenames,
+    ) = db::with_viewer_tx(viewer, |conn| {
         async move {
-            profiles::table
+            let profile = profiles::table
                 .filter(profiles::user_id.eq(user_id))
                 .first::<Profile>(conn)
                 .await
-                .optional()
+                .optional()?;
+            let profile_id = profile.as_ref().map(|p| p.id);
+
+            let (tags, created, attended, interactions, uploads_list, rec) =
+                if let Some(pid) = profile_id {
+                    let tags = auth_export_queries::load_user_tags(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let created = auth_export_queries::load_created_events(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let attended = auth_export_queries::load_attended_events(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let interactions = auth_export_queries::load_event_interactions(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let uploads_list = auth_export_queries::load_user_uploads(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let rec = auth_export_queries::load_recommendation_feedback(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    (tags, created, attended, interactions, uploads_list, rec)
+                } else {
+                    (vec![], vec![], vec![], vec![], vec![], vec![])
+                };
+
+            let us = auth_export_queries::load_user_sessions(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let set = auth_export_queries::load_user_settings(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let filenames = if let Some(pid) = profile_id {
+                auth_export_queries::load_upload_filenames(conn, pid)
+                    .await
+                    .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            } else {
+                vec![]
+            };
+            Ok::<_, diesel::result::Error>((
+                profile,
+                tags,
+                created,
+                attended,
+                interactions,
+                uploads_list,
+                rec,
+                us,
+                set,
+                filenames,
+            ))
         }
         .scope_boxed()
     })
     .await?;
 
-    let profile_id = profile.as_ref().map(|p| p.id);
-
     let profile_view: Option<serde_json::Value> = profile.map(|p| {
         serde_json::json!({
             "id": p.id.to_string(),
-            "userId": user.pid.to_string(),
+            "userId": user_pid_str,
             "name": p.name,
             "bio": p.bio,
             "profilePicture": p.profile_picture,
@@ -327,12 +391,6 @@ pub(in crate::api) async fn export_data(
             "updatedAt": p.updated_at.to_rfc3339(),
         })
     });
-
-    let (tags, created_events, attended_events, event_interactions, user_uploads, rec_feedback) =
-        load_profile_data(profile_id).await?;
-
-    let user_sessions = auth_export_queries::load_user_sessions(user.id).await?;
-    let settings = auth_export_queries::load_user_settings(user.id).await?;
 
     let export = serde_json::json!({
         "user": {
@@ -353,13 +411,6 @@ pub(in crate::api) async fn export_data(
         "settings": settings,
         "exportedAt": Utc::now().to_rfc3339(),
     });
-
-    // Collect image files from S3
-    let upload_filenames = if let Some(pid) = profile_id {
-        auth_export_queries::load_upload_filenames(pid).await?
-    } else {
-        vec![]
-    };
 
     let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
     for filename in &upload_filenames {
@@ -407,31 +458,4 @@ pub(in crate::api) async fn export_data(
         zip_bytes,
     )
         .into_response())
-}
-
-async fn load_profile_data(
-    profile_id: Option<uuid::Uuid>,
-) -> std::result::Result<
-    (
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-    ),
-    crate::error::AppError,
-> {
-    let Some(pid) = profile_id else {
-        return Ok((vec![], vec![], vec![], vec![], vec![], vec![]));
-    };
-
-    let tags = auth_export_queries::load_user_tags(pid).await?;
-    let created = auth_export_queries::load_created_events(pid).await?;
-    let attended = auth_export_queries::load_attended_events(pid).await?;
-    let interactions = auth_export_queries::load_event_interactions(pid).await?;
-    let uploads = auth_export_queries::load_user_uploads(pid).await?;
-    let rec_feedback = auth_export_queries::load_recommendation_feedback(pid).await?;
-
-    Ok((tags, created, attended, interactions, uploads, rec_feedback))
 }

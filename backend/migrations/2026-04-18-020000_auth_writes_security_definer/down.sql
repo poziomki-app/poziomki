@@ -1,3 +1,5 @@
+DROP FUNCTION IF EXISTS app.delete_session_by_token(text);
+DROP FUNCTION IF EXISTS app.create_session_for_user(uuid, int, text, varchar, varchar, timestamptz, timestamptz);
 DROP FUNCTION IF EXISTS app.complete_password_reset(int, text, timestamptz);
 DROP FUNCTION IF EXISTS app.find_user_for_password_reset(text, text, timestamptz);
 DROP FUNCTION IF EXISTS app.set_password_reset_token(int, text, timestamptz);

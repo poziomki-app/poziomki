@@ -3,10 +3,11 @@ pub mod schema;
 pub mod viewer;
 
 pub use viewer::{
-    complete_password_reset, create_user_for_signup, find_user_for_login,
-    find_user_for_password_reset, mark_email_verified, resolve_session, set_anon_context,
-    set_password_reset_token, set_viewer_context, with_anon_tx, with_viewer_tx, AuthSessionRow,
-    AuthUserRow, DbViewer, PasswordResetUserRow,
+    complete_password_reset, create_session_for_user, create_user_for_signup,
+    delete_session_by_token, find_user_for_login, find_user_for_password_reset,
+    mark_email_verified, resolve_session, set_anon_context, set_password_reset_token,
+    set_viewer_context, with_anon_tx, with_viewer_tx, AuthSessionRow, AuthUserRow,
+    CreatedSessionRow, DbViewer, PasswordResetUserRow,
 };
 
 use deadpool::managed::Timeouts;

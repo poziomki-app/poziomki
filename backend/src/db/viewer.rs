@@ -282,3 +282,59 @@ pub async fn complete_password_reset(
         .await?;
     Ok(())
 }
+
+#[derive(Debug, Clone, QueryableByName)]
+pub struct CreatedSessionRow {
+    #[diesel(sql_type = SqlUuid)]
+    pub id: uuid::Uuid,
+    #[diesel(sql_type = Integer)]
+    pub user_id: i32,
+    #[diesel(sql_type = VarChar)]
+    pub token: String,
+    #[diesel(sql_type = Nullable<VarChar>)]
+    pub ip_address: Option<String>,
+    #[diesel(sql_type = Nullable<VarChar>)]
+    pub user_agent: Option<String>,
+    #[diesel(sql_type = Timestamptz)]
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Insert a session row for a user who has just authenticated.
+#[allow(clippy::too_many_arguments)]
+pub async fn create_session_for_user(
+    conn: &mut AsyncPgConnection,
+    id: uuid::Uuid,
+    user_id: i32,
+    token_hash: &str,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+    expires_at: chrono::DateTime<chrono::Utc>,
+) -> Result<CreatedSessionRow, diesel::result::Error> {
+    diesel::sql_query("SELECT * FROM app.create_session_for_user($1, $2, $3, $4, $5, $6, $7)")
+        .bind::<SqlUuid, _>(id)
+        .bind::<Integer, _>(user_id)
+        .bind::<Text, _>(token_hash)
+        .bind::<Nullable<VarChar>, _>(ip_address)
+        .bind::<Nullable<VarChar>, _>(user_agent)
+        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(expires_at)
+        .get_result::<CreatedSessionRow>(conn)
+        .await
+}
+
+/// Delete a session matching the given hashed bearer token. Idempotent.
+pub async fn delete_session_by_token(
+    conn: &mut AsyncPgConnection,
+    token_hash: &str,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.delete_session_by_token($1)")
+        .bind::<Text, _>(token_hash)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
