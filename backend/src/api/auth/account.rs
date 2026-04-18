@@ -8,7 +8,8 @@ use axum::response::Response;
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::RunQueryDsl;
 
 use crate::api::{auth_or_respond, error_response};
 
@@ -26,53 +27,72 @@ use crate::db::schema::{
     conversations, event_attendees, events, profile_tags, profiles, sessions, uploads,
     user_audit_log, user_settings, users,
 };
+use crate::db::{self, DbViewer};
 
 /// Record a GDPR-relevant action on an account (deletion, export, password
 /// change). Best-effort: logs a warning on failure but never blocks the
-/// originating operation.
-async fn write_audit(user_pid: uuid::Uuid, action: &'static str) {
-    let Ok(mut conn) = crate::db::conn().await else {
-        tracing::warn!(action, "audit log skipped: no DB conn");
-        return;
-    };
+/// originating operation. Runs under the caller's viewer context so the
+/// insert is attributable once RLS policies are enabled.
+async fn write_audit(viewer: DbViewer, user_pid: uuid::Uuid, action: &'static str) {
     let entry = NewUserAuditLog {
         id: uuid::Uuid::new_v4(),
         user_pid,
         action: action.to_string(),
         created_at: Utc::now(),
     };
-    if let Err(e) = diesel::insert_into(user_audit_log::table)
-        .values(&entry)
-        .execute(&mut conn)
-        .await
-    {
+    let result = db::with_viewer_tx(viewer, |conn| {
+        async move {
+            diesel::insert_into(user_audit_log::table)
+                .values(&entry)
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        }
+        .scope_boxed()
+    })
+    .await;
+    if let Err(e) = result {
         tracing::warn!(action, error = %e, "audit log insert failed");
     }
 }
 
-async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
+async fn delete_user_data(viewer: DbViewer) -> std::result::Result<(), crate::error::AppError> {
+    let user_id = viewer.user_id;
 
-    let profile_id: Option<uuid::Uuid> = profiles::table
-        .filter(profiles::user_id.eq(user_id))
-        .select(profiles::id)
-        .first(&mut conn)
-        .await
-        .optional()?;
+    // Collect upload filenames before the transaction so the outer-scope S3
+    // cleanup can delete them even though the rows get wiped.
+    let upload_filenames = db::with_viewer_tx(viewer, |conn| {
+        async move {
+            let profile_id: Option<uuid::Uuid> = profiles::table
+                .filter(profiles::user_id.eq(user_id))
+                .select(profiles::id)
+                .first(conn)
+                .await
+                .optional()?;
+            let files: Vec<String> = if let Some(pid) = profile_id {
+                uploads::table
+                    .filter(uploads::owner_id.eq(pid))
+                    .select(uploads::filename)
+                    .load(conn)
+                    .await?
+            } else {
+                vec![]
+            };
+            Ok::<Vec<String>, diesel::result::Error>(files)
+        }
+        .scope_boxed()
+    })
+    .await?;
 
-    // Collect upload filenames before the transaction for S3 cleanup afterwards
-    let upload_filenames: Vec<String> = if let Some(pid) = profile_id {
-        uploads::table
-            .filter(uploads::owner_id.eq(pid))
-            .select(uploads::filename)
-            .load(&mut conn)
-            .await?
-    } else {
-        vec![]
-    };
+    db::with_viewer_tx(viewer, |conn| {
+        async move {
+            let profile_id: Option<uuid::Uuid> = profiles::table
+                .filter(profiles::user_id.eq(user_id))
+                .select(profiles::id)
+                .first(conn)
+                .await
+                .optional()?;
 
-    conn.transaction(|conn| {
-        Box::pin(async move {
             if let Some(pid) = profile_id {
                 // Collect upload IDs before removing the FK reference
                 let upload_ids: Vec<uuid::Uuid> = uploads::table
@@ -170,7 +190,8 @@ async fn delete_user_data(user_id: i32) -> std::result::Result<(), crate::error:
             }
 
             Ok::<(), diesel::result::Error>(())
-        })
+        }
+        .scope_boxed()
     })
     .await?;
 
@@ -195,10 +216,15 @@ pub(in crate::api) async fn delete_account(
         return Ok(unauthorized_error(&headers, "Invalid password"));
     }
 
+    let viewer = DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+
     // Record deletion request before wiping the user record so the audit
     // entry survives the cascade.
-    write_audit(user.pid, "account_delete").await;
-    delete_user_data(user.id).await?;
+    write_audit(viewer, user.pid, "account_delete").await;
+    delete_user_data(viewer).await?;
     invalidate_auth_cache_for_user_id(user.id).await;
 
     Ok(Json(SuccessResponse { success: true }).into_response())
@@ -230,11 +256,14 @@ pub(in crate::api) async fn change_password(
     }
 
     let new_hash = crate::security::hash_password(&payload.new_password)?;
-    let mut conn = crate::db::conn().await?;
+    let viewer = DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
 
-    conn.transaction(|conn| {
+    db::with_viewer_tx(viewer, |conn| {
         let new_hash = new_hash.clone();
-        Box::pin(async move {
+        async move {
             diesel::update(users::table.find(user.id))
                 .set((
                     users::password.eq(new_hash),
@@ -246,12 +275,13 @@ pub(in crate::api) async fn change_password(
                 .execute(conn)
                 .await?;
             Ok::<(), diesel::result::Error>(())
-        })
+        }
+        .scope_boxed()
     })
     .await?;
 
     invalidate_auth_cache_for_user_id(user.id).await;
-    write_audit(user.pid, "password_change").await;
+    write_audit(viewer, user.pid, "password_change").await;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
@@ -264,21 +294,94 @@ pub(in crate::api) async fn export_data(
     headers: HeaderMap,
 ) -> Result<Response> {
     let (_session, user) = auth_or_respond!(headers);
+    let viewer = DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+    let user_pid_str = user.pid.to_string();
 
-    let mut conn = crate::db::conn().await?;
+    // Run every export read inside one viewer-scoped transaction so future
+    // RLS policies scope every SELECT to this user's own rows.
+    let (
+        profile,
+        tags,
+        created_events,
+        attended_events,
+        event_interactions,
+        user_uploads,
+        rec_feedback,
+        user_sessions,
+        settings,
+        upload_filenames,
+    ) = db::with_viewer_tx(viewer, |conn| {
+        async move {
+            let profile = profiles::table
+                .filter(profiles::user_id.eq(user_id))
+                .first::<Profile>(conn)
+                .await
+                .optional()?;
+            let profile_id = profile.as_ref().map(|p| p.id);
 
-    let profile = profiles::table
-        .filter(profiles::user_id.eq(user.id))
-        .first::<Profile>(&mut conn)
-        .await
-        .optional()?;
+            let (tags, created, attended, interactions, uploads_list, rec) =
+                if let Some(pid) = profile_id {
+                    let tags = auth_export_queries::load_user_tags(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let created = auth_export_queries::load_created_events(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let attended = auth_export_queries::load_attended_events(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let interactions = auth_export_queries::load_event_interactions(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let uploads_list = auth_export_queries::load_user_uploads(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let rec = auth_export_queries::load_recommendation_feedback(conn, pid)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    (tags, created, attended, interactions, uploads_list, rec)
+                } else {
+                    (vec![], vec![], vec![], vec![], vec![], vec![])
+                };
 
-    let profile_id = profile.as_ref().map(|p| p.id);
+            let us = auth_export_queries::load_user_sessions(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let set = auth_export_queries::load_user_settings(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let filenames = if let Some(pid) = profile_id {
+                auth_export_queries::load_upload_filenames(conn, pid)
+                    .await
+                    .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            } else {
+                vec![]
+            };
+            Ok::<_, diesel::result::Error>((
+                profile,
+                tags,
+                created,
+                attended,
+                interactions,
+                uploads_list,
+                rec,
+                us,
+                set,
+                filenames,
+            ))
+        }
+        .scope_boxed()
+    })
+    .await?;
 
     let profile_view: Option<serde_json::Value> = profile.map(|p| {
         serde_json::json!({
             "id": p.id.to_string(),
-            "userId": user.pid.to_string(),
+            "userId": user_pid_str,
             "name": p.name,
             "bio": p.bio,
             "profilePicture": p.profile_picture,
@@ -288,12 +391,6 @@ pub(in crate::api) async fn export_data(
             "updatedAt": p.updated_at.to_rfc3339(),
         })
     });
-
-    let (tags, created_events, attended_events, event_interactions, user_uploads, rec_feedback) =
-        load_profile_data(profile_id).await?;
-
-    let user_sessions = auth_export_queries::load_user_sessions(user.id).await?;
-    let settings = auth_export_queries::load_user_settings(user.id).await?;
 
     let export = serde_json::json!({
         "user": {
@@ -314,13 +411,6 @@ pub(in crate::api) async fn export_data(
         "settings": settings,
         "exportedAt": Utc::now().to_rfc3339(),
     });
-
-    // Collect image files from S3
-    let upload_filenames = if let Some(pid) = profile_id {
-        auth_export_queries::load_upload_filenames(pid).await?
-    } else {
-        vec![]
-    };
 
     let mut image_files: Vec<(String, Vec<u8>)> = Vec::new();
     for filename in &upload_filenames {
@@ -355,7 +445,7 @@ pub(in crate::api) async fn export_data(
         .map_err(|e| crate::error::AppError::message(format!("zip finish error: {e}")))?;
     let zip_bytes = cursor.into_inner();
 
-    write_audit(user.pid, "data_export").await;
+    write_audit(viewer, user.pid, "data_export").await;
 
     Ok((
         [
@@ -368,31 +458,4 @@ pub(in crate::api) async fn export_data(
         zip_bytes,
     )
         .into_response())
-}
-
-async fn load_profile_data(
-    profile_id: Option<uuid::Uuid>,
-) -> std::result::Result<
-    (
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-        Vec<serde_json::Value>,
-    ),
-    crate::error::AppError,
-> {
-    let Some(pid) = profile_id else {
-        return Ok((vec![], vec![], vec![], vec![], vec![], vec![]));
-    };
-
-    let tags = auth_export_queries::load_user_tags(pid).await?;
-    let created = auth_export_queries::load_created_events(pid).await?;
-    let attended = auth_export_queries::load_attended_events(pid).await?;
-    let interactions = auth_export_queries::load_event_interactions(pid).await?;
-    let uploads = auth_export_queries::load_user_uploads(pid).await?;
-    let rec_feedback = auth_export_queries::load_recommendation_feedback(pid).await?;
-
-    Ok((tags, created, attended, interactions, uploads, rec_feedback))
 }

@@ -2,9 +2,11 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use diesel::deserialize::QueryableByName;
 use diesel::sql_types::Integer;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 
 use super::{error_response, ErrorSpec};
+use crate::db;
 
 const AUTH_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const AUTH_SIGN_UP_MAX_ATTEMPTS: u32 = 5;
@@ -78,31 +80,36 @@ async fn upsert_attempt(
     key: &str,
     window_secs: i64,
 ) -> std::result::Result<i64, Box<dyn std::error::Error + Send + Sync>> {
-    let mut conn = crate::db::conn().await?;
-
-    let row = diesel::sql_query(
-        r"
-        INSERT INTO auth_rate_limits (id, rate_key, window_start, attempts, updated_at)
-        VALUES (gen_random_uuid(), $1, NOW(), 1, NOW())
-        ON CONFLICT (rate_key) DO UPDATE
-        SET
-            window_start = CASE
-                WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
-                    THEN NOW()
-                ELSE auth_rate_limits.window_start
-            END,
-            attempts = CASE
-                WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
-                    THEN 1
-                ELSE auth_rate_limits.attempts + 1
-            END,
-            updated_at = NOW()
-        RETURNING attempts
-        ",
-    )
-    .bind::<diesel::sql_types::Text, _>(key)
-    .bind::<diesel::sql_types::BigInt, _>(window_secs)
-    .get_result::<AttemptRow>(&mut conn)
+    let key = key.to_owned();
+    let row = db::with_anon_tx(|conn| {
+        async move {
+            diesel::sql_query(
+                r"
+                INSERT INTO auth_rate_limits (id, rate_key, window_start, attempts, updated_at)
+                VALUES (gen_random_uuid(), $1, NOW(), 1, NOW())
+                ON CONFLICT (rate_key) DO UPDATE
+                SET
+                    window_start = CASE
+                        WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
+                            THEN NOW()
+                        ELSE auth_rate_limits.window_start
+                    END,
+                    attempts = CASE
+                        WHEN auth_rate_limits.window_start <= NOW() - make_interval(secs => $2)
+                            THEN 1
+                        ELSE auth_rate_limits.attempts + 1
+                    END,
+                    updated_at = NOW()
+                RETURNING attempts
+                ",
+            )
+            .bind::<diesel::sql_types::Text, _>(key)
+            .bind::<diesel::sql_types::BigInt, _>(window_secs)
+            .get_result::<AttemptRow>(conn)
+            .await
+        }
+        .scope_boxed()
+    })
     .await?;
 
     Ok(i64::from(row.attempts))

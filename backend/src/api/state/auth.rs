@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::super::{error_response, ErrorSpec};
 use super::{SessionView, UserView};
-use crate::db::models::sessions::{NewSession, Session, SessionUpdate};
+use crate::db::models::sessions::{Session, SessionUpdate};
 use crate::db::models::users::User;
 use crate::db::schema::{sessions, users};
 use crate::db::{self, DbViewer};
@@ -305,30 +305,48 @@ pub(in crate::api) async fn create_session_db(
     user_id: i32,
 ) -> std::result::Result<CreatedSession, crate::error::AppError> {
     let now = Utc::now();
+    let expires_at = now + Duration::seconds(SESSION_DURATION_SECS);
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned);
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned);
+
+    // The row id doubles as the first segment of the bearer token. Generate
+    // both client-side, then persist via the SECURITY DEFINER helper so the
+    // insert works before any viewer context is established (sign-in / OTP
+    // verify / password reset all land here pre-auth).
     let session_id = Uuid::new_v4();
     let secret = Uuid::new_v4().simple().to_string();
     let token = format!("{session_id}.{secret}");
-    let new = NewSession {
-        id: session_id,
-        user_id,
-        token: session_token_hash(&token),
-        ip_address: headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .map(ToOwned::to_owned),
-        user_agent: headers
-            .get("user-agent")
-            .and_then(|v| v.to_str().ok())
-            .map(ToOwned::to_owned),
-        expires_at: now + Duration::seconds(SESSION_DURATION_SECS),
-        created_at: now,
-        updated_at: now,
-    };
+    let token_hash = session_token_hash(&token);
+
     let mut conn = crate::db::conn().await?;
-    let model = diesel::insert_into(sessions::table)
-        .values(&new)
-        .get_result::<Session>(&mut conn)
-        .await?;
+    let row = crate::db::create_session_for_user(
+        &mut conn,
+        session_id,
+        user_id,
+        &token_hash,
+        ip_address.as_deref(),
+        user_agent.as_deref(),
+        now,
+        expires_at,
+    )
+    .await?;
+
+    let model = Session {
+        id: row.id,
+        user_id: row.user_id,
+        token: row.token,
+        ip_address: row.ip_address,
+        user_agent: row.user_agent,
+        expires_at: row.expires_at,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    };
     Ok(CreatedSession { model, token })
 }
 

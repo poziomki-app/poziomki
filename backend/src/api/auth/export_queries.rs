@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
@@ -19,13 +19,12 @@ use crate::db::schema::{
 };
 
 pub(super) async fn load_user_tags(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let pt_rows = profile_tags::table
         .filter(profile_tags::profile_id.eq(profile_id))
-        .load::<ProfileTag>(&mut conn)
+        .load::<ProfileTag>(conn)
         .await?;
 
     let tag_ids: Vec<Uuid> = pt_rows.iter().map(|pt| pt.tag_id).collect();
@@ -35,7 +34,7 @@ pub(super) async fn load_user_tags(
 
     let tag_rows = tags::table
         .filter(tags::id.eq_any(&tag_ids))
-        .load::<Tag>(&mut conn)
+        .load::<Tag>(conn)
         .await?;
 
     Ok(tag_rows
@@ -54,18 +53,17 @@ pub(super) async fn load_user_tags(
 }
 
 pub(super) async fn load_created_events(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let event_rows = events::table
         .filter(events::creator_id.eq(profile_id))
-        .load::<Event>(&mut conn)
+        .load::<Event>(conn)
         .await?;
 
     let mut result = Vec::with_capacity(event_rows.len());
     for event in &event_rows {
-        let event_tag_rows = load_tags_for_event(&mut conn, event.id).await?;
+        let event_tag_rows = load_tags_for_event(conn, event.id).await?;
         result.push(serde_json::json!({
             "id": event.id.to_string(),
             "title": event.title,
@@ -82,7 +80,7 @@ pub(super) async fn load_created_events(
 }
 
 async fn load_tags_for_event(
-    conn: &mut diesel_async::AsyncPgConnection,
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
     let et_rows = event_tags::table
@@ -113,13 +111,12 @@ async fn load_tags_for_event(
 }
 
 pub(super) async fn load_attended_events(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let att_rows = event_attendees::table
         .filter(event_attendees::profile_id.eq(profile_id))
-        .load::<EventAttendee>(&mut conn)
+        .load::<EventAttendee>(conn)
         .await?;
 
     let event_ids: Vec<Uuid> = att_rows.iter().map(|a| a.event_id).collect();
@@ -129,7 +126,7 @@ pub(super) async fn load_attended_events(
 
     let event_rows = events::table
         .filter(events::id.eq_any(&event_ids))
-        .load::<Event>(&mut conn)
+        .load::<Event>(conn)
         .await?;
 
     Ok(att_rows
@@ -147,13 +144,12 @@ pub(super) async fn load_attended_events(
 }
 
 pub(super) async fn load_user_sessions(
+    conn: &mut AsyncPgConnection,
     user_id: i32,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let session_rows = sessions::table
         .filter(sessions::user_id.eq(user_id))
-        .load::<Session>(&mut conn)
+        .load::<Session>(conn)
         .await?;
 
     Ok(session_rows
@@ -171,14 +167,13 @@ pub(super) async fn load_user_sessions(
 }
 
 pub(super) async fn load_user_uploads(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let upload_rows = uploads::table
         .filter(uploads::owner_id.eq(profile_id))
         .filter(uploads::deleted.eq(false))
-        .load::<Upload>(&mut conn)
+        .load::<Upload>(conn)
         .await?;
 
     Ok(upload_rows
@@ -196,13 +191,12 @@ pub(super) async fn load_user_uploads(
 }
 
 pub(super) async fn load_user_settings(
+    conn: &mut AsyncPgConnection,
     user_id: i32,
 ) -> std::result::Result<Option<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let settings = user_settings::table
         .filter(user_settings::user_id.eq(user_id))
-        .first::<UserSetting>(&mut conn)
+        .first::<UserSetting>(conn)
         .await
         .optional()?;
 
@@ -218,13 +212,12 @@ pub(super) async fn load_user_settings(
 }
 
 pub(super) async fn load_event_interactions(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let interaction_rows = event_interactions::table
         .filter(event_interactions::profile_id.eq(profile_id))
-        .load::<EventInteraction>(&mut conn)
+        .load::<EventInteraction>(conn)
         .await?;
 
     let event_ids: Vec<Uuid> = interaction_rows.iter().map(|row| row.event_id).collect();
@@ -233,7 +226,7 @@ pub(super) async fn load_event_interactions(
     } else {
         events::table
             .filter(events::id.eq_any(&event_ids))
-            .load::<Event>(&mut conn)
+            .load::<Event>(conn)
             .await?
     };
 
@@ -256,28 +249,26 @@ pub(super) async fn load_event_interactions(
 }
 
 pub(super) async fn load_upload_filenames(
+    conn: &mut AsyncPgConnection,
     profile_id: uuid::Uuid,
 ) -> std::result::Result<Vec<String>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let filenames = uploads::table
         .filter(uploads::owner_id.eq(profile_id))
         .filter(uploads::deleted.eq(false))
         .select(uploads::filename)
-        .load::<String>(&mut conn)
+        .load::<String>(conn)
         .await?;
 
     Ok(filenames)
 }
 
 pub(super) async fn load_recommendation_feedback(
+    conn: &mut AsyncPgConnection,
     profile_id: Uuid,
 ) -> std::result::Result<Vec<serde_json::Value>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let rows = recommendation_feedback::table
         .filter(recommendation_feedback::profile_id.eq(profile_id))
-        .load::<RecommendationFeedback>(&mut conn)
+        .load::<RecommendationFeedback>(conn)
         .await?;
 
     let event_ids: Vec<Uuid> = rows.iter().map(|r| r.event_id).collect();
@@ -286,7 +277,7 @@ pub(super) async fn load_recommendation_feedback(
     } else {
         events::table
             .filter(events::id.eq_any(&event_ids))
-            .load::<Event>(&mut conn)
+            .load::<Event>(conn)
             .await?
     };
 
