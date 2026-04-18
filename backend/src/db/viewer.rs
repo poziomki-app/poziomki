@@ -172,3 +172,113 @@ pub async fn resolve_session(
         .await
         .optional()
 }
+
+// ---------------------------------------------------------------------------
+// SECURITY DEFINER writes for the pre-auth users flows.
+//
+// Sign-up, email verification, and password reset all mutate `users` before
+// any viewer context exists. The matching `app.*` functions are scoped to
+// exactly those flows so we don't need to grant the API role broad
+// INSERT/UPDATE on the underlying tables.
+// ---------------------------------------------------------------------------
+
+/// Insert a user row for the sign-up flow. Runs as owner so no viewer
+/// context is required. Returns the same shape as `find_user_for_login`.
+pub async fn create_user_for_signup(
+    conn: &mut AsyncPgConnection,
+    pid: uuid::Uuid,
+    email: &str,
+    password_hash: &str,
+    api_key: &str,
+    name: &str,
+) -> Result<AuthUserRow, diesel::result::Error> {
+    diesel::sql_query(
+        "SELECT id, pid, name, email, password, email_verified_at, is_review_stub \
+         FROM app.create_user_for_signup($1, $2, $3, $4, $5)",
+    )
+    .bind::<SqlUuid, _>(pid)
+    .bind::<Text, _>(email)
+    .bind::<Text, _>(password_hash)
+    .bind::<Text, _>(api_key)
+    .bind::<Text, _>(name)
+    .get_result::<AuthUserRow>(conn)
+    .await
+}
+
+/// Mark a user's email as verified. Idempotent.
+pub async fn mark_email_verified(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.mark_email_verified($1, $2)")
+        .bind::<Integer, _>(user_id)
+        .bind::<Timestamptz, _>(now)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+/// Record a hashed password-reset token on a user.
+pub async fn set_password_reset_token(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+    token_hash: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.set_password_reset_token($1, $2, $3)")
+        .bind::<Integer, _>(user_id)
+        .bind::<Text, _>(token_hash)
+        .bind::<Timestamptz, _>(now)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, QueryableByName)]
+pub struct PasswordResetUserRow {
+    #[diesel(sql_type = Integer)]
+    pub id: i32,
+    #[diesel(sql_type = SqlUuid)]
+    pub pid: uuid::Uuid,
+    #[diesel(sql_type = VarChar)]
+    pub email: String,
+    #[diesel(sql_type = VarChar)]
+    pub name: String,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    pub email_verified_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[diesel(sql_type = Bool)]
+    pub is_review_stub: bool,
+}
+
+/// Look up a user by email + hashed reset token + TTL cutoff.
+pub async fn find_user_for_password_reset(
+    conn: &mut AsyncPgConnection,
+    email: &str,
+    token_hash: &str,
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> Result<Option<PasswordResetUserRow>, diesel::result::Error> {
+    diesel::sql_query("SELECT * FROM app.find_user_for_password_reset($1, $2, $3)")
+        .bind::<Text, _>(email)
+        .bind::<Text, _>(token_hash)
+        .bind::<Timestamptz, _>(cutoff)
+        .get_result::<PasswordResetUserRow>(conn)
+        .await
+        .optional()
+}
+
+/// Rotate password, clear reset token, and invalidate sessions for a user.
+pub async fn complete_password_reset(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+    new_password_hash: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.complete_password_reset($1, $2, $3)")
+        .bind::<Integer, _>(user_id)
+        .bind::<Text, _>(new_password_hash)
+        .bind::<Timestamptz, _>(now)
+        .execute(conn)
+        .await?;
+    Ok(())
+}

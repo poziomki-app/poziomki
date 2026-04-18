@@ -27,10 +27,10 @@ use diesel_async::RunQueryDsl;
 use super::{
     error_response,
     state::{
-        extract_bearer_token, hash_session_token, invalidate_auth_cache_for_token, is_valid_email,
-        normalize_email, otp_in_cooldown, upsert_otp, user_model_to_view, DataResponse,
-        ForgotPasswordBody, ForgotPasswordVerifyBody, ResendOtpBody, ResetPasswordBody,
-        SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
+        auth_user_row_to_view, extract_bearer_token, hash_session_token,
+        invalidate_auth_cache_for_token, is_valid_email, normalize_email, otp_in_cooldown,
+        upsert_otp, DataResponse, ForgotPasswordBody, ForgotPasswordVerifyBody, ResendOtpBody,
+        ResetPasswordBody, SessionListItem, SignInBody, SignUpBody, SuccessResponse, VerifyOtpBody,
     },
     ErrorSpec,
 };
@@ -68,7 +68,7 @@ pub(super) async fn sign_up(
     }
 
     let data = serde_json::json!({
-        "user": user_model_to_view(&user),
+        "user": auth_user_row_to_view(&user),
     });
     Ok((axum::http::StatusCode::OK, Json(DataResponse { data })).into_response())
 }
