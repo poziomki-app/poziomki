@@ -492,3 +492,21 @@ pub async fn profile_owner_user_id(
         .await?;
     Ok(row.value)
 }
+
+/// Award XP + bump streak via the `app.award_profile_xp` helper.
+///
+/// Narrow owner-level UPDATE so background tasks and cross-profile credits
+/// (e.g. `scan_token` awarding both parties) don't need a viewer context
+/// matching the target profile.
+pub async fn award_profile_xp(
+    conn: &mut AsyncPgConnection,
+    profile_id: uuid::Uuid,
+    amount: i32,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.award_profile_xp($1, $2)")
+        .bind::<SqlUuid, _>(profile_id)
+        .bind::<Integer, _>(amount)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
