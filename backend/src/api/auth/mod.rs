@@ -158,24 +158,44 @@ pub(super) async fn forgot_password(
         return Ok(*response);
     }
 
-    // Always return success to prevent email enumeration.
-    if let Ok(Some(user)) = find_user_by_email(&email).await {
-        if user.email_verified_at.is_some()
-            && !otp_in_cooldown(&email, OTP_RESEND_COOLDOWN_SECS).await
-        {
-            let code = generate_otp_code();
-            if upsert_otp(&email, &code).await.is_ok() {
-                if let Err(error) = enqueue_otp_email(&email, &code).await {
-                    tracing::error!(%error, email = %crate::api::redact_email(&email), "failed to enqueue OTP for forgot password");
-                }
-            }
-        }
-    }
+    // Always return success to prevent email enumeration. The dispatch below
+    // is best-effort — any failure along the chain falls through to the
+    // shared success response.
+    try_dispatch_forgot_password_otp(&email).await;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
     })
     .into_response())
+}
+
+/// Best-effort: look up the user by email, verify they're eligible for an
+/// OTP send, and enqueue the reset email. Each step is a guard; silently
+/// stops on the first miss so the caller can return a uniform success
+/// response regardless of outcome (prevents email enumeration).
+async fn try_dispatch_forgot_password_otp(email: &str) {
+    let Ok(Some(user)) = find_user_by_email(email).await else {
+        return;
+    };
+    if user.email_verified_at.is_none() {
+        return;
+    }
+    if otp_in_cooldown(email, OTP_RESEND_COOLDOWN_SECS).await {
+        return;
+    }
+
+    let code = generate_otp_code();
+    if upsert_otp(email, &code).await.is_err() {
+        return;
+    }
+
+    if let Err(error) = enqueue_otp_email(email, &code).await {
+        tracing::error!(
+            %error,
+            email = %crate::api::redact_email(email),
+            "failed to enqueue OTP for forgot password"
+        );
+    }
 }
 
 pub(super) async fn forgot_password_verify(
