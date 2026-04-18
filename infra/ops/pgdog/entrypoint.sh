@@ -93,6 +93,30 @@ database = "${DB_NAME}"
 password = "${DB_PASSWORD}"
 EOF
 
+# Additional least-privilege roles. Each is optional; when both name and
+# password are set, we register the user with pgdog so clients can connect
+# as that role directly. Added for the RLS rollout (Phase 1) so the API and
+# worker stop running as the cluster owner.
+if [ -n "${API_DB_USER:-}" ] && [ -n "${API_DB_PASSWORD:-}" ]; then
+  cat >> "${CFG_DIR}/users.toml" <<EOF
+
+[[users]]
+name = "${API_DB_USER}"
+database = "${DB_NAME}"
+password = "${API_DB_PASSWORD}"
+EOF
+fi
+
+if [ -n "${WORKER_DB_USER:-}" ] && [ -n "${WORKER_DB_PASSWORD:-}" ]; then
+  cat >> "${CFG_DIR}/users.toml" <<EOF
+
+[[users]]
+name = "${WORKER_DB_USER}"
+database = "${DB_NAME}"
+password = "${WORKER_DB_PASSWORD}"
+EOF
+fi
+
 exec /usr/local/bin/pgdog \
   --config "${CFG_DIR}/pgdog.toml" \
   --users "${CFG_DIR}/users.toml"
