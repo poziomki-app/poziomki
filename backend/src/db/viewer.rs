@@ -450,3 +450,45 @@ pub async fn push_topics_for_users(
         .await?;
     Ok(rows.into_iter().map(|r| r.ntfy_topic).collect())
 }
+
+// ---------------------------------------------------------------------------
+// Narrow public projections used by the events module.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, QueryableByName)]
+pub struct UserPidRow {
+    #[diesel(sql_type = Integer)]
+    pub user_id: i32,
+    #[diesel(sql_type = SqlUuid)]
+    pub pid: uuid::Uuid,
+}
+
+/// Batch lookup of `(user_id, pid)` pairs for a list of users. Used by the
+/// attendee listing endpoint so the API role doesn't need broad SELECT on
+/// `users`.
+pub async fn user_pids_for_ids(
+    conn: &mut AsyncPgConnection,
+    user_ids: &[i32],
+) -> Result<Vec<UserPidRow>, diesel::result::Error> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    diesel::sql_query("SELECT * FROM app.user_pids_for_ids($1)")
+        .bind::<diesel::sql_types::Array<Integer>, _>(user_ids)
+        .load::<UserPidRow>(conn)
+        .await
+}
+
+/// Resolve the owner `user_id` of a profile. Returns `None` if the profile
+/// does not exist. Narrow projection used by push-dispatch paths that have
+/// a profile id and need the owning user.
+pub async fn profile_owner_user_id(
+    conn: &mut AsyncPgConnection,
+    profile_id: uuid::Uuid,
+) -> Result<Option<i32>, diesel::result::Error> {
+    let row = diesel::sql_query("SELECT app.profile_owner_user_id($1) AS value")
+        .bind::<SqlUuid, _>(profile_id)
+        .get_result::<IntRow>(conn)
+        .await?;
+    Ok(row.value)
+}
