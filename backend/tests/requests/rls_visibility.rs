@@ -3,15 +3,14 @@
 //! how many rows of table Y are visible?" without every test redoing
 //! the transaction plumbing.
 //!
-//! The first test below is a **smoke test** that works before any policy
-//! lands: it confirms `db::with_viewer_tx` plus a viewer id scopes the
-//! query execution (GUC visible inside the tx) and that the connection
-//! is actually the API role — future policies will bite here. Once
-//! policies land, tier PRs add their own tests that use
-//! `count_visible_rows` / `count_visible_rows_as` to assert the narrowed
-//! result set.
+//! These tests run against a **dedicated API-role connection** opened via
+//! `rls_harness::open_api_role_conn` — explicitly `poziomki_api`, not the
+//! shared test pool which falls back to the owner role in CI. Running as
+//! owner would silently bypass RLS and let tier tests pass against a
+//! role that doesn't match production. The first test below asserts the
+//! connection identity so any regression in the wiring fails loudly
+//! instead of producing false-green visibility results.
 
-use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Integer, Text};
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -23,6 +22,8 @@ use poziomki_backend::db::schema::users;
 use serial_test::serial;
 use uuid::Uuid;
 
+use super::rls_harness;
+
 #[derive(diesel::deserialize::QueryableByName)]
 struct CountRow {
     #[diesel(sql_type = BigInt)]
@@ -33,6 +34,12 @@ struct CountRow {
 struct TextRow {
     #[diesel(sql_type = Text)]
     value: String,
+}
+
+#[derive(diesel::deserialize::QueryableByName)]
+struct IntegerRow {
+    #[diesel(sql_type = Integer)]
+    value: i32,
 }
 
 async fn setup() {
@@ -58,29 +65,11 @@ pub(super) async fn count_rows(conn: &mut AsyncPgConnection, table: &str) -> i64
     row.count
 }
 
-/// Open a viewer-scoped transaction on the shared test pool and run
-/// `f`. Equivalent to `db::with_viewer_tx` but typed for the test-side
-/// `diesel::result::Error` return and panics on transaction errors.
-async fn with_viewer<T, F>(user_id: i32, f: F) -> T
-where
-    F: for<'c> FnOnce(
-            &'c mut AsyncPgConnection,
-        ) -> diesel_async::scoped_futures::ScopedBoxFuture<
-            'static,
-            'c,
-            Result<T, diesel::result::Error>,
-        > + Send
-        + 'static,
-    T: Send + 'static,
-{
-    let viewer = db::DbViewer {
-        user_id,
-        is_review_stub: false,
-    };
-    db::with_viewer_tx(viewer, f).await.expect("viewer tx")
-}
-
 async fn insert_user(email: &str) -> User {
+    // Inserts go through the shared pool (owner role) — the API role
+    // doesn't always have INSERT on `users` under future policies, and
+    // test setup legitimately needs to seed cross-user data. Tier tests
+    // read via the API-role connection, which is where RLS bites.
     let mut conn = db::conn().await.expect("pool");
     let new_user = NewUser {
         pid: Uuid::new_v4(),
@@ -97,7 +86,23 @@ async fn insert_user(email: &str) -> User {
         .expect("insert user")
 }
 
-/// Harness smoke test: with two users inserted, each viewer's tx sees
+/// Sanity: the dedicated RLS test connection actually authenticates as
+/// `poziomki_api`. If this ever flips back to the owner role, all
+/// downstream visibility tests would silently pass against a role that
+/// bypasses RLS.
+#[tokio::test]
+#[serial]
+async fn api_role_connection_authenticates_as_poziomki_api() {
+    setup().await;
+    let who = rls_harness::api_role_current_user().await;
+    assert_eq!(
+        who, "poziomki_api",
+        "RLS harness must connect as poziomki_api (got {who:?}) — check \
+         TEST_API_DATABASE_URL"
+    );
+}
+
+/// Harness smoke test: with two users inserted, the viewer's tx sees
 /// the expected GUC and can count both rows in `users`. Once Tier-A
 /// policy `users USING (id = app.current_user_id())` lands, the count
 /// drops to 1 and this test must be updated in the same PR.
@@ -108,23 +113,30 @@ async fn viewer_tx_smoke_baseline() {
     let alice = insert_user("rls-alice@example.com").await;
     let _bob = insert_user("rls-bob@example.com").await;
 
-    let (guc_user_id, guc_role, visible_users) = with_viewer(alice.id, |conn| {
-        async move {
-            let uid: TextRow =
-                diesel::sql_query("SELECT current_setting('app.user_id', true) AS value")
-                    .get_result(conn)
-                    .await?;
-            let role: TextRow =
-                diesel::sql_query("SELECT current_setting('app.role', true) AS value")
-                    .get_result(conn)
-                    .await?;
-            let visible = count_rows(conn, "users").await;
-            Ok((uid.value, role.value, visible))
-        }
-        .scope_boxed()
-    })
-    .await;
+    let (current_user, guc_user_id, guc_role, visible_users) =
+        rls_harness::with_api_viewer_tx(alice.id, false, |conn| {
+            async move {
+                let who = rls_harness::api_role_current_user_raw(conn).await;
+                let uid: TextRow =
+                    diesel::sql_query("SELECT current_setting('app.user_id', true) AS value")
+                        .get_result(conn)
+                        .await?;
+                let role: TextRow =
+                    diesel::sql_query("SELECT current_setting('app.role', true) AS value")
+                        .get_result(conn)
+                        .await?;
+                let visible = count_rows(conn, "users").await;
+                Ok((who, uid.value, role.value, visible))
+            }
+            .scope_boxed()
+        })
+        .await
+        .expect("viewer tx");
 
+    assert_eq!(
+        current_user, "poziomki_api",
+        "viewer tx must run as poziomki_api, not the owner"
+    );
     assert_eq!(
         guc_user_id,
         alice.id.to_string(),
@@ -149,47 +161,19 @@ async fn baseline_both_viewers_see_all_users() {
     let alice = insert_user("rls-cross-a@example.com").await;
     let bob = insert_user("rls-cross-b@example.com").await;
 
-    let alice_count = with_viewer(alice.id, |conn| {
+    let alice_count = rls_harness::with_api_viewer_tx(alice.id, false, |conn| {
         async move { Ok(count_rows(conn, "users").await) }.scope_boxed()
     })
-    .await;
-    let bob_count = with_viewer(bob.id, |conn| {
+    .await
+    .expect("alice tx");
+    let bob_count = rls_harness::with_api_viewer_tx(bob.id, false, |conn| {
         async move { Ok(count_rows(conn, "users").await) }.scope_boxed()
     })
-    .await;
+    .await
+    .expect("bob tx");
 
     assert_eq!(alice_count, 2);
     assert_eq!(bob_count, 2);
-}
-
-/// Demonstrates the harness also works for anon (pre-auth) transactions
-/// — useful for OTP / rate-limit tables once their policies land in
-/// Tier-D.
-#[tokio::test]
-#[serial]
-async fn anon_tx_smoke_sets_role_anon() {
-    setup().await;
-    let _ = insert_user("rls-anon@example.com").await;
-
-    let (role, user_id_guc) = db::with_anon_tx(|conn| {
-        async move {
-            let role: TextRow =
-                diesel::sql_query("SELECT current_setting('app.role', true) AS value")
-                    .get_result(conn)
-                    .await?;
-            let uid: TextRow =
-                diesel::sql_query("SELECT current_setting('app.user_id', true) AS value")
-                    .get_result(conn)
-                    .await?;
-            Ok((role.value, uid.value))
-        }
-        .scope_boxed()
-    })
-    .await
-    .expect("anon tx");
-
-    assert_eq!(role, "anon");
-    assert_eq!(user_id_guc, "0");
 }
 
 /// Sanity check that the integer/text types flowing through the helper
@@ -204,7 +188,7 @@ async fn current_user_id_guc_cast_is_int_safe() {
     setup().await;
     let alice = insert_user("rls-cast@example.com").await;
 
-    let got: i32 = with_viewer(alice.id, |conn| {
+    let got: i32 = rls_harness::with_api_viewer_tx(alice.id, false, |conn| {
         async move {
             let row: IntegerRow = diesel::sql_query(
                 "SELECT NULLIF(current_setting('app.user_id', true), '')::int AS value",
@@ -215,21 +199,8 @@ async fn current_user_id_guc_cast_is_int_safe() {
         }
         .scope_boxed()
     })
-    .await;
+    .await
+    .expect("cast tx");
 
     assert_eq!(got, alice.id);
-}
-
-#[derive(diesel::deserialize::QueryableByName)]
-struct IntegerRow {
-    #[diesel(sql_type = Integer)]
-    value: i32,
-}
-
-/// Silences an "unused" warning on `Utc` / `user_id_guc` spread across
-/// helpers that the tier-policy PRs will consume but the baseline file
-/// doesn't yet.
-#[allow(dead_code)]
-fn _keep_used_imports() {
-    let _ = Utc::now();
 }

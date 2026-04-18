@@ -10,6 +10,13 @@ concurrency:
 
 env:
   DATABASE_URL: postgres://poziomki:poziomki@localhost:5432/poziomki_test
+  # RLS visibility tests open a raw AsyncPgConnection with this URL so
+  # they demonstrably run as poziomki_api (the same role the API uses
+  # in prod), not the owner role behind DATABASE_URL. Kept scoped to
+  # the harness — tier tests and tests that seed cross-user data use
+  # DATABASE_URL. Password matches what the setup-roles.sql step
+  # creates in the `test` job below.
+  TEST_API_DATABASE_URL: postgres://poziomki_api:poziomki_api_ci@localhost:5432/poziomki_test
   JWT_SECRET: ci-test-secret
   GARAGE_S3_ENDPOINT: http://localhost:3900
   GARAGE_S3_BUCKET: test-uploads
