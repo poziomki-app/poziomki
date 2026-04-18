@@ -1,12 +1,11 @@
 use super::{
     bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
     fallback_variant_urls, internal_upload_error, load_owned_upload, load_profile_for_user,
-    not_found, public_upload_url, storage_delete, storage_signed_put_url, storage_upload,
-    uploads_multipart, uploads_resize, uploads_storage, validate_filename,
-    validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
-    DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
-    Multipart, NewUpload, Path, Response, Result, State, SuccessResponse, UploadChangeset,
-    UploadResponse, Utc, Uuid,
+    not_found, public_upload_url, storage_signed_put_url, storage_upload, uploads_multipart,
+    uploads_resize, uploads_storage, validate_filename, validate_presign_payload, AppContext,
+    DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
+    ErrorSpec, HandlerError, HeaderMap, Json, Multipart, NewUpload, Path, Response, Result, State,
+    SuccessResponse, UploadChangeset, UploadResponse, Utc, Uuid,
 };
 use axum::response::IntoResponse;
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -337,59 +336,52 @@ pub(in crate::api) async fn file_delete(
 
         let (viewer, user_id) = auth_and_viewer(&headers).await?;
 
+        // Mark the upload row deleted in the same transaction that loads
+        // it, so ownership check and soft-delete are atomic. Storage
+        // cleanup happens *after* commit — swapping the old order prevents
+        // the "live row pointing at missing storage" race when the DB
+        // update fails after a successful S3 delete. If a later storage
+        // op fails, the row is already invisible to reads (deleted=true)
+        // and operators can clean up orphans later.
         let headers_tx = headers.clone();
         let filename_tx = filename.clone();
+        let changeset = UploadChangeset {
+            deleted: Some(true),
+            updated_at: Some(Utc::now()),
+            ..Default::default()
+        };
         let tx_result = db::with_viewer_tx(viewer, move |conn| {
             async move {
                 let profile = match load_profile_for_user(conn, &headers_tx, user_id).await {
                     Ok(p) => p,
                     Err(err) => return Ok(Err(err)),
                 };
-                match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id).await {
-                    Ok(upload) => Ok::<_, diesel::result::Error>(Ok(upload)),
-                    Err(err) => Ok(Err(err)),
+                let upload = match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id)
+                    .await
+                {
+                    Ok(u) => u,
+                    Err(err) => return Ok(Err(err)),
+                };
+                if let Err(error) = mark_upload_deleted(conn, upload.id, &changeset).await {
+                    tracing::warn!(filename = %filename_tx, %error, "failed to mark upload as deleted");
+                    return Err(diesel::result::Error::RollbackTransaction);
                 }
+                Ok::<_, diesel::result::Error>(Ok(()))
             }
             .scope_boxed()
         })
         .await;
-        let upload = unwrap_viewer_tx(tx_result, &headers)?;
+        unwrap_viewer_tx(tx_result, &headers)?;
 
-        storage_delete(&headers, &filename).await?;
-
-        // Best-effort delete variants regardless of DB flags to avoid stale files.
+        // Best-effort storage cleanup. Original + thumb + std variants are
+        // all dropped without failing the request — the row is already
+        // marked deleted, so a storage failure leaves an orphan object
+        // rather than an inconsistent API surface.
+        let _ = uploads_storage::delete(&filename).await;
         let thumb_name = uploads_resize::variant_filename(&filename, "thumb");
         let std_name = uploads_resize::variant_filename(&filename, "std");
         let _ = uploads_storage::delete(&thumb_name).await;
         let _ = uploads_storage::delete(&std_name).await;
-
-        let changeset = UploadChangeset {
-            deleted: Some(true),
-            updated_at: Some(Utc::now()),
-            ..Default::default()
-        };
-
-        let update_tx = db::with_viewer_tx(viewer, {
-            let changeset = changeset.clone();
-            let upload_id = upload.id;
-            move |conn| {
-                async move {
-                    mark_upload_deleted(conn, upload_id, &changeset)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    Ok::<(), diesel::result::Error>(())
-                }
-                .scope_boxed()
-            }
-        })
-        .await;
-        if let Err(error) = update_tx {
-            tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
-            return Err(internal_upload_error(
-                &headers,
-                "Failed to update upload metadata",
-            ));
-        }
 
         Ok(Json(SuccessResponse { success: true }).into_response())
     }
