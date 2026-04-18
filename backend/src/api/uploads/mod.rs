@@ -45,7 +45,7 @@ use crate::db::models::uploads::{NewUpload, UploadChangeset};
 use crate::jobs::enqueue_upload_variants_generation;
 use uploads_auth_service::{
     internal_upload_error, load_owned_original_for_variant, load_owned_upload,
-    require_auth_profile, resolve_upload_mime_type,
+    load_profile_for_user, resolve_upload_mime_type,
 };
 use uploads_http::{
     bad_request, not_found, storage_delete, storage_read, storage_signed_put_url, storage_upload,

@@ -1,13 +1,13 @@
 use crate::db::models::profiles::Profile;
 use crate::db::models::uploads::Upload;
 use axum::http::HeaderMap;
+use diesel_async::AsyncPgConnection;
 
 use super::uploads_http::{forbidden, not_found};
 use super::uploads_multipart::HandlerError;
 use super::uploads_read_repo::{
     find_active_upload_by_filename, find_owned_active_upload_by_filenames, load_profile_by_user_id,
 };
-use crate::api::state::require_auth_db;
 use crate::api::{error_response, ErrorSpec};
 
 #[allow(clippy::unnecessary_box_returns)]
@@ -23,14 +23,15 @@ pub(super) fn internal_upload_error(headers: &HeaderMap, message: &str) -> Handl
     ))
 }
 
-pub(super) async fn require_auth_profile(
+/// Load the caller's profile inside an existing viewer-scoped transaction.
+/// Returns a `HandlerError` matching the prior behaviour — 403 `ACCESS_DENIED`
+/// when the user has no profile yet.
+pub(super) async fn load_profile_for_user(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
+    user_id: i32,
 ) -> std::result::Result<Profile, HandlerError> {
-    let (_session, user) = require_auth_db(headers)
-        .await
-        .map_err(|e| e as HandlerError)?;
-
-    load_profile_by_user_id(user.id)
+    load_profile_by_user_id(conn, user_id)
         .await
         .map_err(|_| {
             Box::new(forbidden(headers, "ACCESS_DENIED", "Profile not found")) as HandlerError
@@ -39,11 +40,12 @@ pub(super) async fn require_auth_profile(
 }
 
 pub(super) async fn load_owned_upload(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     filename: &str,
     owner_profile_id: uuid::Uuid,
 ) -> std::result::Result<Upload, HandlerError> {
-    let upload = find_active_upload_by_filename(filename)
+    let upload = find_active_upload_by_filename(conn, filename)
         .await
         .map_err(|_| Box::new(not_found(headers)) as HandlerError)?
         .ok_or_else(|| Box::new(not_found(headers)) as HandlerError)?;
@@ -66,6 +68,7 @@ fn variant_stem(filename: &str) -> Option<&str> {
 }
 
 pub(super) async fn load_owned_original_for_variant(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     filename: &str,
     owner_profile_id: uuid::Uuid,
@@ -81,22 +84,24 @@ pub(super) async fn load_owned_original_for_variant(
         format!("{stem}.webp"),
     ];
 
-    find_owned_active_upload_by_filenames(owner_profile_id, &candidates)
+    find_owned_active_upload_by_filenames(conn, owner_profile_id, &candidates)
         .await
         .map_err(|_| Box::new(not_found(headers)) as HandlerError)
 }
 
 pub(super) async fn resolve_upload_mime_type(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     filename: &str,
     owner_profile_id: uuid::Uuid,
 ) -> std::result::Result<String, HandlerError> {
-    if let Ok(upload) = load_owned_upload(headers, filename, owner_profile_id).await {
+    if let Ok(upload) = load_owned_upload(conn, headers, filename, owner_profile_id).await {
         return Ok(upload.mime_type);
     }
-    let has_owned_original = load_owned_original_for_variant(headers, filename, owner_profile_id)
-        .await?
-        .is_some();
+    let has_owned_original =
+        load_owned_original_for_variant(conn, headers, filename, owner_profile_id)
+            .await?
+            .is_some();
     if !has_owned_original {
         return Err(Box::new(not_found(headers)));
     }
