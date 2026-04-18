@@ -103,9 +103,8 @@ async fn api_role_connection_authenticates_as_poziomki_api() {
 }
 
 /// Harness smoke test: with two users inserted, the viewer's tx sees
-/// the expected GUC and can count both rows in `users`. Once Tier-A
-/// policy `users USING (id = app.current_user_id())` lands, the count
-/// drops to 1 and this test must be updated in the same PR.
+/// the expected GUC and can count its **own** row only. Tier-A policy
+/// `users USING (id = app.current_user_id())` is now enforced.
 #[tokio::test]
 #[serial]
 async fn viewer_tx_smoke_baseline() {
@@ -144,19 +143,15 @@ async fn viewer_tx_smoke_baseline() {
     );
     assert_eq!(guc_role, "user");
     assert_eq!(
-        visible_users, 2,
-        "with no Tier-A policy enabled the viewer still sees both users; \
-         when the policy lands, flip this to 1 and add a matching test \
-         for Bob's viewer tx"
+        visible_users, 1,
+        "Tier-A users policy: viewer sees only own row"
     );
 }
 
-/// Cross-viewer sanity: count rows from each viewer's tx and confirm
-/// both currently see the same data. Flips the moment a Tier-A policy
-/// is attached to `users`.
+/// Each viewer sees only their own users row (Tier-A enforced).
 #[tokio::test]
 #[serial]
-async fn baseline_both_viewers_see_all_users() {
+async fn baseline_each_viewer_sees_only_own_user() {
     setup().await;
     let alice = insert_user("rls-cross-a@example.com").await;
     let bob = insert_user("rls-cross-b@example.com").await;
@@ -172,8 +167,8 @@ async fn baseline_both_viewers_see_all_users() {
     .await
     .expect("bob tx");
 
-    assert_eq!(alice_count, 2);
-    assert_eq!(bob_count, 2);
+    assert_eq!(alice_count, 1);
+    assert_eq!(bob_count, 1);
 }
 
 /// Sanity check that the integer/text types flowing through the helper
