@@ -13,13 +13,15 @@ use diesel_async::AsyncConnection;
 use super::super::{
     error_response,
     state::{
-        create_session_db, normalize_email, session_model_to_view, upsert_otp, user_model_to_view,
-        validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
+        auth_user_row_to_view, create_session_db, normalize_email, session_model_to_view,
+        upsert_otp, user_model_to_view, validate_signup_payload, verify_otp_db, DataResponse,
+        SignUpBody,
     },
     ErrorSpec,
 };
 use crate::db::models::users::{NewUser, User, UserChangeset};
 use crate::db::schema::{sessions, users};
+use crate::db::{self, AuthUserRow};
 use crate::jobs::enqueue_otp_email;
 
 pub(super) const OTP_RESEND_COOLDOWN_SECS: i64 = 30;
@@ -149,15 +151,10 @@ pub(super) async fn create_user_or_error(
 async fn find_authenticated_user(
     email: &str,
     password: &str,
-) -> std::result::Result<Option<User>, crate::error::AppError> {
+) -> std::result::Result<Option<AuthUserRow>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
-    let user = users::table
-        .filter(users::email.eq(email))
-        .first::<User>(&mut conn)
-        .await
-        .optional()?;
-
-    Ok(user.filter(|u| crate::security::verify_password(password, &u.password)))
+    let row = db::find_user_for_login(&mut conn, email).await?;
+    Ok(row.filter(|u| crate::security::verify_password(password, &u.password)))
 }
 
 pub(super) async fn sign_in_success_or_unauthorized(
@@ -189,7 +186,7 @@ pub(super) async fn sign_in_success_or_unauthorized(
 
     let session = create_session_db(headers, user.id).await?;
     let data = serde_json::json!({
-        "user": user_model_to_view(&user),
+        "user": auth_user_row_to_view(&user),
         "token": session.token,
         "session": session_model_to_view(&session.model),
     });
@@ -198,13 +195,9 @@ pub(super) async fn sign_in_success_or_unauthorized(
 
 pub(super) async fn find_user_by_email(
     email: &str,
-) -> std::result::Result<Option<User>, crate::error::AppError> {
+) -> std::result::Result<Option<AuthUserRow>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
-    Ok(users::table
-        .filter(users::email.eq(email))
-        .first::<User>(&mut conn)
-        .await
-        .optional()?)
+    Ok(db::find_user_for_login(&mut conn, email).await?)
 }
 
 pub(super) async fn verify_otp_inner(
@@ -238,7 +231,7 @@ pub(super) async fn verify_otp_inner(
     let session = create_session_db(headers, verified_user.id).await?;
     Ok(Json(DataResponse {
         data: serde_json::json!({
-            "user": user_model_to_view(&verified_user),
+            "user": auth_user_row_to_view(&verified_user),
             "token": session.token,
             "session": session_model_to_view(&session.model),
             "status": true,
