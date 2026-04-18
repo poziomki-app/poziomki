@@ -29,6 +29,76 @@ use crate::db::schema::{
 };
 use crate::db::{self, DbViewer};
 
+/// Profile-scoped data for the export endpoint. Collected in one shot so the
+/// export handler can stay linear instead of branching on `profile_id` at
+/// every query.
+struct ProfileExport {
+    tags: Vec<serde_json::Value>,
+    created: Vec<serde_json::Value>,
+    attended: Vec<serde_json::Value>,
+    interactions: Vec<serde_json::Value>,
+    uploads_list: Vec<serde_json::Value>,
+    rec: Vec<serde_json::Value>,
+    filenames: Vec<String>,
+}
+
+impl ProfileExport {
+    const fn empty() -> Self {
+        Self {
+            tags: Vec::new(),
+            created: Vec::new(),
+            attended: Vec::new(),
+            interactions: Vec::new(),
+            uploads_list: Vec::new(),
+            rec: Vec::new(),
+            filenames: Vec::new(),
+        }
+    }
+}
+
+/// Load every profile-scoped collection that goes into the export payload.
+/// Returns empty vectors when the caller has no profile — lets the handler
+/// treat both cases uniformly.
+async fn load_profile_scoped_export(
+    conn: &mut diesel_async::AsyncPgConnection,
+    profile_id: Option<uuid::Uuid>,
+) -> std::result::Result<ProfileExport, diesel::result::Error> {
+    let Some(pid) = profile_id else {
+        return Ok(ProfileExport::empty());
+    };
+    let rollback = |_| diesel::result::Error::RollbackTransaction;
+    let tags = auth_export_queries::load_user_tags(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let created = auth_export_queries::load_created_events(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let attended = auth_export_queries::load_attended_events(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let interactions = auth_export_queries::load_event_interactions(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let uploads_list = auth_export_queries::load_user_uploads(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let rec = auth_export_queries::load_recommendation_feedback(conn, pid)
+        .await
+        .map_err(rollback)?;
+    let filenames = auth_export_queries::load_upload_filenames(conn, pid)
+        .await
+        .map_err(rollback)?;
+    Ok(ProfileExport {
+        tags,
+        created,
+        attended,
+        interactions,
+        uploads_list,
+        rec,
+        filenames,
+    })
+}
+
 /// Record a GDPR-relevant action on an account (deletion, export, password
 /// change). Best-effort: logs a warning on failure but never blocks the
 /// originating operation. Runs under the caller's viewer context so the
@@ -322,30 +392,15 @@ pub(in crate::api) async fn export_data(
                 .optional()?;
             let profile_id = profile.as_ref().map(|p| p.id);
 
-            let (tags, created, attended, interactions, uploads_list, rec) =
-                if let Some(pid) = profile_id {
-                    let tags = auth_export_queries::load_user_tags(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    let created = auth_export_queries::load_created_events(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    let attended = auth_export_queries::load_attended_events(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    let interactions = auth_export_queries::load_event_interactions(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    let uploads_list = auth_export_queries::load_user_uploads(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    let rec = auth_export_queries::load_recommendation_feedback(conn, pid)
-                        .await
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    (tags, created, attended, interactions, uploads_list, rec)
-                } else {
-                    (vec![], vec![], vec![], vec![], vec![], vec![])
-                };
+            let ProfileExport {
+                tags,
+                created,
+                attended,
+                interactions,
+                uploads_list,
+                rec,
+                filenames,
+            } = load_profile_scoped_export(conn, profile_id).await?;
 
             let us = auth_export_queries::load_user_sessions(conn, user_id)
                 .await
@@ -353,13 +408,6 @@ pub(in crate::api) async fn export_data(
             let set = auth_export_queries::load_user_settings(conn, user_id)
                 .await
                 .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-            let filenames = if let Some(pid) = profile_id {
-                auth_export_queries::load_upload_filenames(conn, pid)
-                    .await
-                    .map_err(|_| diesel::result::Error::RollbackTransaction)?
-            } else {
-                vec![]
-            };
             Ok::<_, diesel::result::Error>((
                 profile,
                 tags,
