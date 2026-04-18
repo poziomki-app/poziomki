@@ -10,6 +10,13 @@ concurrency:
 
 env:
   DATABASE_URL: postgres://poziomki:poziomki@localhost:5432/poziomki_test
+  # RLS visibility tests open a raw AsyncPgConnection with this URL so
+  # they demonstrably run as poziomki_api (the same role the API uses
+  # in prod), not the owner role behind DATABASE_URL. Kept scoped to
+  # the harness — tier tests and tests that seed cross-user data use
+  # DATABASE_URL. Password matches what the setup-roles.sql step
+  # creates in the `test` job below.
+  TEST_API_DATABASE_URL: postgres://poziomki_api:poziomki_api_ci@localhost:5432/poziomki_test
   JWT_SECRET: ci-test-secret
   GARAGE_S3_ENDPOINT: http://localhost:3900
   GARAGE_S3_BUCKET: test-uploads
@@ -121,5 +128,20 @@ jobs:
           docker exec garage /garage key import --yes -n ci-key GK000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000001
           docker exec garage /garage bucket create test-uploads
           docker exec garage /garage bucket allow --read --write --owner test-uploads --key ci-key
+
+      - name: Bootstrap least-privilege DB roles
+        # Mirrors infra/ops/postgres/setup-roles.sql so the RLS baseline tests
+        # (tests/requests/rls_baseline.rs) can observe poziomki_api /
+        # poziomki_worker grants and flags. Passwords are test-only; the CI
+        # postgres service isn't exposed outside the job.
+        working-directory: .
+        env:
+          PGPASSWORD: poziomki
+        run: |
+          sudo apt-get install -y postgresql-client
+          psql -h localhost -U poziomki -d poziomki_test \
+            -v api_password=poziomki_api_ci \
+            -v worker_password=poziomki_worker_ci \
+            -f infra/ops/postgres/setup-roles.sql
 
       - run: cargo test --all-targets
