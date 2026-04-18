@@ -338,3 +338,49 @@ pub async fn delete_session_by_token(
         .await?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Narrow public projections for cross-user profile reads.
+//
+// A viewer rendering someone else's profile needs to know just their public
+// pid and whether the owner has opted to display their program. The full
+// `users` / `user_settings` rows carry sensitive columns that the viewer
+// must not see under Tier-A policies, so these helpers return a single
+// scalar each.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, QueryableByName)]
+struct UuidRow {
+    #[diesel(sql_type = Nullable<SqlUuid>)]
+    value: Option<uuid::Uuid>,
+}
+
+/// Return the external pid for a user, if they exist.
+pub async fn user_pid_for_id(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> Result<Option<uuid::Uuid>, diesel::result::Error> {
+    let row = diesel::sql_query("SELECT app.user_pid_for_id($1) AS value")
+        .bind::<Integer, _>(user_id)
+        .get_result::<UuidRow>(conn)
+        .await?;
+    Ok(row.value)
+}
+
+#[derive(Debug, Clone, QueryableByName)]
+struct BoolRow {
+    #[diesel(sql_type = Bool)]
+    value: bool,
+}
+
+/// Whether a user has opted to show their program on public profile views.
+pub async fn profile_program_visibility(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> Result<bool, diesel::result::Error> {
+    let row = diesel::sql_query("SELECT app.profile_program_visibility($1) AS value")
+        .bind::<Integer, _>(user_id)
+        .get_result::<BoolRow>(conn)
+        .await?;
+    Ok(row.value)
+}
