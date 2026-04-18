@@ -174,8 +174,12 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     hub.unregister(user_id);
 }
 
-fn into_diesel(_: crate::error::AppError) -> diesel::result::Error {
-    diesel::result::Error::RollbackTransaction
+/// Wrap an `AppError` into a `diesel::result::Error` that preserves the
+/// original message through the transaction boundary. The outer handler
+/// `format!("{e}")`s it, so semantic errors like "message not found or not
+/// editable" surface to the client instead of a generic `RollbackTransaction`.
+fn into_diesel(e: crate::error::AppError) -> diesel::result::Error {
+    diesel::result::Error::QueryBuilderError(Box::new(e))
 }
 
 /// Authenticate the first message. Returns a `SocketViewer` + user pid, or
