@@ -196,6 +196,7 @@ REVOKE EXECUTE ON FUNCTION app.delete_session_by_token(text) FROM PUBLIC;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA app TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.create_user_for_signup(uuid, text, text, text, text) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.mark_email_verified(int, timestamptz) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.set_password_reset_token(int, text, timestamptz) TO poziomki_api';
