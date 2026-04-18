@@ -1,14 +1,12 @@
-use diesel::prelude::*;
-use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::api::{
     resolve_bio_image_urls, resolve_image_url, resolve_image_urls, resolve_thumbhashes,
     state::{FullProfileResponse, ProfileResponse},
 };
+use crate::db;
 use crate::db::models::profiles::Profile;
-use crate::db::models::user_settings::UserSetting;
-use crate::db::schema::user_settings;
 
 use super::profiles_tags_repo::load_profile_tags;
 
@@ -35,12 +33,11 @@ async fn resolve_program(
     if viewer_user_id == Some(profile_user_id) {
         return program;
     }
-    let show = user_settings::table
-        .filter(user_settings::user_id.eq(profile_user_id))
-        .first::<UserSetting>(conn)
+    // Narrow projection — only returns privacy_show_program, not the full
+    // user_settings row. Lets Tier-A policy on user_settings stay "own row
+    // only" without hiding public profile fields for every other viewer.
+    let show = db::profile_program_visibility(conn, profile_user_id)
         .await
-        .optional()
-        .map(|opt| opt.is_none_or(|s| s.privacy_show_program))
         .unwrap_or(false);
     if show {
         program

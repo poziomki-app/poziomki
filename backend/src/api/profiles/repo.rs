@@ -2,9 +2,9 @@ use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
+use crate::db;
 use crate::db::models::profiles::Profile;
-use crate::db::models::users::User;
-use crate::db::schema::{profiles, users};
+use crate::db::schema::profiles;
 
 pub(super) async fn load_profile_by_user_id(
     conn: &mut AsyncPgConnection,
@@ -32,12 +32,11 @@ pub(super) async fn load_profile_with_owner_pid(
         return Ok(None);
     };
 
-    let owner = users::table
-        .find(profile.user_id)
-        .first::<User>(conn)
-        .await
-        .optional()?;
-    let user_pid = owner.map_or(Uuid::nil(), |u| u.pid);
+    // Narrow public-projection helper: only returns the owner's pid, never
+    // the full users row (which carries password hash, email, etc.).
+    let owner_pid = db::user_pid_for_id(conn, profile.user_id)
+        .await?
+        .unwrap_or_else(Uuid::nil);
 
-    Ok(Some((profile, user_pid)))
+    Ok(Some((profile, owner_pid)))
 }

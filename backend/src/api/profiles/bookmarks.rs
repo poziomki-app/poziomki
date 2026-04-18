@@ -8,9 +8,10 @@ use uuid::Uuid;
 
 use crate::api::state::{DataResponse, SuccessResponse};
 use crate::api::{error_response, ErrorSpec};
+use crate::db;
 use crate::db::models::profile_bookmarks::ProfileBookmark;
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{profile_bookmarks, profiles, users};
+use crate::db::schema::{profile_bookmarks, profiles};
 
 use super::profiles_view::profile_to_response;
 use crate::api::state::ProfileResponse;
@@ -97,24 +98,22 @@ pub(in crate::api) async fn profiles_bookmarked(
     my_profile_id: Uuid,
     viewer_user_id: i32,
 ) -> crate::error::AppResult<Vec<ProfileResponse>> {
-    let bookmarked_profiles: Vec<(ProfileBookmark, (Profile, Uuid))> = profile_bookmarks::table
-        .inner_join(
-            profiles::table
-                .on(profile_bookmarks::target_profile_id.eq(profiles::id))
-                .inner_join(users::table),
-        )
+    let bookmarked_profiles: Vec<(ProfileBookmark, Profile)> = profile_bookmarks::table
+        .inner_join(profiles::table.on(profile_bookmarks::target_profile_id.eq(profiles::id)))
         .filter(profile_bookmarks::profile_id.eq(my_profile_id))
         .order(profile_bookmarks::created_at.desc())
-        .select((
-            profile_bookmarks::all_columns,
-            (profiles::all_columns, users::pid),
-        ))
+        .select((profile_bookmarks::all_columns, profiles::all_columns))
         .load(conn)
         .await?;
 
     let mut responses = Vec::with_capacity(bookmarked_profiles.len());
-    for (_bookmark, (profile, user_pid)) in bookmarked_profiles {
-        let response = profile_to_response(conn, &profile, &user_pid, Some(viewer_user_id)).await;
+    for (_bookmark, profile) in bookmarked_profiles {
+        // Narrow public-projection helper avoids reading the owner's full
+        // users row just to get their pid.
+        let owner_pid = db::user_pid_for_id(conn, profile.user_id)
+            .await?
+            .unwrap_or_else(Uuid::nil);
+        let response = profile_to_response(conn, &profile, &owner_pid, Some(viewer_user_id)).await;
         responses.push(response);
     }
     Ok(responses)
