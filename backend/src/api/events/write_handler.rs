@@ -183,7 +183,19 @@ pub(in crate::api) async fn event_create(
         .scope_boxed()
     })
     .await
-    .map_err(crate::error::AppError::from)?;
+    .map_err(crate::error::AppError::from);
+
+    let outcome = match outcome {
+        Ok(o) => o,
+        // Validation failures surfaced from inside the tx (e.g. tagIds that
+        // reference missing tags) match the REST contract for this endpoint:
+        // 400 BAD_REQUEST with code VALIDATION_ERROR, not 422. The default
+        // `AppError::Validation` -> 422 mapping is wrong here.
+        Err(crate::error::AppError::Validation(msg)) => {
+            return Ok(validation_error(&headers, &msg));
+        }
+        Err(e) => return Err(e),
+    };
 
     match outcome {
         CreateOutcome::NoProfile => Ok(profile_not_found(&headers)),
@@ -348,7 +360,16 @@ pub(in crate::api) async fn event_update(
             {
                 tokio::time::sleep(std::time::Duration::from_millis(10u64 << attempts)).await;
             }
-            Err(e) => return Err(crate::error::AppError::from(e)),
+            Err(e) => {
+                // Validation failures (e.g. tagIds) match the existing REST
+                // contract: 400 BAD_REQUEST, not the default 422 mapping for
+                // AppError::Validation.
+                let app_err = crate::error::AppError::from(e);
+                if let crate::error::AppError::Validation(msg) = app_err {
+                    return Ok(validation_error(headers, &msg));
+                }
+                return Err(app_err);
+            }
         }
     };
 
@@ -753,8 +774,11 @@ pub(in crate::api) async fn event_approve_attendee(
         Ok(uuid) => uuid,
         Err(response) => return Ok(*response),
     };
-    let target_profile_id = Uuid::parse_str(&profile_id_str)
-        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
+    let target_profile_id =
+        match crate::api::parse_uuid_response(&profile_id_str, "profile", &headers) {
+            Ok(uuid) => uuid,
+            Err(response) => return Ok(*response),
+        };
     let user_id = viewer.user_id;
 
     let mut conn = crate::db::conn().await?;
@@ -878,8 +902,11 @@ pub(in crate::api) async fn event_reject_attendee(
         Ok(uuid) => uuid,
         Err(response) => return Ok(*response),
     };
-    let target_profile_id = Uuid::parse_str(&profile_id_str)
-        .map_err(|_| crate::error::AppError::Message("Invalid profile ID".to_string()))?;
+    let target_profile_id =
+        match crate::api::parse_uuid_response(&profile_id_str, "profile", &headers) {
+            Ok(uuid) => uuid,
+            Err(response) => return Ok(*response),
+        };
     let user_id = viewer.user_id;
 
     let outcome = db::with_viewer_tx(viewer, |conn| {
