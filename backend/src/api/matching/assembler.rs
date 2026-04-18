@@ -69,7 +69,7 @@ fn build_profile_recommendation(
 
 pub(super) async fn batch_load_show_program(
     user_ids: &[i32],
-    conn: &mut crate::db::DbConn,
+    conn: &mut diesel_async::AsyncPgConnection,
 ) -> crate::error::AppResult<HashMap<i32, bool>> {
     if user_ids.is_empty() {
         return Ok(HashMap::new());
@@ -87,7 +87,7 @@ pub(super) async fn batch_load_show_program(
 pub(super) async fn build_recommendations_response(
     top: &[(f64, &Profile)],
     repo: &MatchingRepository,
-    conn: &mut crate::db::DbConn,
+    conn: &mut diesel_async::AsyncPgConnection,
     privacy_map: &HashMap<i32, bool>,
 ) -> std::result::Result<Vec<ProfileRecommendation>, crate::error::AppError> {
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
