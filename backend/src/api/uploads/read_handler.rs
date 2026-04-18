@@ -1,11 +1,16 @@
 use super::{
     bad_request, encode_thumbhash, extract_filename_from_original_uri, fallback_variant_urls,
-    header, load_owned_original_for_variant, load_owned_upload, public_upload_url,
-    require_auth_profile, resolve_upload_mime_type, storage_read, uploads_resize,
-    validate_filename, AppContext, DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path,
-    Response, Result, State, UploadStatusResponse,
+    header, load_owned_original_for_variant, load_owned_upload, load_profile_for_user,
+    public_upload_url, resolve_upload_mime_type, storage_read, uploads_resize, validate_filename,
+    AppContext, DataResponse, HandlerError, HeaderMap, HeaderValue, Json, Path, Response, Result,
+    State, UploadStatusResponse,
 };
 use axum::response::IntoResponse;
+use diesel_async::scoped_futures::ScopedFutureExt;
+
+use crate::api::{error_response, ErrorSpec};
+use crate::db;
+use crate::db::models::uploads::Upload;
 
 pub(super) struct AuthCheckResponse {
     pub(super) ok: bool,
@@ -23,26 +28,79 @@ impl serde::Serialize for AuthCheckResponse {
     }
 }
 
+/// Translate the outcome of a viewer-scoped transaction that wraps
+/// `HandlerError`-returning work into the handler's `Result<T, HandlerError>`
+/// shape. `Ok(Ok(t))` means the tx committed and the business result is
+/// `t`; `Ok(Err(e))` means the work produced a response-level error
+/// (rolled back); `Err(db)` means Diesel itself failed.
+fn unwrap_viewer_tx<T>(
+    result: std::result::Result<std::result::Result<T, HandlerError>, diesel::result::Error>,
+    headers: &HeaderMap,
+) -> std::result::Result<T, HandlerError> {
+    match result {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(err),
+        Err(_) => Err(Box::new(error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: "Database error".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        ))),
+    }
+}
+
 pub(in crate::api) async fn auth_check(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
     let response: std::result::Result<Response, HandlerError> = async {
-        let profile = require_auth_profile(&headers).await?;
+        let (_session, user) = crate::api::state::require_auth_db(&headers)
+            .await
+            .map_err(|e| e as HandlerError)?;
         let filename = extract_filename_from_original_uri(&headers)?;
-        match load_owned_upload(&headers, &filename, profile.id).await {
-            Ok(_upload) => {}
-            Err(owned_err) => {
-                let has_owned_original =
-                    load_owned_original_for_variant(&headers, &filename, profile.id)
-                        .await?
-                        .is_some();
-                if !has_owned_original {
-                    return Err(owned_err);
+        let viewer = db::DbViewer {
+            user_id: user.id,
+            is_review_stub: user.is_review_stub,
+        };
+
+        let headers_tx = headers.clone();
+        let filename_tx = filename.clone();
+        let tx_result = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let profile = match load_profile_for_user(conn, &headers_tx, user.id).await {
+                    Ok(p) => p,
+                    Err(err) => return Ok(Err(err)),
+                };
+                match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id).await {
+                    Ok(_) => Ok::<_, diesel::result::Error>(Ok(())),
+                    Err(owned_err) => {
+                        let has_owned_original = match load_owned_original_for_variant(
+                            conn,
+                            &headers_tx,
+                            &filename_tx,
+                            profile.id,
+                        )
+                        .await
+                        {
+                            Ok(v) => v.is_some(),
+                            Err(err) => return Ok(Err(err)),
+                        };
+                        if has_owned_original {
+                            Ok(Ok(()))
+                        } else {
+                            Ok(Err(owned_err))
+                        }
+                    }
                 }
             }
-        }
+            .scope_boxed()
+        })
+        .await;
 
+        unwrap_viewer_tx(tx_result, &headers)?;
         Ok(Json(AuthCheckResponse { ok: true }).into_response())
     }
     .await;
@@ -74,8 +132,32 @@ pub(in crate::api) async fn file_get(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&headers).await?;
-        let mime_type = resolve_upload_mime_type(&headers, &filename, profile.id).await?;
+        let (_session, user) = crate::api::state::require_auth_db(&headers)
+            .await
+            .map_err(|e| e as HandlerError)?;
+        let viewer = db::DbViewer {
+            user_id: user.id,
+            is_review_stub: user.is_review_stub,
+        };
+
+        let headers_tx = headers.clone();
+        let filename_tx = filename.clone();
+        let tx_result = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let profile = match load_profile_for_user(conn, &headers_tx, user.id).await {
+                    Ok(p) => p,
+                    Err(err) => return Ok(Err(err)),
+                };
+                match resolve_upload_mime_type(conn, &headers_tx, &filename_tx, profile.id).await {
+                    Ok(mt) => Ok::<_, diesel::result::Error>(Ok(mt)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+
+        let mime_type = unwrap_viewer_tx(tx_result, &headers)?;
 
         if let Some(url) = crate::api::imgproxy_signing::signed_url(&filename, "full", "webp") {
             return Ok(Json(super::super::state::UploadUrlResponse { url }).into_response());
@@ -98,8 +180,32 @@ pub(in crate::api) async fn file_status(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&headers).await?;
-        let upload = load_owned_upload(&headers, &filename, profile.id).await?;
+        let (_session, user) = crate::api::state::require_auth_db(&headers)
+            .await
+            .map_err(|e| e as HandlerError)?;
+        let viewer = db::DbViewer {
+            user_id: user.id,
+            is_review_stub: user.is_review_stub,
+        };
+
+        let headers_tx = headers.clone();
+        let filename_tx = filename.clone();
+        let tx_result = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let profile = match load_profile_for_user(conn, &headers_tx, user.id).await {
+                    Ok(p) => p,
+                    Err(err) => return Ok(Err(err)),
+                };
+                match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id).await {
+                    Ok(upload) => Ok::<_, diesel::result::Error>(Ok(upload)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+
+        let upload: Upload = unwrap_viewer_tx(tx_result, &headers)?;
 
         let imgproxy = crate::api::imgproxy_signing::is_configured();
         let url = public_upload_url(&headers, &upload.filename).await;

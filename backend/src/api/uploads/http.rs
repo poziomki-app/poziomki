@@ -84,12 +84,6 @@ pub(super) async fn storage_upload(
         .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
 }
 
-pub(super) async fn storage_delete(headers: &HeaderMap, filename: &str) -> HandlerResult<()> {
-    uploads_storage::delete(filename)
-        .await
-        .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
-}
-
 pub(super) async fn storage_read(headers: &HeaderMap, filename: &str) -> HandlerResult<Vec<u8>> {
     uploads_storage::read(filename)
         .await
