@@ -8,13 +8,6 @@ use crate::db::models::event_tags::EventTag;
 use crate::db::models::tags::{NewTag, Tag};
 use crate::db::schema::{event_attendees, event_tags, tags};
 
-pub(in crate::api) async fn find_or_create_event_tag(name: String) -> Option<Uuid> {
-    let mut conn = crate::db::conn().await.ok()?;
-    find_or_create_event_tag_with_conn(&mut conn, name)
-        .await
-        .ok()
-}
-
 pub(in crate::api) async fn find_or_create_event_tag_with_conn(
     conn: &mut AsyncPgConnection,
     name: String,

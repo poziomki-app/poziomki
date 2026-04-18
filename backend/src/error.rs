@@ -51,6 +51,21 @@ impl From<&str> for AppError {
 
 impl From<diesel::result::Error> for AppError {
     fn from(value: diesel::result::Error) -> Self {
+        // `with_viewer_tx` closures stash application-level errors inside
+        // `QueryBuilderError(Box<AppError>)` so user-facing `Message` /
+        // `Validation` variants survive the transaction boundary. Unwrap
+        // that shape back into the original `AppError`; anything else
+        // bubbles up as an opaque `Any`.
+        if let diesel::result::Error::QueryBuilderError(ref boxed) = value {
+            if boxed.downcast_ref::<Self>().is_some() {
+                if let diesel::result::Error::QueryBuilderError(owned) = value {
+                    if let Ok(app) = owned.downcast::<Self>() {
+                        return *app;
+                    }
+                    unreachable!("downcast_ref succeeded but downcast failed");
+                }
+            }
+        }
         Self::Any(value.into())
     }
 }

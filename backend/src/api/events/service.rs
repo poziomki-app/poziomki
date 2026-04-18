@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::{error_response, state::CreateEventBody, ErrorSpec};
@@ -42,6 +42,18 @@ pub(in crate::api) fn not_found_event(
     )
 }
 
+pub(in crate::api) fn profile_not_found(headers: &HeaderMap) -> axum::response::Response {
+    error_response(
+        axum::http::StatusCode::NOT_FOUND,
+        headers,
+        ErrorSpec {
+            error: "Profile not found. Create a profile first.".to_string(),
+            code: "NOT_FOUND",
+            details: None,
+        },
+    )
+}
+
 pub(in crate::api) fn forbidden(headers: &HeaderMap, message: &str) -> axum::response::Response {
     error_response(
         axum::http::StatusCode::FORBIDDEN,
@@ -54,72 +66,32 @@ pub(in crate::api) fn forbidden(headers: &HeaderMap, message: &str) -> axum::res
     )
 }
 
-pub(in crate::api) async fn require_auth_profile(
-    headers: &HeaderMap,
-) -> std::result::Result<(Profile, Uuid), HandlerError> {
-    let (_session, user) = crate::api::state::require_auth_db(headers).await?;
-
-    let mut conn = crate::db::conn().await.map_err(|_| {
-        Box::new(error_response(
-            axum::http::StatusCode::NOT_FOUND,
-            headers,
-            ErrorSpec {
-                error: "Profile not found. Create a profile first.".to_string(),
-                code: "NOT_FOUND",
-                details: None,
-            },
-        ))
-    })?;
-
+/// Load the caller's profile inside an existing viewer-scoped transaction.
+/// Returns `None` when the caller has no profile; callers translate that into
+/// a 404 response.
+pub(in crate::api) async fn load_profile_for_user(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> std::result::Result<Option<Profile>, crate::error::AppError> {
     let profile = profiles::table
-        .filter(profiles::user_id.eq(user.id))
-        .first::<Profile>(&mut conn)
+        .filter(profiles::user_id.eq(user_id))
+        .first::<Profile>(conn)
         .await
-        .optional()
-        .map_err(|_| {
-            Box::new(error_response(
-                axum::http::StatusCode::NOT_FOUND,
-                headers,
-                ErrorSpec {
-                    error: "Profile not found. Create a profile first.".to_string(),
-                    code: "NOT_FOUND",
-                    details: None,
-                },
-            ))
-        })?
-        .ok_or_else(|| {
-            Box::new(error_response(
-                axum::http::StatusCode::NOT_FOUND,
-                headers,
-                ErrorSpec {
-                    error: "Profile not found. Create a profile first.".to_string(),
-                    code: "NOT_FOUND",
-                    details: None,
-                },
-            ))
-        })?;
-    Ok((profile, user.pid))
+        .optional()?;
+    Ok(profile)
 }
 
-pub(in crate::api) async fn load_event(
-    headers: &HeaderMap,
-    id: &str,
-) -> std::result::Result<(Event, Uuid), HandlerError> {
-    let event_uuid = crate::api::parse_uuid_response(id, "event", headers)?;
-
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|_| Box::new(not_found_event(headers, id)))?;
-
+/// Load an event by id inside an existing viewer-scoped transaction.
+pub(in crate::api) async fn load_event_by_id(
+    conn: &mut AsyncPgConnection,
+    event_id: Uuid,
+) -> std::result::Result<Option<Event>, crate::error::AppError> {
     let event = events::table
-        .find(event_uuid)
-        .first::<Event>(&mut conn)
+        .find(event_id)
+        .first::<Event>(conn)
         .await
-        .optional()
-        .map_err(|_| Box::new(not_found_event(headers, id)))?
-        .ok_or_else(|| Box::new(not_found_event(headers, id)))?;
-
-    Ok((event, event_uuid))
+        .optional()?;
+    Ok(event)
 }
 
 pub(in crate::api) fn parse_timestamp(

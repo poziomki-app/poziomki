@@ -9,15 +9,6 @@ use crate::db::schema::event_interactions;
 pub(in crate::api) const EVENT_INTERACTION_SAVED: &str = "saved";
 pub(super) const EVENT_INTERACTION_JOINED: &str = "joined";
 
-pub(super) async fn upsert_event_interaction(
-    profile_id: Uuid,
-    event_id: Uuid,
-    kind: &str,
-) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    upsert_event_interaction_with_conn(&mut conn, profile_id, event_id, kind).await
-}
-
 pub(super) async fn upsert_event_interaction_with_conn(
     conn: &mut AsyncPgConnection,
     profile_id: Uuid,
@@ -45,15 +36,6 @@ pub(super) async fn upsert_event_interaction_with_conn(
         .await?;
 
     Ok(())
-}
-
-pub(super) async fn delete_event_interaction(
-    profile_id: Uuid,
-    event_id: Uuid,
-    kind: &str,
-) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    delete_event_interaction_with_conn(&mut conn, profile_id, event_id, kind).await
 }
 
 pub(super) async fn delete_event_interaction_with_conn(

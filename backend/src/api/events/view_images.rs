@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::api::state::EventResponse;
 
 /// Resolve a set of raw image filenames to signed URLs in parallel, returning a lookup map.
-pub(super) async fn resolve_image_map(raw_values: HashSet<String>) -> HashMap<String, String> {
+pub async fn resolve_image_map(raw_values: HashSet<String>) -> HashMap<String, String> {
     let resolve = crate::api::resolve_image_url;
     let futs: Vec<_> = raw_values
         .into_iter()
@@ -43,7 +43,7 @@ fn replace_resolved_image(value: &mut Option<String>, url_map: &HashMap<String, 
 }
 
 /// Resolve all image URLs (cover, creator, attendee previews) in event responses.
-pub(super) async fn resolve_event_images(responses: &mut [EventResponse]) {
+pub async fn resolve_event_images(responses: &mut [EventResponse]) {
     let filenames = collect_image_filenames(responses);
     if filenames.is_empty() {
         return;

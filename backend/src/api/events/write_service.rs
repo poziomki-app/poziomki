@@ -4,11 +4,10 @@ use uuid::Uuid;
 
 use crate::api::state::UpdateEventBody;
 use crate::db::models::events::{Event, EventChangeset};
-use crate::db::models::profiles::Profile;
 
 use super::events_service::{
-    self, forbidden, load_event, require_auth_profile, validate_event_category,
-    validate_event_description, validate_event_location, validate_max_attendees,
+    self, forbidden, validate_event_category, validate_event_description, validate_event_location,
+    validate_max_attendees,
 };
 
 type EventDates = (chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>);
@@ -120,30 +119,21 @@ fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> Event
     changeset
 }
 
-fn validate_creator(
+/// Build an `EventChangeset` for an update, after validating creator ownership
+/// and input fields. Pure validation — no DB access.
+pub(in crate::api) fn prepare_update_changeset(
     headers: &HeaderMap,
     event: &Event,
     profile_id: Uuid,
-) -> std::result::Result<(), Box<axum::response::Response>> {
+    payload: &UpdateEventBody,
+) -> std::result::Result<EventChangeset, Box<axum::response::Response>> {
     if event.creator_id != profile_id {
         return Err(Box::new(forbidden(
             headers,
             "Only the creator can update this event",
         )));
     }
-    Ok(())
-}
-
-pub(in crate::api) async fn event_update_inner(
-    headers: &HeaderMap,
-    id: &str,
-    payload: &UpdateEventBody,
-) -> std::result::Result<(EventChangeset, Uuid, Profile, Event), Box<axum::response::Response>> {
-    let (profile, _user_pid) = require_auth_profile(headers).await?;
-    let (event, event_uuid) = load_event(headers, id).await?;
-    validate_creator(headers, &event, profile.id)?;
     validate_event_basic_fields(headers, payload)?;
-    let dates = parse_event_dates(headers, &event, payload)?;
-    let changeset = build_update_changeset(payload, dates);
-    Ok((changeset, event_uuid, profile, event))
+    let dates = parse_event_dates(headers, event, payload)?;
+    Ok(build_update_changeset(payload, dates))
 }
