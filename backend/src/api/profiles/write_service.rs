@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
 use axum::response::Response;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::api::{
@@ -36,25 +36,13 @@ pub(super) fn validate_profile_fields(
 }
 
 async fn check_no_existing_profile(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     user_id: i32,
 ) -> std::result::Result<(), Box<Response>> {
-    let mut conn = crate::db::conn().await.map_err(|e| {
-        tracing::error!(error = %e, "database error checking existing profile");
-        Box::new(error_response(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            headers,
-            ErrorSpec {
-                error: "Internal server error".to_string(),
-                code: "INTERNAL_ERROR",
-                details: None,
-            },
-        ))
-    })?;
-
     let existing = profiles::table
         .filter(profiles::user_id.eq(user_id))
-        .first::<Profile>(&mut conn)
+        .first::<Profile>(conn)
         .await
         .optional()
         .map_err(|e| {
@@ -84,12 +72,13 @@ async fn check_no_existing_profile(
 }
 
 pub(super) async fn validate_create(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     payload: &CreateProfileBody,
 ) -> std::result::Result<crate::db::models::users::User, Box<Response>> {
     let (_session, user) = require_auth_db(headers).await?;
     validate_profile_fields(headers, payload)?;
-    check_no_existing_profile(headers, user.id).await?;
+    check_no_existing_profile(conn, headers, user.id).await?;
     Ok(user)
 }
 
@@ -107,19 +96,16 @@ fn uploads_unavailable(headers: &HeaderMap) -> Box<Response> {
 }
 
 async fn verify_upload_ownership(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     profile_id: Uuid,
     filename: &str,
 ) -> std::result::Result<(), Box<Response>> {
-    let mut conn = crate::db::conn()
-        .await
-        .map_err(|_| uploads_unavailable(headers))?;
-
     let owned_upload = uploads::table
         .filter(uploads::owner_id.eq(Some(profile_id)))
         .filter(uploads::filename.eq(filename))
         .filter(uploads::deleted.eq(false))
-        .first::<Upload>(&mut conn)
+        .first::<Upload>(conn)
         .await
         .optional()
         .map_err(|_| uploads_unavailable(headers))?;
@@ -150,6 +136,7 @@ async fn verify_upload_exists(
 }
 
 async fn validate_profile_picture_reference(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     owner_profile_id: Option<Uuid>,
     raw_picture: &str,
@@ -158,7 +145,7 @@ async fn validate_profile_picture_reference(
     check_validation(headers, validate_filename(&filename))?;
 
     if let Some(profile_id) = owner_profile_id {
-        verify_upload_ownership(headers, profile_id, &filename).await?;
+        verify_upload_ownership(conn, headers, profile_id, &filename).await?;
     }
     verify_upload_exists(headers, &filename).await?;
 
@@ -166,12 +153,13 @@ async fn validate_profile_picture_reference(
 }
 
 pub(super) async fn resolve_picture_filename(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     owner_profile_id: Option<Uuid>,
     raw_picture: Option<&str>,
 ) -> std::result::Result<Option<String>, Box<Response>> {
     match raw_picture {
-        Some(raw) => validate_profile_picture_reference(headers, owner_profile_id, raw)
+        Some(raw) => validate_profile_picture_reference(conn, headers, owner_profile_id, raw)
             .await
             .map(Some),
         None => Ok(None),
@@ -180,6 +168,7 @@ pub(super) async fn resolve_picture_filename(
 
 #[allow(clippy::option_option)]
 pub(super) async fn validate_and_prepare_update(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     id: &str,
     payload: &UpdateProfileBody,
@@ -191,14 +180,15 @@ pub(super) async fn validate_and_prepare_update(
     ),
     Box<Response>,
 > {
-    let (profile, user) = load_and_verify_profile(headers, id).await?;
+    let (profile, user) = load_and_verify_profile(conn, headers, id).await?;
     validate_update_payload(headers, payload)?;
     let picture = match &payload.profile_picture {
         None => None,             // absent → don't change
         Some(None) => Some(None), // explicit null → clear
         Some(Some(raw)) => {
             let filename =
-                resolve_picture_filename(headers, Some(profile.id), Some(raw.as_str())).await?;
+                resolve_picture_filename(conn, headers, Some(profile.id), Some(raw.as_str()))
+                    .await?;
             Some(filename) // Some(Some(filename))
         }
     };
@@ -247,27 +237,16 @@ pub(super) fn build_update_changeset(
 }
 
 pub(super) async fn load_and_verify_profile(
+    conn: &mut AsyncPgConnection,
     headers: &HeaderMap,
     id: &str,
 ) -> std::result::Result<(Profile, crate::db::models::users::User), Box<Response>> {
     let (_session, user) = require_auth_db(headers).await?;
     let profile_uuid = crate::api::parse_uuid_response(id, "profile", headers)?;
 
-    let mut conn = crate::db::conn().await.map_err(|_| {
-        Box::new(error_response(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            headers,
-            ErrorSpec {
-                error: "Internal server error".to_string(),
-                code: "INTERNAL_ERROR",
-                details: None,
-            },
-        ))
-    })?;
-
     let profile = profiles::table
         .find(profile_uuid)
-        .first::<Profile>(&mut conn)
+        .first::<Profile>(conn)
         .await
         .optional()
         .map_err(|_| Box::new(not_found_profile(headers, id)))?
