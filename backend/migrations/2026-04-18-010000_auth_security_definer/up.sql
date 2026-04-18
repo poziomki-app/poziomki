@@ -71,15 +71,22 @@ COMMENT ON FUNCTION app.resolve_session(text) IS
 REVOKE EXECUTE ON FUNCTION app.find_user_for_login(text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.resolve_session(text) FROM PUBLIC;
 
--- Grant to the API role if it exists. The role is created by
--- infra/ops/postgres/setup-roles.sh; pristine dev clones that have not run
+-- Grant to the API role if it exists now. The role is created by
+-- infra/ops/postgres/setup-roles.sh; pristine dev clones that haven't run
 -- that step will skip these grants and the owner retains default EXECUTE.
+-- setup-roles.sh is forward-compatible: re-running it after this migration
+-- applies catches up USAGE/EXECUTE on the app schema, so bootstrap ordering
+-- doesn't matter in either direction.
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
         EXECUTE 'GRANT USAGE ON SCHEMA app TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_user_for_login(text) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.resolve_session(text) TO poziomki_api';
+        -- Any future function added to `app` by a later migration is
+        -- auto-granted EXECUTE to poziomki_api.
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE poziomki IN SCHEMA app '
+             || 'GRANT EXECUTE ON FUNCTIONS TO poziomki_api';
     END IF;
 END
 $$;
