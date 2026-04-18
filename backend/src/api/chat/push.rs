@@ -1,8 +1,6 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::db::schema::push_subscriptions;
+use crate::db;
 
 const ALLOWED_NTFY_HOSTS: &[&str] = &["ntfy.poziomki.app"];
 const DEFAULT_NTFY_SERVER: &str = "https://ntfy.poziomki.app";
@@ -105,12 +103,12 @@ async fn resolve_ntfy_topics(
 
     let ntfy_server = resolved_ntfy_server();
 
+    // Narrow SECURITY DEFINER helper: returns only `ntfy_topic` rows for
+    // the given user ids. Server-side delivery only — the API role does
+    // not hold broad SELECT on push_subscriptions, and an anon policy
+    // isn't needed to enumerate topics for arbitrary users.
     let mut conn = crate::db::conn().await?;
-    let topics: Vec<String> = push_subscriptions::table
-        .filter(push_subscriptions::user_id.eq_any(user_ids))
-        .select(push_subscriptions::ntfy_topic)
-        .load(&mut conn)
-        .await?;
+    let topics = db::push_topics_for_users(&mut conn, user_ids).await?;
 
     Ok(topics
         .into_iter()

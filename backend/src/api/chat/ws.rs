@@ -1,6 +1,7 @@
 use axum::extract::ws::{Message, WebSocket};
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 
@@ -9,6 +10,7 @@ use super::hub::ChatHub;
 use super::messages as chat_messages;
 use super::protocol::{ClientMessage, ServerMessage};
 use crate::api::state::hash_session_token;
+use crate::db;
 use crate::db::schema::{conversations as conversations_table, profile_blocks, profiles};
 
 const AUTH_TIMEOUT_SECS: u64 = 5;
@@ -21,14 +23,32 @@ const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3
 /// Close the socket if no frame (including pong) arrives within this window.
 const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
 
+/// Authenticated-viewer state carried through the socket lifetime.
+#[derive(Clone, Copy)]
+struct SocketViewer {
+    user_id: i32,
+    is_review_stub: bool,
+}
+
+impl From<SocketViewer> for db::DbViewer {
+    fn from(v: SocketViewer) -> Self {
+        Self {
+            user_id: v.user_id,
+            is_review_stub: v.is_review_stub,
+        }
+    }
+}
+
 /// Handle a WebSocket connection after Axum upgrade.
 pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // --- Step 1: Authenticate ---
-    let Some((user_id, _user_pid)) = authenticate(&mut ws_tx, &mut ws_rx).await else {
+    let Some((viewer, _user_pid)) = authenticate(&mut ws_tx, &mut ws_rx).await else {
         return;
     };
+    let user_id = viewer.user_id;
+    let viewer_is_stub = viewer.is_review_stub;
 
     // --- Step 2: Register in hub ---
     let mut hub_rx = hub.register(user_id);
@@ -40,9 +60,16 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     let (ping_tx, mut ping_rx) = mpsc::unbounded_channel::<()>();
 
     // Send initial conversation list
-    let conv_list = conversations::list_for_user(user_id)
-        .await
-        .unwrap_or_default();
+    let conv_list = db::with_viewer_tx(viewer.into(), move |conn| {
+        async move {
+            conversations::list_for_user(conn, user_id, viewer_is_stub)
+                .await
+                .map_err(into_diesel)
+        }
+        .scope_boxed()
+    })
+    .await
+    .unwrap_or_default();
     let init_msg = ServerMessage::Conversations {
         conversations: conv_list,
     };
@@ -112,7 +139,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
                                         continue;
                                     }
                                 }
-                                handle_client_message(client_msg, user_id, &hub, &outbound_tx).await;
+                                handle_client_message(client_msg, viewer, &hub, &outbound_tx).await;
                             }
                             Err(e) => {
                                 let _ = outbound_tx.send(ServerMessage::Error {
@@ -147,15 +174,31 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     hub.unregister(user_id);
 }
 
-/// Authenticate the first message. Returns (`user_id`, `user_pid`) or None on failure.
+/// Convert an `AppError` from a library helper into a `diesel::result::Error`
+/// that rolls back the transaction.
+///
+/// `AppError::Any` carries diesel / Postgres / pool errors — those collapse
+/// to an opaque `RollbackTransaction` so raw database error text (column
+/// names, constraint names, etc.) never leaks over the WebSocket. The
+/// `Message` / `Validation` variants are intentional, application-level
+/// strings and are safe to surface to clients, so they flow through
+/// `QueryBuilderError` and render via `format!("{e}")` at the outer match.
+fn into_diesel(e: crate::error::AppError) -> diesel::result::Error {
+    match e {
+        crate::error::AppError::Message(_) | crate::error::AppError::Validation(_) => {
+            diesel::result::Error::QueryBuilderError(Box::new(e))
+        }
+        crate::error::AppError::Any(_) => diesel::result::Error::RollbackTransaction,
+    }
+}
+
+/// Authenticate the first message. Returns a `SocketViewer` + user pid, or
+/// None on failure. Routes through `app.resolve_session` so it works once
+/// Tier-A RLS lands on the sessions table.
 async fn authenticate(
     ws_tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     ws_rx: &mut futures_util::stream::SplitStream<WebSocket>,
-) -> Option<(i32, uuid::Uuid)> {
-    use crate::db::schema::{sessions, users};
-    use diesel::prelude::*;
-    use diesel_async::RunQueryDsl;
-
+) -> Option<(SocketViewer, uuid::Uuid)> {
     let timeout = tokio::time::timeout(
         std::time::Duration::from_secs(AUTH_TIMEOUT_SECS),
         ws_rx.next(),
@@ -186,7 +229,6 @@ async fn authenticate(
         return None;
     };
 
-    // Validate the bearer token using existing auth infrastructure
     let hashed = hash_session_token(&token);
 
     let Ok(mut conn) = crate::db::conn().await else {
@@ -200,17 +242,7 @@ async fn authenticate(
         return None;
     };
 
-    let row: Option<(i32, uuid::Uuid)> = if let Ok(row) = sessions::table
-        .inner_join(users::table.on(users::id.eq(sessions::user_id)))
-        .filter(sessions::token.eq(&hashed))
-        .filter(sessions::expires_at.gt(chrono::Utc::now()))
-        .select((users::id, users::pid))
-        .first::<(i32, uuid::Uuid)>(&mut conn)
-        .await
-        .optional()
-    {
-        row
-    } else {
+    let Ok(session) = db::resolve_session(&mut conn, &hashed).await else {
         tracing::warn!("WS auth failed: database query error");
         let _ = send_json(
             ws_tx,
@@ -222,17 +254,8 @@ async fn authenticate(
         return None;
     };
 
-    if let Some((uid, pid)) = row {
-        let _ = send_json(
-            ws_tx,
-            &ServerMessage::AuthOk {
-                user_id: uid.to_string(),
-            },
-        )
-        .await;
-        Some((uid, pid))
-    } else {
-        tracing::warn!("WS auth failed: invalid or expired token");
+    let Some(session) = session else {
+        tracing::warn!("WS auth failed: invalid token");
         let _ = send_json(
             ws_tx,
             &ServerMessage::AuthError {
@@ -240,14 +263,40 @@ async fn authenticate(
             },
         )
         .await;
-        None
+        return None;
+    };
+
+    if session.expires_at <= chrono::Utc::now() {
+        tracing::warn!("WS auth failed: session expired");
+        let _ = send_json(
+            ws_tx,
+            &ServerMessage::AuthError {
+                message: "invalid token".to_string(),
+            },
+        )
+        .await;
+        return None;
     }
+
+    let viewer = SocketViewer {
+        user_id: session.user_id,
+        is_review_stub: session.is_review_stub,
+    };
+
+    let _ = send_json(
+        ws_tx,
+        &ServerMessage::AuthOk {
+            user_id: viewer.user_id.to_string(),
+        },
+    )
+    .await;
+    Some((viewer, session.user_pid))
 }
 
 /// Process a single client message.
 async fn handle_client_message(
     msg: ClientMessage,
-    user_id: i32,
+    viewer: SocketViewer,
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
@@ -264,7 +313,7 @@ async fn handle_client_message(
             client_id,
         } => {
             handle_send(
-                user_id,
+                viewer,
                 conversation_id,
                 &body,
                 "text",
@@ -276,10 +325,10 @@ async fn handle_client_message(
             .await;
         }
         ClientMessage::Edit { message_id, body } => {
-            handle_edit(user_id, message_id, &body, hub, outbound_tx).await;
+            handle_edit(viewer, message_id, &body, hub, outbound_tx).await;
         }
         ClientMessage::Delete { message_id } => {
-            handle_delete(user_id, message_id, hub, outbound_tx).await;
+            handle_delete(viewer, message_id, hub, outbound_tx).await;
         }
         ClientMessage::React { message_id, emoji } => {
             if emoji.chars().count() > 32 {
@@ -287,32 +336,41 @@ async fn handle_client_message(
                     message: "emoji too long".to_string(),
                 });
             } else {
-                handle_react(user_id, message_id, &emoji, hub, outbound_tx).await;
+                handle_react(viewer, message_id, &emoji, hub, outbound_tx).await;
             }
         }
         ClientMessage::Read {
             conversation_id,
             message_id,
         } => {
-            handle_read(user_id, conversation_id, message_id, hub).await;
+            handle_read(viewer, conversation_id, message_id, hub).await;
         }
         ClientMessage::Typing {
             conversation_id,
             is_typing,
         } => {
-            handle_typing(user_id, conversation_id, is_typing, hub).await;
+            handle_typing(viewer, conversation_id, is_typing, hub).await;
         }
         ClientMessage::History {
             conversation_id,
             before,
             limit,
         } => {
-            handle_history(user_id, conversation_id, before, limit, outbound_tx).await;
+            handle_history(viewer, conversation_id, before, limit, outbound_tx).await;
         }
         ClientMessage::ListConversations => {
-            let conv_list = conversations::list_for_user(user_id)
-                .await
-                .unwrap_or_default();
+            let user_id = viewer.user_id;
+            let viewer_is_stub = viewer.is_review_stub;
+            let conv_list = db::with_viewer_tx(viewer.into(), move |conn| {
+                async move {
+                    conversations::list_for_user(conn, user_id, viewer_is_stub)
+                        .await
+                        .map_err(into_diesel)
+                }
+                .scope_boxed()
+            })
+            .await
+            .unwrap_or_default();
             let _ = outbound_tx.send(ServerMessage::Conversations {
                 conversations: conv_list,
             });
@@ -323,9 +381,16 @@ async fn handle_client_message(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Send outcome: Ok(message payload + recipient members) or an error message.
+struct SendOutcome {
+    payload: super::protocol::MessagePayload,
+    members: Vec<i32>,
+    created: bool,
+}
+
+#[allow(clippy::too_many_arguments, clippy::items_after_statements)]
 async fn handle_send(
-    user_id: i32,
+    viewer: SocketViewer,
     conversation_id: uuid::Uuid,
     body: &str,
     kind: &str,
@@ -358,7 +423,6 @@ async fn handle_send(
         }
     }
 
-    // Only text messages are supported
     if kind != "text" {
         let _ = outbound_tx.send(ServerMessage::Error {
             message: "only text messages are supported".to_string(),
@@ -366,57 +430,89 @@ async fn handle_send(
         return;
     }
 
-    // Verify membership
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        let _ = outbound_tx.send(ServerMessage::Error {
-            message: "not a member of this conversation".to_string(),
-        });
-        return;
+    let user_id = viewer.user_id;
+    let body_owned = body.to_string();
+    let kind_owned = kind.to_string();
+    let client_id_for_tx = client_id.clone();
+
+    enum SendFailure {
+        NotMember,
+        Blocked,
     }
 
-    // Block check for DM conversations
-    if matches!(is_blocked_in_dm(conversation_id, user_id).await, Ok(true)) {
-        let _ = outbound_tx.send(ServerMessage::Error {
-            message: "blocked".to_string(),
-        });
-        return;
-    }
+    let result: std::result::Result<
+        std::result::Result<SendOutcome, SendFailure>,
+        diesel::result::Error,
+    > = db::with_viewer_tx(viewer.into(), move |conn| {
+        async move {
+            if !conversations::is_member(conn, conversation_id, user_id)
+                .await
+                .map_err(into_diesel)?
+            {
+                return Ok::<std::result::Result<SendOutcome, SendFailure>, diesel::result::Error>(
+                    Err(SendFailure::NotMember),
+                );
+            }
 
-    match chat_messages::create_message(
-        conversation_id,
-        user_id,
-        body,
-        kind,
-        reply_to_id,
-        client_id,
-    )
-    .await
-    {
-        Ok((_msg, payload, created)) => {
-            let server_msg = ServerMessage::Message {
-                msg: Box::new(payload),
+            if is_blocked_in_dm(conn, conversation_id, user_id)
+                .await
+                .map_err(into_diesel)?
+            {
+                return Ok(Err(SendFailure::Blocked));
+            }
+
+            // create_message does INSERT-then-payload-construction. If
+            // payload construction fails post-INSERT, we MUST roll back,
+            // otherwise the row sits committed without a broadcast. Route
+            // any error through `?` + into_diesel so that happens — the
+            // cost is that pre-write semantic errors (e.g. "reply_to does
+            // not belong") also roll back (harmless) and render via the
+            // `Message`/`Validation` preservation in into_diesel.
+            let (_msg, payload, created) = chat_messages::create_message(
+                conn,
+                conversation_id,
+                user_id,
+                &body_owned,
+                &kind_owned,
+                reply_to_id,
+                client_id_for_tx,
+            )
+            .await
+            .map_err(into_diesel)?;
+
+            let members = if created {
+                conversations::member_user_ids(conn, conversation_id)
+                    .await
+                    .map_err(into_diesel)?
+            } else {
+                Vec::new()
             };
 
-            if created {
+            Ok(Ok(SendOutcome {
+                payload,
+                members,
+                created,
+            }))
+        }
+        .scope_boxed()
+    })
+    .await;
+
+    match result {
+        Ok(Ok(outcome)) => {
+            let server_msg = ServerMessage::Message {
+                msg: Box::new(outcome.payload),
+            };
+            if outcome.created {
                 tracing::info!(
                     conversation_id = %conversation_id,
                     sender_id = user_id,
                     "message_sent"
                 );
+                hub.broadcast(&outcome.members, &server_msg);
 
-                let members = conversations::member_user_ids(conversation_id)
-                    .await
-                    .unwrap_or_default();
-
-                // Broadcast to all members (including sender for confirmation)
-                hub.broadcast(&members, &server_msg);
-
-                // Push to all non-sender members; client-side ActiveChat check
-                // suppresses the notification when the user is viewing this chat.
-                let push_targets: Vec<i32> = members
+                let push_targets: Vec<i32> = outcome
+                    .members
                     .iter()
                     .copied()
                     .filter(|&id| id != user_id)
@@ -429,9 +525,18 @@ async fn handle_send(
                     });
                 }
             } else {
-                // Dedup retry — confirm to sender only, no broadcast/push
                 let _ = outbound_tx.send(server_msg);
             }
+        }
+        Ok(Err(SendFailure::NotMember)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".to_string(),
+            });
+        }
+        Ok(Err(SendFailure::Blocked)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "blocked".to_string(),
+            });
         }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
@@ -441,44 +546,9 @@ async fn handle_send(
     }
 }
 
-/// Check that a message exists and the user is a member of its conversation.
-/// Returns the conversation ID on success, or sends an error and returns None.
-async fn verify_message_membership(
-    message_id: uuid::Uuid,
-    user_id: i32,
-    outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
-) -> Option<uuid::Uuid> {
-    match chat_messages::message_conversation_id(message_id).await {
-        Ok(Some(cid))
-            if conversations::is_member(cid, user_id)
-                .await
-                .unwrap_or(false) =>
-        {
-            Some(cid)
-        }
-        Ok(Some(_)) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "not a member of this conversation".into(),
-            });
-            None
-        }
-        Ok(None) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "message not found".into(),
-            });
-            None
-        }
-        Err(_) => {
-            let _ = outbound_tx.send(ServerMessage::Error {
-                message: "internal error".into(),
-            });
-            None
-        }
-    }
-}
-
+#[allow(clippy::items_after_statements)]
 async fn handle_edit(
-    user_id: i32,
+    viewer: SocketViewer,
     message_id: uuid::Uuid,
     body: &str,
     hub: &ChatHub,
@@ -497,22 +567,96 @@ async fn handle_edit(
         return;
     }
 
-    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
-        return;
-    };
+    let user_id = viewer.user_id;
+    let body_owned = body.to_string();
 
-    match chat_messages::edit_message(message_id, user_id, body).await {
-        Ok(msg) => {
-            let members = conversations::member_user_ids(msg.conversation_id)
-                .await
-                .unwrap_or_default();
+    enum Outcome {
+        Edited {
+            message_id: uuid::Uuid,
+            conversation_id: uuid::Uuid,
+            body: String,
+            edited_at: Option<chrono::DateTime<chrono::Utc>>,
+            members: Vec<i32>,
+        },
+        NotMember,
+        NotFound,
+        Failed(String),
+    }
+
+    let result: std::result::Result<Outcome, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                let Some(conv_id) = chat_messages::message_conversation_id(conn, message_id)
+                    .await
+                    .map_err(into_diesel)?
+                else {
+                    return Ok::<Outcome, diesel::result::Error>(Outcome::NotFound);
+                };
+                if !conversations::is_member(conn, conv_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok(Outcome::NotMember);
+                }
+                // edit_message returns AppError::Message for semantic
+                // failures ("not editable", body validation) and
+                // AppError::Any for DB errors. Surface the semantic text
+                // via Outcome::Failed; let DB errors roll back + render
+                // generically via into_diesel.
+                let msg = match chat_messages::edit_message(conn, message_id, user_id, &body_owned)
+                    .await
+                {
+                    Ok(m) => m,
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
+                };
+                let members = conversations::member_user_ids(conn, msg.conversation_id)
+                    .await
+                    .map_err(into_diesel)?;
+                Ok(Outcome::Edited {
+                    message_id: msg.id,
+                    conversation_id: msg.conversation_id,
+                    body: msg.body,
+                    edited_at: msg.edited_at,
+                    members,
+                })
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    match result {
+        Ok(Outcome::Edited {
+            message_id,
+            conversation_id,
+            body,
+            edited_at,
+            members,
+        }) => {
             let server_msg = ServerMessage::Edited {
-                message_id: msg.id,
-                conversation_id: msg.conversation_id,
-                body: msg.body,
-                edited_at: msg.edited_at.map_or_else(String::new, |t| t.to_rfc3339()),
+                message_id,
+                conversation_id,
+                body,
+                edited_at: edited_at.map_or_else(String::new, |t| t.to_rfc3339()),
             };
             hub.broadcast(&members, &server_msg);
+        }
+        Ok(Outcome::NotMember) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".into(),
+            });
+        }
+        Ok(Outcome::NotFound) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".into(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("edit failed: {msg}"),
+            });
         }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
@@ -522,26 +666,89 @@ async fn handle_edit(
     }
 }
 
+#[allow(clippy::items_after_statements)]
 async fn handle_delete(
-    user_id: i32,
+    viewer: SocketViewer,
     message_id: uuid::Uuid,
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
-        return;
-    };
+    let user_id = viewer.user_id;
 
-    match chat_messages::delete_message(message_id, user_id).await {
-        Ok(msg) => {
-            let members = conversations::member_user_ids(msg.conversation_id)
-                .await
-                .unwrap_or_default();
+    enum Outcome {
+        Deleted {
+            message_id: uuid::Uuid,
+            conversation_id: uuid::Uuid,
+            members: Vec<i32>,
+        },
+        NotMember,
+        NotFound,
+        Failed(String),
+    }
+
+    let result: std::result::Result<Outcome, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                let Some(conv_id) = chat_messages::message_conversation_id(conn, message_id)
+                    .await
+                    .map_err(into_diesel)?
+                else {
+                    return Ok::<Outcome, diesel::result::Error>(Outcome::NotFound);
+                };
+                if !conversations::is_member(conn, conv_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok(Outcome::NotMember);
+                }
+                // "message not found or already deleted" is AppError::Message;
+                // DB failures are AppError::Any and get rolled back + generic.
+                let msg = match chat_messages::delete_message(conn, message_id, user_id).await {
+                    Ok(m) => m,
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
+                };
+                let members = conversations::member_user_ids(conn, msg.conversation_id)
+                    .await
+                    .map_err(into_diesel)?;
+                Ok(Outcome::Deleted {
+                    message_id: msg.id,
+                    conversation_id: msg.conversation_id,
+                    members,
+                })
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    match result {
+        Ok(Outcome::Deleted {
+            message_id,
+            conversation_id,
+            members,
+        }) => {
             let server_msg = ServerMessage::Deleted {
-                message_id: msg.id,
-                conversation_id: msg.conversation_id,
+                message_id,
+                conversation_id,
             };
             hub.broadcast(&members, &server_msg);
+        }
+        Ok(Outcome::NotMember) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".into(),
+            });
+        }
+        Ok(Outcome::NotFound) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".into(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("delete failed: {msg}"),
+            });
         }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
@@ -551,34 +758,103 @@ async fn handle_delete(
     }
 }
 
+#[allow(clippy::items_after_statements)]
 async fn handle_react(
-    user_id: i32,
+    viewer: SocketViewer,
     message_id: uuid::Uuid,
     emoji: &str,
     hub: &ChatHub,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    let Some(_) = verify_message_membership(message_id, user_id, outbound_tx).await else {
-        return;
-    };
+    let user_id = viewer.user_id;
+    let emoji_owned = emoji.to_string();
 
-    match chat_messages::toggle_reaction(message_id, user_id, emoji).await {
-        Ok((added, msg)) => {
-            let members = conversations::member_user_ids(msg.conversation_id)
-                .await
-                .unwrap_or_default();
+    struct ReactRow {
+        message_id: uuid::Uuid,
+        conversation_id: uuid::Uuid,
+        added: bool,
+        members: Vec<i32>,
+        sender_name: String,
+        sender_avatar: Option<String>,
+    }
 
-            let (sender_name, sender_avatar) = resolve_sender_for_reaction(user_id).await;
+    enum Outcome {
+        Reacted(ReactRow),
+        NotMember,
+        NotFound,
+        Failed(String),
+    }
+
+    let result: std::result::Result<Outcome, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                let Some(conv_id) = chat_messages::message_conversation_id(conn, message_id)
+                    .await
+                    .map_err(into_diesel)?
+                else {
+                    return Ok::<Outcome, diesel::result::Error>(Outcome::NotFound);
+                };
+                if !conversations::is_member(conn, conv_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok(Outcome::NotMember);
+                }
+                let (added, msg) =
+                    match chat_messages::toggle_reaction(conn, message_id, user_id, &emoji_owned)
+                        .await
+                    {
+                        Ok(v) => v,
+                        Err(
+                            crate::error::AppError::Message(m)
+                            | crate::error::AppError::Validation(m),
+                        ) => return Ok(Outcome::Failed(m)),
+                        Err(e) => return Err(into_diesel(e)),
+                    };
+                let members = conversations::member_user_ids(conn, msg.conversation_id)
+                    .await
+                    .map_err(into_diesel)?;
+                let (sender_name, sender_avatar) = resolve_sender_for_reaction(conn, user_id).await;
+                Ok(Outcome::Reacted(ReactRow {
+                    message_id: msg.id,
+                    conversation_id: msg.conversation_id,
+                    added,
+                    members,
+                    sender_name,
+                    sender_avatar,
+                }))
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    match result {
+        Ok(Outcome::Reacted(r)) => {
             let server_msg = ServerMessage::Reaction {
-                message_id: msg.id,
-                conversation_id: msg.conversation_id,
+                message_id: r.message_id,
+                conversation_id: r.conversation_id,
                 emoji: emoji.to_string(),
                 user_id,
-                added,
-                sender_name,
-                sender_avatar,
+                added: r.added,
+                sender_name: r.sender_name,
+                sender_avatar: r.sender_avatar,
             };
-            hub.broadcast(&members, &server_msg);
+            hub.broadcast(&r.members, &server_msg);
+        }
+        Ok(Outcome::NotMember) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".into(),
+            });
+        }
+        Ok(Outcome::NotFound) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "message not found".into(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("react failed: {msg}"),
+            });
         }
         Err(e) => {
             let _ = outbound_tx.send(ServerMessage::Error {
@@ -588,19 +864,17 @@ async fn handle_react(
     }
 }
 
-async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
-    use crate::db::schema::{profiles, users};
-    use diesel::prelude::*;
-    use diesel_async::RunQueryDsl;
+async fn resolve_sender_for_reaction(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> (String, Option<String>) {
+    use crate::db::schema::profiles;
 
-    let Ok(mut conn) = crate::db::conn().await else {
-        return ("Unknown".into(), None);
-    };
+    // Filter on profiles.user_id directly — no users join needed.
     let Ok((name, avatar)) = profiles::table
-        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-        .filter(users::id.eq(user_id))
+        .filter(profiles::user_id.eq(user_id))
         .select((profiles::name, profiles::profile_picture))
-        .first::<(String, Option<String>)>(&mut conn)
+        .first::<(String, Option<String>)>(conn)
         .await
     else {
         return ("Unknown".into(), None);
@@ -612,25 +886,35 @@ async fn resolve_sender_for_reaction(user_id: i32) -> (String, Option<String>) {
 }
 
 async fn handle_read(
-    user_id: i32,
+    viewer: SocketViewer,
     conversation_id: uuid::Uuid,
     message_id: uuid::Uuid,
     hub: &ChatHub,
 ) {
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        return;
-    }
+    let user_id = viewer.user_id;
 
-    if chat_messages::mark_read(conversation_id, user_id, message_id)
-        .await
-        .is_ok()
-    {
-        let members = conversations::member_user_ids(conversation_id)
-            .await
-            .unwrap_or_default();
+    let members: std::result::Result<Option<Vec<i32>>, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                if !conversations::is_member(conn, conversation_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok::<Option<Vec<i32>>, diesel::result::Error>(None);
+                }
+                chat_messages::mark_read(conn, conversation_id, user_id, message_id)
+                    .await
+                    .map_err(into_diesel)?;
+                let m = conversations::member_user_ids(conn, conversation_id)
+                    .await
+                    .map_err(into_diesel)?;
+                Ok(Some(m))
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    if let Ok(Some(members)) = members {
         let server_msg = ServerMessage::ReadReceipt {
             conversation_id,
             user_id,
@@ -640,54 +924,114 @@ async fn handle_read(
     }
 }
 
-async fn handle_typing(user_id: i32, conversation_id: uuid::Uuid, is_typing: bool, hub: &ChatHub) {
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        return;
-    }
+async fn handle_typing(
+    viewer: SocketViewer,
+    conversation_id: uuid::Uuid,
+    is_typing: bool,
+    hub: &ChatHub,
+) {
+    let user_id = viewer.user_id;
 
-    let members = conversations::member_user_ids(conversation_id)
-        .await
-        .unwrap_or_default();
-    let server_msg = ServerMessage::Typing {
-        conversation_id,
-        user_id,
-        is_typing,
-    };
-    // Send to all members except the typer
-    let others: Vec<i32> = members.into_iter().filter(|id| *id != user_id).collect();
-    hub.broadcast(&others, &server_msg);
+    let members: std::result::Result<Option<Vec<i32>>, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                if !conversations::is_member(conn, conversation_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok::<Option<Vec<i32>>, diesel::result::Error>(None);
+                }
+                let m = conversations::member_user_ids(conn, conversation_id)
+                    .await
+                    .map_err(into_diesel)?;
+                Ok(Some(m))
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    if let Ok(Some(members)) = members {
+        let server_msg = ServerMessage::Typing {
+            conversation_id,
+            user_id,
+            is_typing,
+        };
+        let others: Vec<i32> = members.into_iter().filter(|id| *id != user_id).collect();
+        hub.broadcast(&others, &server_msg);
+    }
 }
 
+#[allow(clippy::items_after_statements)]
 async fn handle_history(
-    user_id: i32,
+    viewer: SocketViewer,
     conversation_id: uuid::Uuid,
     before: Option<uuid::Uuid>,
     limit: Option<i64>,
     outbound_tx: &mpsc::UnboundedSender<ServerMessage>,
 ) {
-    if !conversations::is_member(conversation_id, user_id)
-        .await
-        .unwrap_or(false)
-    {
-        let _ = outbound_tx.send(ServerMessage::Error {
-            message: "not a member of this conversation".to_string(),
-        });
-        return;
-    }
-
+    let user_id = viewer.user_id;
     let limit = limit
         .unwrap_or(DEFAULT_HISTORY_LIMIT)
         .clamp(1, MAX_HISTORY_LIMIT);
 
-    match chat_messages::load_history(conversation_id, before, limit, user_id).await {
-        Ok((messages, has_more)) => {
+    enum Outcome {
+        Ok {
+            messages: Vec<super::protocol::MessagePayload>,
+            has_more: bool,
+        },
+        NotMember,
+        Failed(String),
+    }
+
+    let result: std::result::Result<Outcome, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                if !conversations::is_member(conn, conversation_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok::<Outcome, diesel::result::Error>(Outcome::NotMember);
+                }
+                // Semantic errors from load_history surface through
+                // Outcome::Failed; internal DB errors get a rollback +
+                // generic message.
+                let (messages, has_more) = match chat_messages::load_history(
+                    conn,
+                    conversation_id,
+                    before,
+                    limit,
+                    user_id,
+                )
+                .await
+                {
+                    Ok(v) => v,
+                    Err(
+                        crate::error::AppError::Message(m) | crate::error::AppError::Validation(m),
+                    ) => return Ok(Outcome::Failed(m)),
+                    Err(e) => return Err(into_diesel(e)),
+                };
+                Ok(Outcome::Ok { messages, has_more })
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    match result {
+        Ok(Outcome::Ok { messages, has_more }) => {
             let _ = outbound_tx.send(ServerMessage::HistoryResponse {
                 conversation_id,
                 messages,
                 has_more,
+            });
+        }
+        Ok(Outcome::NotMember) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: "not a member of this conversation".to_string(),
+            });
+        }
+        Ok(Outcome::Failed(msg)) => {
+            let _ = outbound_tx.send(ServerMessage::Error {
+                message: format!("history failed: {msg}"),
             });
         }
         Err(e) => {
@@ -702,15 +1046,13 @@ async fn handle_history(
 /// Returns true if the other party has blocked the sender.
 #[allow(clippy::similar_names)]
 async fn is_blocked_in_dm(
+    conn: &mut AsyncPgConnection,
     conversation_id: uuid::Uuid,
     sender_user_id: i32,
 ) -> Result<bool, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
-    // Only check DM conversations
     let conv: Option<crate::db::models::conversations::Conversation> = conversations_table::table
         .find(conversation_id)
-        .first(&mut conn)
+        .first(conn)
         .await
         .optional()?;
 
@@ -721,7 +1063,6 @@ async fn is_blocked_in_dm(
         return Ok(false);
     }
 
-    // Get both users' profile IDs
     let other_user_id = if conv.user_low_id == Some(sender_user_id) {
         conv.user_high_id
     } else {
@@ -732,17 +1073,16 @@ async fn is_blocked_in_dm(
         return Ok(false);
     };
 
-    // Resolve both profile IDs
     let sender_profile: Option<uuid::Uuid> = profiles::table
         .filter(profiles::user_id.eq(sender_user_id))
         .select(profiles::id)
-        .first(&mut conn)
+        .first(conn)
         .await
         .optional()?;
     let other_profile: Option<uuid::Uuid> = profiles::table
         .filter(profiles::user_id.eq(other_user_id))
         .select(profiles::id)
-        .first(&mut conn)
+        .first(conn)
         .await
         .optional()?;
 
@@ -750,7 +1090,6 @@ async fn is_blocked_in_dm(
         return Ok(false);
     };
 
-    // Check if either party has blocked the other
     let count = profile_blocks::table
         .filter(
             profile_blocks::blocker_id
@@ -761,7 +1100,7 @@ async fn is_blocked_in_dm(
                     .and(profile_blocks::blocked_id.eq(sender_pid))),
         )
         .count()
-        .get_result::<i64>(&mut conn)
+        .get_result::<i64>(conn)
         .await?;
 
     Ok(count > 0)

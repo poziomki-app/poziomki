@@ -5,15 +5,17 @@ use axum::{
     Json,
 };
 use diesel::prelude::*;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
 use crate::api::common::{auth_or_respond, error_response, parse_uuid_response, ErrorSpec};
 use crate::api::state::SuccessResponse;
 use crate::app::AppContext;
+use crate::db;
 use crate::db::schema::profiles;
 
-use super::report_repo;
+use super::{conversations, report_repo};
 
 type Result<T> = crate::error::AppResult<T>;
 
@@ -35,6 +37,14 @@ pub struct ReportConversationBody {
     pub description: Option<String>,
 }
 
+enum ReportOutcome {
+    NoProfile,
+    NotMember,
+    ConversationMissing,
+    Duplicate,
+    Inserted,
+}
+
 pub(in crate::api) async fn conversation_report(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
@@ -48,41 +58,7 @@ pub(in crate::api) async fn conversation_report(
         Err(response) => return Ok(*response),
     };
 
-    // Resolve reporter's profile id
-    let mut conn = crate::db::conn().await?;
-
-    let reporter_profile_id: Option<uuid::Uuid> = profiles::table
-        .filter(profiles::user_id.eq(user.id))
-        .select(profiles::id)
-        .first(&mut conn)
-        .await
-        .optional()?;
-
-    let Some(reporter_profile_id) = reporter_profile_id else {
-        return Ok(error_response(
-            StatusCode::FORBIDDEN,
-            &headers,
-            ErrorSpec {
-                error: "Profile required".to_string(),
-                code: "FORBIDDEN",
-                details: None,
-            },
-        ));
-    };
-
-    // Verify reporter is a member
-    if !super::conversations::is_member(conversation_id, user.id).await? {
-        return Ok(error_response(
-            StatusCode::FORBIDDEN,
-            &headers,
-            ErrorSpec {
-                error: "Musisz być członkiem tej rozmowy".to_string(),
-                code: "FORBIDDEN",
-                details: None,
-            },
-        ));
-    }
-
+    // Validate input before touching the DB.
     let reason = body.reason.trim().to_lowercase();
     if !VALID_REASONS.contains(&reason.as_str()) {
         return Ok(error_response(
@@ -117,15 +93,67 @@ pub(in crate::api) async fn conversation_report(
         }
     }
 
-    let Some(inserted) = report_repo::insert_conversation_report(
-        reporter_profile_id,
-        conversation_id,
-        reason,
-        description,
-    )
-    .await?
-    else {
-        return Ok(error_response(
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+
+    let outcome = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let reporter_profile_id: Option<uuid::Uuid> = profiles::table
+                .filter(profiles::user_id.eq(user_id))
+                .select(profiles::id)
+                .first(conn)
+                .await
+                .optional()
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            let Some(reporter_profile_id) = reporter_profile_id else {
+                return Ok::<_, diesel::result::Error>(ReportOutcome::NoProfile);
+            };
+
+            if !conversations::is_member(conn, conversation_id, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            {
+                return Ok(ReportOutcome::NotMember);
+            }
+
+            match report_repo::insert_conversation_report(
+                conn,
+                reporter_profile_id,
+                conversation_id,
+                reason,
+                description,
+            )
+            .await
+            .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            {
+                None => Ok(ReportOutcome::ConversationMissing),
+                Some(false) => Ok(ReportOutcome::Duplicate),
+                Some(true) => Ok(ReportOutcome::Inserted),
+            }
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    match outcome {
+        ReportOutcome::NoProfile | ReportOutcome::NotMember => Ok(error_response(
+            StatusCode::FORBIDDEN,
+            &headers,
+            ErrorSpec {
+                error: if matches!(outcome, ReportOutcome::NoProfile) {
+                    "Profile required".to_string()
+                } else {
+                    "Musisz być członkiem tej rozmowy".to_string()
+                },
+                code: "FORBIDDEN",
+                details: None,
+            },
+        )),
+        ReportOutcome::ConversationMissing => Ok(error_response(
             StatusCode::NOT_FOUND,
             &headers,
             ErrorSpec {
@@ -133,11 +161,8 @@ pub(in crate::api) async fn conversation_report(
                 code: "NOT_FOUND",
                 details: None,
             },
-        ));
-    };
-
-    if !inserted {
-        return Ok(error_response(
+        )),
+        ReportOutcome::Duplicate => Ok(error_response(
             StatusCode::BAD_REQUEST,
             &headers,
             ErrorSpec {
@@ -145,8 +170,7 @@ pub(in crate::api) async fn conversation_report(
                 code: "VALIDATION_ERROR",
                 details: None,
             },
-        ));
+        )),
+        ReportOutcome::Inserted => Ok(Json(SuccessResponse { success: true }).into_response()),
     }
-
-    Ok(Json(SuccessResponse { success: true }).into_response())
 }
