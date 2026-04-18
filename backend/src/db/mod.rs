@@ -1,5 +1,11 @@
 pub mod models;
 pub mod schema;
+pub mod viewer;
+
+pub use viewer::{
+    find_user_for_login, resolve_session, set_anon_context, set_viewer_context, with_anon_tx,
+    with_viewer_tx, AuthSessionRow, AuthUserRow, DbViewer,
+};
 
 use deadpool::managed::Timeouts;
 use deadpool::Runtime;
