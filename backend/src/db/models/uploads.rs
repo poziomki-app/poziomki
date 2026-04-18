@@ -20,7 +20,7 @@ pub struct Upload {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Insertable)]
+#[derive(Clone, Debug, Insertable)]
 #[diesel(table_name = uploads)]
 pub struct NewUpload {
     pub id: Uuid,
@@ -36,7 +36,7 @@ pub struct NewUpload {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, AsChangeset, Default)]
+#[derive(Clone, Debug, AsChangeset, Default)]
 #[diesel(table_name = uploads)]
 pub struct UploadChangeset {
     pub filename: Option<String>,
