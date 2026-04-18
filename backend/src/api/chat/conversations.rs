@@ -3,11 +3,10 @@ use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
+use crate::db;
 use crate::db::models::conversation_members::NewConversationMember;
 use crate::db::models::conversations::{Conversation, NewConversation};
-use crate::db::schema::{
-    conversation_members, conversations, events, profile_blocks, profiles, users,
-};
+use crate::db::schema::{conversation_members, conversations, events, profile_blocks, profiles};
 
 /// Resolve or create a DM conversation between two users.
 /// Uses canonical pair (lower id, higher id) for uniqueness.
@@ -188,17 +187,10 @@ pub async fn is_member(
 pub async fn list_for_user(
     conn: &mut AsyncPgConnection,
     user_id: i32,
+    viewer_is_stub: bool,
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
     use super::protocol::ConversationPayload;
     use std::collections::HashMap;
-
-    let viewer_is_stub = users::table
-        .filter(users::id.eq(user_id))
-        .select(users::is_review_stub)
-        .first::<bool>(conn)
-        .await
-        .optional()?
-        .unwrap_or(false);
 
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
@@ -229,17 +221,12 @@ pub async fn list_for_user(
         })
         .collect();
 
-    let stub_flags: std::collections::HashMap<i32, bool> = if other_ids.is_empty() {
-        std::collections::HashMap::new()
-    } else {
-        users::table
-            .filter(users::id.eq_any(&other_ids))
-            .select((users::id, users::is_review_stub))
-            .load::<(i32, bool)>(conn)
-            .await?
-            .into_iter()
-            .collect()
-    };
+    // Narrow public projection: is_review_stub only, no full users row.
+    let stub_flags: std::collections::HashMap<i32, bool> = db::user_review_stubs(conn, &other_ids)
+        .await?
+        .into_iter()
+        .map(|r| (r.user_id, r.is_review_stub))
+        .collect();
 
     // Hide DMs where the other participant has a different is_review_stub
     // value so stub accounts stay invisible to real users (and vice versa).
@@ -329,16 +316,16 @@ pub async fn list_for_user(
     profile_user_ids.sort_unstable();
     profile_user_ids.dedup();
 
-    // Batch-load profiles
+    // Batch-load profiles (filter on profiles.user_id directly — no need
+    // to join users, which would require broad SELECT on a sensitive table).
     let profile_rows: Vec<(i32, uuid::Uuid, String, Option<String>)> =
         if profile_user_ids.is_empty() {
             Vec::new()
         } else {
             profiles::table
-                .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-                .filter(users::id.eq_any(&profile_user_ids))
+                .filter(profiles::user_id.eq_any(&profile_user_ids))
                 .select((
-                    users::id,
+                    profiles::user_id,
                     profiles::id,
                     profiles::name,
                     profiles::profile_picture,

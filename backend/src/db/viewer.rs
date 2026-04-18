@@ -384,3 +384,69 @@ pub async fn profile_program_visibility(
         .await?;
     Ok(row.value)
 }
+
+// ---------------------------------------------------------------------------
+// Narrow public projections used by the chat module.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, QueryableByName)]
+struct IntRow {
+    #[diesel(sql_type = Nullable<Integer>)]
+    value: Option<i32>,
+}
+
+/// Resolve a user pid to its int id. Returns None if the pid is unknown.
+pub async fn user_id_for_pid(
+    conn: &mut AsyncPgConnection,
+    pid: uuid::Uuid,
+) -> Result<Option<i32>, diesel::result::Error> {
+    let row = diesel::sql_query("SELECT app.user_id_for_pid($1) AS value")
+        .bind::<SqlUuid, _>(pid)
+        .get_result::<IntRow>(conn)
+        .await?;
+    Ok(row.value)
+}
+
+#[derive(Debug, Clone, QueryableByName)]
+pub struct UserReviewStubRow {
+    #[diesel(sql_type = Integer)]
+    pub user_id: i32,
+    #[diesel(sql_type = Bool)]
+    pub is_review_stub: bool,
+}
+
+/// Batch lookup of `is_review_stub` for a list of users.
+pub async fn user_review_stubs(
+    conn: &mut AsyncPgConnection,
+    user_ids: &[i32],
+) -> Result<Vec<UserReviewStubRow>, diesel::result::Error> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    diesel::sql_query("SELECT * FROM app.user_review_stubs($1)")
+        .bind::<diesel::sql_types::Array<Integer>, _>(user_ids)
+        .load::<UserReviewStubRow>(conn)
+        .await
+}
+
+#[derive(Debug, Clone, QueryableByName)]
+struct NtfyTopicRow {
+    #[diesel(sql_type = VarChar)]
+    ntfy_topic: String,
+}
+
+/// Return the ntfy push topics registered for a set of users. Server-side
+/// delivery only; bypasses RLS via SECURITY DEFINER.
+pub async fn push_topics_for_users(
+    conn: &mut AsyncPgConnection,
+    user_ids: &[i32],
+) -> Result<Vec<String>, diesel::result::Error> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = diesel::sql_query("SELECT * FROM app.push_topics_for_users($1)")
+        .bind::<diesel::sql_types::Array<Integer>, _>(user_ids)
+        .load::<NtfyTopicRow>(conn)
+        .await?;
+    Ok(rows.into_iter().map(|r| r.ntfy_topic).collect())
+}

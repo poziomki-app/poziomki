@@ -120,10 +120,6 @@ pub async fn resolve_dm(
     headers: HeaderMap,
     Json(body): Json<DmRequest>,
 ) -> Result<Response> {
-    use crate::db::schema::users;
-    use diesel::prelude::*;
-    use diesel_async::RunQueryDsl;
-
     let (_session, user) = auth_or_respond!(headers);
 
     let target_pid = match parse_uuid_response(&body.user_id, "user", &headers) {
@@ -140,12 +136,9 @@ pub async fn resolve_dm(
     let outcome: std::result::Result<Option<Uuid>, &'static str> =
         db::with_viewer_tx(viewer, move |conn| {
             async move {
-                let target_user_id: Option<i32> = users::table
-                    .filter(users::pid.eq(target_pid))
-                    .select(users::id)
-                    .first(conn)
+                // Narrow public projection: pid → int id, no full users row read.
+                let target_user_id: Option<i32> = db::user_id_for_pid(conn, target_pid)
                     .await
-                    .optional()
                     .map_err(|_| diesel::result::Error::RollbackTransaction)?;
 
                 let Some(target_user_id) = target_user_id else {

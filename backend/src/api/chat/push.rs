@@ -1,10 +1,6 @@
-use diesel::prelude::*;
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::db;
-use crate::db::schema::push_subscriptions;
 
 const ALLOWED_NTFY_HOSTS: &[&str] = &["ntfy.poziomki.app"];
 const DEFAULT_NTFY_SERVER: &str = "https://ntfy.poziomki.app";
@@ -107,23 +103,12 @@ async fn resolve_ntfy_topics(
 
     let ntfy_server = resolved_ntfy_server();
 
-    // Push delivery runs after a message/event commit, decoupled from the
-    // originating viewer transaction. Use an anon tx — the only column read
-    // is `ntfy_topic`, which is not sensitive (it's the destination the user
-    // registered with us). Once push_subscriptions ships Tier-A RLS this
-    // will move to a narrow SECURITY DEFINER helper.
-    let owned_ids = user_ids.to_vec();
-    let topics: Vec<String> = db::with_anon_tx(move |conn| {
-        async move {
-            push_subscriptions::table
-                .filter(push_subscriptions::user_id.eq_any(&owned_ids))
-                .select(push_subscriptions::ntfy_topic)
-                .load(conn)
-                .await
-        }
-        .scope_boxed()
-    })
-    .await?;
+    // Narrow SECURITY DEFINER helper: returns only `ntfy_topic` rows for
+    // the given user ids. Server-side delivery only — the API role does
+    // not hold broad SELECT on push_subscriptions, and an anon policy
+    // isn't needed to enumerate topics for arbitrary users.
+    let mut conn = crate::db::conn().await?;
+    let topics = db::push_topics_for_users(&mut conn, user_ids).await?;
 
     Ok(topics
         .into_iter()

@@ -48,6 +48,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
         return;
     };
     let user_id = viewer.user_id;
+    let viewer_is_stub = viewer.is_review_stub;
 
     // --- Step 2: Register in hub ---
     let mut hub_rx = hub.register(user_id);
@@ -61,7 +62,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     // Send initial conversation list
     let conv_list = db::with_viewer_tx(viewer.into(), move |conn| {
         async move {
-            conversations::list_for_user(conn, user_id)
+            conversations::list_for_user(conn, user_id, viewer_is_stub)
                 .await
                 .map_err(into_diesel)
         }
@@ -345,9 +346,10 @@ async fn handle_client_message(
         }
         ClientMessage::ListConversations => {
             let user_id = viewer.user_id;
+            let viewer_is_stub = viewer.is_review_stub;
             let conv_list = db::with_viewer_tx(viewer.into(), move |conn| {
                 async move {
-                    conversations::list_for_user(conn, user_id)
+                    conversations::list_for_user(conn, user_id, viewer_is_stub)
                         .await
                         .map_err(into_diesel)
                 }
@@ -799,11 +801,11 @@ async fn resolve_sender_for_reaction(
     conn: &mut AsyncPgConnection,
     user_id: i32,
 ) -> (String, Option<String>) {
-    use crate::db::schema::{profiles, users};
+    use crate::db::schema::profiles;
 
+    // Filter on profiles.user_id directly — no users join needed.
     let Ok((name, avatar)) = profiles::table
-        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-        .filter(users::id.eq(user_id))
+        .filter(profiles::user_id.eq(user_id))
         .select((profiles::name, profiles::profile_picture))
         .first::<(String, Option<String>)>(conn)
         .await

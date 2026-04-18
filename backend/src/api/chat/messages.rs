@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::protocol::{MessagePayload, ReactionPayload, ReplyPayload};
 use crate::db::models::message_reactions::NewMessageReaction;
 use crate::db::models::messages::{Message, NewMessage};
-use crate::db::schema::{message_reactions, messages, profiles, users};
+use crate::db::schema::{message_reactions, messages, profiles};
 
 /// Convert a single message to a payload via the batch path.
 async fn single_message_payload(
@@ -346,12 +346,12 @@ async fn batch_messages_to_payloads(
     let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
     let reply_ids: Vec<Uuid> = msgs.iter().filter_map(|m| m.reply_to_id).collect();
 
-    // Batch-load sender profiles
+    // Batch-load sender profiles. Filter on profiles.user_id directly so
+    // we don't need SELECT on users (which carries sensitive columns).
     let sender_rows: Vec<(i32, String, Uuid, Option<String>)> = profiles::table
-        .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-        .filter(users::id.eq_any(&sender_ids))
+        .filter(profiles::user_id.eq_any(&sender_ids))
         .select((
-            users::id,
+            profiles::user_id,
             profiles::name,
             profiles::id,
             profiles::profile_picture,
@@ -382,9 +382,8 @@ async fn batch_messages_to_payloads(
         HashMap::new()
     } else {
         profiles::table
-            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-            .filter(users::id.eq_any(&reply_sender_ids))
-            .select((users::id, profiles::name))
+            .filter(profiles::user_id.eq_any(&reply_sender_ids))
+            .select((profiles::user_id, profiles::name))
             .load::<(i32, String)>(conn)
             .await?
             .into_iter()
@@ -408,9 +407,8 @@ async fn batch_messages_to_payloads(
         HashMap::new()
     } else {
         profiles::table
-            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
-            .filter(users::id.eq_any(&reaction_user_ids))
-            .select((users::id, profiles::name))
+            .filter(profiles::user_id.eq_any(&reaction_user_ids))
+            .select((profiles::user_id, profiles::name))
             .load::<(i32, String)>(conn)
             .await?
             .into_iter()
