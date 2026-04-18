@@ -1,7 +1,8 @@
 use axum::http::HeaderMap;
 use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
@@ -15,6 +16,7 @@ use super::{SessionView, UserView};
 use crate::db::models::sessions::{NewSession, Session, SessionUpdate};
 use crate::db::models::users::User;
 use crate::db::schema::{sessions, users};
+use crate::db::{self, DbViewer};
 
 const SESSION_DURATION_SECS: i64 = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECS: i64 = 60 * 60 * 24;
@@ -148,18 +150,6 @@ pub(in crate::api) async fn invalidate_auth_cache_for_user_id(user_id: i32) {
         .retain(|_, entry| entry.user.id != user_id);
 }
 
-pub(in crate::api) async fn resolve_session_by_token(
-    token: &str,
-) -> std::result::Result<Option<Session>, crate::error::AppError> {
-    let hashed = session_token_hash(token);
-    let mut conn = crate::db::conn().await?;
-    Ok(sessions::table
-        .filter(sessions::token.eq(&hashed))
-        .first::<Session>(&mut conn)
-        .await
-        .optional()?)
-}
-
 pub(in crate::api) async fn require_auth_db(
     headers: &HeaderMap,
 ) -> std::result::Result<(Session, User), Box<axum::response::Response>> {
@@ -177,60 +167,115 @@ pub(in crate::api) async fn require_auth_context(
     if let Some((session, user)) = cache_auth_get(&hashed).await {
         let elapsed = Utc::now() - session.updated_at;
         if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
-            maybe_renew_session(&session).await;
+            maybe_renew_session(&session, user.is_review_stub).await;
         }
         tracing::Span::current().record("user_id", user.id);
         return Ok(AuthContext { session, user });
     }
 
+    // The SECURITY DEFINER `app.resolve_session` bypasses RLS so we can
+    // authenticate a bearer token before a viewer context exists. Once we
+    // know the user, we set `app.user_id` / `app.is_stub` inside the same
+    // transaction so the follow-up User SELECT and session renewal run under
+    // the correct RLS scope.
     let mut conn = crate::db::conn()
         .await
         .map_err(|_| Box::new(unauthorized_response(headers)))?;
-    let (session, user) = sessions::table
-        .inner_join(users::table.on(users::id.eq(sessions::user_id)))
-        .filter(sessions::token.eq(&hashed))
-        .select((Session::as_select(), User::as_select()))
-        .first::<(Session, User)>(&mut conn)
-        .await
-        .optional()
-        .map_err(|_| Box::new(unauthorized_response(headers)))?
-        .ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-
     let now = Utc::now();
-    if session.expires_at <= now || is_past_absolute_cap(&session, now) {
-        let _ = diesel::delete(sessions::table.find(session.id))
-            .execute(&mut conn)
-            .await;
-        return Err(Box::new(unauthorized_response(headers)));
-    }
 
-    let session = maybe_renew_session_on_conn(session, &mut conn).await;
+    let hashed_for_tx = hashed.clone();
+    let result = conn
+        .transaction::<Option<(Session, User)>, diesel::result::Error, _>(|conn| {
+            async move {
+                let Some(row) = db::resolve_session(conn, &hashed_for_tx).await? else {
+                    return Ok(None);
+                };
+                let session = session_from_row(&row);
+                if session.expires_at <= now || is_past_absolute_cap(&session, now) {
+                    let _ = diesel::delete(sessions::table.find(session.id))
+                        .execute(conn)
+                        .await;
+                    return Ok(None);
+                }
+                db::set_viewer_context(
+                    conn,
+                    DbViewer {
+                        user_id: row.user_id,
+                        is_review_stub: row.is_review_stub,
+                    },
+                )
+                .await?;
+                let user = users::table
+                    .find(row.user_id)
+                    .select(User::as_select())
+                    .first::<User>(conn)
+                    .await?;
+                let session = maybe_renew_session_on_conn(session, conn).await;
+                Ok(Some((session, user)))
+            }
+            .scope_boxed()
+        })
+        .await
+        .map_err(|_| Box::new(unauthorized_response(headers)))?;
+
+    let (session, user) = result.ok_or_else(|| Box::new(unauthorized_response(headers)))?;
     cache_auth_put(hashed, &session, &user).await;
     tracing::Span::current().record("user_id", user.id);
     Ok(AuthContext { session, user })
 }
 
-async fn maybe_renew_session(session: &Session) {
-    let now = Utc::now();
-    let elapsed = now - session.updated_at;
-    if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
-        let new_expires = capped_expiry(
-            session.created_at,
-            now + Duration::seconds(SESSION_DURATION_SECS),
-        );
-        if let Ok(mut conn) = crate::db::conn().await {
-            let _ = diesel::update(sessions::table.find(session.id))
-                .set(&SessionUpdate {
-                    updated_at: Some(now),
-                    expires_at: Some(new_expires),
-                })
-                .execute(&mut conn)
-                .await;
-        }
+fn session_from_row(row: &db::AuthSessionRow) -> Session {
+    Session {
+        id: row.session_id,
+        user_id: row.user_id,
+        token: row.token.clone(),
+        ip_address: row.ip_address.clone(),
+        user_agent: row.user_agent.clone(),
+        expires_at: row.expires_at,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
     }
 }
 
-async fn maybe_renew_session_on_conn(session: Session, conn: &mut crate::db::DbConn) -> Session {
+async fn maybe_renew_session(session: &Session, is_review_stub: bool) {
+    let now = Utc::now();
+    let elapsed = now - session.updated_at;
+    if elapsed < Duration::seconds(SESSION_UPDATE_AGE_SECS) {
+        return;
+    }
+    let new_expires = capped_expiry(
+        session.created_at,
+        now + Duration::seconds(SESSION_DURATION_SECS),
+    );
+    let session_id = session.id;
+    // Renewal is a mutation on the sessions row; run under the caller's
+    // viewer context so it obeys RLS once Tier-A policies land.
+    let _ = db::with_viewer_tx(
+        DbViewer {
+            user_id: session.user_id,
+            is_review_stub,
+        },
+        move |conn| {
+            async move {
+                diesel::update(sessions::table.find(session_id))
+                    .set(&SessionUpdate {
+                        updated_at: Some(now),
+                        expires_at: Some(new_expires),
+                    })
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        },
+    )
+    .await;
+}
+
+async fn maybe_renew_session_on_conn(
+    session: Session,
+    conn: &mut diesel_async::AsyncPgConnection,
+) -> Session {
     let now = Utc::now();
     if now - session.updated_at < Duration::seconds(SESSION_UPDATE_AGE_SECS) {
         return session;
@@ -305,6 +350,15 @@ pub(in crate::api) fn user_model_to_view(user: &User) -> UserView {
         email: user.email.clone(),
         name: user.name.clone(),
         email_verified: user.email_verified_at.is_some(),
+    }
+}
+
+pub(in crate::api) fn auth_user_row_to_view(row: &db::AuthUserRow) -> UserView {
+    UserView {
+        id: row.pid.to_string(),
+        email: row.email.clone(),
+        name: row.name.clone(),
+        email_verified: row.email_verified_at.is_some(),
     }
 }
 
