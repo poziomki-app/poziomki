@@ -1145,3 +1145,315 @@ async fn sign_in_rate_limit_not_bypassed_by_spoofed_forwarded_for_headers() {
     })
     .await;
 }
+
+// ---------------------------------------------------------------------------
+// Phase-6 events coverage: endpoints the phase-3 contract test doesn't hit.
+// These exercise the viewer-scoped transaction wrappers on the endpoints that
+// were otherwise only reachable via phased scenarios.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial]
+async fn event_attendees_listing_returns_user_pids() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "attlist-owner@example.com", "Owner").await;
+        let (attendee_key, attendee_value) =
+            create_user_with_profile(&request, "attlist-att@example.com", "Attendee").await;
+
+        let create = request
+            .post("/api/v1/events")
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({
+                "title": "Attendee listing",
+                "startsAt": "2030-06-01T12:00:00Z",
+            }))
+            .await;
+        assert_eq!(create.status_code(), 201);
+        let event_id = create.json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("event id")
+            .to_string();
+
+        let attend = request
+            .post(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(attendee_key.clone(), attendee_value.clone())
+            .json(&serde_json::json!({ "status": "going" }))
+            .await;
+        assert_eq!(attend.status_code(), 200);
+
+        let attendees = request
+            .get(&format!("/api/v1/events/{event_id}/attendees"))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(attendees.status_code(), 200);
+        let payload: serde_json::Value = attendees.json();
+        let rows = payload["data"].as_array().expect("attendees array");
+        assert_eq!(rows.len(), 2);
+        // The narrow `app.user_pids_for_ids` helper returns real pids — not
+        // the nil UUID fallback. Both attendees should expose non-nil userIds
+        // so the mobile client can open DMs or link to profiles.
+        for row in rows {
+            let uid = row["userId"].as_str().unwrap_or_default();
+            assert_ne!(uid, "00000000-0000-0000-0000-000000000000");
+            assert!(uuid::Uuid::parse_str(uid).is_ok(), "userId must be a uuid");
+        }
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn event_delete_removes_event_and_is_creator_only() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "del-owner@example.com", "Owner").await;
+        let (other_key, other_value) =
+            create_user_with_profile(&request, "del-other@example.com", "Other").await;
+
+        let create = request
+            .post("/api/v1/events")
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({
+                "title": "To delete",
+                "startsAt": "2030-06-02T12:00:00Z",
+            }))
+            .await;
+        let event_id = create.json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("event id")
+            .to_string();
+
+        // Non-creator gets 403
+        let forbidden = request
+            .delete(&format!("/api/v1/events/{event_id}"))
+            .add_header(other_key.clone(), other_value.clone())
+            .await;
+        assert_eq!(forbidden.status_code(), 403);
+
+        // Creator deletes successfully
+        let deleted = request
+            .delete(&format!("/api/v1/events/{event_id}"))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(deleted.status_code(), 200);
+
+        // GET returns 404
+        let after = request
+            .get(&format!("/api/v1/events/{event_id}"))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(after.status_code(), 404);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn event_leave_removes_attendee_and_blocks_creator() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "leave-owner@example.com", "Owner").await;
+        let (att_key, att_value) =
+            create_user_with_profile(&request, "leave-att@example.com", "Att").await;
+
+        let event_id = request
+            .post("/api/v1/events")
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({
+                "title": "Leave flow",
+                "startsAt": "2030-06-03T12:00:00Z",
+            }))
+            .await
+            .json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("event id")
+            .to_string();
+
+        // Creator cannot leave their own event
+        let creator_leave = request
+            .delete(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(creator_leave.status_code(), 403);
+
+        // Attendee joins then leaves
+        let attend = request
+            .post(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(att_key.clone(), att_value.clone())
+            .json(&serde_json::json!({ "status": "going" }))
+            .await;
+        assert_eq!(attend.status_code(), 200);
+
+        let leave = request
+            .delete(&format!("/api/v1/events/{event_id}/attend"))
+            .add_header(att_key.clone(), att_value.clone())
+            .await;
+        assert_eq!(leave.status_code(), 200);
+        let payload: serde_json::Value = leave.json();
+        assert_eq!(payload["data"]["isAttending"], false);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn event_approve_and_reject_flow() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "approve-owner@example.com", "Owner").await;
+        let (ok_key, ok_value) =
+            create_user_with_profile(&request, "approve-ok@example.com", "Ok").await;
+        let (rej_key, rej_value) =
+            create_user_with_profile(&request, "approve-rej@example.com", "Rej").await;
+
+        let event = request
+            .post("/api/v1/events")
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({
+                "title": "Approvals",
+                "startsAt": "2030-06-04T12:00:00Z",
+                "requiresApproval": true,
+            }))
+            .await;
+        let event_id = event.json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("event id")
+            .to_string();
+
+        // Both attendees request to go — approval gate downgrades to pending.
+        for (k, v) in [
+            (ok_key.clone(), ok_value.clone()),
+            (rej_key.clone(), rej_value.clone()),
+        ] {
+            let r = request
+                .post(&format!("/api/v1/events/{event_id}/attend"))
+                .add_header(k, v)
+                .json(&serde_json::json!({ "status": "going" }))
+                .await;
+            assert_eq!(r.status_code(), 200);
+            let p: serde_json::Value = r.json();
+            assert_eq!(p["data"]["isPending"], true);
+            assert_eq!(p["data"]["isAttending"], false);
+        }
+
+        // Rejecting a non-creator is 403.
+        let ok_profile_id = request
+            .get("/api/v1/profiles/me")
+            .add_header(ok_key.clone(), ok_value.clone())
+            .await
+            .json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("profile id")
+            .to_string();
+        let rej_profile_id = request
+            .get("/api/v1/profiles/me")
+            .add_header(rej_key.clone(), rej_value.clone())
+            .await
+            .json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("profile id")
+            .to_string();
+
+        let non_creator_approve = request
+            .post(&format!(
+                "/api/v1/events/{event_id}/attendees/{ok_profile_id}/approve"
+            ))
+            .add_header(ok_key.clone(), ok_value.clone())
+            .await;
+        assert_eq!(non_creator_approve.status_code(), 403);
+
+        // Creator approves one and rejects the other.
+        let approve = request
+            .post(&format!(
+                "/api/v1/events/{event_id}/attendees/{ok_profile_id}/approve"
+            ))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(approve.status_code(), 200);
+
+        let reject = request
+            .post(&format!(
+                "/api/v1/events/{event_id}/attendees/{rej_profile_id}/reject"
+            ))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(reject.status_code(), 200);
+
+        // Bad profile id → 400 BAD_REQUEST, not 500.
+        let bad = request
+            .post(&format!(
+                "/api/v1/events/{event_id}/attendees/not-a-uuid/approve"
+            ))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .await;
+        assert_eq!(bad.status_code(), 400);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn event_report_flow() {
+    request(|request, _ctx| async move {
+        let (owner_key, owner_value) =
+            create_user_with_profile(&request, "report-owner@example.com", "Owner").await;
+        let (reporter_key, reporter_value) =
+            create_user_with_profile(&request, "report-reporter@example.com", "Reporter").await;
+
+        let event_id = request
+            .post("/api/v1/events")
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({
+                "title": "Report target",
+                "startsAt": "2030-06-05T12:00:00Z",
+            }))
+            .await
+            .json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("event id")
+            .to_string();
+
+        // Owner reporting own event → 403
+        let self_report = request
+            .post(&format!("/api/v1/events/{event_id}/report"))
+            .add_header(owner_key.clone(), owner_value.clone())
+            .json(&serde_json::json!({ "reason": "spam" }))
+            .await;
+        assert_eq!(self_report.status_code(), 403);
+
+        // Invalid reason → 400
+        let bad_reason = request
+            .post(&format!("/api/v1/events/{event_id}/report"))
+            .add_header(reporter_key.clone(), reporter_value.clone())
+            .json(&serde_json::json!({ "reason": "not-a-reason" }))
+            .await;
+        assert_eq!(bad_reason.status_code(), 400);
+
+        // First report → 200 success
+        let ok = request
+            .post(&format!("/api/v1/events/{event_id}/report"))
+            .add_header(reporter_key.clone(), reporter_value.clone())
+            .json(&serde_json::json!({ "reason": "spam" }))
+            .await;
+        assert_eq!(ok.status_code(), 200);
+
+        // Duplicate → 400 VALIDATION_ERROR
+        let dup = request
+            .post(&format!("/api/v1/events/{event_id}/report"))
+            .add_header(reporter_key.clone(), reporter_value.clone())
+            .json(&serde_json::json!({ "reason": "spam" }))
+            .await;
+        assert_eq!(dup.status_code(), 400);
+
+        // Missing event → 404
+        let missing_id = uuid::Uuid::new_v4();
+        let missing = request
+            .post(&format!("/api/v1/events/{missing_id}/report"))
+            .add_header(reporter_key.clone(), reporter_value.clone())
+            .json(&serde_json::json!({ "reason": "spam" }))
+            .await;
+        assert_eq!(missing.status_code(), 404);
+    })
+    .await;
+}
