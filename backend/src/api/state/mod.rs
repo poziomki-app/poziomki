@@ -31,10 +31,12 @@ mod uploads_payloads;
 
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use super::ErrorSpec;
+use crate::db;
 use crate::db::models::otp_codes::{NewOtpCode, OtpCode};
 use crate::db::schema::otp_codes;
 pub(super) use auth::*;
@@ -65,14 +67,6 @@ pub(super) async fn upsert_otp(
 ) -> std::result::Result<(), crate::error::AppError> {
     let now = Utc::now();
     let expires_at = now + Duration::seconds(OTP_TTL_SECS);
-
-    let mut conn = crate::db::conn().await?;
-
-    // Delete any existing OTP for this email, then insert fresh
-    diesel::delete(otp_codes::table.filter(otp_codes::email.eq(email)))
-        .execute(&mut conn)
-        .await?;
-
     let new = NewOtpCode {
         id: Uuid::new_v4(),
         email: email.to_owned(),
@@ -82,31 +76,22 @@ pub(super) async fn upsert_otp(
         last_sent_at: now,
         created_at: now,
     };
-    diesel::insert_into(otp_codes::table)
-        .values(&new)
-        .execute(&mut conn)
-        .await?;
+    let email_for_delete = email.to_owned();
+    db::with_anon_tx(move |conn| {
+        async move {
+            diesel::delete(otp_codes::table.filter(otp_codes::email.eq(email_for_delete)))
+                .execute(conn)
+                .await?;
+            diesel::insert_into(otp_codes::table)
+                .values(&new)
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        }
+        .scope_boxed()
+    })
+    .await?;
     Ok(())
-}
-
-/// Load and validate an OTP entry: returns `None` if not found, expired, or max attempts exceeded.
-async fn load_valid_otp(email: &str) -> Option<(OtpCode, crate::db::DbConn)> {
-    let mut conn = crate::db::conn().await.ok()?;
-    let saved = otp_codes::table
-        .filter(otp_codes::email.eq(email))
-        .first::<OtpCode>(&mut conn)
-        .await
-        .optional()
-        .ok()
-        .flatten()?;
-    let now = Utc::now();
-    if saved.expires_at <= now || saved.attempts >= OTP_MAX_ATTEMPTS {
-        let _ = diesel::delete(otp_codes::table.find(saved.id))
-            .execute(&mut conn)
-            .await;
-        return None;
-    }
-    Some((saved, conn))
 }
 
 /// Verify an OTP code against the database. Returns true if valid.
@@ -118,58 +103,81 @@ async fn load_valid_otp(email: &str) -> Option<(OtpCode, crate::db::DbConn)> {
 pub(super) async fn verify_otp_db(email: &str, otp: &str) -> bool {
     use subtle::ConstantTimeEq;
 
-    let loaded = load_valid_otp(email).await;
+    let otp_bytes = otp.as_bytes().to_vec();
+    let email = email.to_owned();
 
-    // Always compare in constant time against something of the requested
-    // length — even when no OTP exists — so CPU-side timing is uniform.
-    let ct_match = if let Some((saved, _)) = loaded.as_ref() {
-        saved.code.len() == otp.len() && bool::from(saved.code.as_bytes().ct_eq(otp.as_bytes()))
-    } else {
-        let dummy = vec![0u8; otp.len()];
-        let _ = bool::from(dummy.as_slice().ct_eq(otp.as_bytes()));
-        false
-    };
+    let result: Result<bool, diesel::result::Error> = db::with_anon_tx(move |conn| {
+        async move {
+            let saved = otp_codes::table
+                .filter(otp_codes::email.eq(&email))
+                .first::<OtpCode>(conn)
+                .await
+                .optional()?;
+            let now = Utc::now();
+            let valid = saved.filter(|s| s.expires_at > now && s.attempts < OTP_MAX_ATTEMPTS);
 
-    let Some((saved, mut conn)) = loaded else {
-        // No valid OTP row. Issue a no-op write to match the DB round-trip
-        // of the "bad code" path, then fail.
-        if let Ok(mut conn) = crate::db::conn().await {
-            let _ = diesel::update(otp_codes::table.find(Uuid::nil()))
-                .set(otp_codes::attempts.eq(0))
-                .execute(&mut conn)
-                .await;
+            // Always perform the constant-time compare so CPU timing is uniform.
+            let ct_match = valid.as_ref().map_or_else(
+                || {
+                    let dummy = vec![0u8; otp_bytes.len()];
+                    let _ = bool::from(dummy.as_slice().ct_eq(&otp_bytes));
+                    false
+                },
+                |s| {
+                    s.code.len() == otp_bytes.len()
+                        && bool::from(s.code.as_bytes().ct_eq(&otp_bytes))
+                },
+            );
+
+            let Some(saved) = valid else {
+                // No valid OTP row. Issue a no-op write to match the DB
+                // round-trip of the "bad code" path, then fail.
+                diesel::update(otp_codes::table.find(Uuid::nil()))
+                    .set(otp_codes::attempts.eq(0))
+                    .execute(conn)
+                    .await?;
+                return Ok(false);
+            };
+
+            if !ct_match {
+                let new_attempts = saved.attempts.saturating_add(1);
+                diesel::update(otp_codes::table.find(saved.id))
+                    .set(otp_codes::attempts.eq(new_attempts))
+                    .execute(conn)
+                    .await?;
+                return Ok(false);
+            }
+
+            diesel::delete(otp_codes::table.find(saved.id))
+                .execute(conn)
+                .await?;
+            Ok(true)
         }
-        return false;
-    };
+        .scope_boxed()
+    })
+    .await;
 
-    if !ct_match {
-        let new_attempts = saved.attempts.saturating_add(1);
-        let _ = diesel::update(otp_codes::table.find(saved.id))
-            .set(otp_codes::attempts.eq(new_attempts))
-            .execute(&mut conn)
-            .await;
-        return false;
-    }
-
-    // Valid — delete the OTP row
-    let _ = diesel::delete(otp_codes::table.find(saved.id))
-        .execute(&mut conn)
-        .await;
-    true
+    result.unwrap_or(false)
 }
 
 /// Check if the OTP for this email is still within the resend cooldown.
 pub(super) async fn otp_in_cooldown(email: &str, cooldown_secs: i64) -> bool {
     let now = Utc::now();
-    let Ok(mut conn) = crate::db::conn().await else {
-        return false;
-    };
-    otp_codes::table
-        .filter(otp_codes::email.eq(email))
-        .first::<OtpCode>(&mut conn)
-        .await
-        .ok()
-        .is_some_and(|entry| entry.last_sent_at + Duration::seconds(cooldown_secs) > now)
+    let email = email.to_owned();
+    let entry = db::with_anon_tx(move |conn| {
+        async move {
+            otp_codes::table
+                .filter(otp_codes::email.eq(email))
+                .first::<OtpCode>(conn)
+                .await
+                .optional()
+        }
+        .scope_boxed()
+    })
+    .await
+    .ok()
+    .flatten();
+    entry.is_some_and(|e| e.last_sent_at + Duration::seconds(cooldown_secs) > now)
 }
 
 // --- Auth validation helpers ---

@@ -5,22 +5,15 @@ pub(super) use auth_otp_email::send_otp_email;
 use axum::response::Response;
 use axum::{http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
-
-use diesel_async::AsyncConnection;
 
 use super::super::{
     error_response,
     state::{
         auth_user_row_to_view, create_session_db, normalize_email, session_model_to_view,
-        upsert_otp, user_model_to_view, validate_signup_payload, verify_otp_db, DataResponse,
-        SignUpBody,
+        upsert_otp, validate_signup_payload, verify_otp_db, DataResponse, SignUpBody,
     },
     ErrorSpec,
 };
-use crate::db::models::users::{NewUser, User, UserChangeset};
-use crate::db::schema::{sessions, users};
 use crate::db::{self, AuthUserRow};
 use crate::jobs::enqueue_otp_email;
 
@@ -79,7 +72,7 @@ fn registration_failed_response(headers: &HeaderMap) -> Response {
 pub(super) async fn create_user_or_error(
     headers: &HeaderMap,
     payload: &SignUpBody,
-) -> std::result::Result<User, Response> {
+) -> std::result::Result<AuthUserRow, Response> {
     if let Err(spec) = validate_signup_payload(payload) {
         return Err(error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -96,11 +89,8 @@ pub(super) async fn create_user_or_error(
         registration_failed_response(headers)
     })?;
 
-    let existing = users::table
-        .filter(users::email.eq(&email))
-        .first::<User>(&mut conn)
+    let existing = db::find_user_for_login(&mut conn, &email)
         .await
-        .optional()
         .map_err(|e| {
             tracing::error!("User lookup failed: {e}");
             registration_failed_response(headers)
@@ -130,17 +120,10 @@ pub(super) async fn create_user_or_error(
         registration_failed_response(headers)
     })?;
 
-    let new_user = NewUser {
-        pid: uuid::Uuid::new_v4(),
-        email,
-        password: password_hash,
-        api_key: format!("lo-{}", uuid::Uuid::new_v4()),
-        name,
-    };
+    let pid = uuid::Uuid::new_v4();
+    let api_key = format!("lo-{}", uuid::Uuid::new_v4());
 
-    diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result::<User>(&mut conn)
+    db::create_user_for_signup(&mut conn, pid, &email, &password_hash, &api_key, &name)
         .await
         .map_err(|e| {
             tracing::error!("User creation failed: {e}");
@@ -218,13 +201,7 @@ pub(super) async fn verify_otp_inner(
     if verified_user.email_verified_at.is_none() {
         let now = Utc::now();
         let mut conn = crate::db::conn().await?;
-        let _ = diesel::update(users::table.find(user.id))
-            .set(&UserChangeset {
-                email_verified_at: Some(Some(now)),
-                updated_at: Some(now),
-            })
-            .execute(&mut conn)
-            .await;
+        let _ = db::mark_email_verified(&mut conn, user.id, now).await;
         verified_user.email_verified_at = Some(now);
     }
 
@@ -279,14 +256,7 @@ pub(super) async fn forgot_password_verify_inner(
     let now = Utc::now();
 
     let mut conn = crate::db::conn().await?;
-    diesel::update(users::table.find(user.id))
-        .set((
-            users::reset_token.eq(&hashed),
-            users::reset_sent_at.eq(now),
-            users::updated_at.eq(now),
-        ))
-        .execute(&mut conn)
-        .await?;
+    db::set_password_reset_token(&mut conn, user.id, &hashed, now).await?;
 
     Ok(Json(DataResponse {
         data: serde_json::json!({ "resetToken": raw_token }),
@@ -316,13 +286,7 @@ pub(super) async fn reset_password_inner(
     let cutoff = Utc::now() - chrono::Duration::seconds(RESET_TOKEN_TTL_SECS);
 
     let mut conn = crate::db::conn().await?;
-    let user = users::table
-        .filter(users::email.eq(email))
-        .filter(users::reset_token.eq(&hashed_token))
-        .filter(users::reset_sent_at.gt(cutoff))
-        .first::<User>(&mut conn)
-        .await
-        .optional()?;
+    let user = db::find_user_for_password_reset(&mut conn, email, &hashed_token, cutoff).await?;
 
     let Some(user) = user else {
         return Ok(unauthorized_error(
@@ -332,33 +296,19 @@ pub(super) async fn reset_password_inner(
     };
 
     let new_hash = crate::security::hash_password(new_password)?;
-
-    conn.transaction(|conn| {
-        let new_hash = new_hash.clone();
-        Box::pin(async move {
-            diesel::update(users::table.find(user.id))
-                .set((
-                    users::password.eq(new_hash),
-                    users::reset_token.eq(None::<String>),
-                    users::reset_sent_at.eq(None::<chrono::DateTime<Utc>>),
-                    users::updated_at.eq(Utc::now()),
-                ))
-                .execute(conn)
-                .await?;
-            diesel::delete(sessions::table.filter(sessions::user_id.eq(user.id)))
-                .execute(conn)
-                .await?;
-            Ok::<(), diesel::result::Error>(())
-        })
-    })
-    .await?;
+    db::complete_password_reset(&mut conn, user.id, &new_hash, Utc::now()).await?;
 
     super::super::state::invalidate_auth_cache_for_user_id(user.id).await;
 
     let session = create_session_db(headers, user.id).await?;
     Ok(Json(DataResponse {
         data: serde_json::json!({
-            "user": user_model_to_view(&user),
+            "user": serde_json::json!({
+                "id": user.pid.to_string(),
+                "email": user.email,
+                "name": user.name,
+                "emailVerified": user.email_verified_at.is_some(),
+            }),
             "token": session.token,
             "session": session_model_to_view(&session.model),
         }),
