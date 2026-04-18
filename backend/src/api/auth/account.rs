@@ -69,16 +69,15 @@ async fn delete_user_data(viewer: DbViewer) -> std::result::Result<(), crate::er
                 .first(conn)
                 .await
                 .optional()?;
-            let files: Vec<String> = if let Some(pid) = profile_id {
-                uploads::table
-                    .filter(uploads::owner_id.eq(pid))
-                    .select(uploads::filename)
-                    .load(conn)
-                    .await?
-            } else {
-                vec![]
+            let Some(pid) = profile_id else {
+                return Ok::<Vec<String>, diesel::result::Error>(Vec::new());
             };
-            Ok::<Vec<String>, diesel::result::Error>(files)
+            let files: Vec<String> = uploads::table
+                .filter(uploads::owner_id.eq(pid))
+                .select(uploads::filename)
+                .load(conn)
+                .await?;
+            Ok(files)
         }
         .scope_boxed()
     })

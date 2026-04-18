@@ -262,16 +262,12 @@ pub(in crate::api) async fn event_update(
         Err(response) => return Ok(*response),
     };
 
-    let validated_tag_ids = if payload.tag_ids.is_some() {
-        match payload.tag_ids.clone() {
-            Some(ids) => match parse_event_tag_ids(&headers, ids) {
-                Ok(parsed) => Some(parsed),
-                Err(response) => return Ok(*response),
-            },
-            None => None,
-        }
-    } else {
-        None
+    let validated_tag_ids = match payload.tag_ids.clone() {
+        Some(ids) => match parse_event_tag_ids(&headers, ids) {
+            Ok(parsed) => Some(parsed),
+            Err(response) => return Ok(*response),
+        },
+        None => None,
     };
 
     let mut conn = crate::db::conn().await?;
