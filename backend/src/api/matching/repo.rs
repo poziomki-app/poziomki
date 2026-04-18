@@ -40,7 +40,7 @@ impl MatchingRepository {
     async fn load_profile_tag_ids(
         &self,
         profile_id: Uuid,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
         let tag_links = profile_tags::table
             .filter(profile_tags::profile_id.eq(profile_id))
@@ -52,7 +52,7 @@ impl MatchingRepository {
     async fn load_profile_interest_categories(
         &self,
         profile_id: Uuid,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashSet<String>, crate::error::AppError> {
         let rows = profile_tags::table
             .inner_join(tags::table.on(tags::id.eq(profile_tags::tag_id)))
@@ -70,7 +70,7 @@ impl MatchingRepository {
         &self,
         profile_id: Uuid,
         kind: &str,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
         let interactions = event_interactions::table
             .filter(event_interactions::profile_id.eq(profile_id))
@@ -83,7 +83,7 @@ impl MatchingRepository {
     async fn load_feedback_event_ids(
         &self,
         profile_id: Uuid,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<(HashSet<Uuid>, HashSet<Uuid>), crate::error::AppError> {
         let rows = recommendation_feedback::table
             .filter(recommendation_feedback::profile_id.eq(profile_id))
@@ -109,7 +109,7 @@ impl MatchingRepository {
     pub(super) async fn load_profile_context(
         &self,
         user_id: i32,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<MatchingProfileContext, crate::error::AppError> {
         let profile = profiles::table
             .filter(profiles::user_id.eq(user_id))
@@ -129,7 +129,7 @@ impl MatchingRepository {
     pub(super) async fn load_user_context(
         &self,
         user_id: i32,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<MatchingUserContext, crate::error::AppError> {
         let profile = profiles::table
             .filter(profiles::user_id.eq(user_id))
@@ -182,7 +182,7 @@ impl MatchingRepository {
         &self,
         user_id: i32,
         limit: i64,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<Vec<Profile>, crate::error::AppError> {
         let viewer_is_stub = users::table
             .filter(users::id.eq(user_id))
@@ -214,7 +214,7 @@ impl MatchingRepository {
         &self,
         now: DateTime<Utc>,
         limit: i64,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<Vec<Event>, crate::error::AppError> {
         events::table
             .filter(events::starts_at.ge(now))
@@ -228,7 +228,7 @@ impl MatchingRepository {
     pub(super) async fn batch_load_profile_tags(
         &self,
         profile_ids: &[Uuid],
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashMap<Uuid, Vec<MatchingTagResponse>>, crate::error::AppError> {
         if profile_ids.is_empty() {
             return Ok(HashMap::new());
@@ -271,7 +271,7 @@ impl MatchingRepository {
     pub(super) async fn batch_load_profile_tag_ids(
         &self,
         profile_ids: &[Uuid],
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
         if profile_ids.is_empty() {
             return Ok(HashMap::new());
@@ -295,7 +295,7 @@ impl MatchingRepository {
     pub(super) async fn batch_load_event_tag_ids(
         &self,
         event_ids: &[Uuid],
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashMap<Uuid, HashSet<Uuid>>, crate::error::AppError> {
         if event_ids.is_empty() {
             return Ok(HashMap::new());
@@ -316,7 +316,7 @@ impl MatchingRepository {
     pub(super) async fn load_users_by_ids(
         &self,
         user_ids: &[i32],
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<Vec<User>, crate::error::AppError> {
         if user_ids.is_empty() {
             return Ok(vec![]);
@@ -331,7 +331,7 @@ impl MatchingRepository {
 
     pub(super) async fn load_tag_parent_map(
         &self,
-        conn: &mut crate::db::DbConn,
+        conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<HashMap<Uuid, Option<Uuid>>, crate::error::AppError> {
         Ok(tags::table
             .select((tags::id, tags::parent_id))

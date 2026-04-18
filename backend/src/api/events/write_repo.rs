@@ -1,6 +1,6 @@
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::event_attendees::EventAttendee;
@@ -10,7 +10,7 @@ use crate::db::schema::{conversations, event_attendees, event_interactions, even
 
 pub(in crate::api) const MAX_ATTEMPTS: usize = 3;
 
-const fn is_serialization_failure(err: &diesel::result::Error) -> bool {
+pub(in crate::api) const fn is_serialization_failure(err: &diesel::result::Error) -> bool {
     matches!(
         err,
         diesel::result::Error::DatabaseError(
@@ -18,15 +18,6 @@ const fn is_serialization_failure(err: &diesel::result::Error) -> bool {
             _
         )
     )
-}
-
-pub(in crate::api) fn is_serialization_failure_app(err: &crate::error::AppError) -> bool {
-    match err {
-        crate::error::AppError::Any(boxed) => boxed
-            .downcast_ref::<diesel::result::Error>()
-            .is_some_and(is_serialization_failure),
-        _ => false,
-    }
 }
 
 pub(in crate::api) enum UpsertOutcome {
@@ -38,120 +29,79 @@ pub(in crate::api) enum UpsertOutcome {
     StatusMismatch,
 }
 
-/// Atomically check capacity, upsert the attendee, and track the interaction
-/// inside a serializable transaction so that two concurrent requests cannot
-/// exceed `max_attendees` and the interaction stays consistent.
-///
-/// When `require_status` is `Some`, the attendee's current status is verified
-/// inside the transaction before proceeding, preventing TOCTOU races.
-///
-/// When `requires_approval` is true and the requested status is "going",
-/// the approval gate is evaluated inside the transaction: if the attendee
-/// is not already "going", the written status is downgraded to "pending".
-/// The actual written status is returned in `UpsertOutcome::Accepted`.
-pub(in crate::api) async fn check_capacity_and_upsert(
+/// Body of the capacity/approval check. Caller is responsible for running
+/// this inside a serializable transaction with the viewer context set.
+pub(in crate::api) async fn check_capacity_and_upsert_with_conn(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
     profile_id: Uuid,
     status: &str,
     max_attendees: Option<i32>,
     require_status: Option<&str>,
     requires_approval: bool,
-) -> std::result::Result<UpsertOutcome, crate::error::AppError> {
-    let status = status.to_string();
-    let require_status = require_status.map(String::from);
-    let mut conn = crate::db::conn().await?;
+) -> std::result::Result<UpsertOutcome, diesel::result::Error> {
+    // Read current status inside the txn so retries see fresh state
+    let current_status = event_attendees::table
+        .filter(event_attendees::event_id.eq(event_id))
+        .filter(event_attendees::profile_id.eq(profile_id))
+        .select(event_attendees::status)
+        .first::<String>(conn)
+        .await
+        .optional()?;
 
-    let mut attempts = 0;
-    loop {
-        attempts += 1;
-        let result = conn
-            .build_transaction()
-            .serializable()
-            .run(|conn| {
-                let status = status.clone();
-                let require_status = require_status.clone();
-                Box::pin(async move {
-                    // Read current status inside the txn so retries see fresh state
-                    let current_status = event_attendees::table
-                        .filter(event_attendees::event_id.eq(event_id))
-                        .filter(event_attendees::profile_id.eq(profile_id))
-                        .select(event_attendees::status)
-                        .first::<String>(conn)
-                        .await
-                        .optional()?;
-
-                    // Precondition: verify attendee has required status
-                    if let Some(required) = &require_status {
-                        if current_status.as_deref() != Some(required.as_str()) {
-                            return Ok::<UpsertOutcome, diesel::result::Error>(
-                                UpsertOutcome::StatusMismatch,
-                            );
-                        }
-                    }
-
-                    let already_going = current_status.as_deref() == Some("going");
-
-                    // Approval gate: downgrade "going" → "pending" unless already going
-                    let effective_status =
-                        if requires_approval && status == "going" && !already_going {
-                            "pending".to_string()
-                        } else {
-                            status
-                        };
-
-                    // Capacity gate: only enforce when switching to "going"
-                    if effective_status == "going" && !already_going {
-                        if let Some(max) = max_attendees {
-                            let current_going = event_attendees::table
-                                .filter(event_attendees::event_id.eq(event_id))
-                                .filter(event_attendees::status.eq("going"))
-                                .count()
-                                .get_result::<i64>(conn)
-                                .await?;
-                            if current_going >= i64::from(max) {
-                                return Ok(UpsertOutcome::Full);
-                            }
-                        }
-                    }
-
-                    // Upsert attendee: delete-then-insert
-                    diesel::delete(
-                        event_attendees::table
-                            .filter(event_attendees::event_id.eq(event_id))
-                            .filter(event_attendees::profile_id.eq(profile_id)),
-                    )
-                    .execute(conn)
-                    .await?;
-
-                    let attendee = EventAttendee {
-                        event_id,
-                        profile_id,
-                        status: effective_status.clone(),
-                    };
-                    diesel::insert_into(event_attendees::table)
-                        .values(&attendee)
-                        .execute(conn)
-                        .await?;
-
-                    // Track "joined" interaction atomically with the attendee change
-                    if effective_status == "going" {
-                        upsert_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
-                    } else {
-                        delete_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
-                    }
-
-                    Ok(UpsertOutcome::Accepted(effective_status))
-                })
-            })
-            .await;
-        match result {
-            Ok(val) => return Ok(val),
-            Err(ref e) if attempts < MAX_ATTEMPTS && is_serialization_failure(e) => {
-                tokio::time::sleep(std::time::Duration::from_millis(10u64 << attempts)).await;
-            }
-            Err(e) => return Err(e.into()),
+    if let Some(required) = require_status {
+        if current_status.as_deref() != Some(required) {
+            return Ok(UpsertOutcome::StatusMismatch);
         }
     }
+
+    let already_going = current_status.as_deref() == Some("going");
+
+    let effective_status = if requires_approval && status == "going" && !already_going {
+        "pending".to_string()
+    } else {
+        status.to_string()
+    };
+
+    if effective_status == "going" && !already_going {
+        if let Some(max) = max_attendees {
+            let current_going = event_attendees::table
+                .filter(event_attendees::event_id.eq(event_id))
+                .filter(event_attendees::status.eq("going"))
+                .count()
+                .get_result::<i64>(conn)
+                .await?;
+            if current_going >= i64::from(max) {
+                return Ok(UpsertOutcome::Full);
+            }
+        }
+    }
+
+    diesel::delete(
+        event_attendees::table
+            .filter(event_attendees::event_id.eq(event_id))
+            .filter(event_attendees::profile_id.eq(profile_id)),
+    )
+    .execute(conn)
+    .await?;
+
+    let attendee = EventAttendee {
+        event_id,
+        profile_id,
+        status: effective_status.clone(),
+    };
+    diesel::insert_into(event_attendees::table)
+        .values(&attendee)
+        .execute(conn)
+        .await?;
+
+    if effective_status == "going" {
+        upsert_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
+    } else {
+        delete_interaction_with_conn(conn, profile_id, event_id, "joined").await?;
+    }
+
+    Ok(UpsertOutcome::Accepted(effective_status))
 }
 
 pub(in crate::api) async fn insert_event_with_conn(
@@ -177,46 +127,42 @@ pub(in crate::api) async fn update_event_with_conn(
     Ok(updated)
 }
 
-pub(in crate::api) async fn delete_event(
+/// Delete an event plus its reports and chat conversation. Caller must
+/// supply a connection already inside a transaction.
+pub(in crate::api) async fn delete_event_with_conn(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
 ) -> std::result::Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    conn.transaction(|conn| {
-        Box::pin(async move {
-            diesel::delete(
-                reports::table
-                    .filter(reports::target_type.eq("event"))
-                    .filter(reports::target_id.eq(event_id)),
-            )
-            .execute(conn)
-            .await?;
-            diesel::delete(conversations::table.filter(conversations::event_id.eq(event_id)))
-                .execute(conn)
-                .await?;
-            diesel::delete(events::table.find(event_id))
-                .execute(conn)
-                .await?;
-            Ok::<(), diesel::result::Error>(())
-        })
-    })
+    diesel::delete(
+        reports::table
+            .filter(reports::target_type.eq("event"))
+            .filter(reports::target_id.eq(event_id)),
+    )
+    .execute(conn)
     .await?;
+    diesel::delete(conversations::table.filter(conversations::event_id.eq(event_id)))
+        .execute(conn)
+        .await?;
+    diesel::delete(events::table.find(event_id))
+        .execute(conn)
+        .await?;
     Ok(())
 }
 
 /// Atomically delete an attendee only if their status is "pending".
 /// Returns `true` when the row was deleted, `false` when no pending row existed.
-pub(in crate::api) async fn delete_pending_attendee(
+pub(in crate::api) async fn delete_pending_attendee_with_conn(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
     profile_id: Uuid,
 ) -> std::result::Result<bool, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let deleted = diesel::delete(
         event_attendees::table
             .filter(event_attendees::event_id.eq(event_id))
             .filter(event_attendees::profile_id.eq(profile_id))
             .filter(event_attendees::status.eq("pending")),
     )
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
     Ok(deleted > 0)
 }

@@ -6,14 +6,15 @@ mod events_view_images;
 mod events_view_repo;
 
 use axum::response::IntoResponse;
+use diesel_async::AsyncPgConnection;
 use uuid::Uuid;
 
 use crate::api::state::{AttendeeStatus, DataResponse, EventResponse, ProfilePreview};
 use crate::db::models::events::Event;
-use events_view_images::resolve_event_images;
 use events_view_repo::load_event_batch_context;
 
 pub(in crate::api) use events_view_attendees::attendee_info;
+pub(in crate::api) use events_view_images::resolve_event_images;
 
 const PREVIEW_LIMIT: usize = 5;
 
@@ -101,34 +102,30 @@ fn build_from_context(
     }
 }
 
-pub(in crate::api) async fn build_event_responses(
+/// Build raw event responses inside an existing viewer-scoped transaction.
+/// Image URLs are not resolved — callers must apply `resolve_event_images`
+/// after the transaction closes (avoids holding a DB connection while we
+/// call into imgproxy).
+pub(in crate::api) async fn build_event_responses_raw(
+    conn: &mut AsyncPgConnection,
     event_models: &[Event],
     profile_id: &Uuid,
 ) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-    build_event_responses_with_conn(event_models, profile_id, &mut conn).await
-}
-
-pub(in crate::api) async fn build_event_responses_with_conn(
-    event_models: &[Event],
-    profile_id: &Uuid,
-    conn: &mut crate::db::DbConn,
-) -> std::result::Result<Vec<EventResponse>, crate::error::AppError> {
-    let batch_ctx = load_event_batch_context(event_models, *profile_id, conn).await?;
-    let mut responses: Vec<EventResponse> = event_models
+    let batch_ctx = load_event_batch_context(conn, event_models, *profile_id).await?;
+    Ok(event_models
         .iter()
         .map(|event| build_from_context(event, profile_id, &batch_ctx))
-        .collect();
-    resolve_event_images(&mut responses).await;
-    Ok(responses)
+        .collect())
 }
 
-pub(in crate::api) async fn build_event_response(
+pub(in crate::api) async fn build_event_response_raw(
+    conn: &mut AsyncPgConnection,
     event: &Event,
     profile_id: &Uuid,
 ) -> std::result::Result<EventResponse, crate::error::AppError> {
-    let responses = build_event_responses(std::slice::from_ref(event), profile_id).await?;
-    responses.into_iter().next().ok_or_else(|| {
+    let mut responses =
+        build_event_responses_raw(conn, std::slice::from_ref(event), profile_id).await?;
+    responses.pop().ok_or_else(|| {
         crate::error::AppError::Message("Failed to build event response".to_string())
     })
 }
