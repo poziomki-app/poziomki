@@ -205,6 +205,19 @@ pub(in crate::api) async fn scan_token(
         return Ok(*response);
     }
 
+    // Authenticate first so an unauthenticated caller can't use a 400
+    // "Invalid or expired token" response as an oracle for token validity.
+    // The pre-PR flow ran load_profile_for (which called require_auth_db
+    // internally) before token::verify — preserve that ordering.
+    let (_session, user) = match crate::api::state::require_auth_db(&headers).await {
+        Ok(pair) => pair,
+        Err(response) => return Ok(*response),
+    };
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+
     let Ok(scanned_id) = token::verify(&body.token) else {
         return Ok(error_response(
             axum::http::StatusCode::BAD_REQUEST,
@@ -215,15 +228,6 @@ pub(in crate::api) async fn scan_token(
                 details: None,
             },
         ));
-    };
-
-    let (_session, user) = match crate::api::state::require_auth_db(&headers).await {
-        Ok(pair) => pair,
-        Err(response) => return Ok(*response),
-    };
-    let viewer = db::DbViewer {
-        user_id: user.id,
-        is_review_stub: user.is_review_stub,
     };
 
     // Load scanner profile + insert scan record atomically. The scan row
