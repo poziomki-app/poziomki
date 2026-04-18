@@ -1,7 +1,7 @@
 use super::{
     bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
-    fallback_variant_urls, internal_upload_error, load_owned_upload, not_found, public_upload_url,
-    require_auth_profile, storage_delete, storage_signed_put_url, storage_upload,
+    fallback_variant_urls, internal_upload_error, load_owned_upload, load_profile_for_user,
+    not_found, public_upload_url, storage_delete, storage_signed_put_url, storage_upload,
     uploads_multipart, uploads_resize, uploads_storage, validate_filename,
     validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
     DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
@@ -9,10 +9,48 @@ use super::{
     UploadResponse, Utc, Uuid,
 };
 use axum::response::IntoResponse;
+use diesel_async::scoped_futures::ScopedFutureExt;
 
 use super::uploads_write_repo::{insert_upload_metadata, mark_upload_deleted};
+use crate::db;
 
 const DIRECT_UPLOAD_PRESIGN_EXPIRY_SECS: u64 = 3600;
+
+/// Map a viewer-tx result carrying an inner `HandlerError` into the handler's
+/// `Result<T, HandlerError>` shape. Diesel-level failures become a generic
+/// 500 — matches the prior `?` behaviour which would have surfaced as
+/// `AppError::Any`.
+fn unwrap_viewer_tx<T>(
+    result: std::result::Result<std::result::Result<T, HandlerError>, diesel::result::Error>,
+    headers: &HeaderMap,
+) -> std::result::Result<T, HandlerError> {
+    match result {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(err),
+        Err(_) => Err(Box::new(error_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: "Database error".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        ))),
+    }
+}
+
+async fn auth_and_viewer(
+    headers: &HeaderMap,
+) -> std::result::Result<(db::DbViewer, i32), HandlerError> {
+    let (_session, user) = crate::api::state::require_auth_db(headers)
+        .await
+        .map_err(|e| e as HandlerError)?;
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    Ok((viewer, user.id))
+}
 
 pub(in crate::api) async fn file_upload(
     State(_ctx): State<AppContext>,
@@ -26,7 +64,23 @@ pub(in crate::api) async fn file_upload(
         )
         .await?;
 
-        let profile = require_auth_profile(&headers).await?;
+        let (viewer, user_id) = auth_and_viewer(&headers).await?;
+
+        // Resolve the caller's profile inside a short viewer tx before
+        // touching storage, so we don't S3-upload bytes for a user who
+        // has no profile yet.
+        let headers_for_profile = headers.clone();
+        let profile_tx = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                match load_profile_for_user(conn, &headers_for_profile, user_id).await {
+                    Ok(p) => Ok::<_, diesel::result::Error>(Ok(p)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+        let profile = unwrap_viewer_tx(profile_tx, &headers)?;
 
         let parsed = uploads_multipart::read_multipart(&headers, multipart).await?;
         let filename = create_upload_filename(&parsed.mime_type);
@@ -50,7 +104,22 @@ pub(in crate::api) async fn file_upload(
             updated_at: now,
         };
 
-        if let Err(error) = insert_upload_metadata(&new_upload).await {
+        // Insert metadata in its own viewer tx so Tier-C upload write policy
+        // (owner_id = viewer's profile) is enforced once it lands.
+        let insert_tx = db::with_viewer_tx(viewer, {
+            let new_upload = new_upload.clone();
+            move |conn| {
+                async move {
+                    insert_upload_metadata(conn, &new_upload)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    Ok::<(), diesel::result::Error>(())
+                }
+                .scope_boxed()
+            }
+        })
+        .await;
+        if let Err(error) = insert_tx {
             tracing::warn!(filename = %filename, %error, "failed to insert upload row");
             let _ = uploads_storage::delete(&filename).await;
             return Err(internal_upload_error(
@@ -103,7 +172,20 @@ pub(in crate::api) async fn file_upload_presign(
         .await?;
 
         let context = validate_presign_payload(&headers, &payload)?;
-        let profile = require_auth_profile(&headers).await?;
+        let (viewer, user_id) = auth_and_viewer(&headers).await?;
+
+        let headers_for_profile = headers.clone();
+        let profile_tx = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                match load_profile_for_user(conn, &headers_for_profile, user_id).await {
+                    Ok(p) => Ok::<_, diesel::result::Error>(Ok(p)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+        let profile = unwrap_viewer_tx(profile_tx, &headers)?;
 
         let filename = create_upload_filename(&payload.mime_type);
         let upload_url = storage_signed_put_url(&headers, &filename, &payload.mime_type).await?;
@@ -124,12 +206,23 @@ pub(in crate::api) async fn file_upload_presign(
             updated_at: now,
         };
 
-        insert_upload_metadata(&new_upload)
-            .await
-            .map_err(|error| {
-                tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
-                internal_upload_error(&headers, "Failed to save upload metadata")
-            })?;
+        let insert_tx = db::with_viewer_tx(viewer, {
+            let new_upload = new_upload.clone();
+            move |conn| {
+                async move {
+                    insert_upload_metadata(conn, &new_upload)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    Ok::<(), diesel::result::Error>(())
+                }
+                .scope_boxed()
+            }
+        })
+        .await;
+        insert_tx.map_err(|error| {
+            tracing::warn!(%error, filename = %filename, "failed to insert direct-upload metadata row");
+            internal_upload_error(&headers, "Failed to save upload metadata")
+        })?;
 
         Ok(Json(DataResponse {
             data: DirectUploadPresignResponse {
@@ -163,8 +256,25 @@ pub(in crate::api) async fn file_upload_complete(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&headers).await?;
-        let upload = load_owned_upload(&headers, &payload.filename, profile.id).await?;
+        let (viewer, user_id) = auth_and_viewer(&headers).await?;
+
+        let headers_tx = headers.clone();
+        let filename_tx = payload.filename.clone();
+        let tx_result = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let profile = match load_profile_for_user(conn, &headers_tx, user_id).await {
+                    Ok(p) => p,
+                    Err(err) => return Ok(Err(err)),
+                };
+                match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id).await {
+                    Ok(upload) => Ok::<_, diesel::result::Error>(Ok(upload)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+        let upload = unwrap_viewer_tx(tx_result, &headers)?;
 
         let exists = uploads_storage::exists(&payload.filename)
             .await
@@ -225,8 +335,25 @@ pub(in crate::api) async fn file_delete(
             return Err(Box::new(bad_request(&headers, "INVALID_FILENAME", message)));
         }
 
-        let profile = require_auth_profile(&headers).await?;
-        let upload = load_owned_upload(&headers, &filename, profile.id).await?;
+        let (viewer, user_id) = auth_and_viewer(&headers).await?;
+
+        let headers_tx = headers.clone();
+        let filename_tx = filename.clone();
+        let tx_result = db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let profile = match load_profile_for_user(conn, &headers_tx, user_id).await {
+                    Ok(p) => p,
+                    Err(err) => return Ok(Err(err)),
+                };
+                match load_owned_upload(conn, &headers_tx, &filename_tx, profile.id).await {
+                    Ok(upload) => Ok::<_, diesel::result::Error>(Ok(upload)),
+                    Err(err) => Ok(Err(err)),
+                }
+            }
+            .scope_boxed()
+        })
+        .await;
+        let upload = unwrap_viewer_tx(tx_result, &headers)?;
 
         storage_delete(&headers, &filename).await?;
 
@@ -242,7 +369,21 @@ pub(in crate::api) async fn file_delete(
             ..Default::default()
         };
 
-        if let Err(error) = mark_upload_deleted(upload.id, &changeset).await {
+        let update_tx = db::with_viewer_tx(viewer, {
+            let changeset = changeset.clone();
+            let upload_id = upload.id;
+            move |conn| {
+                async move {
+                    mark_upload_deleted(conn, upload_id, &changeset)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    Ok::<(), diesel::result::Error>(())
+                }
+                .scope_boxed()
+            }
+        })
+        .await;
+        if let Err(error) = update_tx {
             tracing::warn!(filename = %filename, %error, "failed to mark upload as deleted");
             return Err(internal_upload_error(
                 &headers,
