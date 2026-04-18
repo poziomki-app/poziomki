@@ -14,11 +14,13 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use diesel_async::scoped_futures::ScopedFutureExt;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::common::{auth_or_respond, error_response, parse_uuid_response, ErrorSpec};
 use crate::app::AppContext;
+use crate::db;
 
 type Result<T> = crate::error::AppResult<T>;
 
@@ -129,17 +131,47 @@ pub async fn resolve_dm(
         Err(response) => return Ok(*response),
     };
 
-    // Resolve target user's internal id
-    let mut conn = crate::db::conn().await?;
-    let target_user_id: Option<i32> = users::table
-        .filter(users::pid.eq(target_pid))
-        .select(users::id)
-        .first(&mut conn)
-        .await
-        .optional()?;
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let caller_user_id = user.id;
 
-    let Some(target_user_id) = target_user_id else {
-        return Ok(error_response(
+    let outcome: std::result::Result<Option<Uuid>, &'static str> =
+        db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                let target_user_id: Option<i32> = users::table
+                    .filter(users::pid.eq(target_pid))
+                    .select(users::id)
+                    .first(conn)
+                    .await
+                    .optional()
+                    .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+                let Some(target_user_id) = target_user_id else {
+                    return Ok::<
+                        std::result::Result<Option<Uuid>, &'static str>,
+                        diesel::result::Error,
+                    >(Err("target_missing"));
+                };
+
+                if caller_user_id == target_user_id {
+                    return Ok(Err("self_dm"));
+                }
+
+                let conversation =
+                    conversations::resolve_or_create_dm(conn, caller_user_id, target_user_id)
+                        .await
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+                Ok(Ok(Some(conversation.id)))
+            }
+            .scope_boxed()
+        })
+        .await?;
+
+    match outcome {
+        Err("target_missing") => Ok(error_response(
             StatusCode::NOT_FOUND,
             &headers,
             ErrorSpec {
@@ -147,11 +179,8 @@ pub async fn resolve_dm(
                 code: "NOT_FOUND",
                 details: None,
             },
-        ));
-    };
-
-    if user.id == target_user_id {
-        return Ok(error_response(
+        )),
+        Err("self_dm") => Ok(error_response(
             StatusCode::BAD_REQUEST,
             &headers,
             ErrorSpec {
@@ -159,25 +188,39 @@ pub async fn resolve_dm(
                 code: "BAD_REQUEST",
                 details: None,
             },
-        ));
+        )),
+        Err(_) => Ok(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &headers,
+            ErrorSpec {
+                error: "Internal error".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        )),
+        Ok(Some(conv_id)) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "data": {
+                    "conversationId": conv_id.to_string(),
+                }
+            })),
+        )
+            .into_response()),
+        Ok(None) => unreachable!(),
     }
-
-    let conversation = conversations::resolve_or_create_dm(user.id, target_user_id).await?;
-
-    Ok((
-        StatusCode::OK,
-        Json(serde_json::json!({
-            "data": {
-                "conversationId": conversation.id.to_string(),
-            }
-        })),
-    )
-        .into_response())
 }
 
 // ---------------------------------------------------------------------------
 // REST: Resolve event conversation
 // ---------------------------------------------------------------------------
+
+enum EventConvOutcome {
+    NotFound,
+    NoProfile,
+    Forbidden,
+    Ok(Uuid),
+}
 
 pub async fn resolve_event_conversation(
     State(_ctx): State<AppContext>,
@@ -196,18 +239,88 @@ pub async fn resolve_event_conversation(
         Err(response) => return Ok(*response),
     };
 
-    let mut conn = crate::db::conn().await?;
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let caller_user_id = user.id;
 
-    // Load event
-    let event: Option<(Uuid, String, Uuid)> = events::table
-        .filter(events::id.eq(event_id))
-        .select((events::id, events::title, events::creator_id))
-        .first(&mut conn)
-        .await
-        .optional()?;
+    let outcome = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let event: Option<(Uuid, String, Uuid)> = events::table
+                .filter(events::id.eq(event_id))
+                .select((events::id, events::title, events::creator_id))
+                .first(conn)
+                .await
+                .optional()
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
 
-    let Some((event_id, event_title, creator_profile_id)) = event else {
-        return Ok(error_response(
+            let Some((event_id, event_title, creator_profile_id)) = event else {
+                return Ok::<_, diesel::result::Error>(EventConvOutcome::NotFound);
+            };
+
+            let user_profile_id: Option<Uuid> = profiles::table
+                .filter(profiles::user_id.eq(caller_user_id))
+                .select(profiles::id)
+                .first(conn)
+                .await
+                .optional()
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            let Some(user_profile_id) = user_profile_id else {
+                return Ok(EventConvOutcome::NoProfile);
+            };
+
+            let is_creator = creator_profile_id == user_profile_id;
+            let is_attendee: bool = event_attendees::table
+                .filter(event_attendees::event_id.eq(event_id))
+                .filter(event_attendees::profile_id.eq(user_profile_id))
+                .filter(event_attendees::status.eq("going"))
+                .count()
+                .get_result::<i64>(conn)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?
+                > 0;
+
+            if !is_creator && !is_attendee {
+                return Ok(EventConvOutcome::Forbidden);
+            }
+
+            let creator_user_id: i32 = profiles::table
+                .filter(profiles::id.eq(creator_profile_id))
+                .select(profiles::user_id)
+                .first(conn)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            let conversation = conversations::resolve_or_create_event_conversation(
+                conn,
+                event_id,
+                &event_title,
+                creator_user_id,
+            )
+            .await
+            .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            diesel::insert_into(conversation_members::table)
+                .values(&NewConversationMember {
+                    conversation_id: conversation.id,
+                    user_id: caller_user_id,
+                    joined_at: chrono::Utc::now(),
+                })
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+            Ok(EventConvOutcome::Ok(conversation.id))
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    match outcome {
+        EventConvOutcome::NotFound => Ok(error_response(
             StatusCode::NOT_FOUND,
             &headers,
             ErrorSpec {
@@ -215,19 +328,8 @@ pub async fn resolve_event_conversation(
                 code: "NOT_FOUND",
                 details: None,
             },
-        ));
-    };
-
-    // Check if user is creator or attendee
-    let user_profile_id: Option<Uuid> = profiles::table
-        .filter(profiles::user_id.eq(user.id))
-        .select(profiles::id)
-        .first(&mut conn)
-        .await
-        .optional()?;
-
-    let Some(user_profile_id) = user_profile_id else {
-        return Ok(error_response(
+        )),
+        EventConvOutcome::NoProfile => Ok(error_response(
             StatusCode::FORBIDDEN,
             &headers,
             ErrorSpec {
@@ -235,21 +337,8 @@ pub async fn resolve_event_conversation(
                 code: "FORBIDDEN",
                 details: None,
             },
-        ));
-    };
-
-    let is_creator = creator_profile_id == user_profile_id;
-    let is_attendee: bool = event_attendees::table
-        .filter(event_attendees::event_id.eq(event_id))
-        .filter(event_attendees::profile_id.eq(user_profile_id))
-        .filter(event_attendees::status.eq("going"))
-        .count()
-        .get_result::<i64>(&mut conn)
-        .await?
-        > 0;
-
-    if !is_creator && !is_attendee {
-        return Ok(error_response(
+        )),
+        EventConvOutcome::Forbidden => Ok(error_response(
             StatusCode::FORBIDDEN,
             &headers,
             ErrorSpec {
@@ -257,43 +346,17 @@ pub async fn resolve_event_conversation(
                 code: "FORBIDDEN",
                 details: None,
             },
-        ));
+        )),
+        EventConvOutcome::Ok(conv_id) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "data": {
+                    "conversationId": conv_id.to_string(),
+                }
+            })),
+        )
+            .into_response()),
     }
-
-    // Resolve creator's user_id from their profile_id
-    let creator_user_id: i32 = profiles::table
-        .filter(profiles::id.eq(creator_profile_id))
-        .select(profiles::user_id)
-        .first(&mut conn)
-        .await?;
-
-    let conversation = conversations::resolve_or_create_event_conversation(
-        event_id,
-        &event_title,
-        creator_user_id,
-    )
-    .await?;
-
-    // Ensure requesting user is a member
-    diesel::insert_into(conversation_members::table)
-        .values(&NewConversationMember {
-            conversation_id: conversation.id,
-            user_id: user.id,
-            joined_at: chrono::Utc::now(),
-        })
-        .on_conflict_do_nothing()
-        .execute(&mut conn)
-        .await?;
-
-    Ok((
-        StatusCode::OK,
-        Json(serde_json::json!({
-            "data": {
-                "conversationId": conversation.id.to_string(),
-            }
-        })),
-    )
-        .into_response())
 }
 
 // ---------------------------------------------------------------------------
@@ -349,24 +412,37 @@ pub async fn push_register(
         ));
     }
 
-    let mut conn = crate::db::conn().await?;
-    let now = chrono::Utc::now();
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+    let device_id = body.device_id.clone();
+    let ntfy_topic = body.ntfy_topic.clone();
 
-    diesel::insert_into(push_subscriptions::table)
-        .values(
-            &crate::db::models::push_subscriptions::NewPushSubscription {
-                id: uuid::Uuid::new_v4(),
-                user_id: user.id,
-                device_id: body.device_id.clone(),
-                ntfy_topic: body.ntfy_topic.clone(),
-                created_at: now,
-            },
-        )
-        .on_conflict((push_subscriptions::user_id, push_subscriptions::device_id))
-        .do_update()
-        .set(push_subscriptions::ntfy_topic.eq(&body.ntfy_topic))
-        .execute(&mut conn)
-        .await?;
+    db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let now = chrono::Utc::now();
+            diesel::insert_into(push_subscriptions::table)
+                .values(
+                    &crate::db::models::push_subscriptions::NewPushSubscription {
+                        id: uuid::Uuid::new_v4(),
+                        user_id,
+                        device_id: device_id.clone(),
+                        ntfy_topic: ntfy_topic.clone(),
+                        created_at: now,
+                    },
+                )
+                .on_conflict((push_subscriptions::user_id, push_subscriptions::device_id))
+                .do_update()
+                .set(push_subscriptions::ntfy_topic.eq(&ntfy_topic))
+                .execute(conn)
+                .await?;
+            Ok::<(), diesel::result::Error>(())
+        }
+        .scope_boxed()
+    })
+    .await?;
 
     Ok((StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response())
 }
@@ -388,13 +464,26 @@ pub async fn push_unregister(
 
     let (_session, user) = auth_or_respond!(headers);
 
-    let mut conn = crate::db::conn().await?;
-    diesel::delete(
-        push_subscriptions::table
-            .filter(push_subscriptions::user_id.eq(user.id))
-            .filter(push_subscriptions::device_id.eq(&body.device_id)),
-    )
-    .execute(&mut conn)
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+    let device_id = body.device_id.clone();
+
+    db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            diesel::delete(
+                push_subscriptions::table
+                    .filter(push_subscriptions::user_id.eq(user_id))
+                    .filter(push_subscriptions::device_id.eq(&device_id)),
+            )
+            .execute(conn)
+            .await?;
+            Ok::<(), diesel::result::Error>(())
+        }
+        .scope_boxed()
+    })
     .await?;
 
     Ok((StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response())

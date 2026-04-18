@@ -1,6 +1,6 @@
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use super::protocol::{MessagePayload, ReactionPayload, ReplyPayload};
@@ -12,7 +12,7 @@ use crate::db::schema::{message_reactions, messages, profiles, users};
 async fn single_message_payload(
     msg: &Message,
     viewer_user_id: i32,
-    conn: &mut crate::db::DbConn,
+    conn: &mut AsyncPgConnection,
 ) -> Result<MessagePayload, crate::error::AppError> {
     batch_messages_to_payloads(std::slice::from_ref(msg), viewer_user_id, conn)
         .await?
@@ -26,6 +26,7 @@ async fn single_message_payload(
 /// `(conversation_id, client_id)`, return the existing message (idempotent).
 /// Returns `(message, payload, created)` where `created` is `false` on dedup hit.
 pub async fn create_message(
+    conn: &mut AsyncPgConnection,
     conversation_id: Uuid,
     sender_id: i32,
     body: &str,
@@ -33,8 +34,6 @@ pub async fn create_message(
     reply_to_id: Option<Uuid>,
     client_id: Option<String>,
 ) -> Result<(Message, MessagePayload, bool), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     // Dedup: if client_id is set, check for an existing message first
     if let Some(ref cid) = client_id {
         let existing: Option<Message> = messages::table
@@ -42,11 +41,11 @@ pub async fn create_message(
             .filter(messages::sender_id.eq(sender_id))
             .filter(messages::client_id.eq(cid))
             .filter(messages::deleted_at.is_null())
-            .first(&mut conn)
+            .first(conn)
             .await
             .optional()?;
         if let Some(msg) = existing {
-            let payload = single_message_payload(&msg, 0, &mut conn).await?;
+            let payload = single_message_payload(&msg, 0, conn).await?;
             return Ok((msg, payload, false));
         }
     }
@@ -60,7 +59,7 @@ pub async fn create_message(
             .filter(messages::id.eq(reply_id))
             .filter(messages::conversation_id.eq(conversation_id))
             .count()
-            .get_result::<i64>(&mut conn)
+            .get_result::<i64>(conn)
             .await?
             > 0;
         if !reply_in_conv {
@@ -83,7 +82,7 @@ pub async fn create_message(
 
     let msg = match diesel::insert_into(messages::table)
         .values(&new)
-        .get_result::<Message>(&mut conn)
+        .get_result::<Message>(conn)
         .await
     {
         Ok(msg) => msg,
@@ -101,9 +100,9 @@ pub async fn create_message(
                 .filter(messages::sender_id.eq(sender_id))
                 .filter(messages::client_id.eq(cid))
                 .filter(messages::deleted_at.is_null())
-                .first(&mut conn)
+                .first(conn)
                 .await?;
-            let payload = single_message_payload(&msg, 0, &mut conn).await?;
+            let payload = single_message_payload(&msg, 0, conn).await?;
             return Ok((msg, payload, false));
         }
         Err(e) => return Err(e.into()),
@@ -111,12 +110,13 @@ pub async fn create_message(
 
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
-    let payload = single_message_payload(&msg, 0, &mut conn).await?;
+    let payload = single_message_payload(&msg, 0, conn).await?;
     Ok((msg, payload, true))
 }
 
 /// Edit a message body. Returns the updated message.
 pub async fn edit_message(
+    conn: &mut AsyncPgConnection,
     message_id: Uuid,
     sender_id: i32,
     new_body: &str,
@@ -130,7 +130,6 @@ pub async fn edit_message(
         return Err(crate::error::AppError::message("message body too long"));
     }
 
-    let mut conn = crate::db::conn().await?;
     let now = Utc::now();
 
     let updated = diesel::update(
@@ -140,7 +139,7 @@ pub async fn edit_message(
             .filter(messages::deleted_at.is_null()),
     )
     .set((messages::body.eq(new_body), messages::edited_at.eq(now)))
-    .get_result::<Message>(&mut conn)
+    .get_result::<Message>(conn)
     .await
     .optional()?;
 
@@ -149,10 +148,10 @@ pub async fn edit_message(
 
 /// Soft-delete a message.
 pub async fn delete_message(
+    conn: &mut AsyncPgConnection,
     message_id: Uuid,
     sender_id: i32,
 ) -> Result<Message, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let now = Utc::now();
 
     let updated = diesel::update(
@@ -162,7 +161,7 @@ pub async fn delete_message(
             .filter(messages::deleted_at.is_null()),
     )
     .set(messages::deleted_at.eq(Some(now)))
-    .get_result::<Message>(&mut conn)
+    .get_result::<Message>(conn)
     .await
     .optional()?;
 
@@ -171,17 +170,16 @@ pub async fn delete_message(
 
 /// Toggle a reaction. Returns (added: bool, message) — true if added, false if removed.
 pub async fn toggle_reaction(
+    conn: &mut AsyncPgConnection,
     message_id: Uuid,
     user_id: i32,
     emoji: &str,
 ) -> Result<(bool, Message), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     // Check the message exists
     let msg = messages::table
         .filter(messages::id.eq(message_id))
         .filter(messages::deleted_at.is_null())
-        .first::<Message>(&mut conn)
+        .first::<Message>(conn)
         .await
         .optional()?
         .ok_or_else(|| crate::error::AppError::message("message not found"))?;
@@ -193,7 +191,7 @@ pub async fn toggle_reaction(
             .filter(message_reactions::user_id.eq(user_id))
             .filter(message_reactions::emoji.eq(emoji)),
     )
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
 
     if deleted > 0 {
@@ -211,7 +209,7 @@ pub async fn toggle_reaction(
             created_at: now,
         })
         .on_conflict_do_nothing()
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     Ok((true, msg))
@@ -219,18 +217,17 @@ pub async fn toggle_reaction(
 
 /// Update read watermark for a user in a conversation.
 pub async fn mark_read(
+    conn: &mut AsyncPgConnection,
     conversation_id: Uuid,
     user_id: i32,
     message_id: Uuid,
 ) -> Result<(), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     // Verify message belongs to this conversation
     let belongs = messages::table
         .filter(messages::id.eq(message_id))
         .filter(messages::conversation_id.eq(conversation_id))
         .count()
-        .get_result::<i64>(&mut conn)
+        .get_result::<i64>(conn)
         .await?
         > 0;
 
@@ -255,7 +252,7 @@ pub async fn mark_read(
     .bind::<diesel::sql_types::Uuid, _>(message_id)
     .bind::<diesel::sql_types::Uuid, _>(conversation_id)
     .bind::<diesel::sql_types::Integer, _>(user_id)
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
 
     Ok(())
@@ -263,13 +260,13 @@ pub async fn mark_read(
 
 /// Look up the `conversation_id` for a given message.
 pub async fn message_conversation_id(
+    conn: &mut AsyncPgConnection,
     message_id: Uuid,
 ) -> Result<Option<Uuid>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let cid = messages::table
         .filter(messages::id.eq(message_id))
         .select(messages::conversation_id)
-        .first::<Uuid>(&mut conn)
+        .first::<Uuid>(conn)
         .await
         .optional()?;
     Ok(cid)
@@ -277,13 +274,12 @@ pub async fn message_conversation_id(
 
 /// Load message history for a conversation, paginated backwards.
 pub async fn load_history(
+    conn: &mut AsyncPgConnection,
     conversation_id: Uuid,
     before: Option<Uuid>,
     limit: i64,
     viewer_user_id: i32,
 ) -> Result<(Vec<MessagePayload>, bool), crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let query_limit = limit + 1; // fetch one extra to determine has_more
 
     let msgs: Vec<Message> = if let Some(before_id) = before {
@@ -291,7 +287,7 @@ pub async fn load_history(
             .filter(messages::id.eq(before_id))
             .filter(messages::conversation_id.eq(conversation_id))
             .select(messages::created_at)
-            .first(&mut conn)
+            .first(conn)
             .await
             .optional()?;
         let Some(before_ts) = before_ts else {
@@ -308,7 +304,7 @@ pub async fn load_history(
             )
             .order((messages::created_at.desc(), messages::id.desc()))
             .limit(query_limit)
-            .load(&mut conn)
+            .load(conn)
             .await?
     } else {
         messages::table
@@ -316,7 +312,7 @@ pub async fn load_history(
             .filter(messages::deleted_at.is_null())
             .order((messages::created_at.desc(), messages::id.desc()))
             .limit(query_limit)
-            .load(&mut conn)
+            .load(conn)
             .await?
     };
 
@@ -324,7 +320,7 @@ pub async fn load_history(
     let has_more = msgs.len() > limit_usize;
     let msgs: Vec<Message> = msgs.into_iter().take(limit_usize).collect();
 
-    let mut payloads = batch_messages_to_payloads(&msgs, viewer_user_id, &mut conn).await?;
+    let mut payloads = batch_messages_to_payloads(&msgs, viewer_user_id, conn).await?;
 
     // Return in chronological order (oldest first)
     payloads.reverse();
@@ -337,7 +333,7 @@ pub async fn load_history(
 async fn batch_messages_to_payloads(
     msgs: &[Message],
     viewer_user_id: i32,
-    conn: &mut crate::db::DbConn,
+    conn: &mut AsyncPgConnection,
 ) -> Result<Vec<MessagePayload>, crate::error::AppError> {
     use std::collections::HashMap;
 

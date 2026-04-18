@@ -1,6 +1,6 @@
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::db::models::conversation_members::NewConversationMember;
@@ -13,6 +13,7 @@ use crate::db::schema::{
 /// Uses canonical pair (lower id, higher id) for uniqueness.
 #[allow(clippy::similar_names)]
 pub async fn resolve_or_create_dm(
+    conn: &mut AsyncPgConnection,
     first_user_id: i32,
     second_user_id: i32,
 ) -> Result<Conversation, crate::error::AppError> {
@@ -22,14 +23,12 @@ pub async fn resolve_or_create_dm(
         (second_user_id, first_user_id)
     };
 
-    let mut conn = crate::db::conn().await?;
-
     // Try to find existing DM
     let existing = conversations::table
         .filter(conversations::kind.eq("dm"))
         .filter(conversations::user_low_id.eq(low))
         .filter(conversations::user_high_id.eq(high))
-        .first::<Conversation>(&mut conn)
+        .first::<Conversation>(conn)
         .await
         .optional()?;
 
@@ -53,7 +52,7 @@ pub async fn resolve_or_create_dm(
     let inserted = diesel::insert_into(conversations::table)
         .values(&new_conv)
         .on_conflict_do_nothing()
-        .get_result::<Conversation>(&mut conn)
+        .get_result::<Conversation>(conn)
         .await
         .optional()?;
 
@@ -65,7 +64,7 @@ pub async fn resolve_or_create_dm(
                 .filter(conversations::kind.eq("dm"))
                 .filter(conversations::user_low_id.eq(low))
                 .filter(conversations::user_high_id.eq(high))
-                .first::<Conversation>(&mut conn)
+                .first::<Conversation>(conn)
                 .await?
         }
     };
@@ -86,7 +85,7 @@ pub async fn resolve_or_create_dm(
     diesel::insert_into(conversation_members::table)
         .values(&members)
         .on_conflict_do_nothing()
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     Ok(created)
@@ -94,16 +93,15 @@ pub async fn resolve_or_create_dm(
 
 /// Resolve or create an event conversation.
 pub async fn resolve_or_create_event_conversation(
+    conn: &mut AsyncPgConnection,
     event_id: Uuid,
     event_title: &str,
     creator_user_id: i32,
 ) -> Result<Conversation, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
-
     let existing = conversations::table
         .filter(conversations::kind.eq("event"))
         .filter(conversations::event_id.eq(event_id))
-        .first::<Conversation>(&mut conn)
+        .first::<Conversation>(conn)
         .await
         .optional()?;
 
@@ -126,7 +124,7 @@ pub async fn resolve_or_create_event_conversation(
     let inserted = diesel::insert_into(conversations::table)
         .values(&new_conv)
         .on_conflict_do_nothing()
-        .get_result::<Conversation>(&mut conn)
+        .get_result::<Conversation>(conn)
         .await
         .optional()?;
 
@@ -136,7 +134,7 @@ pub async fn resolve_or_create_event_conversation(
             conversations::table
                 .filter(conversations::kind.eq("event"))
                 .filter(conversations::event_id.eq(event_id))
-                .first::<Conversation>(&mut conn)
+                .first::<Conversation>(conn)
                 .await?
         }
     };
@@ -149,34 +147,36 @@ pub async fn resolve_or_create_event_conversation(
             joined_at: now,
         })
         .on_conflict_do_nothing()
-        .execute(&mut conn)
+        .execute(conn)
         .await?;
 
     Ok(created)
 }
 
 /// Get all conversation member user IDs for a conversation.
-pub async fn member_user_ids(conversation_id: Uuid) -> Result<Vec<i32>, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
+pub async fn member_user_ids(
+    conn: &mut AsyncPgConnection,
+    conversation_id: Uuid,
+) -> Result<Vec<i32>, crate::error::AppError> {
     let ids = conversation_members::table
         .filter(conversation_members::conversation_id.eq(conversation_id))
         .select(conversation_members::user_id)
-        .load::<i32>(&mut conn)
+        .load::<i32>(conn)
         .await?;
     Ok(ids)
 }
 
 /// Check if a user is a member of a conversation.
 pub async fn is_member(
+    conn: &mut AsyncPgConnection,
     conversation_id: Uuid,
     user_id: i32,
 ) -> Result<bool, crate::error::AppError> {
-    let mut conn = crate::db::conn().await?;
     let count = conversation_members::table
         .filter(conversation_members::conversation_id.eq(conversation_id))
         .filter(conversation_members::user_id.eq(user_id))
         .count()
-        .get_result::<i64>(&mut conn)
+        .get_result::<i64>(conn)
         .await?;
     Ok(count > 0)
 }
@@ -186,17 +186,16 @@ pub async fn is_member(
 /// Uses batch queries instead of per-conversation loops to avoid N+1.
 #[allow(clippy::similar_names, clippy::too_many_lines)]
 pub async fn list_for_user(
+    conn: &mut AsyncPgConnection,
     user_id: i32,
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
     use super::protocol::ConversationPayload;
     use std::collections::HashMap;
 
-    let mut conn = crate::db::conn().await?;
-
     let viewer_is_stub = users::table
         .filter(users::id.eq(user_id))
         .select(users::is_review_stub)
-        .first::<bool>(&mut conn)
+        .first::<bool>(conn)
         .await
         .optional()?
         .unwrap_or(false);
@@ -204,7 +203,7 @@ pub async fn list_for_user(
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
         .select(conversation_members::conversation_id)
-        .load(&mut conn)
+        .load(conn)
         .await?;
 
     if conv_ids.is_empty() {
@@ -213,7 +212,7 @@ pub async fn list_for_user(
 
     let all_convs: Vec<Conversation> = conversations::table
         .filter(conversations::id.eq_any(&conv_ids))
-        .load(&mut conn)
+        .load(conn)
         .await?;
 
     // Collect the "other participant" id for every DM so we can batch-load
@@ -236,7 +235,7 @@ pub async fn list_for_user(
         users::table
             .filter(users::id.eq_any(&other_ids))
             .select((users::id, users::is_review_stub))
-            .load::<(i32, bool)>(&mut conn)
+            .load::<(i32, bool)>(conn)
             .await?
             .into_iter()
             .collect()
@@ -276,7 +275,7 @@ pub async fn list_for_user(
              ORDER BY conversation_id, created_at DESC, id DESC",
     )
     .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&conv_ids)
-    .load(&mut conn)
+    .load(conn)
     .await?;
 
     let latest_map: HashMap<Uuid, &crate::db::models::messages::Message> = latest_messages
@@ -303,7 +302,7 @@ pub async fn list_for_user(
     )
     .bind::<diesel::sql_types::Integer, _>(user_id)
     .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&conv_ids)
-    .load::<UnreadCountRow>(&mut conn)
+    .load::<UnreadCountRow>(conn)
     .await?;
 
     let unread_map: HashMap<Uuid, i64> = unread_counts
@@ -344,7 +343,7 @@ pub async fn list_for_user(
                     profiles::name,
                     profiles::profile_picture,
                 ))
-                .load(&mut conn)
+                .load(conn)
                 .await?
         };
 
@@ -357,7 +356,7 @@ pub async fn list_for_user(
     let my_profile_id: Option<uuid::Uuid> = profiles::table
         .filter(profiles::user_id.eq(user_id))
         .select(profiles::id)
-        .first(&mut conn)
+        .first(conn)
         .await
         .optional()?;
 
@@ -371,7 +370,7 @@ pub async fn list_for_user(
                         .or(profile_blocks::blocked_id.eq(my_pid)),
                 )
                 .select((profile_blocks::blocker_id, profile_blocks::blocked_id))
-                .load(&mut conn)
+                .load(conn)
                 .await?;
             rows.into_iter()
                 .flat_map(|(a, b)| {
@@ -475,7 +474,8 @@ struct UnreadCountRow {
 }
 
 /// Sync event membership: add or remove a user from the event conversation.
-/// Called from outbox job dispatch.
+/// Called from outbox job dispatch (worker, BYPASSRLS), so it opens its own
+/// connection rather than requiring a viewer context.
 #[allow(clippy::similar_names)]
 pub async fn sync_event_membership(
     event_id: Uuid,
@@ -542,9 +542,14 @@ pub async fn sync_event_membership(
             .map_err(|e| format!("resolve creator user_id: {e}"))?;
 
         // Ensure conversation exists
-        let conv = resolve_or_create_event_conversation(event_id, &event_title, creator_user_id)
-            .await
-            .map_err(|e| format!("resolve conversation: {e}"))?;
+        let conv = resolve_or_create_event_conversation(
+            &mut conn,
+            event_id,
+            &event_title,
+            creator_user_id,
+        )
+        .await
+        .map_err(|e| format!("resolve conversation: {e}"))?;
 
         // Add member
         diesel::insert_into(conversation_members::table)
