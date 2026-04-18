@@ -12,6 +12,16 @@ use crate::db::models::user_settings::UserSetting;
 use crate::db::models::users::User;
 use crate::db::schema::user_settings;
 
+/// DB-only context for the top-N scored profiles. Collected inside the viewer
+/// transaction so RLS applies; external image / thumbhash resolution happens
+/// in `finalize_recommendations` after the tx closes.
+pub(super) struct RecommendationData {
+    pub(super) scored: Vec<(f64, Profile)>,
+    pub(super) user_models: Vec<User>,
+    pub(super) profile_tags: HashMap<Uuid, Vec<MatchingTagResponse>>,
+    pub(super) privacy_map: HashMap<i32, bool>,
+}
+
 struct RecommendationContext<'a> {
     user_models: &'a [User],
     pic_map: &'a HashMap<String, String>,
@@ -84,19 +94,41 @@ pub(super) async fn batch_load_show_program(
         .collect())
 }
 
-pub(super) async fn build_recommendations_response(
+/// Load the DB-backed fields needed to render a recommendations payload.
+/// Must run inside a viewer-scoped transaction. `finalize_recommendations`
+/// converts the result into the HTTP response shape.
+pub(super) async fn load_recommendation_data(
     top: &[(f64, &Profile)],
     repo: &MatchingRepository,
     conn: &mut diesel_async::AsyncPgConnection,
     privacy_map: &HashMap<i32, bool>,
-) -> std::result::Result<Vec<ProfileRecommendation>, crate::error::AppError> {
+) -> std::result::Result<RecommendationData, crate::error::AppError> {
     let user_ids: Vec<i32> = top.iter().map(|(_, p)| p.user_id).collect();
     let user_models = repo.load_users_by_ids(&user_ids, conn).await?;
 
     let top_ids: Vec<Uuid> = top.iter().map(|(_, p)| p.id).collect();
-    let top_tags = repo.batch_load_profile_tags(&top_ids, conn).await?;
+    let profile_tags = repo.batch_load_profile_tags(&top_ids, conn).await?;
 
-    let pic_filenames: Vec<String> = top
+    let scored: Vec<(f64, Profile)> = top
+        .iter()
+        .map(|(score, profile)| (*score, (*profile).clone()))
+        .collect();
+
+    Ok(RecommendationData {
+        scored,
+        user_models,
+        profile_tags,
+        privacy_map: privacy_map.clone(),
+    })
+}
+
+/// Resolve signed image URLs / thumbhashes and build the final response. Runs
+/// outside the DB transaction so imgproxy latency doesn't hold a connection.
+pub(super) async fn finalize_recommendations(
+    data: RecommendationData,
+) -> Vec<ProfileRecommendation> {
+    let pic_filenames: Vec<String> = data
+        .scored
         .iter()
         .filter_map(|(_, p)| p.profile_picture.clone())
         .collect();
@@ -108,16 +140,20 @@ pub(super) async fn build_recommendations_response(
     let pic_map: HashMap<String, String> = pic_filenames.into_iter().zip(resolved_pics).collect();
 
     let ctx = RecommendationContext {
-        user_models: &user_models,
+        user_models: &data.user_models,
         pic_map: &pic_map,
         thumbhash_map: &thumbhash_map,
-        privacy_map,
+        privacy_map: &data.privacy_map,
     };
-    Ok(top
+    data.scored
         .iter()
         .map(|(score, profile)| {
-            let profile_tags = top_tags.get(&profile.id).cloned().unwrap_or_default();
+            let profile_tags = data
+                .profile_tags
+                .get(&profile.id)
+                .cloned()
+                .unwrap_or_default();
             build_profile_recommendation(*score, profile, &ctx, profile_tags)
         })
-        .collect())
+        .collect()
 }

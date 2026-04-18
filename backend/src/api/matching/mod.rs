@@ -30,7 +30,9 @@ use crate::db;
 use crate::db::models::events::Event;
 use crate::db::models::profiles::Profile;
 use crate::db::schema::{events, profiles, recommendation_feedback};
-use matching_assembler::{batch_load_show_program, build_recommendations_response};
+use matching_assembler::{
+    batch_load_show_program, finalize_recommendations, load_recommendation_data,
+};
 use matching_repo::MatchingRepository;
 use matching_scoring::{
     build_affinity_map, rank_and_take, rank_events_and_take, score_event, score_profile,
@@ -118,7 +120,7 @@ pub(super) async fn profiles_recommendations(
 
             let top = rank_and_take(&mut scored, limit);
 
-            build_recommendations_response(&top, &repo, conn, &privacy_map)
+            load_recommendation_data(&top, &repo, conn, &privacy_map)
                 .await
                 .map_err(matching_into_diesel)
         }
@@ -126,6 +128,10 @@ pub(super) async fn profiles_recommendations(
     })
     .await
     .map_err(crate::error::AppError::from)?;
+
+    // imgproxy / thumbhash resolution runs after the tx closes so external
+    // storage latency can't hold a DB connection open.
+    let data = finalize_recommendations(data).await;
 
     let mut response = Json(DataResponse { data }).into_response();
     response
