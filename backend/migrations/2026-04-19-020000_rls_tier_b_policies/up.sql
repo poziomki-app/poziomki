@@ -117,10 +117,49 @@ $$;
 COMMENT ON FUNCTION app.event_creator_user_id(uuid) IS
     'User id of the given event''s creator, or NULL if missing. SECURITY DEFINER so policy expressions can resolve it without tripping events / profiles RLS.';
 
+-- Helpers for the chat resolve-or-create paths (resolve_or_create_dm
+-- and resolve_or_create_event_conversation). They look up an existing
+-- conversation row by pair / event regardless of viewer membership so
+-- the caller can discover and reuse a row that was created by a
+-- concurrent request that hasn't yet added the viewer as member.
+-- Without this, the handler's race-fallback SELECT would be filtered
+-- to empty by conversations_viewer and bubble up as NotFound.
+CREATE OR REPLACE FUNCTION app.find_dm_conversation(p_low int, p_high int)
+RETURNS SETOF public.conversations
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT * FROM public.conversations
+    WHERE kind = 'dm' AND user_low_id = p_low AND user_high_id = p_high
+    LIMIT 1
+$$;
+
+COMMENT ON FUNCTION app.find_dm_conversation(int, int) IS
+    'Canonical DM conversation row for the (low, high) user pair, or empty set. SECURITY DEFINER so the chat resolve path can read the row before the viewer''s membership has been inserted.';
+
+CREATE OR REPLACE FUNCTION app.find_event_conversation(p_event_id uuid)
+RETURNS SETOF public.conversations
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT * FROM public.conversations
+    WHERE kind = 'event' AND event_id = p_event_id
+    LIMIT 1
+$$;
+
+COMMENT ON FUNCTION app.find_event_conversation(uuid) IS
+    'Event chat conversation row for the given event, or empty set. SECURITY DEFINER so the resolve-or-create path can detect concurrent creation without relying on viewer membership.';
+
 REVOKE EXECUTE ON FUNCTION app.viewer_conversation_ids() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.event_creator_user_id(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.find_dm_conversation(int, int) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.find_event_conversation(uuid) FROM PUBLIC;
 
 DO $$
 BEGIN
@@ -129,6 +168,8 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.event_creator_user_id(uuid) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_api';
     END IF;
 END
 $$;
