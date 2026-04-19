@@ -20,7 +20,14 @@
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		# Full HSTS preload form. includeSubDomains applies HTTPS-only
+		# to every *.poziomki.app; preload signals we're willing to ship
+		# on Chrome's preload list. Actual submission at hstspreload.org
+		# is a manual human step AFTER this header has been live for a
+		# week with no HTTP-only subdomain breakage. Removal from the
+		# preload list takes weeks-to-months, so don't submit until we
+		# are sure every current + near-term subdomain serves HTTPS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Clickjacking: refuse to be framed, in both the legacy and
