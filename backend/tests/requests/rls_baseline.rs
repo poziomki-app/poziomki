@@ -78,6 +78,7 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "push_topics_for_users",
     "resolve_session",
     // Tier-C policy-support helpers.
+    "event_auto_approves",
     "viewer_owns_event",
     // Tier-B policy-support helpers.
     "conversation_meta_for_insert",

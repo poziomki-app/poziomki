@@ -87,11 +87,33 @@ $$;
 COMMENT ON FUNCTION app.viewer_owns_event(uuid) IS
     'True iff the viewer owns the given event. Narrower than viewer_can_access_event (which also admits going attendees) — used for creator-only mutations on the attendee roster.';
 
+-- Auto-approval helper — true iff the event doesn't require approval.
+-- Used by the self-write branch so a raw API-role caller can't
+-- self-insert as status='going' for an approval-gated event (which
+-- would also unlock its event-chat via Tier-B's viewer_can_access_event).
+CREATE OR REPLACE FUNCTION app.event_auto_approves(p_event_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT NOT COALESCE(
+        (SELECT requires_approval FROM public.events WHERE id = p_event_id),
+        true
+    )
+$$;
+
+COMMENT ON FUNCTION app.event_auto_approves(uuid) IS
+    'True iff the event exists and requires_approval = false — i.e. a join can land as `going` without creator approval.';
+
 REVOKE EXECUTE ON FUNCTION app.viewer_owns_event(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.event_auto_approves(uuid) FROM PUBLIC;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_owns_event(uuid) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.event_auto_approves(uuid) TO poziomki_api';
     END IF;
 END
 $$;
@@ -109,7 +131,9 @@ BEGIN
     ) THEN
         ALTER TABLE public.event_attendees
             ADD CONSTRAINT event_attendees_status_valid
-            CHECK (status IN ('pending', 'going', 'declined', 'waitlist'));
+            CHECK (status IN (
+                'pending', 'going', 'declined', 'waitlist', 'interested', 'invited'
+            ));
     END IF;
 END
 $$;
@@ -131,13 +155,27 @@ CREATE POLICY event_attendees_viewer ON public.event_attendees
     FOR SELECT TO poziomki_api
     USING (profile_id IN (SELECT id FROM app.profiles_in_current_bucket()));
 
+-- Two write branches:
+--   * self — viewer writes own attendance row; status restricted so
+--     a direct API-role caller can't self-join as `going` into an
+--     approval-gated event (that also gates Tier-B event-chat
+--     access via viewer_can_access_event).
+--   * creator — event owner writes attendee rows for their event;
+--     status set is full (approval, rejection, invites), but
+--     profile_id must be in the viewer's stub bucket so a creator
+--     can't fabricate cross-bucket attendance rows.
 CREATE POLICY event_attendees_insert ON public.event_attendees
     FOR INSERT TO poziomki_api
     WITH CHECK (
         app.current_user_id() > 0
         AND (
-            profile_id IN (SELECT id FROM app.viewer_profile_ids())
-            OR app.viewer_owns_event(event_id)
+            (profile_id IN (SELECT id FROM app.viewer_profile_ids())
+             AND (
+                 status IN ('pending', 'declined', 'waitlist', 'interested')
+                 OR (status = 'going' AND app.event_auto_approves(event_id))
+             ))
+            OR (app.viewer_owns_event(event_id)
+                AND profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
         )
     );
 
@@ -145,18 +183,25 @@ CREATE POLICY event_attendees_update ON public.event_attendees
     FOR UPDATE TO poziomki_api
     USING (
         profile_id IN (SELECT id FROM app.viewer_profile_ids())
-        OR app.viewer_owns_event(event_id)
+        OR (app.viewer_owns_event(event_id)
+            AND profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
     )
     WITH CHECK (
-        profile_id IN (SELECT id FROM app.viewer_profile_ids())
-        OR app.viewer_owns_event(event_id)
+        (profile_id IN (SELECT id FROM app.viewer_profile_ids())
+         AND (
+             status IN ('pending', 'declined', 'waitlist', 'interested')
+             OR (status = 'going' AND app.event_auto_approves(event_id))
+         ))
+        OR (app.viewer_owns_event(event_id)
+            AND profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
     );
 
 CREATE POLICY event_attendees_delete ON public.event_attendees
     FOR DELETE TO poziomki_api
     USING (
         profile_id IN (SELECT id FROM app.viewer_profile_ids())
-        OR app.viewer_owns_event(event_id)
+        OR (app.viewer_owns_event(event_id)
+            AND profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
     );
 
 CREATE OR REPLACE FUNCTION app.reject_event_attendees_pk_change()
