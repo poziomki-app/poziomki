@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS message_reactions_key_immutable ON public.message_reactions;
+DROP FUNCTION IF EXISTS app.reject_message_reactions_key_change();
 DROP POLICY IF EXISTS message_reactions_delete ON public.message_reactions;
 DROP POLICY IF EXISTS message_reactions_update ON public.message_reactions;
 DROP POLICY IF EXISTS message_reactions_insert ON public.message_reactions;

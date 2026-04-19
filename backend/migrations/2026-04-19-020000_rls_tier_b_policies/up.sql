@@ -186,6 +186,13 @@ AS $$
     FROM public.conversations c
     WHERE app.current_user_id() > 0
       AND c.id = p_conversation_id
+      AND (
+          (c.kind = 'dm'
+           AND app.current_user_id() IN (c.user_low_id, c.user_high_id))
+          OR (c.kind = 'event'
+              AND c.event_id IS NOT NULL
+              AND app.viewer_can_access_event(c.event_id))
+      )
 $$;
 
 COMMENT ON FUNCTION app.conversation_meta_for_insert(uuid) IS
@@ -453,3 +460,31 @@ CREATE POLICY message_reactions_delete ON public.message_reactions
         user_id = app.current_user_id()
         AND app.viewer_can_see_message(message_id)
     );
+
+-- message_reactions.message_id + user_id are immutable for the same
+-- reason as messages and conversation_members: RLS evaluates USING
+-- against the old row and WITH CHECK against the new row
+-- independently, so a viewer who can see two different messages can
+-- move their reaction between them (cross-conversation reaction
+-- injection) without either predicate catching it.
+CREATE OR REPLACE FUNCTION app.reject_message_reactions_key_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+    IF NEW.message_id IS DISTINCT FROM OLD.message_id
+       OR NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+        RAISE EXCEPTION
+            'message_reactions (message_id, user_id) are immutable (old=%,% new=%,%)',
+            OLD.message_id, OLD.user_id, NEW.message_id, NEW.user_id;
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS message_reactions_key_immutable ON public.message_reactions;
+CREATE TRIGGER message_reactions_key_immutable
+    BEFORE UPDATE ON public.message_reactions
+    FOR EACH ROW
+    EXECUTE FUNCTION app.reject_message_reactions_key_change();
