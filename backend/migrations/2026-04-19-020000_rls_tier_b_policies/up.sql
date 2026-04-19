@@ -60,6 +60,32 @@ $$;
 COMMENT ON FUNCTION app.viewer_can_see_message(uuid) IS
     'True iff the viewer is a member of the conversation the given message belongs to. SECURITY DEFINER so it bypasses the messages + conversation_members policies installed by this migration.';
 
+-- Helper: does the session-level caller already have BYPASSRLS? The
+-- worker process connects as `poziomki_worker` which has BYPASSRLS on
+-- real tables, but inside a SECURITY DEFINER function `current_user`
+-- resolves to the definer (owner), so the SD lookup helpers need an
+-- explicit out for the worker. `session_user` preserves the role the
+-- connection authenticated as. Future BYPASSRLS roles inherit this
+-- without a code change.
+--
+-- Defined early so other helpers below (event_creator_user_id,
+-- find_dm_conversation, find_event_conversation, delete_event_and_chat)
+-- can reference it.
+CREATE OR REPLACE FUNCTION app.session_bypasses_rls()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT COALESCE(
+        (SELECT rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = session_user),
+        false
+    )
+$$;
+
+COMMENT ON FUNCTION app.session_bypasses_rls() IS
+    'True iff the session authentication role has BYPASSRLS. Used inside SD helpers to give worker processes a trust bypass that the policy guards would otherwise block.';
+
 -- Helper: "can the viewer access this event?" Gate for creating event
 -- conversations — without this the conversations_insert policy would
 -- accept any `kind='event'` row and let a compromised API-role caller
@@ -101,6 +127,13 @@ COMMENT ON FUNCTION app.viewer_can_access_event(uuid) IS
 -- before the viewer's own, so the conversation_members INSERT policy
 -- needs to recognise that specific target user_id as legitimate — not
 -- just the viewer's own id.
+--
+-- Access is gated on session_bypasses_rls() OR viewer_can_access_event
+-- so a direct poziomki_api caller can't use this function to look up
+-- the internal user_id of event creators for events they have no
+-- relationship to. Policy expressions supply their own access check
+-- before invoking this, but the guard means direct SQL abuse is
+-- blocked too.
 CREATE OR REPLACE FUNCTION app.event_creator_user_id(p_event_id uuid)
 RETURNS int
 LANGUAGE sql
@@ -112,10 +145,14 @@ AS $$
     FROM public.events e
     JOIN public.profiles p ON p.id = e.creator_id
     WHERE e.id = p_event_id
+      AND (
+          app.session_bypasses_rls()
+          OR app.viewer_can_access_event(p_event_id)
+      )
 $$;
 
 COMMENT ON FUNCTION app.event_creator_user_id(uuid) IS
-    'User id of the given event''s creator, or NULL if missing. SECURITY DEFINER so policy expressions can resolve it without tripping events / profiles RLS.';
+    'User id of the given event''s creator, or NULL if the viewer has no event access. SECURITY DEFINER so policy expressions can resolve it without tripping events / profiles RLS; access is gated so direct API-role calls can''t enumerate creator identity.';
 
 -- Helpers for the chat resolve-or-create paths (resolve_or_create_dm
 -- and resolve_or_create_event_conversation). They look up an existing
@@ -124,28 +161,6 @@ COMMENT ON FUNCTION app.event_creator_user_id(uuid) IS
 -- concurrent request that hasn't yet added the viewer as member.
 -- Without this, the handler's race-fallback SELECT would be filtered
 -- to empty by conversations_viewer and bubble up as NotFound.
--- Helper: does the session-level caller already have BYPASSRLS? The
--- worker process connects as `poziomki_worker` which has BYPASSRLS on
--- real tables, but inside a SECURITY DEFINER function `current_user`
--- resolves to the definer (owner), so the SD lookup helpers need an
--- explicit out for the worker. `session_user` preserves the role the
--- connection authenticated as. Future BYPASSRLS roles inherit this
--- without a code change.
-CREATE OR REPLACE FUNCTION app.session_bypasses_rls()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SET search_path = pg_catalog, pg_temp
-AS $$
-    SELECT COALESCE(
-        (SELECT rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = session_user),
-        false
-    )
-$$;
-
-COMMENT ON FUNCTION app.session_bypasses_rls() IS
-    'True iff the session authentication role has BYPASSRLS. Used inside SD helpers to give worker processes a trust bypass that the policy guards would otherwise block.';
-
 -- DM lookup gates on the viewer being one of the pair — without that
 -- guard the SD bypass would let any API-role caller enumerate DM
 -- conversation ids by iterating over (low, high) pairs. Worker
@@ -232,7 +247,6 @@ REVOKE EXECUTE ON FUNCTION app.viewer_conversation_ids() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.event_creator_user_id(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.session_bypasses_rls() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_dm_conversation(int, int) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_event_conversation(uuid) FROM PUBLIC;
@@ -249,7 +263,6 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) TO poziomki_api';
-        EXECUTE 'GRANT EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) TO poziomki_api';
     END IF;
     -- Worker process (BYPASSRLS) reaches the resolve-or-create event
     -- chat path via sync_event_membership — it needs execute on the
@@ -284,15 +297,28 @@ CREATE POLICY conversations_viewer ON public.conversations
 -- Relying on the handler for event access was insufficient — a
 -- compromised API-role caller could fabricate chat rooms for arbitrary
 -- events and then add themselves via conversation_members_insert.
+-- INSERT WITH CHECK enforces well-formed shapes directly in the
+-- policy, so a direct API-role SQL path can't skip the handler's
+-- canonicalisation:
+--   * DM — both pair ids present, distinct, canonically ordered,
+--     viewer is one of the pair, event_id NULL
+--   * Event — event_id NOT NULL, pair ids NULL, viewer has access
+--     (creator or going attendee)
 CREATE POLICY conversations_insert ON public.conversations
     FOR INSERT TO poziomki_api
     WITH CHECK (
         app.current_user_id() > 0
         AND (
             (kind = 'dm'
+             AND event_id IS NULL
+             AND user_low_id IS NOT NULL
+             AND user_high_id IS NOT NULL
+             AND user_low_id < user_high_id
              AND app.current_user_id() IN (user_low_id, user_high_id))
             OR (kind = 'event'
                 AND event_id IS NOT NULL
+                AND user_low_id IS NULL
+                AND user_high_id IS NULL
                 AND app.viewer_can_access_event(event_id))
         )
     );
@@ -339,6 +365,15 @@ $$;
 
 COMMENT ON FUNCTION app.delete_event_and_chat(uuid) IS
     'Event deletion + chat cleanup. Auth check pins access to the event creator or a BYPASSRLS role. FK cascades handle the rest of the chat fan-out.';
+
+REVOKE EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) FROM PUBLIC;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) TO poziomki_api';
+    END IF;
+END
+$$;
 
 -- No general UPDATE or DELETE policy for poziomki_api on conversations.
 -- A member-only UPDATE would permit mutation of title / metadata
@@ -444,6 +479,9 @@ CREATE POLICY conversation_members_delete ON public.conversation_members
     FOR DELETE TO poziomki_api
     USING (user_id = app.current_user_id());
 
+-- Only last_read_message_id is legitimately mutable. PK pinned
+-- (conversation_id, user_id) prevents membership row migration; joined_at
+-- pinned keeps the audit signal honest.
 CREATE OR REPLACE FUNCTION app.reject_conversation_members_pk_change()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -451,10 +489,10 @@ SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     IF NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
-       OR NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+       OR NEW.user_id IS DISTINCT FROM OLD.user_id
+       OR NEW.joined_at IS DISTINCT FROM OLD.joined_at THEN
         RAISE EXCEPTION
-            'conversation_members primary key is immutable (old=%,% new=%,%)',
-            OLD.conversation_id, OLD.user_id, NEW.conversation_id, NEW.user_id;
+            'conversation_members: only last_read_message_id is mutable';
     END IF;
     RETURN NEW;
 END
@@ -511,12 +549,13 @@ CREATE POLICY messages_delete ON public.messages
         AND conversation_id IN (SELECT conversation_id FROM app.viewer_conversation_ids())
     );
 
--- messages.conversation_id + sender_id are immutable. RLS can't
--- compare old-row vs new-row values, so without this trigger a
--- member of two conversations could `UPDATE messages SET
--- conversation_id = <other>` and inject their message into the
--- second room — both USING (old conversation membership) and WITH
--- CHECK (new conversation membership) would pass.
+-- messages identity / immutable columns. RLS can't compare old-row vs
+-- new-row values, so only the application-editable fields (body,
+-- edited_at, deleted_at) are left mutable. Everything else — sender,
+-- conversation, kind, attachment, reply target, client id, created_at
+-- — is pinned so a direct UPDATE from the API role can't recast a
+-- message into another shape (cross-convo injection, undelete,
+-- attachment swap, etc.).
 CREATE OR REPLACE FUNCTION app.reject_messages_conversation_change()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -524,10 +563,14 @@ SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     IF NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
-       OR NEW.sender_id IS DISTINCT FROM OLD.sender_id THEN
+       OR NEW.sender_id IS DISTINCT FROM OLD.sender_id
+       OR NEW.kind IS DISTINCT FROM OLD.kind
+       OR NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id
+       OR NEW.attachment_upload_id IS DISTINCT FROM OLD.attachment_upload_id
+       OR NEW.client_id IS DISTINCT FROM OLD.client_id
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
         RAISE EXCEPTION
-            'messages (conversation_id, sender_id) are immutable (old=%,% new=%,%)',
-            OLD.conversation_id, OLD.sender_id, NEW.conversation_id, NEW.sender_id;
+            'messages: only body / edited_at / deleted_at are mutable (identity columns are pinned)';
     END IF;
     RETURN NEW;
 END
