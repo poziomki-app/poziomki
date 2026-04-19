@@ -284,6 +284,47 @@ pub(super) async fn sign_out(
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
+/// Terminate every active session for the authenticated user — the
+/// "sign out everywhere" button.
+///
+/// Used when a token is suspected of leaking, a device was lost, or
+/// the user wants a clean slate. Scoped to the caller's own
+/// `user_id`, not a target; the admin ban endpoint is the
+/// cross-user equivalent.
+///
+/// Runs the DELETE inside `db::with_viewer_tx` so RLS on `sessions`
+/// (policy `sessions_viewer` requires `user_id = app.current_user_id()`)
+/// sees the viewer and actually purges the rows. Without the viewer
+/// context the DELETE would filter to zero rows and the endpoint
+/// would lie — a 200 with nothing revoked except the in-memory cache.
+pub(super) async fn sign_out_all(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    use crate::db::schema::sessions;
+    use diesel_async::scoped_futures::ScopedFutureExt;
+    let (_session, user) = auth_or_respond!(headers);
+    let viewer = crate::db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+    let deleted = crate::db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+                .execute(conn)
+                .await
+        }
+        .scope_boxed()
+    })
+    .await;
+    crate::api::state::invalidate_auth_cache_for_user_id(user.id).await;
+    match deleted {
+        Ok(_) => Ok(Json(SuccessResponse { success: true }).into_response()),
+        Err(_) => Ok(Json(SuccessResponse { success: false }).into_response()),
+    }
+}
+
 pub(super) async fn sessions(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
