@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::db::schema::conversations;
 
-#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
+#[derive(Debug, Clone, Queryable, QueryableByName, Selectable, Identifiable)]
 #[diesel(table_name = conversations)]
 pub struct Conversation {
     pub id: Uuid,

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::db::models::event_attendees::EventAttendee;
 use crate::db::models::event_interactions::EventInteraction;
 use crate::db::models::events::{Event, EventChangeset, NewEvent};
-use crate::db::schema::{conversations, event_attendees, event_interactions, events, reports};
+use crate::db::schema::{event_attendees, event_interactions, events};
 
 pub(in crate::api) const MAX_ATTEMPTS: usize = 3;
 
@@ -133,17 +133,14 @@ pub(in crate::api) async fn delete_event_with_conn(
     conn: &mut AsyncPgConnection,
     event_id: Uuid,
 ) -> std::result::Result<(), crate::error::AppError> {
-    diesel::delete(
-        reports::table
-            .filter(reports::target_type.eq("event"))
-            .filter(reports::target_id.eq(event_id)),
-    )
-    .execute(conn)
-    .await?;
-    diesel::delete(conversations::table.filter(conversations::event_id.eq(event_id)))
-        .execute(conn)
-        .await?;
-    diesel::delete(events::table.find(event_id))
+    // Route through the SD helper installed by Tier-B migration so
+    // the API role doesn't need broad DELETE on conversations. The
+    // helper auth-checks (event creator or BYPASSRLS), deletes
+    // reports, then deletes the event — FK cascades handle the chat
+    // fan-out (conversations → conversation_members → messages →
+    // message_reactions).
+    diesel::sql_query("SELECT app.delete_event_and_chat($1)")
+        .bind::<diesel::sql_types::Uuid, _>(event_id)
         .execute(conn)
         .await?;
     Ok(())

@@ -1,5 +1,6 @@
 use chrono::Utc;
 use diesel::prelude::*;
+use diesel::sql_types::{Integer, Uuid as SqlUuid};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
@@ -7,6 +8,36 @@ use crate::db;
 use crate::db::models::conversation_members::NewConversationMember;
 use crate::db::models::conversations::{Conversation, NewConversation};
 use crate::db::schema::{conversation_members, conversations, events, profile_blocks, profiles};
+
+/// Fetch the canonical DM conversation for `(low, high)` via the
+/// SECURITY DEFINER helper installed in the Tier-B migration. Bypasses
+/// `conversations_viewer` RLS so callers can discover a concurrently
+/// created row whose membership hasn't yet been inserted — the resolve
+/// flow would otherwise dead-end on `NotFound` after its race fallback.
+async fn find_dm_conversation(
+    conn: &mut AsyncPgConnection,
+    low: i32,
+    high: i32,
+) -> Result<Option<Conversation>, diesel::result::Error> {
+    diesel::sql_query("SELECT * FROM app.find_dm_conversation($1, $2)")
+        .bind::<Integer, _>(low)
+        .bind::<Integer, _>(high)
+        .get_result::<Conversation>(conn)
+        .await
+        .optional()
+}
+
+/// Event-chat counterpart to `find_dm_conversation`.
+async fn find_event_conversation(
+    conn: &mut AsyncPgConnection,
+    event_id: Uuid,
+) -> Result<Option<Conversation>, diesel::result::Error> {
+    diesel::sql_query("SELECT * FROM app.find_event_conversation($1)")
+        .bind::<SqlUuid, _>(event_id)
+        .get_result::<Conversation>(conn)
+        .await
+        .optional()
+}
 
 /// Resolve or create a DM conversation between two users.
 /// Uses canonical pair (lower id, higher id) for uniqueness.
@@ -22,16 +53,11 @@ pub async fn resolve_or_create_dm(
         (second_user_id, first_user_id)
     };
 
-    // Try to find existing DM
-    let existing = conversations::table
-        .filter(conversations::kind.eq("dm"))
-        .filter(conversations::user_low_id.eq(low))
-        .filter(conversations::user_high_id.eq(high))
-        .first::<Conversation>(conn)
-        .await
-        .optional()?;
-
-    if let Some(found) = existing {
+    // Try to find existing DM. The SD lookup bypasses
+    // `conversations_viewer` so viewers who aren't yet members (e.g.
+    // the resolve flow before membership is bootstrapped) still see
+    // the row.
+    if let Some(found) = find_dm_conversation(conn, low, high).await? {
         return Ok(found);
     }
 
@@ -55,17 +81,18 @@ pub async fn resolve_or_create_dm(
         .await
         .optional()?;
 
-    // Handle race condition: another request may have created it
+    // Handle race condition: another request may have created it. The
+    // fallback uses the SD helper so RLS doesn't filter the row out
+    // when the viewer's membership hasn't been inserted yet.
     let created = match inserted {
         Some(c) => c,
-        None => {
-            conversations::table
-                .filter(conversations::kind.eq("dm"))
-                .filter(conversations::user_low_id.eq(low))
-                .filter(conversations::user_high_id.eq(high))
-                .first::<Conversation>(conn)
-                .await?
-        }
+        None => find_dm_conversation(conn, low, high)
+            .await?
+            .ok_or_else(|| {
+                crate::error::AppError::message(format!(
+                    "DM conversation race-fallback lookup returned None for pair ({low}, {high})"
+                ))
+            })?,
     };
 
     // Ensure both users are members
@@ -97,14 +124,10 @@ pub async fn resolve_or_create_event_conversation(
     event_title: &str,
     creator_user_id: i32,
 ) -> Result<Conversation, crate::error::AppError> {
-    let existing = conversations::table
-        .filter(conversations::kind.eq("event"))
-        .filter(conversations::event_id.eq(event_id))
-        .first::<Conversation>(conn)
-        .await
-        .optional()?;
-
-    if let Some(found) = existing {
+    // Existing-row lookup via SD helper so an attendee resolving the
+    // chat before their membership has been inserted still sees the
+    // row created by the event owner (or an earlier attendee).
+    if let Some(found) = find_event_conversation(conn, event_id).await? {
         return Ok(found);
     }
 
@@ -129,13 +152,13 @@ pub async fn resolve_or_create_event_conversation(
 
     let created = match inserted {
         Some(c) => c,
-        None => {
-            conversations::table
-                .filter(conversations::kind.eq("event"))
-                .filter(conversations::event_id.eq(event_id))
-                .first::<Conversation>(conn)
-                .await?
-        }
+        None => find_event_conversation(conn, event_id)
+            .await?
+            .ok_or_else(|| {
+                crate::error::AppError::message(format!(
+                    "event conversation race-fallback lookup returned None for event {event_id}"
+                ))
+            })?,
     };
 
     // Add creator as first member
