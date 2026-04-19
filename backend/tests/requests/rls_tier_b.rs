@@ -769,6 +769,60 @@ async fn event_conversation_insert_rejects_pending_attendee() {
 }
 
 // ---------------------------------------------------------------------------
+// message_reactions PK-change trigger: a viewer cannot move their
+// reaction to another message — even one they can see in a shared
+// conversation. Defends against cross-conversation reaction injection
+// where USING (old row visible) + WITH CHECK (new row visible) both
+// pass but the semantics shift.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn message_reactions_message_id_change_rejected() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+
+    // Alice reacts to Bob's message in their shared DM — both
+    // messages are visible to her, so the attack target is a valid
+    // move under RLS predicates alone.
+    let reaction_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        diesel::insert_into(message_reactions::table)
+            .values((
+                message_reactions::id.eq(reaction_id),
+                message_reactions::message_id.eq(fx.bob_msg_id),
+                message_reactions::user_id.eq(alice_id),
+                message_reactions::emoji.eq("🎉"),
+                message_reactions::created_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed reaction");
+    }
+
+    let target_msg = fx.alice_msg_id;
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql = format!(
+                    "UPDATE public.message_reactions SET message_id = '{target_msg}' \
+                     WHERE id = '{reaction_id}'"
+                );
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "message_reactions trigger must reject message_id UPDATE even to a visible message"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // messages PK-change trigger: the sender must not be able to move
 // their own message to another conversation they're also in. RLS can
 // only evaluate the final row, so a `BEFORE UPDATE` trigger enforces
