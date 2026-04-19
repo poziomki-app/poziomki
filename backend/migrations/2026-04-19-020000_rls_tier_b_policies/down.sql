@@ -19,6 +19,8 @@ DROP POLICY IF EXISTS conversation_members_update ON public.conversation_members
 DROP POLICY IF EXISTS conversation_members_insert ON public.conversation_members;
 DROP POLICY IF EXISTS conversation_members_viewer ON public.conversation_members;
 
+DROP TRIGGER IF EXISTS conversations_identity_immutable ON public.conversations;
+DROP FUNCTION IF EXISTS app.reject_conversations_identity_change();
 DROP POLICY IF EXISTS conversations_delete ON public.conversations;
 DROP POLICY IF EXISTS conversations_update ON public.conversations;
 DROP POLICY IF EXISTS conversations_insert ON public.conversations;
