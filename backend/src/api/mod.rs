@@ -51,6 +51,7 @@ fn auth_routes() -> Router<AppContext> {
         .route("/verify-otp", post(auth::verify_otp))
         .route("/resend-otp", post(auth::resend_otp))
         .route("/sign-out", post(auth::sign_out))
+        .route("/sessions/revoke-all", post(auth::sign_out_all))
         .route("/sessions", get(auth::sessions))
         .route("/account", delete(auth::delete_account))
         .route("/account/password", patch(auth::change_password))
