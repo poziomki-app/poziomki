@@ -149,16 +149,20 @@ pub(in crate::api) fn validate_image_dimensions(
 ///   from the original to human eyes; small size increase possible.
 /// * PNG / WebP — re-encoded losslessly, pixel-identical.
 ///
-/// Falls back to returning the original bytes if the decode fails
-/// for any reason (truncated upload, unknown variant). Validation
-/// of MIME + dimensions has already run at this point, so the
-/// fallback path shouldn't realistically fire.
-pub(in crate::api) fn strip_image_metadata(data: &[u8], mime_type: &str) -> Vec<u8> {
+/// Fails closed: if decode or re-encode fails for any reason
+/// (truncated upload, unsupported sub-variant, unknown mime type
+/// reaching this point) the upload is rejected rather than stored
+/// with metadata intact. Validation of MIME + dimensions runs
+/// before this, so a failure here means something exotic reached
+/// past the front-line checks.
+pub(in crate::api) fn strip_image_metadata(
+    data: &[u8],
+    mime_type: &str,
+) -> std::result::Result<Vec<u8>, &'static str> {
     use std::io::Cursor;
 
-    let Ok(img) = image::load_from_memory(data) else {
-        return data.to_vec();
-    };
+    let img =
+        image::load_from_memory(data).map_err(|_| "Could not decode image for metadata strip")?;
 
     let mut out = Vec::with_capacity(data.len());
     let result = match mime_type {
@@ -168,13 +172,10 @@ pub(in crate::api) fn strip_image_metadata(data: &[u8], mime_type: &str) -> Vec<
         }
         "image/png" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png),
         "image/webp" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::WebP),
-        _ => return data.to_vec(),
+        _ => return Err("Unsupported mime for metadata strip"),
     };
 
-    match result {
-        Ok(()) => out,
-        Err(_) => data.to_vec(),
-    }
+    result.map(|()| out).map_err(|_| "Image re-encode failed")
 }
 
 pub(in crate::api) fn extension_for_mime(mime_type: &str) -> &'static str {
@@ -277,7 +278,8 @@ mod tests {
             "precondition: test fixture must contain the sentinel"
         );
 
-        let output = strip_image_metadata(&input, "image/jpeg");
+        let output =
+            strip_image_metadata(&input, "image/jpeg").expect("strip must succeed on valid JPEG");
         assert!(
             !output.windows(sentinel.len()).any(|w| w == sentinel),
             "strip_image_metadata must drop the EXIF sentinel"
@@ -293,13 +295,24 @@ mod tests {
     }
 
     #[test]
-    fn strip_image_metadata_falls_back_on_undecodable_input() {
-        // Truncated garbage — the decoder rejects it, and the function
-        // returns the input bytes unchanged. The upstream validation
-        // chain should have rejected this before strip even runs; the
-        // fallback is purely defensive.
+    fn strip_image_metadata_rejects_undecodable_input() {
+        // Truncated garbage — the decoder rejects it, so the strip
+        // function returns an error. The handler path propagates
+        // this to a 400 rather than silently storing the bytes with
+        // metadata intact.
         let garbage = vec![0xff, 0xd8, 0x00, 0x00];
-        let output = strip_image_metadata(&garbage, "image/jpeg");
-        assert_eq!(output, garbage);
+        assert!(strip_image_metadata(&garbage, "image/jpeg").is_err());
+    }
+
+    #[test]
+    fn strip_image_metadata_rejects_unsupported_mime() {
+        // Even if decode succeeds on a crafted payload the function
+        // won't encode an unknown mime. No bytes reach storage.
+        let img = image::RgbImage::from_pixel(2, 2, image::Rgb([10, 20, 30]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut bytes), 80)
+            .encode_image(&image::DynamicImage::ImageRgb8(img))
+            .expect("encode seed");
+        assert!(strip_image_metadata(&bytes, "image/heic").is_err());
     }
 }
