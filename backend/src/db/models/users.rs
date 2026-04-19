@@ -23,6 +23,8 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub is_review_stub: bool,
+    pub banned_at: Option<DateTime<Utc>>,
+    pub banned_reason: Option<String>,
 }
 
 #[derive(Debug, Insertable)]

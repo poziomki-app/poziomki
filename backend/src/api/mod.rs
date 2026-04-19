@@ -11,6 +11,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::app::AppContext;
 
+mod admin;
 mod auth;
 mod catalog;
 pub(crate) mod chat;
@@ -34,6 +35,12 @@ pub(crate) use common::{
 };
 fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static(value))
+}
+
+fn admin_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/users/{pid}/ban", post(admin::ban_user))
+        .layer(cache_layer("no-store"))
 }
 
 fn auth_routes() -> Router<AppContext> {
@@ -262,6 +269,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/chat", chat_routes())
         .nest("/api/v1/xp", xp::handler::routes())
         .nest("/api/v1/ops", ops_routes())
+        .nest("/api/v1/admin", admin_routes())
         .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
         .layer(middleware::from_fn(observe_http_metrics))
         .layer(
