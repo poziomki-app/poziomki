@@ -11,6 +11,9 @@ DROP POLICY IF EXISTS event_attendees_delete ON public.event_attendees;
 DROP POLICY IF EXISTS event_attendees_update ON public.event_attendees;
 DROP POLICY IF EXISTS event_attendees_insert ON public.event_attendees;
 DROP POLICY IF EXISTS event_attendees_viewer ON public.event_attendees;
+ALTER TABLE public.event_attendees
+    DROP CONSTRAINT IF EXISTS event_attendees_status_valid;
+DROP FUNCTION IF EXISTS app.viewer_owns_event(uuid);
 
 DROP TRIGGER IF EXISTS events_identity_immutable ON public.events;
 DROP FUNCTION IF EXISTS app.reject_events_identity_change();

@@ -299,12 +299,15 @@ async fn event_attendees_viewer_sees_bucket_roster() {
 
 #[tokio::test]
 #[serial]
-async fn event_attendees_cannot_mutate_peer_attendance() {
+async fn event_attendees_non_creator_non_owner_cannot_mutate_peer() {
     let fx = setup_fixture().await;
     let event_id = fx.event_id;
     let bob_profile = fx.bob_profile;
+    let carol_id = fx.carol.id;
 
-    let affected = rls_harness::with_api_viewer_tx(fx.alice.id, false, move |conn| {
+    // Carol is not the event creator and not Bob — her UPDATE of
+    // Bob's attendance must be rejected.
+    let affected = rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
         async move {
             let sql = format!(
                 "UPDATE public.event_attendees SET status = 'declined' \
@@ -315,10 +318,61 @@ async fn event_attendees_cannot_mutate_peer_attendance() {
         .scope_boxed()
     })
     .await
-    .expect("alice tx");
+    .expect("carol tx");
     assert_eq!(
         affected, 0,
-        "viewer cannot flip another attendee's status; SELECT visibility doesn't grant UPDATE"
+        "non-creator non-owner cannot flip another attendee's status"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn event_attendees_creator_can_approve_pending_peer() {
+    let fx = setup_fixture().await;
+    let event_id = fx.event_id;
+    let carol_id = fx.carol.id;
+    let alice_id = fx.alice.id;
+
+    // Seed: Carol is pending on Alice's event (requires_approval
+    // irrelevant here — we're testing the RLS surface, not the
+    // business logic).
+    let carol_profile = {
+        let mut conn = db::conn().await.expect("pool");
+        let pid = profiles::table
+            .filter(profiles::user_id.eq(carol_id))
+            .select(profiles::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .expect("carol profile");
+        diesel::insert_into(event_attendees::table)
+            .values((
+                event_attendees::event_id.eq(event_id),
+                event_attendees::profile_id.eq(pid),
+                event_attendees::status.eq("pending"),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed carol pending");
+        pid
+    };
+
+    // Alice (event creator) approves Carol — must succeed under the
+    // viewer_owns_event branch.
+    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql = format!(
+                "UPDATE public.event_attendees SET status = 'going' \
+                 WHERE event_id = '{event_id}' AND profile_id = '{carol_profile}'"
+            );
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 1,
+        "event creator must be able to approve a pending attendee (handler-level approval flow)"
     );
 }
 
