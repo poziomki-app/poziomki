@@ -131,31 +131,50 @@ CREATE POLICY users_viewer ON public.users
 -- ---------------------------------------------------------------------------
 -- profiles
 --
--- Cross-viewer reads within the same stub bucket so matching, attendee
--- previews, DM member resolution, etc. can continue to read other
--- users' rows. WITH CHECK is own-profile-only so a viewer can't create
--- or mutate someone else's profile.
+-- Reads span the viewer's stub bucket (matching, attendee previews, DM
+-- member resolution all read other users' rows). Writes are locked to
+-- the viewer's own row — splitting the policies is what prevents
+-- cross-user UPDATE/DELETE: a single `FOR ALL USING (bucket)` would
+-- let Alice DELETE Bob's row because USING gates DELETE too.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 CREATE POLICY profiles_viewer ON public.profiles
-    FOR ALL TO poziomki_api
-    USING (id IN (SELECT id FROM app.profiles_in_current_bucket()))
+    FOR SELECT TO poziomki_api
+    USING (id IN (SELECT id FROM app.profiles_in_current_bucket()));
+CREATE POLICY profiles_insert ON public.profiles
+    FOR INSERT TO poziomki_api
     WITH CHECK (user_id = app.current_user_id());
+CREATE POLICY profiles_update ON public.profiles
+    FOR UPDATE TO poziomki_api
+    USING (user_id = app.current_user_id())
+    WITH CHECK (user_id = app.current_user_id());
+CREATE POLICY profiles_delete ON public.profiles
+    FOR DELETE TO poziomki_api
+    USING (user_id = app.current_user_id());
 
 -- ---------------------------------------------------------------------------
 -- profile_tags
 --
--- Same bucket for reads (profile interest lookups drive matching /
--- onboarding / export). Writes restricted to the viewer's own
--- profile.
+-- Same shape as profiles: bucket reads, own-profile writes. Without the
+-- split, any viewer could DELETE or UPDATE another same-bucket user's
+-- tag rows since FOR ALL makes USING gate every command.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.profile_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_tags FORCE ROW LEVEL SECURITY;
 CREATE POLICY profile_tags_viewer ON public.profile_tags
-    FOR ALL TO poziomki_api
-    USING (profile_id IN (SELECT id FROM app.profiles_in_current_bucket()))
+    FOR SELECT TO poziomki_api
+    USING (profile_id IN (SELECT id FROM app.profiles_in_current_bucket()));
+CREATE POLICY profile_tags_insert ON public.profile_tags
+    FOR INSERT TO poziomki_api
     WITH CHECK (profile_id IN (SELECT id FROM app.viewer_profile_ids()));
+CREATE POLICY profile_tags_update ON public.profile_tags
+    FOR UPDATE TO poziomki_api
+    USING (profile_id IN (SELECT id FROM app.viewer_profile_ids()))
+    WITH CHECK (profile_id IN (SELECT id FROM app.viewer_profile_ids()));
+CREATE POLICY profile_tags_delete ON public.profile_tags
+    FOR DELETE TO poziomki_api
+    USING (profile_id IN (SELECT id FROM app.viewer_profile_ids()));
 
 -- ---------------------------------------------------------------------------
 -- sessions
@@ -246,17 +265,30 @@ CREATE POLICY profile_bookmarks_viewer ON public.profile_bookmarks
 --
 -- Chat reads blocks in both directions — it needs to know "A blocked
 -- B" AND "B blocked A" to gate a DM. Writes are always initiated by
--- the blocker.
+-- the blocker, so UPDATE/DELETE are restricted to rows where the
+-- viewer owns the blocker side. Without splitting FOR SELECT from
+-- FOR UPDATE/DELETE, Alice could delete Bob's outbound block (the
+-- row that makes her invisible to Bob) simply because the SELECT
+-- predicate matches it.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.profile_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_blocks FORCE ROW LEVEL SECURITY;
 CREATE POLICY profile_blocks_viewer ON public.profile_blocks
-    FOR ALL TO poziomki_api
+    FOR SELECT TO poziomki_api
     USING (
         blocker_id IN (SELECT id FROM app.viewer_profile_ids())
         OR blocked_id IN (SELECT id FROM app.viewer_profile_ids())
-    )
+    );
+CREATE POLICY profile_blocks_insert ON public.profile_blocks
+    FOR INSERT TO poziomki_api
     WITH CHECK (blocker_id IN (SELECT id FROM app.viewer_profile_ids()));
+CREATE POLICY profile_blocks_update ON public.profile_blocks
+    FOR UPDATE TO poziomki_api
+    USING (blocker_id IN (SELECT id FROM app.viewer_profile_ids()))
+    WITH CHECK (blocker_id IN (SELECT id FROM app.viewer_profile_ids()));
+CREATE POLICY profile_blocks_delete ON public.profile_blocks
+    FOR DELETE TO poziomki_api
+    USING (blocker_id IN (SELECT id FROM app.viewer_profile_ids()));
 
 -- ---------------------------------------------------------------------------
 -- recommendation_feedback

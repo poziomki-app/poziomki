@@ -607,6 +607,175 @@ async fn reports_viewer_sees_only_own_reports() {
 }
 
 // ---------------------------------------------------------------------------
+// Negative tests: broadened SELECT predicates must NOT leak into write
+// permissions. A `FOR ALL USING (bucket)` policy would let Alice DELETE
+// or UPDATE Bob's same-bucket rows because USING gates DELETE and
+// UPDATE. The split into FOR SELECT + per-command write policies is
+// what prevents that — these tests lock that split in.
+// ---------------------------------------------------------------------------
+
+async fn execute_count(conn: &mut AsyncPgConnection, sql: &str) -> usize {
+    diesel::sql_query(sql)
+        .execute(conn)
+        .await
+        .expect("statement must succeed (RLS silently filters, not errors)")
+}
+
+#[tokio::test]
+#[serial]
+async fn profiles_viewer_cannot_delete_other_bucket_row() {
+    let (alice, bob) = setup_two_parties().await;
+    let bob_profile_id = bob.profile_id;
+
+    let affected = rls_harness::with_api_viewer_tx(alice.user.id, false, move |conn| {
+        async move {
+            let sql = format!("DELETE FROM public.profiles WHERE id = '{bob_profile_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "profiles_delete policy must reject cross-user DELETE even though SELECT sees the row"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let remaining = count_rows(&mut conn, "profiles").await;
+    assert_eq!(
+        remaining, 2,
+        "Bob's profile must survive the DELETE attempt"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn profiles_viewer_cannot_update_other_bucket_row() {
+    let (alice, bob) = setup_two_parties().await;
+    let bob_profile_id = bob.profile_id;
+
+    let affected = rls_harness::with_api_viewer_tx(alice.user.id, false, move |conn| {
+        async move {
+            let sql =
+                format!("UPDATE public.profiles SET name = 'pwned' WHERE id = '{bob_profile_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "profiles_update policy must reject cross-user UPDATE"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let row: CountRow = diesel::sql_query(
+        "SELECT COUNT(*) AS count FROM public.profiles WHERE id = $1 AND name = 'Bob'",
+    )
+    .bind::<diesel::sql_types::Uuid, _>(bob_profile_id)
+    .get_result(&mut conn)
+    .await
+    .expect("post-check query");
+    assert_eq!(row.count, 1, "Bob's name must be untouched");
+}
+
+#[tokio::test]
+#[serial]
+async fn profile_tags_viewer_cannot_delete_other_bucket_tag() {
+    let (alice, bob) = setup_two_parties().await;
+
+    let tag_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        diesel::insert_into(tags::table)
+            .values((
+                tags::id.eq(tag_id),
+                tags::name.eq("Jazz"),
+                tags::scope.eq("interest"),
+                tags::created_at.eq(now),
+                tags::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed tag");
+        for p in [alice.profile_id, bob.profile_id] {
+            diesel::insert_into(profile_tags::table)
+                .values((
+                    profile_tags::profile_id.eq(p),
+                    profile_tags::tag_id.eq(tag_id),
+                ))
+                .execute(&mut conn)
+                .await
+                .expect("seed profile_tag");
+        }
+    }
+
+    let bob_profile_id = bob.profile_id;
+    let affected = rls_harness::with_api_viewer_tx(alice.user.id, false, move |conn| {
+        async move {
+            let sql =
+                format!("DELETE FROM public.profile_tags WHERE profile_id = '{bob_profile_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "profile_tags_delete policy must reject cross-user DELETE"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let remaining = count_rows(&mut conn, "profile_tags").await;
+    assert_eq!(remaining, 2, "both profile_tag rows must still exist");
+}
+
+#[tokio::test]
+#[serial]
+async fn profile_blocks_viewer_cannot_delete_inbound_block() {
+    let (alice, bob) = setup_two_parties().await;
+
+    {
+        let mut conn = db::conn().await.expect("pool");
+        // Bob blocks Alice — visible to Alice under the SELECT policy
+        // (so chat can gate DMs), but Alice must NOT be able to delete
+        // it.
+        diesel::insert_into(profile_blocks::table)
+            .values((
+                profile_blocks::blocker_id.eq(bob.profile_id),
+                profile_blocks::blocked_id.eq(alice.profile_id),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("bob blocks alice");
+    }
+
+    let bob_profile_id = bob.profile_id;
+    let affected = rls_harness::with_api_viewer_tx(alice.user.id, false, move |conn| {
+        async move {
+            let sql =
+                format!("DELETE FROM public.profile_blocks WHERE blocker_id = '{bob_profile_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "profile_blocks_delete policy must reject deletion of an inbound block"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let remaining = count_rows(&mut conn, "profile_blocks").await;
+    assert_eq!(remaining, 1, "Bob's block of Alice must survive");
+}
+
+// ---------------------------------------------------------------------------
 // Anon: no viewer context → policies evaluate to NULL → zero visible rows.
 // ---------------------------------------------------------------------------
 #[tokio::test]
