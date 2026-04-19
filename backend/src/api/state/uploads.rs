@@ -4,6 +4,12 @@ use super::shared::UploadContext;
 
 const MAX_UPLOAD_SIZE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION: u32 = 8192;
+/// Decoder allocation cap. Sized to accommodate the largest legit
+/// image we'd accept (8192²×4 bytes = 256 MiB) while still refusing
+/// genuinely pathological decompression bombs. Anything that needs
+/// more RAM than this to decode is rejected before pixels land in
+/// memory, so a 40-byte PNG can't expand into multiple gigabytes.
+const MAX_IMAGE_DECODE_ALLOC: u64 = 256 * 1024 * 1024;
 
 pub(in crate::api) fn is_s3_storage_configured() -> bool {
     std::env::var("GARAGE_S3_ENDPOINT")
@@ -155,13 +161,39 @@ pub(in crate::api) fn validate_image_dimensions(
 /// with metadata intact. Validation of MIME + dimensions runs
 /// before this, so a failure here means something exotic reached
 /// past the front-line checks.
+/// Decode `data` through the `image` crate with strict limits on
+/// both dimensions and decoder allocation — this is what makes the
+/// upload pipeline resistant to decompression bombs. A hostile PNG
+/// of a few dozen bytes can declare a multi-gigapixel IHDR; without
+/// limits the decoder happily allocates, OOMs the worker, and takes
+/// the pool down. `max_image_width` / `max_image_height` short-
+/// circuit at the header; `max_alloc` catches anything that slips
+/// past the dimension check by declaring less-extreme pixel counts
+/// backed by exotic colour depths / channels.
+fn decode_with_limits(data: &[u8]) -> std::result::Result<image::DynamicImage, &'static str> {
+    use std::io::Cursor;
+
+    let mut reader = image::ImageReader::new(Cursor::new(data));
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_IMAGE_DECODE_ALLOC);
+    reader.limits(limits);
+
+    reader
+        .with_guessed_format()
+        .map_err(|_| "Image could not be decoded safely")?
+        .decode()
+        .map_err(|_| "Image could not be decoded safely")
+}
+
 pub(in crate::api) fn strip_image_metadata(
     data: &[u8],
     mime_type: &str,
 ) -> std::result::Result<Vec<u8>, &'static str> {
     use std::io::Cursor;
 
-    let img = image::load_from_memory(data).map_err(|_| "Image could not be decoded safely")?;
+    let img = decode_with_limits(data)?;
 
     let mut out = Vec::with_capacity(data.len());
     let result = match mime_type {
@@ -342,6 +374,60 @@ mod tests {
         assert!(
             out.starts_with(b"RIFF"),
             "stripped webp must remain a valid RIFF container"
+        );
+    }
+
+    /// Build a tiny PNG with a valid header that declares huge
+    /// dimensions — the on-wire file is only a few dozen bytes but
+    /// the decoder would have to allocate gigabytes to inflate it.
+    /// The strict `max_image_width` / `max_image_height` must reject
+    /// before pixels touch memory.
+    fn png_with_oversized_header(width: u32, height: u32) -> Vec<u8> {
+        let mut out: Vec<u8> = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        // IHDR chunk: 13 bytes of data.
+        out.extend_from_slice(&[0, 0, 0, 13]);
+        let mut ihdr = Vec::with_capacity(17);
+        ihdr.extend_from_slice(b"IHDR");
+        ihdr.extend_from_slice(&width.to_be_bytes());
+        ihdr.extend_from_slice(&height.to_be_bytes());
+        ihdr.extend_from_slice(&[8, 2, 0, 0, 0]); // bit 8, colortype 2 (RGB)
+        let crc = crc32(&ihdr);
+        out.extend_from_slice(&ihdr);
+        out.extend_from_slice(&crc.to_be_bytes());
+        // IEND chunk (empty data).
+        out.extend_from_slice(&[0, 0, 0, 0]);
+        let iend_crc = crc32(b"IEND");
+        out.extend_from_slice(b"IEND");
+        out.extend_from_slice(&iend_crc.to_be_bytes());
+        out
+    }
+
+    fn crc32(data: &[u8]) -> u32 {
+        // Inline CRC-32 so the test doesn't need a new dep. IEEE polynomial.
+        let mut crc: u32 = 0xffff_ffff;
+        for &b in data {
+            crc ^= u32::from(b);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0xedb8_8320
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        !crc
+    }
+
+    #[test]
+    fn strip_image_metadata_rejects_decompression_bomb() {
+        // Declares a 100 000 × 100 000 PNG (≈ 40 GB decoded) in
+        // a ~50-byte file. Before the limits were wired up, the
+        // decoder would happily try to allocate.
+        let bomb = png_with_oversized_header(100_000, 100_000);
+        let result = strip_image_metadata(&bomb, "image/png");
+        assert!(
+            result.is_err(),
+            "decompression-bomb PNG must be rejected before decode allocates pixels"
         );
     }
 
