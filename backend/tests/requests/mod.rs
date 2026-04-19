@@ -4,4 +4,5 @@ mod rls_baseline;
 mod rls_harness;
 mod rls_tier_a;
 mod rls_tier_b;
+mod rls_tier_c;
 mod rls_visibility;
