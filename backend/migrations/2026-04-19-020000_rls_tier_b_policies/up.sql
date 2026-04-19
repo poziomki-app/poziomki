@@ -323,6 +323,35 @@ CREATE POLICY conversations_insert ON public.conversations
         )
     );
 
+-- Title on event chats is user-facing (rendered in the room list),
+-- and the INSERT policy can't verify it against events.title without
+-- a subquery — cheaper and safer to normalise it in a BEFORE INSERT
+-- trigger. DMs have no legitimate title, so we force NULL. Event
+-- chats copy the authoritative title from public.events, ignoring
+-- whatever the client supplied.
+CREATE OR REPLACE FUNCTION app.enforce_conversation_title()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+    IF NEW.kind = 'dm' THEN
+        NEW.title := NULL;
+    ELSIF NEW.kind = 'event' AND NEW.event_id IS NOT NULL THEN
+        SELECT e.title INTO NEW.title
+        FROM public.events e
+        WHERE e.id = NEW.event_id;
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS conversations_title_authoritative ON public.conversations;
+CREATE TRIGGER conversations_title_authoritative
+    BEFORE INSERT ON public.conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION app.enforce_conversation_title();
+
 -- Event cleanup path: the API role has no direct DELETE privilege on
 -- conversations (see policy block below), so legitimate event deletion
 -- routes through this SD helper. It validates the caller is the event
