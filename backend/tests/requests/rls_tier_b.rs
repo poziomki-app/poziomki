@@ -769,6 +769,59 @@ async fn event_conversation_insert_rejects_pending_attendee() {
 }
 
 // ---------------------------------------------------------------------------
+// conversations identity-column trigger: a DM member cannot silently
+// enrol a third party by swapping user_high_id, and cannot flip
+// kind / event_id to switch which conversation_members_insert branch
+// applies. These fields drive every downstream policy decision.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn conversations_identity_change_rejected() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let dm_id = fx.dm_id;
+    let carol_id = fx.carol.id;
+
+    // Alice tries to replace Bob with Carol as the DM's high-id peer.
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql = format!(
+                    "UPDATE public.conversations SET user_high_id = {carol_id} \
+                     WHERE id = '{dm_id}'"
+                );
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "conversations identity trigger must reject user_high_id UPDATE"
+    );
+
+    // Same viewer, different field — kind flip must also error.
+    let result2: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql =
+                    format!("UPDATE public.conversations SET kind = 'event' WHERE id = '{dm_id}'");
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result2.is_err(),
+        "conversations identity trigger must reject kind UPDATE"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // message_reactions PK-change trigger: a viewer cannot move their
 // reaction to another message — even one they can see in a shared
 // conversation. Defends against cross-conversation reaction injection

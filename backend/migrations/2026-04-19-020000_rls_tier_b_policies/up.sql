@@ -262,6 +262,39 @@ CREATE POLICY conversations_delete ON public.conversations
     FOR DELETE TO poziomki_api
     USING (id IN (SELECT conversation_id FROM app.viewer_conversation_ids()));
 
+-- conversations.(kind, event_id, user_low_id, user_high_id) are
+-- identity columns — the policy branches below decide what an
+-- INSERT is allowed to be, but a subsequent UPDATE could mutate
+-- those fields and sidestep the intent. Concrete attacks:
+--   * flip kind='dm' → 'event' to switch which policy branch
+--     conversation_members_insert applies
+--   * rewrite user_low/high on a DM to silently enrol a third party
+--   * rewrite event_id to attach the chat to a different event
+-- RLS can't compare old-row vs new-row values, so a BEFORE UPDATE
+-- trigger pins them; title / timestamp columns remain mutable.
+CREATE OR REPLACE FUNCTION app.reject_conversations_identity_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+    IF NEW.kind IS DISTINCT FROM OLD.kind
+       OR NEW.event_id IS DISTINCT FROM OLD.event_id
+       OR NEW.user_low_id IS DISTINCT FROM OLD.user_low_id
+       OR NEW.user_high_id IS DISTINCT FROM OLD.user_high_id THEN
+        RAISE EXCEPTION
+            'conversations identity columns (kind, event_id, user_low_id, user_high_id) are immutable';
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS conversations_identity_immutable ON public.conversations;
+CREATE TRIGGER conversations_identity_immutable
+    BEFORE UPDATE ON public.conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION app.reject_conversations_identity_change();
+
 -- ---------------------------------------------------------------------------
 -- conversation_members
 --
