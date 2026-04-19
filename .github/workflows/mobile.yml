@@ -3,6 +3,12 @@ name: Mobile CI
 on:
   pull_request:
     paths: [mobile/**]
+  schedule:
+    # Weekly dependency-update report. Monday 06:00 UTC avoids overlapping
+    # with backend security audit (Sunday) and keeps the report fresh at
+    # the start of the work week.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 concurrency:
   group: mobile-${{ github.head_ref || github.ref }}
@@ -47,3 +53,33 @@ jobs:
 
       - run: ./gradlew detekt
       - run: ./gradlew ktlintCheck
+
+  dependency-updates:
+    # Only runs on the weekly schedule and manual dispatch — pull-request
+    # runs skip it to avoid gating merges on an upstream version bump we
+    # haven't had time to triage.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew dependencyUpdates -Drevision=release
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gradle-dependency-updates
+          path: mobile/build/dependencyUpdates/
+          retention-days: 30
