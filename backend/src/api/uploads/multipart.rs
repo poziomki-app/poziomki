@@ -8,7 +8,7 @@ use crate::api::{
     error_response,
     state::{
         allowed_upload_mime, is_chat_context, max_upload_size_bytes, parse_upload_context,
-        validate_image_dimensions, validate_magic_bytes, UploadContext,
+        strip_image_metadata, validate_image_dimensions, validate_magic_bytes, UploadContext,
     },
     ErrorSpec,
 };
@@ -116,6 +116,26 @@ fn validate_upload_payload(headers: &HeaderMap, parsed: &ParsedUpload) -> Handle
     validate_upload_size(headers, parsed)?;
     validate_upload_content(headers, parsed)?;
     validate_upload_dimensions(headers, parsed)
+}
+
+/// Re-encode the parsed payload without metadata before it moves
+/// downstream to storage or variant generation. Runs last in the
+/// validation chain so the cheap rejections (MIME / size / magic /
+/// dimensions) fire first and we don't waste decode cycles on
+/// already-rejected input.
+///
+/// Fails closed: if the decode or re-encode step errors, the upload
+/// is rejected rather than stored with metadata intact. The earlier
+/// validation means this should only fire for genuinely exotic
+/// input that passed magic-bytes but not the full decoder.
+fn strip_parsed_metadata(headers: &HeaderMap, parsed: &mut ParsedUpload) -> HandlerResult<()> {
+    match strip_image_metadata(&parsed.bytes, &parsed.mime_type) {
+        Ok(stripped) => {
+            parsed.bytes = stripped;
+            Ok(())
+        }
+        Err(msg) => Err(Box::new(bad_request(headers, "INVALID_FILE_CONTENT", msg))),
+    }
 }
 
 fn classify_field(name: Option<&str>) -> UploadFieldKind {
@@ -243,13 +263,14 @@ fn build_parsed_upload(headers: &HeaderMap, draft: UploadDraft) -> HandlerResult
         ))
     })?;
 
-    let parsed = ParsedUpload {
+    let mut parsed = ParsedUpload {
         context: context.unwrap_or(UploadContext::ProfileGallery),
         context_id,
         mime_type,
         bytes,
     };
     validate_upload_payload(headers, &parsed)?;
+    strip_parsed_metadata(headers, &mut parsed)?;
     Ok(parsed)
 }
 
