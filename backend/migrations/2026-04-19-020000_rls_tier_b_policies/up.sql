@@ -124,9 +124,33 @@ COMMENT ON FUNCTION app.event_creator_user_id(uuid) IS
 -- concurrent request that hasn't yet added the viewer as member.
 -- Without this, the handler's race-fallback SELECT would be filtered
 -- to empty by conversations_viewer and bubble up as NotFound.
+-- Helper: does the session-level caller already have BYPASSRLS? The
+-- worker process connects as `poziomki_worker` which has BYPASSRLS on
+-- real tables, but inside a SECURITY DEFINER function `current_user`
+-- resolves to the definer (owner), so the SD lookup helpers need an
+-- explicit out for the worker. `session_user` preserves the role the
+-- connection authenticated as. Future BYPASSRLS roles inherit this
+-- without a code change.
+CREATE OR REPLACE FUNCTION app.session_bypasses_rls()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT COALESCE(
+        (SELECT rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = session_user),
+        false
+    )
+$$;
+
+COMMENT ON FUNCTION app.session_bypasses_rls() IS
+    'True iff the session authentication role has BYPASSRLS. Used inside SD helpers to give worker processes a trust bypass that the policy guards would otherwise block.';
+
 -- DM lookup gates on the viewer being one of the pair — without that
 -- guard the SD bypass would let any API-role caller enumerate DM
--- conversation ids by iterating over (low, high) pairs.
+-- conversation ids by iterating over (low, high) pairs. Worker
+-- sessions (poziomki_worker / BYPASSRLS) are trusted and skip the
+-- check so background jobs like event membership sync still work.
 CREATE OR REPLACE FUNCTION app.find_dm_conversation(p_low int, p_high int)
 RETURNS SETOF public.conversations
 LANGUAGE sql
@@ -138,8 +162,11 @@ AS $$
     WHERE kind = 'dm'
       AND user_low_id = p_low
       AND user_high_id = p_high
-      AND app.current_user_id() > 0
-      AND app.current_user_id() IN (p_low, p_high)
+      AND (
+          app.session_bypasses_rls()
+          OR (app.current_user_id() > 0
+              AND app.current_user_id() IN (p_low, p_high))
+      )
     LIMIT 1
 $$;
 
@@ -160,7 +187,10 @@ AS $$
     SELECT * FROM public.conversations
     WHERE kind = 'event'
       AND event_id = p_event_id
-      AND app.viewer_can_access_event(p_event_id)
+      AND (
+          app.session_bypasses_rls()
+          OR app.viewer_can_access_event(p_event_id)
+      )
     LIMIT 1
 $$;
 
@@ -202,6 +232,7 @@ REVOKE EXECUTE ON FUNCTION app.viewer_conversation_ids() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.event_creator_user_id(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.session_bypasses_rls() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_dm_conversation(int, int) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_event_conversation(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) FROM PUBLIC;
@@ -209,6 +240,7 @@ REVOKE EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) FROM PUBLIC;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.session_bypasses_rls() TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_conversation_ids() TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) TO poziomki_api';
@@ -216,6 +248,16 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) TO poziomki_api';
+    END IF;
+    -- Worker process (BYPASSRLS) reaches the resolve-or-create event
+    -- chat path via sync_event_membership — it needs execute on the
+    -- lookup helpers even though its row-level bypass means the
+    -- INSERT policies are irrelevant to it.
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_worker') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA app TO poziomki_worker';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.session_bypasses_rls() TO poziomki_worker';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_worker';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_worker';
     END IF;
 END
 $$;
