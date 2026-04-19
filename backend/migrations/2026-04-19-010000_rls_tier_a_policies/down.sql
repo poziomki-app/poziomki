@@ -4,6 +4,9 @@
 DROP POLICY IF EXISTS reports_viewer ON public.reports;
 DROP POLICY IF EXISTS event_interactions_viewer ON public.event_interactions;
 DROP POLICY IF EXISTS recommendation_feedback_viewer ON public.recommendation_feedback;
+DROP POLICY IF EXISTS profile_blocks_delete ON public.profile_blocks;
+DROP POLICY IF EXISTS profile_blocks_update ON public.profile_blocks;
+DROP POLICY IF EXISTS profile_blocks_insert ON public.profile_blocks;
 DROP POLICY IF EXISTS profile_blocks_viewer ON public.profile_blocks;
 DROP POLICY IF EXISTS profile_bookmarks_viewer ON public.profile_bookmarks;
 DROP POLICY IF EXISTS task_completions_viewer ON public.task_completions;
@@ -12,7 +15,13 @@ DROP POLICY IF EXISTS push_subscriptions_viewer ON public.push_subscriptions;
 DROP POLICY IF EXISTS user_audit_log_viewer ON public.user_audit_log;
 DROP POLICY IF EXISTS user_settings_viewer ON public.user_settings;
 DROP POLICY IF EXISTS sessions_viewer ON public.sessions;
+DROP POLICY IF EXISTS profile_tags_delete ON public.profile_tags;
+DROP POLICY IF EXISTS profile_tags_update ON public.profile_tags;
+DROP POLICY IF EXISTS profile_tags_insert ON public.profile_tags;
 DROP POLICY IF EXISTS profile_tags_viewer ON public.profile_tags;
+DROP POLICY IF EXISTS profiles_delete ON public.profiles;
+DROP POLICY IF EXISTS profiles_update ON public.profiles;
+DROP POLICY IF EXISTS profiles_insert ON public.profiles;
 DROP POLICY IF EXISTS profiles_viewer ON public.profiles;
 DROP POLICY IF EXISTS users_viewer ON public.users;
 
