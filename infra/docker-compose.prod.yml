@@ -119,10 +119,12 @@ services:
       SERVER_HOST: ${SERVER_HOST:-https://api.poziomki.app}
       # Owner URL used ONLY for migrations (schema changes need the owner role).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
-      # Least-privilege URL the API pool connects as. Leave unset in .env until
-      # roles have been bootstrapped via infra/ops/postgres/setup-roles.sh; the
-      # Rust pool falls back to DATABASE_URL when this is empty.
-      API_DATABASE_URL: ${API_DATABASE_URL:-}
+      # Least-privilege URL the API pool connects as (role poziomki_api,
+      # NOBYPASSRLS). Required in production — startup fails if unset, and
+      # the API asserts current_user = 'poziomki_api' after connecting so a
+      # misrouted pool can't silently bypass RLS. Bootstrap roles first via
+      # infra/ops/postgres/setup-roles.sh.
+      API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL must be set (least-privilege pool URL)}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-16}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
@@ -185,10 +187,11 @@ services:
       # Owner URL used ONLY for migrations (worker also runs pending migrations
       # on boot via build_app_context).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
-      # Worker pool URL. Worker has BYPASSRLS because outbox dispatch and
-      # cleanup legitimately act across users. Leave unset in .env until roles
-      # have been bootstrapped; Rust falls back to DATABASE_URL when empty.
-      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:-}
+      # Worker pool URL (role poziomki_worker, BYPASSRLS — outbox dispatch
+      # and cleanup legitimately act across users). Required in production;
+      # startup asserts current_user = 'poziomki_worker'. Bootstrap roles
+      # first via infra/ops/postgres/setup-roles.sh.
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL must be set (least-privilege pool URL)}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${WORKER_DB_POOL_CREATE_TIMEOUT_MS:-5000}
