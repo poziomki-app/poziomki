@@ -402,6 +402,281 @@ async fn messages_outsider_cannot_insert() {
 }
 
 // ---------------------------------------------------------------------------
+// conversation_members INSERT is the most dangerous lever — if any
+// viewer can insert themselves into any conversation, the whole
+// membership boundary collapses. These negative tests pin the
+// tightened INSERT policy:
+//   * outsiders cannot self-join a random conversation
+//   * a DM participant cannot add a third party to their DM
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn conversation_members_outsider_cannot_self_join() {
+    let fx = setup_fixture().await;
+    let dm_id = fx.dm_id;
+    let carol_id = fx.carol.id;
+
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
+            async move {
+                let now = Utc::now();
+                diesel::insert_into(conversation_members::table)
+                    .values(&NewConversationMember {
+                        conversation_id: dm_id,
+                        user_id: carol_id,
+                        joined_at: now,
+                    })
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "conversation_members_insert must reject self-join into a DM the viewer isn't party to"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn conversation_members_dm_cannot_inject_third_party() {
+    let fx = setup_fixture().await;
+    let dm_id = fx.dm_id;
+    let alice_id = fx.alice.id;
+    let carol_id = fx.carol.id;
+
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let now = Utc::now();
+                diesel::insert_into(conversation_members::table)
+                    .values(&NewConversationMember {
+                        conversation_id: dm_id,
+                        user_id: carol_id,
+                        joined_at: now,
+                    })
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "conversation_members_insert DM branch must reject adding a user who isn't part of the DM pair"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// PK-move trigger: a viewer UPDATEing their membership row to a
+// different conversation_id must fail loudly (RLS WITH CHECK can't
+// compare old vs new, so a BEFORE UPDATE trigger does the job).
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn conversation_members_pk_change_rejected() {
+    let fx = setup_fixture().await;
+    // Seed an unrelated conversation that Alice isn't a member of so
+    // she has a real target to try moving into.
+    let decoy_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        diesel::insert_into(conversations::table)
+            .values(&NewConversation {
+                id: decoy_id,
+                kind: "dm".into(),
+                title: None,
+                event_id: None,
+                user_low_id: Some(fx.bob.id),
+                user_high_id: Some(fx.carol.id),
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed decoy");
+    }
+
+    let alice_id = fx.alice.id;
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql = format!(
+                    "UPDATE public.conversation_members SET conversation_id = '{decoy_id}' \
+                     WHERE user_id = {alice_id}"
+                );
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "conversation_members PK-move trigger must reject conversation_id UPDATE"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Low-finding fix: leaving a conversation must revoke edit/delete
+// rights on past messages, not just SELECT visibility.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn messages_update_rejected_after_leaving_conversation() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let dm_id = fx.dm_id;
+    let alice_msg = fx.alice_msg_id;
+
+    // Alice leaves the DM via the owner pool (bypasses policies) so the
+    // test isolates the post-leave edit attempt from the "can Alice
+    // DELETE her own membership" policy question.
+    {
+        let mut conn = db::conn().await.expect("pool");
+        diesel::delete(
+            conversation_members::table
+                .filter(conversation_members::conversation_id.eq(dm_id))
+                .filter(conversation_members::user_id.eq(alice_id)),
+        )
+        .execute(&mut conn)
+        .await
+        .expect("remove alice membership");
+    }
+
+    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql =
+                format!("UPDATE public.messages SET body = 'after-leave' WHERE id = '{alice_msg}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+
+    assert_eq!(
+        affected, 0,
+        "messages_update must require current membership, not just authorship"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Medium-finding fix: a viewer cannot update their own reaction onto
+// a message they cannot see. Attack shape: Alice owns a reaction on
+// Bob's message; there's also a hidden third-party message she
+// happens to know the UUID of. The UPDATE must fail.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn message_reactions_cannot_update_onto_hidden_message() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let bob_msg = fx.bob_msg_id;
+
+    // Seed a hidden conversation (Bob + Carol) + a message Alice can't see.
+    let hidden_conv = Uuid::new_v4();
+    let hidden_msg = Uuid::new_v4();
+    let reaction_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        diesel::insert_into(conversations::table)
+            .values(&NewConversation {
+                id: hidden_conv,
+                kind: "dm".into(),
+                title: None,
+                event_id: None,
+                user_low_id: Some(fx.bob.id),
+                user_high_id: Some(fx.carol.id),
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed hidden conv");
+        for uid in [fx.bob.id, fx.carol.id] {
+            diesel::insert_into(conversation_members::table)
+                .values(&NewConversationMember {
+                    conversation_id: hidden_conv,
+                    user_id: uid,
+                    joined_at: now,
+                })
+                .execute(&mut conn)
+                .await
+                .expect("seed hidden member");
+        }
+        diesel::insert_into(messages::table)
+            .values(&NewMessage {
+                id: hidden_msg,
+                conversation_id: hidden_conv,
+                sender_id: fx.bob.id,
+                body: "hidden".into(),
+                kind: "text".into(),
+                reply_to_id: None,
+                client_id: None,
+                created_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed hidden message");
+
+        // Alice reacts to Bob's message in the DM she's in — fine.
+        diesel::insert_into(message_reactions::table)
+            .values((
+                message_reactions::id.eq(reaction_id),
+                message_reactions::message_id.eq(bob_msg),
+                message_reactions::user_id.eq(alice_id),
+                message_reactions::emoji.eq("👍"),
+                message_reactions::created_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed alice reaction");
+    }
+
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql = format!(
+                    "UPDATE public.message_reactions SET message_id = '{hidden_msg}' \
+                     WHERE id = '{reaction_id}'"
+                );
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    // WITH CHECK failure surfaces as a diesel::result::Error::DatabaseError;
+    // empty match + raw affected count both mean the row wasn't moved.
+    if result.is_ok() {
+        let mut conn = db::conn().await.expect("pool");
+        let row: CountRow = diesel::sql_query(
+            "SELECT COUNT(*) AS count FROM public.message_reactions \
+             WHERE id = $1 AND message_id = $2",
+        )
+        .bind::<diesel::sql_types::Uuid, _>(reaction_id)
+        .bind::<diesel::sql_types::Uuid, _>(hidden_msg)
+        .get_result(&mut conn)
+        .await
+        .expect("post-check query");
+        assert_eq!(
+            row.count, 0,
+            "message_reactions UPDATE must not move a reaction onto a hidden message"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Anon: every chat table returns zero rows.
 // ---------------------------------------------------------------------------
 #[tokio::test]

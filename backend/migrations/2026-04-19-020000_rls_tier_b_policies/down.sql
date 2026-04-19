@@ -8,6 +8,8 @@ DROP POLICY IF EXISTS messages_update ON public.messages;
 DROP POLICY IF EXISTS messages_insert ON public.messages;
 DROP POLICY IF EXISTS messages_viewer ON public.messages;
 
+DROP TRIGGER IF EXISTS conversation_members_pk_immutable ON public.conversation_members;
+DROP FUNCTION IF EXISTS app.reject_conversation_members_pk_change();
 DROP POLICY IF EXISTS conversation_members_delete ON public.conversation_members;
 DROP POLICY IF EXISTS conversation_members_update ON public.conversation_members;
 DROP POLICY IF EXISTS conversation_members_insert ON public.conversation_members;
@@ -27,5 +29,7 @@ ALTER TABLE public.conversation_members DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations DISABLE ROW LEVEL SECURITY;
 
+DROP FUNCTION IF EXISTS app.event_creator_user_id(uuid);
+DROP FUNCTION IF EXISTS app.viewer_can_access_event(uuid);
 DROP FUNCTION IF EXISTS app.viewer_can_see_message(uuid);
 DROP FUNCTION IF EXISTS app.viewer_conversation_ids();
