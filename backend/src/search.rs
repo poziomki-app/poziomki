@@ -314,11 +314,14 @@ struct UserIdRow {
     id: i32,
 }
 
+#[allow(clippy::similar_names)]
 pub async fn search_message_rooms(
     query: &str,
     user_pid: &uuid::Uuid,
     limit: usize,
 ) -> crate::error::AppResult<Vec<String>> {
+    use diesel_async::scoped_futures::ScopedFutureExt;
+
     let normalized_query = query.trim().to_ascii_lowercase();
 
     if normalized_query.len() < 2 {
@@ -328,11 +331,46 @@ pub async fn search_message_rooms(
     let pattern = format!("%{normalized_query}%");
     let limit_i64 = i64::try_from(limit).unwrap_or(20);
 
-    let dm_fut = search_dm_room_ids(&normalized_query, &pattern, user_pid, limit_i64);
-    let event_fut = search_event_room_ids(&normalized_query, &pattern, limit_i64);
+    // Resolve caller's internal user id up front — the DM + event
+    // branches both need it to constrain results to rooms the viewer
+    // is actually a member of.
+    let mut conn = crate::db::conn().await?;
+    let user_id: Option<i32> = diesel::sql_query("SELECT id FROM users WHERE pid = $1")
+        .bind::<DieselUuid, _>(user_pid)
+        .get_result::<UserIdRow>(&mut conn)
+        .await
+        .optional()?
+        .map(|r| r.id);
+    drop(conn);
+    let Some(user_id) = user_id else {
+        return Ok(Vec::new());
+    };
 
-    let (dm_rooms, event_rooms) = tokio::try_join!(dm_fut, event_fut)?;
+    // Route through a viewer tx so RLS on conversations /
+    // conversation_members / events applies. The membership filter on
+    // events below is a defence in depth on top of that — without it,
+    // an event with its conversation_id still populated would have
+    // leaked through this search even though the caller never joined
+    // the event's chat.
+    let viewer = crate::db::DbViewer {
+        user_id,
+        is_review_stub: false,
+    };
+    let normalized = normalized_query.clone();
+    let pattern_tx = pattern.clone();
+    let rows = crate::db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let dm = search_dm_room_ids(conn, &normalized, &pattern_tx, user_id, limit_i64).await?;
+            let ev =
+                search_event_room_ids(conn, &normalized, &pattern_tx, user_id, limit_i64).await?;
+            Ok::<_, diesel::result::Error>((dm, ev))
+        }
+        .scope_boxed()
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Any(e.into()))?;
 
+    let (dm_rooms, event_rooms) = rows;
     let mut room_ids = dm_rooms;
     room_ids.extend(event_rooms);
     Ok(room_ids)
@@ -340,25 +378,12 @@ pub async fn search_message_rooms(
 
 #[allow(clippy::similar_names)]
 async fn search_dm_room_ids(
+    conn: &mut diesel_async::AsyncPgConnection,
     query: &str,
     pattern: &str,
-    user_pid: &uuid::Uuid,
+    user_id: i32,
     limit_i64: i64,
-) -> crate::error::AppResult<Vec<String>> {
-    let mut conn = crate::db::conn().await?;
-
-    // Resolve user's internal id from pid
-    let user_id: Option<i32> = diesel::sql_query("SELECT id FROM users WHERE pid = $1")
-        .bind::<DieselUuid, _>(user_pid)
-        .get_result::<UserIdRow>(&mut conn)
-        .await
-        .optional()?
-        .map(|r| r.id);
-
-    let Some(user_id) = user_id else {
-        return Ok(Vec::new());
-    };
-
+) -> Result<Vec<String>, diesel::result::Error> {
     let rows = diesel::sql_query(
         r"
         SELECT c.id::text AS room_id
@@ -389,23 +414,25 @@ async fn search_dm_room_ids(
     .bind::<Text, _>(pattern)
     .bind::<Integer, _>(user_id)
     .bind::<BigInt, _>(limit_i64)
-    .load::<RoomIdRow>(&mut conn)
+    .load::<RoomIdRow>(conn)
     .await?;
 
     Ok(rows.into_iter().map(|r| r.room_id).collect())
 }
 
 async fn search_event_room_ids(
+    conn: &mut diesel_async::AsyncPgConnection,
     query: &str,
     pattern: &str,
+    user_id: i32,
     limit_i64: i64,
-) -> crate::error::AppResult<Vec<String>> {
-    let mut conn = crate::db::conn().await?;
-
+) -> Result<Vec<String>, diesel::result::Error> {
     let rows = diesel::sql_query(
         r"
         SELECT e.conversation_id AS room_id
         FROM events e
+        JOIN conversation_members cm
+          ON cm.conversation_id = e.conversation_id AND cm.user_id = $3
         LEFT JOIN profiles p ON p.id = e.creator_id
         WHERE
             e.conversation_id IS NOT NULL
@@ -417,13 +444,14 @@ async fn search_event_room_ids(
         ORDER BY
             ts_rank_cd(e.search_vector, websearch_to_tsquery('simple', $1)) DESC,
             e.starts_at DESC
-        LIMIT $3
+        LIMIT $4
         ",
     )
     .bind::<Text, _>(query)
     .bind::<Text, _>(pattern)
+    .bind::<Integer, _>(user_id)
     .bind::<BigInt, _>(limit_i64)
-    .load::<RoomIdRow>(&mut conn)
+    .load::<RoomIdRow>(conn)
     .await?;
 
     Ok(rows.into_iter().map(|r| r.room_id).collect())
