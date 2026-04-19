@@ -72,10 +72,10 @@ fun VerifyScreen(
         focusRequester.requestFocus()
     }
 
-    // Auto-submit when 6 digits entered (with guard against double-submit)
+    // Auto-submit when 8 digits entered (with guard against double-submit)
     var hasSubmitted by remember { mutableStateOf(false) }
     LaunchedEffect(otp) {
-        if (otp.length < 6) {
+        if (otp.length < 8) {
             hasSubmitted = false
         } else if (!hasSubmitted && !uiState.isLoading) {
             hasSubmitted = true
@@ -136,7 +136,7 @@ fun VerifyScreen(
         // OTP input boxes
         OtpInput(
             value = otp,
-            onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) otp = it },
+            onValueChange = { if (it.length <= 8 && it.all { c -> c.isDigit() }) otp = it },
             modifier = Modifier.focusRequester(focusRequester),
         )
 
@@ -145,7 +145,7 @@ fun VerifyScreen(
         AppButton(
             text = "potwierd\u017a",
             onClick = submit,
-            enabled = otp.length == 6,
+            enabled = otp.length == 8,
             loading = uiState.isLoading,
         )
 
@@ -202,7 +202,7 @@ private fun OtpInput(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                repeat(6) { index ->
+                repeat(8) { index ->
                     val char = value.getOrNull(index)
                     val isFocused = value.length == index
                     Box(
