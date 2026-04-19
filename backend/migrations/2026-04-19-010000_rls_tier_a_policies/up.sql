@@ -23,11 +23,11 @@
 -- = '…'`. Missing GUC → NULL / false; `NULL = id` never matches, so the
 -- anon case falls through to "sees nothing".
 --
--- `viewer_profile_ids()` is a pure convenience: the same
--- `(SELECT id FROM profiles WHERE user_id = …)` subquery would
--- otherwise repeat across every policy. Regular (non-SD) function so
--- it still runs under the caller's privileges and RLS; the profiles
--- policy below explicitly allows the viewer to see their own row.
+-- `viewer_profile_ids()` is a SECURITY DEFINER helper that returns the
+-- profile ids owned by the current viewer. Definer rights are required
+-- so policy expressions that embed the subquery aren't re-filtered by
+-- the profiles RLS policy during evaluation. Returns only `id`, so no
+-- sensitive columns leak even if a caller could invoke it unexpectedly.
 -- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION app.current_user_id()
