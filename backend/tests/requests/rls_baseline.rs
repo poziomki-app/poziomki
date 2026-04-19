@@ -48,12 +48,14 @@ const EXPECTED_TIER_B_TABLES: &[&str] = &[
     "message_reactions",
 ];
 
-const EXPECTED_RLS_DISABLED_TABLES: &[&str] = &[
-    // Tier C — events, attendance, uploads
-    "events",
-    "event_attendees",
-    "uploads",
-];
+/// Tier-C tables (events, attendance, uploads). Same shape as Tier-A
+/// and Tier-B: ENABLED + FORCED + `<table>_viewer` SELECT policy on
+/// `poziomki_api`.
+const EXPECTED_TIER_C_TABLES: &[&str] = &["events", "event_attendees", "uploads"];
+
+/// No tables remaining in the "RLS still off" canary — every table
+/// the plan protects is now locked down.
+const EXPECTED_RLS_DISABLED_TABLES: &[&str] = &[];
 
 /// SD helpers installed by the 010000..070000 migration series. Every
 /// entry must carry `search_path=pg_catalog, pg_temp` so the `pg_temp`
@@ -75,6 +77,9 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "profiles_in_current_bucket",
     "push_topics_for_users",
     "resolve_session",
+    // Tier-C policy-support helpers.
+    "event_auto_approves",
+    "viewer_owns_event",
     // Tier-B policy-support helpers.
     "conversation_meta_for_insert",
     "delete_event_and_chat",
@@ -138,6 +143,7 @@ async fn api_role_has_dml_on_all_protected_tables() {
     let all_tables = EXPECTED_TIER_A_TABLES
         .iter()
         .chain(EXPECTED_TIER_B_TABLES.iter())
+        .chain(EXPECTED_TIER_C_TABLES.iter())
         .chain(EXPECTED_RLS_DISABLED_TABLES.iter());
     for table in all_tables {
         let grants = rls_harness::role_privileges("poziomki_api", table).await;
@@ -310,6 +316,56 @@ async fn tier_b_tables_have_named_policy_on_api_role() {
         assert!(
             matched.roles.iter().any(|r| r == "poziomki_api"),
             "Tier-B policy {expected_name} on public.{table} must target poziomki_api (targets: {:?})",
+            matched.roles
+        );
+    }
+}
+
+/// Tier-C canary: `events`, `event_attendees`, `uploads` have RLS
+/// ENABLED + FORCED + `<table>_viewer` SELECT policy.
+#[tokio::test]
+#[serial]
+async fn tier_c_tables_have_rls_enabled_and_forced() {
+    setup();
+    let mut missing_enabled = Vec::new();
+    let mut missing_forced = Vec::new();
+    for table in EXPECTED_TIER_C_TABLES {
+        if !rls_harness::table_rls_enabled(table).await {
+            missing_enabled.push(*table);
+        }
+        if !rls_harness::table_force_rls(table).await {
+            missing_forced.push(*table);
+        }
+    }
+    assert!(
+        missing_enabled.is_empty(),
+        "Tier-C tables missing RLS ENABLE: {missing_enabled:?}"
+    );
+    assert!(
+        missing_forced.is_empty(),
+        "Tier-C tables missing FORCE ROW LEVEL SECURITY: {missing_forced:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn tier_c_tables_have_named_policy_on_api_role() {
+    setup();
+    let attachments = rls_harness::policies_for_tables(EXPECTED_TIER_C_TABLES).await;
+    for table in EXPECTED_TIER_C_TABLES {
+        let policies = attachments
+            .get(*table)
+            .expect("policy catalog query must return an entry per table");
+        let expected_name = format!("{table}_viewer");
+        let matched = policies.iter().find(|p| p.name == expected_name);
+        assert!(
+            matched.is_some(),
+            "Tier-C table public.{table} is missing policy {expected_name}; found {policies:?}"
+        );
+        let matched = matched.unwrap();
+        assert!(
+            matched.roles.iter().any(|r| r == "poziomki_api"),
+            "Tier-C policy {expected_name} on public.{table} must target poziomki_api (targets: {:?})",
             matched.roles
         );
     }
