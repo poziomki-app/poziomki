@@ -29,6 +29,8 @@ ALTER TABLE public.conversation_members DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations DISABLE ROW LEVEL SECURITY;
 
+DROP FUNCTION IF EXISTS app.find_event_conversation(uuid);
+DROP FUNCTION IF EXISTS app.find_dm_conversation(int, int);
 DROP FUNCTION IF EXISTS app.event_creator_user_id(uuid);
 DROP FUNCTION IF EXISTS app.viewer_can_access_event(uuid);
 DROP FUNCTION IF EXISTS app.viewer_can_see_message(uuid);

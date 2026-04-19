@@ -77,6 +77,8 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "resolve_session",
     // Tier-B policy-support helpers.
     "event_creator_user_id",
+    "find_dm_conversation",
+    "find_event_conversation",
     "viewer_can_access_event",
     "viewer_can_see_message",
     "viewer_conversation_ids",
