@@ -124,6 +124,9 @@ COMMENT ON FUNCTION app.event_creator_user_id(uuid) IS
 -- concurrent request that hasn't yet added the viewer as member.
 -- Without this, the handler's race-fallback SELECT would be filtered
 -- to empty by conversations_viewer and bubble up as NotFound.
+-- DM lookup gates on the viewer being one of the pair — without that
+-- guard the SD bypass would let any API-role caller enumerate DM
+-- conversation ids by iterating over (low, high) pairs.
 CREATE OR REPLACE FUNCTION app.find_dm_conversation(p_low int, p_high int)
 RETURNS SETOF public.conversations
 LANGUAGE sql
@@ -132,13 +135,21 @@ STABLE
 SET search_path = pg_catalog, pg_temp
 AS $$
     SELECT * FROM public.conversations
-    WHERE kind = 'dm' AND user_low_id = p_low AND user_high_id = p_high
+    WHERE kind = 'dm'
+      AND user_low_id = p_low
+      AND user_high_id = p_high
+      AND app.current_user_id() > 0
+      AND app.current_user_id() IN (p_low, p_high)
     LIMIT 1
 $$;
 
 COMMENT ON FUNCTION app.find_dm_conversation(int, int) IS
-    'Canonical DM conversation row for the (low, high) user pair, or empty set. SECURITY DEFINER so the chat resolve path can read the row before the viewer''s membership has been inserted.';
+    'Canonical DM conversation row for the (low, high) user pair, restricted to viewers who are one of the pair. SECURITY DEFINER so it works before the viewer''s membership row has been inserted.';
 
+-- Event lookup gates on viewer event access (creator or going
+-- attendee) via the existing helper, so the SD bypass can't be used
+-- to discover the conversation id of an event the viewer has no
+-- relationship to.
 CREATE OR REPLACE FUNCTION app.find_event_conversation(p_event_id uuid)
 RETURNS SETOF public.conversations
 LANGUAGE sql
@@ -147,12 +158,37 @@ STABLE
 SET search_path = pg_catalog, pg_temp
 AS $$
     SELECT * FROM public.conversations
-    WHERE kind = 'event' AND event_id = p_event_id
+    WHERE kind = 'event'
+      AND event_id = p_event_id
+      AND app.viewer_can_access_event(p_event_id)
     LIMIT 1
 $$;
 
 COMMENT ON FUNCTION app.find_event_conversation(uuid) IS
-    'Event chat conversation row for the given event, or empty set. SECURITY DEFINER so the resolve-or-create path can detect concurrent creation without relying on viewer membership.';
+    'Event chat conversation row for the given event, restricted to viewers with event access (owner or going attendee). SECURITY DEFINER so the resolve-or-create path can detect concurrent creation before the viewer''s membership row exists.';
+
+-- conversation_members_insert has to look up the target conversation
+-- to decide if the proposed (conversation_id, user_id) pair is
+-- legitimate. A plain subquery on public.conversations would be
+-- filtered by conversations_viewer — fine for viewers already in the
+-- room, but the resolve-or-create event-chat bootstrap reaches the
+-- INSERT before the viewer's membership row exists. This SD helper
+-- returns just the fields the INSERT policy needs, without membership
+-- filtering, so going attendees can self-join.
+CREATE OR REPLACE FUNCTION app.conversation_meta_for_insert(p_conversation_id uuid)
+RETURNS TABLE (kind text, event_id uuid, user_low_id int, user_high_id int)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT c.kind, c.event_id, c.user_low_id, c.user_high_id
+    FROM public.conversations c
+    WHERE c.id = p_conversation_id
+$$;
+
+COMMENT ON FUNCTION app.conversation_meta_for_insert(uuid) IS
+    'Metadata the conversation_members INSERT policy needs to decide if a (conversation_id, user_id) pair is legitimate. SECURITY DEFINER so it doesn''t self-filter through conversations_viewer.';
 
 REVOKE EXECUTE ON FUNCTION app.viewer_conversation_ids() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) FROM PUBLIC;
@@ -160,6 +196,7 @@ REVOKE EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.event_creator_user_id(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_dm_conversation(int, int) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_event_conversation(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) FROM PUBLIC;
 
 DO $$
 BEGIN
@@ -170,6 +207,7 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.event_creator_user_id(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) TO poziomki_api';
     END IF;
 END
 $$;
@@ -252,9 +290,8 @@ CREATE POLICY conversation_members_insert ON public.conversation_members
         app.current_user_id() > 0
         AND EXISTS (
             SELECT 1
-            FROM public.conversations c
-            WHERE c.id = conversation_id
-              AND (
+            FROM app.conversation_meta_for_insert(conversation_id) c
+            WHERE (
                   (c.kind = 'dm'
                    AND app.current_user_id() IN (c.user_low_id, c.user_high_id)
                    AND conversation_members.user_id IN (c.user_low_id, c.user_high_id))

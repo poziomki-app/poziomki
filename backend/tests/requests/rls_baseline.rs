@@ -76,6 +76,7 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "push_topics_for_users",
     "resolve_session",
     // Tier-B policy-support helpers.
+    "conversation_meta_for_insert",
     "event_creator_user_id",
     "find_dm_conversation",
     "find_event_conversation",
