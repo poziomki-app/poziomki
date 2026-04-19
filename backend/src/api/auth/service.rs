@@ -41,8 +41,12 @@ pub(super) fn env_truthy(key: &str) -> bool {
 }
 
 pub(super) fn generate_otp_code() -> String {
-    let value = (uuid::Uuid::new_v4().as_u128() % 1_000_000) as u32;
-    format!("{value:06}")
+    // 8 decimal digits ≈ 26.5 bits of entropy — up from ~20 at
+    // 6 digits. The auth_rate_limits table already caps guesses per
+    // email, but widening the code space makes the cap easier to
+    // tune without crowding the brute-force horizon.
+    let value = (uuid::Uuid::new_v4().as_u128() % 100_000_000) as u32;
+    format!("{value:08}")
 }
 
 pub(super) fn invalid_otp_response(headers: &HeaderMap) -> Response {
