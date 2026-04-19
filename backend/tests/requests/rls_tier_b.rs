@@ -769,6 +769,78 @@ async fn event_conversation_insert_rejects_pending_attendee() {
 }
 
 // ---------------------------------------------------------------------------
+// messages PK-change trigger: the sender must not be able to move
+// their own message to another conversation they're also in. RLS can
+// only evaluate the final row, so a `BEFORE UPDATE` trigger enforces
+// conversation_id + sender_id immutability alongside the RLS policy.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn messages_conversation_id_change_rejected() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let alice_msg = fx.alice_msg_id;
+
+    // Spin up a second DM (Alice + Carol) that Alice is a member of,
+    // so her UPDATE has a legitimate target the WITH CHECK would
+    // otherwise accept.
+    let other_conv_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        let pair: [i32; 2] = if alice_id < fx.carol.id {
+            [alice_id, fx.carol.id]
+        } else {
+            [fx.carol.id, alice_id]
+        };
+        diesel::insert_into(conversations::table)
+            .values(&NewConversation {
+                id: other_conv_id,
+                kind: "dm".into(),
+                title: None,
+                event_id: None,
+                user_low_id: Some(pair[0]),
+                user_high_id: Some(pair[1]),
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed second dm");
+        for uid in pair {
+            diesel::insert_into(conversation_members::table)
+                .values(&NewConversationMember {
+                    conversation_id: other_conv_id,
+                    user_id: uid,
+                    joined_at: now,
+                })
+                .execute(&mut conn)
+                .await
+                .expect("seed second dm member");
+        }
+    }
+
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                let sql = format!(
+                    "UPDATE public.messages SET conversation_id = '{other_conv_id}' \
+                     WHERE id = '{alice_msg}'"
+                );
+                diesel::sql_query(sql).execute(conn).await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "messages trigger must reject cross-conversation UPDATE of conversation_id"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Positive event-chat join flow: a going attendee who is not yet a
 // member of the event conversation can discover the existing row via
 // the SD lookup helper AND self-insert their membership. This

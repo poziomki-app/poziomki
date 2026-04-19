@@ -3,6 +3,8 @@ DROP POLICY IF EXISTS message_reactions_update ON public.message_reactions;
 DROP POLICY IF EXISTS message_reactions_insert ON public.message_reactions;
 DROP POLICY IF EXISTS message_reactions_viewer ON public.message_reactions;
 
+DROP TRIGGER IF EXISTS messages_conversation_immutable ON public.messages;
+DROP FUNCTION IF EXISTS app.reject_messages_conversation_change();
 DROP POLICY IF EXISTS messages_delete ON public.messages;
 DROP POLICY IF EXISTS messages_update ON public.messages;
 DROP POLICY IF EXISTS messages_insert ON public.messages;

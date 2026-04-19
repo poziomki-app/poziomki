@@ -184,7 +184,8 @@ SET search_path = pg_catalog, pg_temp
 AS $$
     SELECT c.kind, c.event_id, c.user_low_id, c.user_high_id
     FROM public.conversations c
-    WHERE c.id = p_conversation_id
+    WHERE app.current_user_id() > 0
+      AND c.id = p_conversation_id
 $$;
 
 COMMENT ON FUNCTION app.conversation_meta_for_insert(uuid) IS
@@ -381,6 +382,34 @@ CREATE POLICY messages_delete ON public.messages
         sender_id = app.current_user_id()
         AND conversation_id IN (SELECT conversation_id FROM app.viewer_conversation_ids())
     );
+
+-- messages.conversation_id + sender_id are immutable. RLS can't
+-- compare old-row vs new-row values, so without this trigger a
+-- member of two conversations could `UPDATE messages SET
+-- conversation_id = <other>` and inject their message into the
+-- second room — both USING (old conversation membership) and WITH
+-- CHECK (new conversation membership) would pass.
+CREATE OR REPLACE FUNCTION app.reject_messages_conversation_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+    IF NEW.conversation_id IS DISTINCT FROM OLD.conversation_id
+       OR NEW.sender_id IS DISTINCT FROM OLD.sender_id THEN
+        RAISE EXCEPTION
+            'messages (conversation_id, sender_id) are immutable (old=%,% new=%,%)',
+            OLD.conversation_id, OLD.sender_id, NEW.conversation_id, NEW.sender_id;
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS messages_conversation_immutable ON public.messages;
+CREATE TRIGGER messages_conversation_immutable
+    BEFORE UPDATE ON public.messages
+    FOR EACH ROW
+    EXECUTE FUNCTION app.reject_messages_conversation_change();
 
 -- ---------------------------------------------------------------------------
 -- message_reactions
