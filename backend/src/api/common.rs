@@ -131,10 +131,16 @@ pub fn extract_filename(value: &str) -> String {
 }
 
 /// Resolve a stored image value (filename or legacy presigned URL) to a fresh signed URL.
-/// Prefers imgproxy (feed/800px, webp) when configured; otherwise uses app-routed media URL.
+/// Prefers imgproxy (full/2000px, webp) when configured; otherwise uses app-routed media URL.
+///
+/// 2000px WebP looks sharp on a 1080px high-DPI phone screen at any
+/// rendered size up to full-bleed. 800px (the prior default) was
+/// visibly soft on matching cards and bio galleries. Bandwidth cost
+/// is ~3× per image but a WebP-compressed 2000px photo is still
+/// ~200-400 KiB — acceptable for a beta audience on wifi.
 pub async fn resolve_image_url(stored: &str) -> String {
     let filename = extract_filename(stored);
-    if let Some(url) = super::imgproxy_signing::signed_url(&filename, "feed", "webp") {
+    if let Some(url) = super::imgproxy_signing::signed_url(&filename, "full", "webp") {
         return url;
     }
     format!("/api/v1/uploads/{filename}")
