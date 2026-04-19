@@ -21,8 +21,6 @@ DROP POLICY IF EXISTS conversation_members_viewer ON public.conversation_members
 
 DROP TRIGGER IF EXISTS conversations_identity_immutable ON public.conversations;
 DROP FUNCTION IF EXISTS app.reject_conversations_identity_change();
-DROP POLICY IF EXISTS conversations_delete ON public.conversations;
-DROP POLICY IF EXISTS conversations_update ON public.conversations;
 DROP POLICY IF EXISTS conversations_insert ON public.conversations;
 DROP POLICY IF EXISTS conversations_viewer ON public.conversations;
 
@@ -35,6 +33,7 @@ ALTER TABLE public.conversation_members DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations DISABLE ROW LEVEL SECURITY;
 
+DROP FUNCTION IF EXISTS app.delete_event_and_chat(uuid);
 DROP FUNCTION IF EXISTS app.conversation_meta_for_insert(uuid);
 DROP FUNCTION IF EXISTS app.find_event_conversation(uuid);
 DROP FUNCTION IF EXISTS app.find_dm_conversation(int, int);
