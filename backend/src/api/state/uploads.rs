@@ -136,6 +136,49 @@ pub(in crate::api) fn validate_image_dimensions(
     Ok(())
 }
 
+/// Strip EXIF / metadata from the uploaded image bytes.
+///
+/// The mobile client is *supposed* to strip EXIF before uploading,
+/// but an API caller (or a mis-built client) can skip it and leak
+/// GPS / device identifiers into profile pictures and attachments.
+/// Re-decoding and re-encoding the pixels drops every metadata
+/// chunk the original carried (EXIF, XMP, ICC, iTXt, etc.).
+///
+/// Quality notes:
+/// * JPEG — re-encoded at quality 92, visually indistinguishable
+///   from the original to human eyes; small size increase possible.
+/// * PNG / WebP — re-encoded losslessly, pixel-identical.
+///
+/// Fails closed: if decode or re-encode fails for any reason
+/// (truncated upload, unsupported sub-variant, unknown mime type
+/// reaching this point) the upload is rejected rather than stored
+/// with metadata intact. Validation of MIME + dimensions runs
+/// before this, so a failure here means something exotic reached
+/// past the front-line checks.
+pub(in crate::api) fn strip_image_metadata(
+    data: &[u8],
+    mime_type: &str,
+) -> std::result::Result<Vec<u8>, &'static str> {
+    use std::io::Cursor;
+
+    let img = image::load_from_memory(data).map_err(|_| "Image could not be decoded safely")?;
+
+    let mut out = Vec::with_capacity(data.len());
+    let result = match mime_type {
+        "image/jpeg" => {
+            let mut cursor = Cursor::new(&mut out);
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 92).encode_image(&img)
+        }
+        "image/png" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png),
+        "image/webp" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::WebP),
+        _ => return Err("Image could not be sanitized"),
+    };
+
+    result
+        .map(|()| out)
+        .map_err(|_| "Image could not be sanitized")
+}
+
 pub(in crate::api) fn extension_for_mime(mime_type: &str) -> &'static str {
     match mime_type {
         "image/jpeg" => "jpeg",
@@ -182,4 +225,135 @@ pub(in crate::api) const fn is_chat_context(context: UploadContext) -> bool {
         context,
         UploadContext::ChatCover | UploadContext::ChatAttachment
     )
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::indexing_slicing,
+    clippy::cast_possible_truncation,
+    clippy::expect_used
+)]
+mod tests {
+    use super::strip_image_metadata;
+    use std::io::Cursor;
+
+    /// Round-trip a tiny synthesized JPEG through the `image` crate
+    /// first (giving us a guaranteed-valid JPEG we can decode) and
+    /// then splice an EXIF APP1 segment carrying a recognisable
+    /// sentinel into it. `strip_image_metadata` must re-encode
+    /// without the sentinel.
+    fn jpeg_with_injected_exif_sentinel() -> (Vec<u8>, &'static [u8]) {
+        let sentinel: &[u8] = b"GPS_SENTINEL_0XDEADBEEF";
+
+        // Start with a real JPEG from the image crate so the decoder
+        // definitely accepts the payload.
+        let img = image::RgbImage::from_pixel(4, 4, image::Rgb([200, 50, 50]));
+        let mut base = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut base), 90)
+            .encode_image(&image::DynamicImage::ImageRgb8(img))
+            .expect("encode seed jpeg");
+
+        // Build an APP1 segment: FF E1 <len_be u16> "Exif\0\0" <payload>
+        // `len_be` counts itself + Exif header + payload.
+        let mut payload: Vec<u8> = Vec::new();
+        payload.extend_from_slice(b"Exif\0\0");
+        payload.extend_from_slice(sentinel);
+        let seg_len = (2 + payload.len()) as u16; // length bytes include themselves
+        let mut app1 = vec![0xff, 0xe1];
+        app1.extend_from_slice(&seg_len.to_be_bytes());
+        app1.extend_from_slice(&payload);
+
+        // Inject right after the SOI (bytes 0–1 are FF D8).
+        let mut with_exif = Vec::with_capacity(base.len() + app1.len());
+        with_exif.extend_from_slice(&base[..2]);
+        with_exif.extend_from_slice(&app1);
+        with_exif.extend_from_slice(&base[2..]);
+        (with_exif, sentinel)
+    }
+
+    #[test]
+    fn strip_image_metadata_removes_jpeg_exif_sentinel() {
+        let (input, sentinel) = jpeg_with_injected_exif_sentinel();
+        assert!(
+            input.windows(sentinel.len()).any(|w| w == sentinel),
+            "precondition: test fixture must contain the sentinel"
+        );
+
+        let output =
+            strip_image_metadata(&input, "image/jpeg").expect("strip must succeed on valid JPEG");
+        assert!(
+            !output.windows(sentinel.len()).any(|w| w == sentinel),
+            "strip_image_metadata must drop the EXIF sentinel"
+        );
+        // And the re-encoded output should still start with a valid
+        // JPEG SOI marker (FF D8) so the pipeline downstream can
+        // still handle it.
+        assert_eq!(
+            &output[..2],
+            &[0xff, 0xd8],
+            "re-encoded output must remain a valid JPEG"
+        );
+    }
+
+    #[test]
+    fn strip_image_metadata_rejects_undecodable_input() {
+        // Truncated garbage — the decoder rejects it, so the strip
+        // function returns an error. The handler path propagates
+        // this to a 400 rather than silently storing the bytes with
+        // metadata intact.
+        let garbage = vec![0xff, 0xd8, 0x00, 0x00];
+        assert!(strip_image_metadata(&garbage, "image/jpeg").is_err());
+    }
+
+    #[test]
+    fn strip_image_metadata_round_trips_small_png() {
+        // Minimal 1x1 grayscale PNG (proper IDAT CRC). Same fixture
+        // shape used by tests/requests/migration_contract.rs so a
+        // regression that breaks PNG strip would fail here first.
+        let bytes: &[u8] = &[
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, b'I', b'H',
+            b'D', b'R', 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00,
+            0x00, 0x3a, 0x7e, 0x9b, 0x55, 0x00, 0x00, 0x00, 0x0a, b'I', b'D', b'A', b'T', 0x78,
+            0x9c, 0x63, 0xf8, 0x0f, 0x00, 0x01, 0x01, 0x01, 0x00, 0xb1, 0x38, 0xf6, 0x14, 0x00,
+            0x00, 0x00, 0x00, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        ];
+        let result = strip_image_metadata(bytes, "image/png");
+        assert!(
+            result.is_ok(),
+            "1x1 grayscale PNG must strip OK; got {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn strip_image_metadata_round_trips_webp() {
+        // Exercise the WebP encoder branch. `image::ImageFormat::WebP`
+        // uses a lossless encoder by default in 0.25.x; if the build
+        // features ever drop the WebP encoder we want a loud test
+        // failure before prod ships uploads that silently 400.
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([0, 128, 255]));
+        let mut webp = Vec::new();
+        img.write_to(&mut Cursor::new(&mut webp), image::ImageFormat::WebP)
+            .expect("seed webp");
+
+        let out =
+            strip_image_metadata(&webp, "image/webp").expect("strip must succeed on a valid webp");
+        assert!(!out.is_empty(), "stripped webp must have bytes");
+        assert!(
+            out.starts_with(b"RIFF"),
+            "stripped webp must remain a valid RIFF container"
+        );
+    }
+
+    #[test]
+    fn strip_image_metadata_rejects_unsupported_mime() {
+        // Even if decode succeeds on a crafted payload the function
+        // won't encode an unknown mime. No bytes reach storage.
+        let img = image::RgbImage::from_pixel(2, 2, image::Rgb([10, 20, 30]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut bytes), 80)
+            .encode_image(&image::DynamicImage::ImageRgb8(img))
+            .expect("encode seed");
+        assert!(strip_image_metadata(&bytes, "image/heic").is_err());
+    }
 }
