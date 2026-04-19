@@ -15,11 +15,13 @@
 //! the endpoint by accident.
 
 use axum::{
-    extract::Path,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
+
+use crate::app::AppContext;
 use chrono::Utc;
 use diesel::sql_types::{Integer, Nullable, Text, Uuid as SqlUuid};
 use diesel_async::RunQueryDsl;
@@ -77,6 +79,7 @@ fn admin_auth(headers: &HeaderMap) -> Result<(), Box<Response>> {
 }
 
 pub(super) async fn ban_user(
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(pid): Path<Uuid>,
     Json(body): Json<BanBody>,
@@ -142,6 +145,10 @@ pub(super) async fn ban_user(
     };
 
     state::invalidate_auth_cache_for_user_id(user_id).await;
+    // Kick any live WebSocket connection belonging to the banned
+    // user — the DB + cache path already stops future requests,
+    // this closes the last remaining transport on existing sockets.
+    ctx.chat_hub.disconnect_user(user_id);
 
     (
         StatusCode::OK,

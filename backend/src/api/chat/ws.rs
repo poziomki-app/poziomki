@@ -51,7 +51,7 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
     let viewer_is_stub = viewer.is_review_stub;
 
     // --- Step 2: Register in hub ---
-    let mut hub_rx = hub.register(user_id);
+    let (mut hub_rx, mut kill_rx) = hub.register(user_id);
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<ServerMessage>();
     // Separate channel for WS protocol-level Ping frames. Using the standard
     // control frame (rather than an app-level Pong JSON) means the client's
@@ -117,6 +117,14 @@ pub async fn handle_socket(socket: WebSocket, hub: ChatHub) {
 
     loop {
         tokio::select! {
+            // Force-disconnect from the hub (sign_out_all / admin ban).
+            // We break out so the cleanup path below aborts the
+            // writer task and unregisters the connection, the same
+            // way an idle timeout or client close would.
+            Some(()) = kill_rx.recv() => {
+                tracing::info!(user_id, "ws force-disconnected by hub");
+                break;
+            }
             frame = ws_rx.next() => {
                 let Some(Ok(frame)) = frame else { break };
                 last_seen = tokio::time::Instant::now();
