@@ -284,6 +284,29 @@ pub(super) async fn sign_out(
     Ok(Json(SuccessResponse { success: true }).into_response())
 }
 
+/// Terminate every active session for the authenticated user — the
+/// "sign out everywhere" button.
+///
+/// Used when a token is suspected of leaking, a device was lost, or
+/// the user wants a clean slate. Scoped to the caller's own
+/// `user_id`, not a target; the admin ban endpoint is the
+/// cross-user equivalent.
+pub(super) async fn sign_out_all(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    use crate::db::schema::sessions;
+    let (_session, user) = auth_or_respond!(headers);
+    let Ok(mut conn) = crate::db::conn().await else {
+        return Ok(Json(SuccessResponse { success: false }).into_response());
+    };
+    let _ = diesel::delete(sessions::table.filter(sessions::user_id.eq(user.id)))
+        .execute(&mut conn)
+        .await;
+    crate::api::state::invalidate_auth_cache_for_user_id(user.id).await;
+    Ok(Json(SuccessResponse { success: true }).into_response())
+}
+
 pub(super) async fn sessions(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
