@@ -89,3 +89,12 @@ pub(super) async fn storage_read(headers: &HeaderMap, filename: &str) -> Handler
         .await
         .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
 }
+
+pub(super) async fn storage_head_meta(
+    headers: &HeaderMap,
+    filename: &str,
+) -> HandlerResult<uploads_storage::HeadMeta> {
+    uploads_storage::head_meta(filename)
+        .await
+        .map_err(|err| Box::new(storage_error_to_response(headers, &err)))
+}
