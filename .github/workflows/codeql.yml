@@ -16,9 +16,9 @@ jobs:
       matrix:
         include:
           - language: rust
-            build-mode: none
+            build-mode: manual
           - language: java-kotlin
-            build-mode: none
+            build-mode: manual
 
     steps:
       - uses: actions/checkout@v4
@@ -28,5 +28,37 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           config-file: .github/codeql-config.yml
+
+      # Rust: `build-mode: manual` requires an explicit cargo build so
+      # CodeQL can observe MIR. Swatinem/rust-cache keeps weekly runs
+      # under a few minutes after the first green build.
+      - name: Rust toolchain
+        if: matrix.language == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust cache
+        if: matrix.language == 'rust'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: Build Rust
+        if: matrix.language == 'rust'
+        working-directory: backend
+        run: cargo build --all-targets --locked
+
+      # Kotlin/Java: gradle produces the JAR / class files CodeQL
+      # reads. Uses the same task the mobile PR checks already run.
+      - name: JDK 21
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Gradle cache
+        if: matrix.language == 'java-kotlin'
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build mobile
+        if: matrix.language == 'java-kotlin'
+        working-directory: mobile
+        run: gradle :androidApp:assembleDebug --no-daemon
 
       - uses: github/codeql-action/analyze@v4
