@@ -171,6 +171,44 @@ async fn users_audit_captures_email_update() {
     );
 }
 
+#[tokio::test]
+#[serial]
+async fn users_audit_redacts_password_and_tokens() {
+    setup();
+    let mut conn = db::conn().await.expect("pool");
+    let user = insert_user_raw(&mut conn, "audit-redact@example.com").await;
+    let user_id = user.id;
+
+    diesel::sql_query("DELETE FROM audit.events WHERE table_name = 'public.users' AND row_pk = $1")
+        .bind::<Text, _>(user_id.to_string())
+        .execute(&mut conn)
+        .await
+        .expect("clear prior");
+
+    diesel::update(users::table.filter(users::id.eq(user_id)))
+        .set(users::password.eq("new-secret-hash"))
+        .execute(&mut conn)
+        .await
+        .expect("update password");
+
+    let row: CountRow = diesel::sql_query(
+        "SELECT COUNT(*) AS count FROM audit.events \
+         WHERE table_name = 'public.users' \
+           AND row_pk = $1 \
+           AND 'password' = ANY(changed_columns) \
+           AND (new_data ? 'password') = false \
+           AND (old_data ? 'password') = false",
+    )
+    .bind::<Text, _>(user_id.to_string())
+    .get_result(&mut conn)
+    .await
+    .expect("redaction check");
+    assert_eq!(
+        row.count, 1,
+        "password rotation must surface in changed_columns but the password key must be stripped from old_data + new_data"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // poziomki_api role has a bounded statement_timeout so a runaway
 // query can't exhaust the pool.
