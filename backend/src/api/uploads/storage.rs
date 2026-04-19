@@ -203,6 +203,25 @@ pub(in crate::api) async fn exists(filename: &str) -> Result<bool, StorageError>
     Err(storage_error(None))
 }
 
+pub(in crate::api) struct HeadMeta {
+    pub content_length: Option<u64>,
+    pub content_type: Option<String>,
+}
+
+pub(in crate::api) async fn head_meta(filename: &str) -> Result<HeadMeta, StorageError> {
+    let config = storage().map_err(|_message| storage_error(None))?;
+    let (head, status_code) = config
+        .bucket
+        .head_object(object_path(&config.object_prefix, filename))
+        .await
+        .map_err(|err| map_s3_error(&err))?;
+    ensure_ok_status(status_code)?;
+    Ok(HeadMeta {
+        content_length: head.content_length.and_then(|v| u64::try_from(v).ok()),
+        content_type: head.content_type,
+    })
+}
+
 pub(super) async fn delete(filename: &str) -> Result<(), StorageError> {
     let config = storage().map_err(|_message| storage_error(None))?;
     let response = config

@@ -1,11 +1,16 @@
 use super::{
     bad_request, create_upload_filename, enqueue_upload_variants_generation, error_response,
     fallback_variant_urls, internal_upload_error, load_owned_upload, load_profile_for_user,
-    not_found, public_upload_url, storage_signed_put_url, storage_upload, uploads_multipart,
-    uploads_resize, uploads_storage, validate_filename, validate_presign_payload, AppContext,
-    DataResponse, DirectUploadCompleteBody, DirectUploadPresignBody, DirectUploadPresignResponse,
-    ErrorSpec, HandlerError, HeaderMap, Json, Multipart, NewUpload, Path, Response, Result, State,
-    SuccessResponse, UploadChangeset, UploadResponse, Utc, Uuid,
+    public_upload_url, storage_head_meta, storage_read, storage_signed_put_url, storage_upload,
+    uploads_multipart, uploads_resize, uploads_storage, validate_filename,
+    validate_presign_payload, AppContext, DataResponse, DirectUploadCompleteBody,
+    DirectUploadPresignBody, DirectUploadPresignResponse, ErrorSpec, HandlerError, HeaderMap, Json,
+    Multipart, NewUpload, Path, Response, Result, State, SuccessResponse, UploadChangeset,
+    UploadResponse, Utc, Uuid,
+};
+use crate::api::state::{
+    allowed_upload_mime, max_upload_size_bytes, strip_image_metadata, validate_image_dimensions,
+    validate_magic_bytes,
 };
 use axum::response::IntoResponse;
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -36,6 +41,125 @@ fn unwrap_viewer_tx<T>(
             },
         ))),
     }
+}
+
+/// Best-effort cleanup after a rejected direct upload: drop the object
+/// in storage and soft-delete the DB row. Runs on the "caller shipped
+/// garbage" path so the next presign attempt isn't blocked by a stale
+/// upload row + we don't retain the bytes.
+async fn purge_rejected_upload(upload_id: Uuid, filename: &str) {
+    let _ = uploads_storage::delete(filename).await;
+    let changeset = UploadChangeset {
+        deleted: Some(true),
+        updated_at: Some(Utc::now()),
+        ..Default::default()
+    };
+    if let Ok(mut conn) = crate::db::conn().await {
+        let _ =
+            super::uploads_write_repo::mark_upload_deleted(&mut conn, upload_id, &changeset).await;
+    }
+}
+
+async fn sanitize_direct_upload(
+    headers: &HeaderMap,
+    upload: &crate::db::models::uploads::Upload,
+    filename: &str,
+) -> std::result::Result<(), HandlerError> {
+    use axum::http::StatusCode;
+
+    // 1. HEAD first. Cheaper than a full GET and lets us reject
+    //    oversized / wrong-type uploads before pulling bytes over
+    //    the wire.
+    // A missing object surfaces from storage_head_meta as NOT_FOUND
+    // (same shape the old exists() check returned).
+    let meta = storage_head_meta(headers, filename).await?;
+
+    let max = max_upload_size_bytes() as u64;
+    if let Some(len) = meta.content_length {
+        if len > max {
+            purge_rejected_upload(upload.id, filename).await;
+            return Err(Box::new(bad_request(
+                headers,
+                "FILE_TOO_LARGE",
+                "Uploaded file exceeds maximum size",
+            )));
+        }
+    }
+    if let Some(ct) = meta.content_type.as_deref() {
+        let normalized = ct
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        if !normalized.is_empty() && normalized != upload.mime_type.to_ascii_lowercase() {
+            purge_rejected_upload(upload.id, filename).await;
+            return Err(Box::new(bad_request(
+                headers,
+                "INVALID_FILE_CONTENT",
+                "Uploaded content type does not match presign",
+            )));
+        }
+    }
+    if !allowed_upload_mime(&upload.mime_type) {
+        purge_rejected_upload(upload.id, filename).await;
+        return Err(Box::new(bad_request(
+            headers,
+            "INVALID_FILE_TYPE",
+            "Unsupported file type",
+        )));
+    }
+
+    // 2. Download bytes. Bounded by the HEAD check above.
+    let bytes = storage_read(headers, filename).await.inspect_err(|_| {
+        tracing::warn!(filename, "failed to read direct-upload bytes for sanitize");
+    })?;
+    if bytes.len() as u64 > max {
+        purge_rejected_upload(upload.id, filename).await;
+        return Err(Box::new(bad_request(
+            headers,
+            "FILE_TOO_LARGE",
+            "Uploaded file exceeds maximum size",
+        )));
+    }
+
+    // 3. Magic bytes + dimensions + strip-and-reencode. Same chain the
+    //    multipart path runs.
+    if !validate_magic_bytes(&bytes, &upload.mime_type) {
+        purge_rejected_upload(upload.id, filename).await;
+        return Err(Box::new(bad_request(
+            headers,
+            "INVALID_FILE_CONTENT",
+            "Content does not match type",
+        )));
+    }
+    if let Err(msg) = validate_image_dimensions(&bytes, &upload.mime_type) {
+        purge_rejected_upload(upload.id, filename).await;
+        return Err(Box::new(bad_request(headers, "IMAGE_TOO_LARGE", msg)));
+    }
+    let sanitized = match strip_image_metadata(&bytes, &upload.mime_type) {
+        Ok(out) => out,
+        Err(msg) => {
+            purge_rejected_upload(upload.id, filename).await;
+            return Err(Box::new(bad_request(headers, "INVALID_FILE_CONTENT", msg)));
+        }
+    };
+
+    // 4. Overwrite with sanitized bytes so downstream readers +
+    //    variant generation see metadata-stripped content.
+    if let Err(err) = uploads_storage::upload(filename, &sanitized, &upload.mime_type).await {
+        tracing::warn!(filename, ?err.kind, "failed to overwrite sanitized direct upload");
+        return Err(Box::new(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            headers,
+            ErrorSpec {
+                error: "Failed to finalize upload".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        )));
+    }
+    Ok(())
 }
 
 async fn auth_and_viewer(
@@ -275,22 +399,14 @@ pub(in crate::api) async fn file_upload_complete(
         .await;
         let upload = unwrap_viewer_tx(tx_result, &headers)?;
 
-        let exists = uploads_storage::exists(&payload.filename)
-            .await
-            .map_err(|_error| {
-                Box::new(error_response(
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    &headers,
-                    ErrorSpec {
-                        error: "Upload storage is unavailable".to_string(),
-                        code: "INTERNAL_ERROR",
-                        details: None,
-                    },
-                )) as HandlerError
-            })?;
-        if !exists {
-            return Err(Box::new(not_found(&headers)));
-        }
+        // The client PUT directly to Garage via presigned URL without
+        // going through our multipart validator — so we must re-run the
+        // same checks here: HEAD the object, enforce size + mime match,
+        // download, verify magic bytes + dimensions, strip metadata, and
+        // overwrite with the sanitized bytes. Otherwise a caller can
+        // upload arbitrary non-image content up to whatever size Garage
+        // accepts and trigger downstream variant generation on it.
+        sanitize_direct_upload(&headers, &upload, &payload.filename).await?;
 
         if let Err(error) = enqueue_upload_variants_generation(&upload.id).await {
             tracing::warn!(
