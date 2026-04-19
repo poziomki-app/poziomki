@@ -1,0 +1,29 @@
+# Poziomki auth-endpoint jail.
+#
+# Adds an OS-level (iptables) ban after repeated failures on the
+# API auth routes. Application-layer rate limits in
+# `backend/src/api/state/auth.rs` already reject per-email brute
+# force; this jail catches per-IP brute force that spreads across
+# many target emails (credential stuffing).
+#
+# Tuning notes:
+# * maxretry = 8 — tolerant enough for the legitimate "I typed
+#   my password wrong 3 times" case; tight enough to bite a
+#   credential stuffer within seconds.
+# * findtime = 10m — short window so legit users who get rate-
+#   limited once don't accumulate banpoints across hours.
+# * bantime = 1h — fastest path to good-faith unban, matches the
+#   existing `caddy-auth` jail's cadence.
+# * logpath = /var/log/caddy/*access.log — glob so the rename
+#   from rs-access.log → api-access.log doesn't require a
+#   follow-up fail2ban config change.
+
+[poziomki-auth]
+enabled  = true
+filter   = poziomki-auth
+logpath  = /var/log/caddy/*access.log
+maxretry = 8
+findtime = 10m
+bantime  = 1h
+port     = http,https
+action   = iptables-allports[name=poziomki-auth]
