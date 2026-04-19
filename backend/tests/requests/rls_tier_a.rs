@@ -623,6 +623,45 @@ async fn execute_count(conn: &mut AsyncPgConnection, sql: &str) -> usize {
 
 #[tokio::test]
 #[serial]
+async fn users_viewer_cannot_flip_own_stub_flag() {
+    let (alice, _bob) = setup_two_parties().await;
+    let alice_id = alice.user.id;
+
+    // WITH CHECK must reject setting is_review_stub = true for a
+    // non-stub viewer — otherwise the viewer could jump stub buckets
+    // and read the other side via profiles_in_current_bucket().
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+            async move {
+                diesel::sql_query(format!(
+                    "UPDATE public.users SET is_review_stub = true WHERE id = {alice_id}"
+                ))
+                .execute(conn)
+                .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "UPDATE flipping is_review_stub must be rejected by the users_viewer WITH CHECK"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let row: CountRow = diesel::sql_query(
+        "SELECT COUNT(*) AS count FROM public.users WHERE id = $1 AND is_review_stub = false",
+    )
+    .bind::<diesel::sql_types::Integer, _>(alice_id)
+    .get_result(&mut conn)
+    .await
+    .expect("post-check query");
+    assert_eq!(row.count, 1, "Alice must still be a real (non-stub) user");
+}
+
+#[tokio::test]
+#[serial]
 async fn profiles_viewer_cannot_delete_other_bucket_row() {
     let (alice, bob) = setup_two_parties().await;
     let bob_profile_id = bob.profile_id;

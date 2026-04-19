@@ -130,10 +130,14 @@ $$;
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users FORCE ROW LEVEL SECURITY;
+-- WITH CHECK mirrors USING on `is_review_stub` so a viewer can't flip
+-- their own stub flag via UPDATE and jump buckets — otherwise a real
+-- user could run `UPDATE users SET is_review_stub = true` on their own
+-- row and then read the stub bucket via `profiles_in_current_bucket()`.
 CREATE POLICY users_viewer ON public.users
     FOR ALL TO poziomki_api
     USING (id = app.current_user_id() AND is_review_stub = app.current_is_stub())
-    WITH CHECK (id = app.current_user_id());
+    WITH CHECK (id = app.current_user_id() AND is_review_stub = app.current_is_stub());
 
 -- ---------------------------------------------------------------------------
 -- profiles
