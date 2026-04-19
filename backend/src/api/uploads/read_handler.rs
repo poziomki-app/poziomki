@@ -212,7 +212,10 @@ pub(in crate::api) async fn file_status(
         let (thumbnail_url, standard_url) = if imgproxy {
             (
                 crate::api::imgproxy_signing::signed_avatar_url(&upload.filename),
-                crate::api::imgproxy_signing::signed_url(&upload.filename, "feed", "webp"),
+                // `standard_url` is what clients use for the main image
+                // render; full/2000px WebP keeps it sharp on high-DPI
+                // phones (200-400 KiB, fine on wifi).
+                crate::api::imgproxy_signing::signed_url(&upload.filename, "full", "webp"),
             )
         } else if upload.has_variants {
             let thumb_name = uploads_resize::variant_filename(&upload.filename, "thumb");
