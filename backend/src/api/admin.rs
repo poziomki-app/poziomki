@@ -81,6 +81,17 @@ pub(super) async fn ban_user(
     Path(pid): Path<Uuid>,
     Json(body): Json<BanBody>,
 ) -> Response {
+    // Rate limit by caller IP before token compare — caps online
+    // brute-force of ADMIN_TOKEN from any single source even though
+    // the compare itself is constant time.
+    if let Err(resp) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::AdminAuth,
+    )
+    .await
+    {
+        return *resp;
+    }
     if let Err(resp) = admin_auth(&headers) {
         return *resp;
     }
