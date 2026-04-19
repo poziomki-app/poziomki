@@ -317,6 +317,8 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         is_review_stub -> Bool,
+        banned_at -> Nullable<Timestamptz>,
+        banned_reason -> Nullable<Text>,
     }
 }
 
