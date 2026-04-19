@@ -769,6 +769,68 @@ async fn event_conversation_insert_rejects_pending_attendee() {
 }
 
 // ---------------------------------------------------------------------------
+// API role must not be able to UPDATE or DELETE whole conversation
+// rows. A naive member-only UPDATE/DELETE policy would let any chat
+// participant nuke the room for everyone via ON DELETE CASCADE
+// through conversation_members / messages / message_reactions.
+// Legitimate event-chat cleanup routes through
+// app.delete_event_and_chat() instead.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn conversations_member_cannot_delete() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let dm_id = fx.dm_id;
+
+    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql = format!("DELETE FROM public.conversations WHERE id = '{dm_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "no conversations_delete policy — member DELETE must be a no-op"
+    );
+
+    let mut conn = db::conn().await.expect("pool");
+    let row: CountRow =
+        diesel::sql_query("SELECT COUNT(*) AS count FROM public.conversations WHERE id = $1")
+            .bind::<diesel::sql_types::Uuid, _>(dm_id)
+            .get_result(&mut conn)
+            .await
+            .expect("post-check");
+    assert_eq!(row.count, 1, "DM row must still exist");
+}
+
+#[tokio::test]
+#[serial]
+async fn conversations_member_cannot_update_metadata() {
+    let fx = setup_fixture().await;
+    let alice_id = fx.alice.id;
+    let dm_id = fx.dm_id;
+
+    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql =
+                format!("UPDATE public.conversations SET title = 'tampered' WHERE id = '{dm_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "no conversations_update policy — member UPDATE must be a no-op"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // conversations identity-column trigger: a DM member cannot silently
 // enrol a third party by swapping user_high_id, and cannot flip
 // kind / event_id to switch which conversation_members_insert branch
@@ -782,42 +844,41 @@ async fn conversations_identity_change_rejected() {
     let dm_id = fx.dm_id;
     let carol_id = fx.carol.id;
 
-    // Alice tries to replace Bob with Carol as the DM's high-id peer.
-    let result: Result<(), diesel::result::Error> =
-        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
-            async move {
-                let sql = format!(
-                    "UPDATE public.conversations SET user_high_id = {carol_id} \
-                     WHERE id = '{dm_id}'"
-                );
-                diesel::sql_query(sql).execute(conn).await?;
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await;
-
-    assert!(
-        result.is_err(),
-        "conversations identity trigger must reject user_high_id UPDATE"
+    // With no conversations_update policy, the member's UPDATE just
+    // filters to zero rows — the identity trigger doesn't fire at all
+    // from the API role path. We assert the mutation didn't land;
+    // that's the property that matters. (The trigger still defends
+    // owner / worker paths from accidental identity-column changes.)
+    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql = format!(
+                "UPDATE public.conversations SET user_high_id = {carol_id} \
+                 WHERE id = '{dm_id}'"
+            );
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx");
+    assert_eq!(
+        affected, 0,
+        "API role must not be able to reassign DM pair members"
     );
 
-    // Same viewer, different field — kind flip must also error.
-    let result2: Result<(), diesel::result::Error> =
-        rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
-            async move {
-                let sql =
-                    format!("UPDATE public.conversations SET kind = 'event' WHERE id = '{dm_id}'");
-                diesel::sql_query(sql).execute(conn).await?;
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await;
-
-    assert!(
-        result2.is_err(),
-        "conversations identity trigger must reject kind UPDATE"
+    let affected_kind = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+        async move {
+            let sql =
+                format!("UPDATE public.conversations SET kind = 'event' WHERE id = '{dm_id}'");
+            Ok(execute_count(conn, &sql).await)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("alice tx 2");
+    assert_eq!(
+        affected_kind, 0,
+        "API role must not be able to flip conversation kind"
     );
 }
 

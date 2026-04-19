@@ -232,6 +232,7 @@ REVOKE EXECUTE ON FUNCTION app.viewer_conversation_ids() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_see_message(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.viewer_can_access_event(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.event_creator_user_id(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.session_bypasses_rls() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_dm_conversation(int, int) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.find_event_conversation(uuid) FROM PUBLIC;
@@ -248,6 +249,7 @@ BEGIN
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_dm_conversation(int, int) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_event_conversation(uuid) TO poziomki_api';
         EXECUTE 'GRANT EXECUTE ON FUNCTION app.conversation_meta_for_insert(uuid) TO poziomki_api';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.delete_event_and_chat(uuid) TO poziomki_api';
     END IF;
     -- Worker process (BYPASSRLS) reaches the resolve-or-create event
     -- chat path via sync_event_membership — it needs execute on the
@@ -295,14 +297,58 @@ CREATE POLICY conversations_insert ON public.conversations
         )
     );
 
-CREATE POLICY conversations_update ON public.conversations
-    FOR UPDATE TO poziomki_api
-    USING (id IN (SELECT conversation_id FROM app.viewer_conversation_ids()))
-    WITH CHECK (id IN (SELECT conversation_id FROM app.viewer_conversation_ids()));
+-- Event cleanup path: the API role has no direct DELETE privilege on
+-- conversations (see policy block below), so legitimate event deletion
+-- routes through this SD helper. It validates the caller is the event
+-- owner (or a BYPASSRLS worker), then issues the event DELETE — FK
+-- cascades handle conversations / conversation_members / messages /
+-- message_reactions. Report rows are cleaned up here too so they
+-- don't dangle after the event disappears.
+CREATE OR REPLACE FUNCTION app.delete_event_and_chat(p_event_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    v_allowed boolean;
+BEGIN
+    SELECT
+        app.session_bypasses_rls()
+        OR EXISTS (
+            SELECT 1
+            FROM public.events e
+            JOIN public.profiles p ON p.id = e.creator_id
+            WHERE e.id = p_event_id
+              AND p.user_id = app.current_user_id()
+              AND app.current_user_id() > 0
+        )
+    INTO v_allowed;
 
-CREATE POLICY conversations_delete ON public.conversations
-    FOR DELETE TO poziomki_api
-    USING (id IN (SELECT conversation_id FROM app.viewer_conversation_ids()));
+    IF NOT v_allowed THEN
+        RAISE EXCEPTION
+            'delete_event_and_chat: caller is neither event creator nor a BYPASSRLS role';
+    END IF;
+
+    DELETE FROM public.reports
+    WHERE target_type = 'event' AND target_id = p_event_id;
+
+    DELETE FROM public.events WHERE id = p_event_id;
+END
+$$;
+
+COMMENT ON FUNCTION app.delete_event_and_chat(uuid) IS
+    'Event deletion + chat cleanup. Auth check pins access to the event creator or a BYPASSRLS role. FK cascades handle the rest of the chat fan-out.';
+
+-- No general UPDATE or DELETE policy for poziomki_api on conversations.
+-- A member-only UPDATE would permit mutation of title / metadata
+-- across the room (no API feature uses this today); a member-only
+-- DELETE is worse — it would let any participant nuke an entire chat
+-- via CASCADE through conversation_members, messages, and
+-- message_reactions. The legitimate cleanup path is event deletion,
+-- which is routed through the SD helper app.delete_event_and_chat()
+-- below; DM rows are never deleted from the application — they're
+-- cleaned up at account-deletion time through a different path.
 
 -- conversations.(kind, event_id, user_low_id, user_high_id) are
 -- identity columns — the policy branches below decide what an
