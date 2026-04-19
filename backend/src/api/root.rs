@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
+use subtle::ConstantTimeEq;
 
 use crate::app::AppContext;
 
@@ -43,10 +44,13 @@ fn ops_token_matches(headers: &HeaderMap) -> bool {
     let Some(expected) = ops_status_token() else {
         return false;
     };
-    headers
+    let actual = headers
         .get("x-ops-token")
         .and_then(|value| value.to_str().ok())
-        .is_some_and(|actual| actual == expected)
+        .unwrap_or("");
+    // Constant-time compare so response timing doesn't leak bytes of
+    // the expected token to an attacker probing /ops/*.
+    expected.as_bytes().ct_eq(actual.as_bytes()).unwrap_u8() == 1
 }
 
 pub(super) async fn outbox_status(
@@ -55,6 +59,17 @@ pub(super) async fn outbox_status(
 ) -> Result<Response> {
     if ops_status_token().is_none() {
         return Ok((axum::http::StatusCode::NOT_FOUND, "not found").into_response());
+    }
+
+    // Rate limit by caller IP before token compare — caps online
+    // brute-force of OPS_STATUS_TOKEN.
+    if let Err(resp) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::OpsAuth,
+    )
+    .await
+    {
+        return Ok(*resp);
     }
 
     if !ops_token_matches(&headers) {
