@@ -1,4 +1,6 @@
-**Badanie potrzeb studentów** – [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
+🌱 Dołącz do naszego community na [Discordzie](https://discord.gg/UB9vHhbGNu)
+
+📢 Badanie potrzeb studentów – [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
 
 <p align="center">
   <picture>
@@ -39,3 +41,4 @@ projekt udostępniany jest na warunkach licencji AGPLv3
 <p align="left">
   <img src="./assets/funding.png" />
 </p>
+
