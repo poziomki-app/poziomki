@@ -184,6 +184,8 @@ impl MatchingRepository {
         limit: i64,
         conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<Vec<Profile>, crate::error::AppError> {
+        use crate::db::schema::profile_blocks;
+
         let viewer_is_stub = users::table
             .filter(users::id.eq(user_id))
             .select(users::is_review_stub)
@@ -191,6 +193,45 @@ impl MatchingRepository {
             .await
             .optional()?
             .unwrap_or(false);
+
+        // Resolve every profile id on either side of a block with the
+        // viewer. Chat already filters DMs against this set
+        // (chat/conversations.rs:376); matching must do the same or
+        // blocked users re-appear in swipes. Batch-load once and
+        // pass as a NOT IN to the main query so the DB plan stays a
+        // single pass instead of an N+1 subquery.
+        let viewer_profile_ids: Vec<uuid::Uuid> = profiles::table
+            .filter(profiles::user_id.eq(user_id))
+            .select(profiles::id)
+            .load(conn)
+            .await?;
+
+        let blocked_profile_ids: Vec<uuid::Uuid> = if viewer_profile_ids.is_empty() {
+            Vec::new()
+        } else {
+            let rows: Vec<(uuid::Uuid, uuid::Uuid)> = profile_blocks::table
+                .filter(
+                    profile_blocks::blocker_id
+                        .eq_any(&viewer_profile_ids)
+                        .or(profile_blocks::blocked_id.eq_any(&viewer_profile_ids)),
+                )
+                .select((profile_blocks::blocker_id, profile_blocks::blocked_id))
+                .load(conn)
+                .await?;
+            rows.into_iter()
+                .flat_map(|(a, b)| {
+                    // Keep the "other side" id — the one that isn't the viewer.
+                    let mut out = Vec::with_capacity(2);
+                    if !viewer_profile_ids.contains(&a) {
+                        out.push(a);
+                    }
+                    if !viewer_profile_ids.contains(&b) {
+                        out.push(b);
+                    }
+                    out
+                })
+                .collect()
+        };
 
         profiles::table
             .inner_join(users::table.on(users::id.eq(profiles::user_id)))
@@ -202,6 +243,7 @@ impl MatchingRepository {
                     .eq(true)
                     .or(user_settings::privacy_discoverable.is_null()),
             )
+            .filter(profiles::id.ne_all(&blocked_profile_ids))
             .order(profiles::created_at.desc())
             .limit(limit)
             .select(profiles::all_columns)
