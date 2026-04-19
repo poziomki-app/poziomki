@@ -165,6 +165,10 @@ pub(in crate::api) async fn require_auth_context(
     let hashed = session_token_hash(&token);
 
     if let Some((session, user)) = cache_auth_get(&hashed).await {
+        if user.banned_at.is_some() {
+            invalidate_auth_cache_for_user_id(user.id).await;
+            return Err(Box::new(banned_response(headers)));
+        }
         let elapsed = Utc::now() - session.updated_at;
         if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
             maybe_renew_session(&session, user.is_review_stub).await;
@@ -219,9 +223,28 @@ pub(in crate::api) async fn require_auth_context(
         .map_err(|_| Box::new(unauthorized_response(headers)))?;
 
     let (session, user) = result.ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+    if user.banned_at.is_some() {
+        // Don't cache a banned user — they'd be a fast-path back in.
+        // The admin-ban path also purges sessions, so a banned user
+        // should normally not reach this branch.
+        return Err(Box::new(banned_response(headers)));
+    }
     cache_auth_put(hashed, &session, &user).await;
     tracing::Span::current().record("user_id", user.id);
     Ok(AuthContext { session, user })
+}
+
+fn banned_response(headers: &HeaderMap) -> axum::response::Response {
+    use crate::api::{error_response, ErrorSpec};
+    error_response(
+        axum::http::StatusCode::FORBIDDEN,
+        headers,
+        ErrorSpec {
+            error: "Account suspended".to_string(),
+            code: "ACCOUNT_BANNED",
+            details: None,
+        },
+    )
 }
 
 fn session_from_row(row: &db::AuthSessionRow) -> Session {
