@@ -95,7 +95,8 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
 /// (no table reads), so they don't need definer rights. Listed
 /// separately so a dropped helper surfaces loudly even though it won't
 /// appear in the hardened-search_path test.
-const EXPECTED_POLICY_HELPERS: &[&str] = &["current_is_stub", "current_user_id"];
+const EXPECTED_POLICY_HELPERS: &[&str] =
+    &["current_is_stub", "current_user_id", "session_bypasses_rls"];
 
 fn setup() {
     let _ = dotenvy::dotenv();
