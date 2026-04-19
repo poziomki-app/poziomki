@@ -122,6 +122,68 @@ pub async fn role_flags(role: &str) -> (bool, bool) {
         .unwrap_or_default()
 }
 
+/// A policy attached to a table.
+#[derive(Debug, Clone)]
+pub struct Policy {
+    pub name: String,
+    pub roles: Vec<String>,
+}
+
+/// Fetch the `<table> → Vec<Policy>` map for a set of tables in
+/// `public`, in one catalog query. Empty vec when a table has no
+/// policies attached.
+pub async fn policies_for_tables(tables: &[&str]) -> BTreeMap<String, Vec<Policy>> {
+    let mut conn = db::conn().await.expect("pool");
+    let owned: Vec<String> = tables.iter().map(|s| (*s).to_string()).collect();
+    let rows: Vec<TextPair> = diesel::sql_query(
+        "SELECT p.tablename AS a, \
+                p.policyname || '\t' || COALESCE(array_to_string(p.roles, ','), '') AS b \
+         FROM pg_policies p \
+         WHERE p.schemaname = 'public' AND p.tablename = ANY($1)",
+    )
+    .bind::<diesel::sql_types::Array<Text>, _>(&owned)
+    .load(&mut conn)
+    .await
+    .expect("policies query");
+
+    let mut out: BTreeMap<String, Vec<Policy>> = tables
+        .iter()
+        .map(|t| ((*t).to_string(), Vec::new()))
+        .collect();
+    for row in rows {
+        if let Some((name, roles)) = row.b.split_once('\t') {
+            let roles = roles
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
+            out.entry(row.a).or_default().push(Policy {
+                name: name.to_string(),
+                roles,
+            });
+        }
+    }
+    out
+}
+
+/// Names of every function in schema `app`, regardless of security
+/// mode. Used by tier tests to assert policy-support helpers
+/// (non-SECURITY-DEFINER) are installed.
+pub async fn policy_helper_names() -> Vec<String> {
+    let mut conn = db::conn().await.expect("pool");
+    let rows: Vec<TextRow> = diesel::sql_query(
+        "SELECT p.proname AS value \
+         FROM pg_proc p \
+         JOIN pg_namespace n ON n.oid = p.pronamespace \
+         WHERE n.nspname = 'app' AND p.prosecdef = false \
+         ORDER BY p.proname",
+    )
+    .load(&mut conn)
+    .await
+    .expect("helper query");
+    rows.into_iter().map(|r| r.value).collect()
+}
+
 /// Map of every SECURITY DEFINER function name in schema `app` to its
 /// `proconfig` string, which encodes `SET search_path = ...`. Tests use
 /// this to assert every helper is hardened with `pg_catalog, pg_temp`.
