@@ -793,3 +793,70 @@ async fn anon_tx_sees_zero_users() {
     .expect("anon tx");
     assert_eq!(visible, 0, "anon viewer must not see any users");
 }
+
+// ---------------------------------------------------------------------------
+// Anon must not satisfy the bucket-relaxation on profiles / profile_tags.
+// `app.current_is_stub()` defaults to false, so without the explicit
+// `current_user_id() > 0` guard in `profiles_in_current_bucket()` an
+// anon tx would read every non-stub profile. Keep these tests pointed
+// directly at that exposure.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn anon_tx_sees_zero_profiles() {
+    let (_alice, _bob) = setup_two_parties().await;
+
+    let visible = rls_harness::with_api_viewer_tx(0, false, |conn| {
+        async move { Ok(count_rows(conn, "profiles").await) }.scope_boxed()
+    })
+    .await
+    .expect("anon tx");
+    assert_eq!(
+        visible, 0,
+        "anon viewer must not see same-bucket profiles — \
+         profiles_in_current_bucket() gates on current_user_id() > 0"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn anon_tx_sees_zero_profile_tags() {
+    let (alice, bob) = setup_two_parties().await;
+
+    let tag_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        diesel::insert_into(tags::table)
+            .values((
+                tags::id.eq(tag_id),
+                tags::name.eq("Rock"),
+                tags::scope.eq("interest"),
+                tags::created_at.eq(now),
+                tags::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed tag");
+        for p in [alice.profile_id, bob.profile_id] {
+            diesel::insert_into(profile_tags::table)
+                .values((
+                    profile_tags::profile_id.eq(p),
+                    profile_tags::tag_id.eq(tag_id),
+                ))
+                .execute(&mut conn)
+                .await
+                .expect("seed profile_tag");
+        }
+    }
+
+    let visible = rls_harness::with_api_viewer_tx(0, false, |conn| {
+        async move { Ok(count_rows(conn, "profile_tags").await) }.scope_boxed()
+    })
+    .await
+    .expect("anon tx");
+    assert_eq!(
+        visible, 0,
+        "anon viewer must not see same-bucket profile_tags"
+    );
+}

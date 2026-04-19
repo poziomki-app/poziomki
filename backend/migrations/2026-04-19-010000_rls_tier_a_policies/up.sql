@@ -80,6 +80,12 @@ COMMENT ON FUNCTION app.viewer_profile_ids() IS
 -- every profile in the same stub bucket (matching / attendee previews
 -- / DM resolution depend on this). Narrow returns — only `id` — so no
 -- sensitive column leaks even if a caller could invoke it unexpectedly.
+--
+-- The `app.current_user_id() > 0` guard is load-bearing: `current_is_stub`
+-- defaults to false, and `with_anon_tx` emits `app.user_id = '0'`, so
+-- without this check an anon API-role tx would satisfy the bucket
+-- predicate and read every non-stub profile. Real viewers have a
+-- positive user_id; anon (user_id 0 or NULL) gets an empty set.
 CREATE OR REPLACE FUNCTION app.profiles_in_current_bucket()
 RETURNS TABLE (id uuid)
 LANGUAGE sql
@@ -90,11 +96,12 @@ AS $$
     SELECT p.id
     FROM public.profiles p
     JOIN public.users u ON u.id = p.user_id
-    WHERE u.is_review_stub = app.current_is_stub()
+    WHERE app.current_user_id() > 0
+      AND u.is_review_stub = app.current_is_stub()
 $$;
 
 COMMENT ON FUNCTION app.profiles_in_current_bucket() IS
-    'All profile ids whose owner is in the viewer''s stub bucket. Bypasses RLS on users + profiles so policies that embed it don''t recursively self-filter.';
+    'All profile ids whose owner is in the viewer''s stub bucket. Bypasses RLS on users + profiles so policies that embed it don''t recursively self-filter. Returns empty for anon (user_id ≤ 0) to prevent cross-user reads without a real viewer.';
 
 REVOKE EXECUTE ON FUNCTION app.current_user_id() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION app.current_is_stub() FROM PUBLIC;
