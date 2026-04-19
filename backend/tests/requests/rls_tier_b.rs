@@ -23,7 +23,8 @@ use poziomki_backend::db::models::messages::NewMessage;
 use poziomki_backend::db::models::profiles::NewProfile;
 use poziomki_backend::db::models::users::{NewUser, User};
 use poziomki_backend::db::schema::{
-    conversation_members, conversations, message_reactions, messages, profiles, users,
+    conversation_members, conversations, event_attendees, events, message_reactions, messages,
+    profiles, users,
 };
 use serial_test::serial;
 use uuid::Uuid;
@@ -674,6 +675,91 @@ async fn message_reactions_cannot_update_onto_hidden_message() {
             "message_reactions UPDATE must not move a reaction onto a hidden message"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// viewer_can_access_event status filter: pending attendees must NOT
+// be able to create an event chat — the HTTP handler gates on
+// `status = 'going'` and the RLS helper mirrors that.
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn event_conversation_insert_rejects_pending_attendee() {
+    let fx = setup_fixture().await;
+    let carol_id = fx.carol.id;
+
+    // Carol has a `pending` attendance row on Bob's event. She's not
+    // the creator, not confirmed, so event chat creation must fail.
+    let event_id = Uuid::new_v4();
+    let bob_profile: Uuid = {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        let bob_profile_id = profiles::table
+            .filter(profiles::user_id.eq(fx.bob.id))
+            .select(profiles::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .expect("bob profile");
+        let carol_profile_id = profiles::table
+            .filter(profiles::user_id.eq(carol_id))
+            .select(profiles::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .expect("carol profile");
+        diesel::insert_into(events::table)
+            .values((
+                events::id.eq(event_id),
+                events::title.eq("Gathering"),
+                events::starts_at.eq(now + chrono::Duration::days(1)),
+                events::creator_id.eq(bob_profile_id),
+                events::created_at.eq(now),
+                events::updated_at.eq(now),
+                events::requires_approval.eq(true),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed event");
+        diesel::insert_into(event_attendees::table)
+            .values((
+                event_attendees::event_id.eq(event_id),
+                event_attendees::profile_id.eq(carol_profile_id),
+                event_attendees::status.eq("pending"),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed pending attendance");
+        bob_profile_id
+    };
+
+    let _ = bob_profile;
+
+    let result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
+            async move {
+                let now = Utc::now();
+                diesel::insert_into(conversations::table)
+                    .values(&NewConversation {
+                        id: Uuid::new_v4(),
+                        kind: "event".into(),
+                        title: Some("Gathering".into()),
+                        event_id: Some(event_id),
+                        user_low_id: None,
+                        user_high_id: None,
+                        created_at: now,
+                        updated_at: now,
+                    })
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "conversations_insert must reject event chat creation for a pending attendee"
+    );
 }
 
 // ---------------------------------------------------------------------------

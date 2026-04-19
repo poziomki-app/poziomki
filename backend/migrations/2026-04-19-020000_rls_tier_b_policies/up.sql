@@ -64,7 +64,9 @@ COMMENT ON FUNCTION app.viewer_can_see_message(uuid) IS
 -- conversations — without this the conversations_insert policy would
 -- accept any `kind='event'` row and let a compromised API-role caller
 -- fabricate chat rooms for events they have no right to. Grants access
--- to the event creator and any confirmed attendee.
+-- to the event creator and any `going` attendee; `pending`, `waitlist`,
+-- `declined`, etc. are rejected so attendance status maps one-to-one
+-- with chat access (same gate the HTTP handler uses in chat/mod.rs).
 CREATE OR REPLACE FUNCTION app.viewer_can_access_event(p_event_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -85,13 +87,14 @@ AS $$
             FROM public.event_attendees ea
             JOIN public.profiles p ON p.id = ea.profile_id
             WHERE ea.event_id = p_event_id
+              AND ea.status = 'going'
               AND p.user_id = app.current_user_id()
         )
     )
 $$;
 
 COMMENT ON FUNCTION app.viewer_can_access_event(uuid) IS
-    'True iff the viewer owns the event or is a confirmed attendee. Used by conversations_insert to prevent arbitrary event chat creation.';
+    'True iff the viewer owns the event or has a `going` attendance row. Used by conversations_insert to prevent arbitrary event chat creation; mirrors the HTTP-layer gate.';
 
 -- Helper: user_id behind an event's creator. The event-chat bootstrap
 -- (resolve_or_create_event_conversation) inserts the creator membership
