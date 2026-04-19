@@ -22,7 +22,8 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use serde::Deserialize;
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
@@ -114,25 +115,32 @@ pub(super) async fn ban_user(
     let now = Utc::now();
     let reason = body.reason.unwrap_or_else(|| "no reason provided".into());
 
-    // Flip the ban flag + invalidate every active session in one tx
+    // Flip the ban flag + invalidate every active session atomically
     // so a banned user can't keep using a cached session past the
     // ban. The auth middleware also rejects banned users on the
-    // next cache miss, but session purge makes the kick immediate.
-    let result: Result<(), diesel::result::Error> = async {
-        diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set((
-                users::banned_at.eq(Some(now)),
-                users::banned_reason.eq(Some(reason.clone())),
-                users::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .await?;
-        diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
-            .execute(&mut conn)
-            .await?;
-        Ok(())
-    }
-    .await;
+    // next cache miss, but session purge makes the kick immediate —
+    // and the wrapping transaction is what makes "immediate" real:
+    // without it, a successful UPDATE followed by a failed DELETE
+    // would leave the user banned-but-still-sessioned.
+    let result: Result<(), diesel::result::Error> = conn
+        .transaction(|conn| {
+            async move {
+                diesel::update(users::table.filter(users::id.eq(user_id)))
+                    .set((
+                        users::banned_at.eq(Some(now)),
+                        users::banned_reason.eq(Some(reason.clone())),
+                        users::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .await?;
+                diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
 
     if result.is_err() {
         return error_response(
