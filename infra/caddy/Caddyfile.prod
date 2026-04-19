@@ -137,7 +137,14 @@ api.poziomki.app {
 		header {
 			X-Robots-Tag "noindex, nofollow, noarchive"
 		}
-		reverse_proxy localhost:3080
+		# imgproxy refuses any request without a matching X-Origin-Secret
+		# (so a direct hit on port 3080 can't serve images if ever exposed).
+		# Strip any client-supplied value first so the caller can't forge
+		# it, then inject the configured one before forwarding upstream.
+		request_header -X-Origin-Secret
+		reverse_proxy localhost:3080 {
+			header_up X-Origin-Secret {$IMGPROXY_ORIGIN_SECRET}
+		}
 	}
 
 	handle {
