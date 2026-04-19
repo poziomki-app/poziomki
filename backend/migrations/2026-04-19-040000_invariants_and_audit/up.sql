@@ -99,13 +99,28 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
-    v_row_pk       text;
-    v_op           char(1);
-    v_old_jsonb    jsonb;
-    v_new_jsonb    jsonb;
-    v_changed      text[];
-    v_actor        int;
+    v_row_pk          text;
+    v_op              char(1);
+    v_old_jsonb       jsonb;
+    v_new_jsonb       jsonb;
+    v_changed         text[];
+    v_actor           int;
+    v_sensitive_cols  text[] := ARRAY[]::text[];
 BEGIN
+    -- Never persist credential material in audit.events. We still
+    -- surface the column in `changed_columns` (so "password rotated"
+    -- is a visible event), but the JSONB snapshots get the sensitive
+    -- keys stripped before storage.
+    IF TG_TABLE_NAME = 'users' THEN
+        v_sensitive_cols := ARRAY[
+            'password',
+            'api_key',
+            'reset_token',
+            'email_verification_token',
+            'magic_link_token'
+        ];
+    END IF;
+
     IF TG_OP = 'INSERT' THEN
         v_op := 'I';
         v_old_jsonb := NULL;
@@ -131,6 +146,18 @@ BEGIN
         v_new_jsonb := NULL;
         v_changed := NULL;
         v_row_pk := (v_old_jsonb ->> 'id');
+    END IF;
+
+    -- Strip sensitive keys from the stored payload (changed_columns
+    -- is computed above against the unredacted row so rotation
+    -- events still surface).
+    IF array_length(v_sensitive_cols, 1) IS NOT NULL THEN
+        IF v_old_jsonb IS NOT NULL THEN
+            v_old_jsonb := v_old_jsonb - v_sensitive_cols;
+        END IF;
+        IF v_new_jsonb IS NOT NULL THEN
+            v_new_jsonb := v_new_jsonb - v_sensitive_cols;
+        END IF;
     END IF;
 
     BEGIN
