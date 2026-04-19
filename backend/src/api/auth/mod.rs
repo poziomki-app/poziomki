@@ -298,7 +298,7 @@ pub(super) async fn sign_out(
 /// context the DELETE would filter to zero rows and the endpoint
 /// would lie — a 200 with nothing revoked except the in-memory cache.
 pub(super) async fn sign_out_all(
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
     use crate::db::schema::sessions;
@@ -319,6 +319,10 @@ pub(super) async fn sign_out_all(
     })
     .await;
     crate::api::state::invalidate_auth_cache_for_user_id(user.id).await;
+    // Drop any live WebSocket connections — otherwise "sign out
+    // everywhere" leaves the chat transport happy-pathing on a
+    // previously-authenticated socket until the client reconnects.
+    ctx.chat_hub.disconnect_user(user.id);
     match deleted {
         Ok(_) => Ok(Json(SuccessResponse { success: true }).into_response()),
         Err(_) => Ok(Json(SuccessResponse { success: false }).into_response()),
