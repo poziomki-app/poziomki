@@ -116,7 +116,7 @@ services:
       PORT: 5150
       METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      SERVER_HOST: ${SERVER_HOST:-https://api.poziomki.app}
       # Owner URL used ONLY for migrations (schema changes need the owner role).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
       # Least-privilege URL the API pool connects as. Leave unset in .env until
@@ -180,7 +180,7 @@ services:
     environment:
       RUST_ENV: production
       METRICS_PORT: 9093
-      SERVER_HOST: ${SERVER_HOST:-https://rs.poziomki.app}
+      SERVER_HOST: ${SERVER_HOST:-https://api.poziomki.app}
       # Owner URL used ONLY for migrations (worker also runs pending migrations
       # on boot via build_app_context).
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
