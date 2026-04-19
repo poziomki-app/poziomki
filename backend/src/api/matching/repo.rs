@@ -233,11 +233,17 @@ impl MatchingRepository {
                 .collect()
         };
 
+        // No INNER JOIN to users: under RLS, the users policy is own-row
+        // only, so joining here would silently drop every other-bucket
+        // profile. Bucket scoping is already enforced by the
+        // `profiles_viewer` RLS policy via `app.profiles_in_current_bucket()`,
+        // so the redundant `users.is_review_stub = viewer_is_stub` filter
+        // is unnecessary here. `viewer_is_stub` is still resolved above
+        // because some callers depend on it; matching itself doesn't.
+        let _ = viewer_is_stub;
         profiles::table
-            .inner_join(users::table.on(users::id.eq(profiles::user_id)))
             .left_join(user_settings::table.on(user_settings::user_id.eq(profiles::user_id)))
             .filter(profiles::user_id.ne(user_id))
-            .filter(users::is_review_stub.eq(viewer_is_stub))
             .filter(
                 user_settings::privacy_discoverable
                     .eq(true)

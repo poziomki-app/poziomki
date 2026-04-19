@@ -1,6 +1,5 @@
 use diesel::deserialize::QueryableByName;
 use diesel::sql_types::{Array, BigInt, Float8, Integer, Nullable, Text, Uuid as DieselUuid};
-use diesel::OptionalExtension;
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 
@@ -308,12 +307,6 @@ struct RoomIdRow {
     room_id: String,
 }
 
-#[derive(Debug, Clone, QueryableByName)]
-struct UserIdRow {
-    #[diesel(sql_type = Integer)]
-    id: i32,
-}
-
 #[allow(clippy::similar_names)]
 pub async fn search_message_rooms(
     query: &str,
@@ -334,13 +327,13 @@ pub async fn search_message_rooms(
     // Resolve caller's internal user id up front — the DM + event
     // branches both need it to constrain results to rooms the viewer
     // is actually a member of.
+    //
+    // Use the SECURITY DEFINER helper instead of a plain SELECT FROM
+    // users: under RLS, `users` is own-row-only with no viewer GUC set
+    // here, so a direct query returns nothing and search degrades to
+    // empty for everyone.
     let mut conn = crate::db::conn().await?;
-    let user_id: Option<i32> = diesel::sql_query("SELECT id FROM users WHERE pid = $1")
-        .bind::<DieselUuid, _>(user_pid)
-        .get_result::<UserIdRow>(&mut conn)
-        .await
-        .optional()?
-        .map(|r| r.id);
+    let user_id: Option<i32> = crate::db::user_id_for_pid(&mut conn, *user_pid).await?;
     drop(conn);
     let Some(user_id) = user_id else {
         return Ok(Vec::new());
@@ -391,10 +384,14 @@ async fn search_dm_room_ids(
         JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $3
         WHERE c.kind = 'dm'
           AND EXISTS (
+            -- Drop the JOIN to users: the users RLS policy is own-row
+            -- only so joining other-bucket users returns zero rows and
+            -- DM search degrades to empty. profiles is bucket-readable
+            -- via RLS so we can hop straight from conversation_members
+            -- to profiles via the shared user_id.
             SELECT 1 FROM conversation_members cm2
-            JOIN users u2 ON u2.id = cm2.user_id
-            JOIN profiles p ON p.user_id = u2.id
-            LEFT JOIN user_settings us ON us.user_id = u2.id
+            JOIN profiles p ON p.user_id = cm2.user_id
+            LEFT JOIN user_settings us ON us.user_id = cm2.user_id
             WHERE cm2.conversation_id = c.id
               AND cm2.user_id != $3
               AND (
