@@ -126,19 +126,46 @@ enum PoolRole {
     Worker,
 }
 
+impl PoolRole {
+    const fn env_var(self) -> &'static str {
+        match self {
+            Self::Api => "API_DATABASE_URL",
+            Self::Worker => "WORKER_DATABASE_URL",
+        }
+    }
+
+    const fn expected_db_user(self) -> &'static str {
+        match self {
+            Self::Api => "poziomki_api",
+            Self::Worker => "poziomki_worker",
+        }
+    }
+}
+
+fn is_production() -> bool {
+    std::env::var("RUST_ENV").unwrap_or_default() == "production"
+}
+
 // The pool URL is chosen per-process so the API and worker can connect as
 // least-privilege roles (poziomki_api / poziomki_worker) while migrations
-// keep using the owner role via DATABASE_URL. When the role-specific var is
-// unset we fall back to DATABASE_URL, which preserves current dev behaviour.
+// keep using the owner role via DATABASE_URL.
+//
+// In dev/test we fall back to DATABASE_URL when the role-specific var is
+// unset. In production an empty role-specific var is a hard failure: the
+// fallback would silently connect as the owner role (BYPASSRLS), which
+// invalidates every RLS policy we ship.
 fn resolve_pool_url(role: PoolRole) -> crate::error::AppResult<String> {
-    let primary = match role {
-        PoolRole::Api => "API_DATABASE_URL",
-        PoolRole::Worker => "WORKER_DATABASE_URL",
-    };
+    let primary = role.env_var();
     if let Ok(value) = std::env::var(primary) {
         if !value.trim().is_empty() {
             return Ok(value);
         }
+    }
+    if is_production() {
+        return Err(crate::error::AppError::message(format!(
+            "{primary} must be set in production (no fallback to DATABASE_URL — the owner \
+             role bypasses RLS)"
+        )));
     }
     std::env::var("DATABASE_URL")
         .map_err(|_| crate::error::AppError::message("DATABASE_URL must be set"))
@@ -147,6 +174,40 @@ fn resolve_pool_url(role: PoolRole) -> crate::error::AppResult<String> {
 fn init_diesel_pool(role: PoolRole) -> crate::error::AppResult<()> {
     let url = resolve_pool_url(role)?;
     crate::db::init_pool(&url).map_err(crate::error::AppError::Message)
+}
+
+// In production, verify the pool actually connected as the expected
+// least-privilege role. If pgdog / env / password misconfig routes us to
+// the owner role instead, RLS is silently disabled — fail startup.
+#[derive(diesel::deserialize::QueryableByName)]
+struct CurrentDbUser {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    current_user: String,
+}
+
+async fn assert_pool_role(role: PoolRole) -> crate::error::AppResult<()> {
+    use diesel_async::RunQueryDsl;
+
+    if !is_production() {
+        return Ok(());
+    }
+    let mut conn = crate::db::conn()
+        .await
+        .map_err(|e| crate::error::AppError::Message(format!("pool role check: {e}")))?;
+    let row: CurrentDbUser = diesel::sql_query("SELECT current_user::text AS current_user")
+        .get_result(&mut conn)
+        .await
+        .map_err(|e| crate::error::AppError::Message(format!("pool role check: {e}")))?;
+    let expected = role.expected_db_user();
+    if row.current_user != expected {
+        return Err(crate::error::AppError::Message(format!(
+            "pool connected as db user {actual:?}, expected {expected:?} — refusing to start \
+             (RLS would be bypassed)",
+            actual = row.current_user,
+        )));
+    }
+    tracing::info!(db_user = %row.current_user, "pool role verified");
+    Ok(())
 }
 
 fn build_app_context(role: PoolRole) -> crate::error::AppResult<AppContext> {
@@ -177,6 +238,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Api)?;
     let cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Api)?;
+    assert_pool_role(PoolRole::Api).await?;
     let router = build_router_with_state(ctx);
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
@@ -202,6 +264,7 @@ pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     let _cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Worker)?;
+    assert_pool_role(PoolRole::Worker).await?;
 
     crate::jobs::start_background_workers(&ctx)?;
     tracing::info!("Poziomki outbox worker process started");
