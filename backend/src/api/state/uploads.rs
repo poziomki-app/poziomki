@@ -136,6 +136,47 @@ pub(in crate::api) fn validate_image_dimensions(
     Ok(())
 }
 
+/// Strip EXIF / metadata from the uploaded image bytes.
+///
+/// The mobile client is *supposed* to strip EXIF before uploading,
+/// but an API caller (or a mis-built client) can skip it and leak
+/// GPS / device identifiers into profile pictures and attachments.
+/// Re-decoding and re-encoding the pixels drops every metadata
+/// chunk the original carried (EXIF, XMP, ICC, iTXt, etc.).
+///
+/// Quality notes:
+/// * JPEG — re-encoded at quality 92, visually indistinguishable
+///   from the original to human eyes; small size increase possible.
+/// * PNG / WebP — re-encoded losslessly, pixel-identical.
+///
+/// Falls back to returning the original bytes if the decode fails
+/// for any reason (truncated upload, unknown variant). Validation
+/// of MIME + dimensions has already run at this point, so the
+/// fallback path shouldn't realistically fire.
+pub(in crate::api) fn strip_image_metadata(data: &[u8], mime_type: &str) -> Vec<u8> {
+    use std::io::Cursor;
+
+    let Ok(img) = image::load_from_memory(data) else {
+        return data.to_vec();
+    };
+
+    let mut out = Vec::with_capacity(data.len());
+    let result = match mime_type {
+        "image/jpeg" => {
+            let mut cursor = Cursor::new(&mut out);
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 92).encode_image(&img)
+        }
+        "image/png" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png),
+        "image/webp" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::WebP),
+        _ => return data.to_vec(),
+    };
+
+    match result {
+        Ok(()) => out,
+        Err(_) => data.to_vec(),
+    }
+}
+
 pub(in crate::api) fn extension_for_mime(mime_type: &str) -> &'static str {
     match mime_type {
         "image/jpeg" => "jpeg",
@@ -182,4 +223,83 @@ pub(in crate::api) const fn is_chat_context(context: UploadContext) -> bool {
         context,
         UploadContext::ChatCover | UploadContext::ChatAttachment
     )
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::indexing_slicing,
+    clippy::cast_possible_truncation,
+    clippy::expect_used
+)]
+mod tests {
+    use super::strip_image_metadata;
+    use std::io::Cursor;
+
+    /// Round-trip a tiny synthesized JPEG through the `image` crate
+    /// first (giving us a guaranteed-valid JPEG we can decode) and
+    /// then splice an EXIF APP1 segment carrying a recognisable
+    /// sentinel into it. `strip_image_metadata` must re-encode
+    /// without the sentinel.
+    fn jpeg_with_injected_exif_sentinel() -> (Vec<u8>, &'static [u8]) {
+        let sentinel: &[u8] = b"GPS_SENTINEL_0XDEADBEEF";
+
+        // Start with a real JPEG from the image crate so the decoder
+        // definitely accepts the payload.
+        let img = image::RgbImage::from_pixel(4, 4, image::Rgb([200, 50, 50]));
+        let mut base = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut base), 90)
+            .encode_image(&image::DynamicImage::ImageRgb8(img))
+            .expect("encode seed jpeg");
+
+        // Build an APP1 segment: FF E1 <len_be u16> "Exif\0\0" <payload>
+        // `len_be` counts itself + Exif header + payload.
+        let mut payload: Vec<u8> = Vec::new();
+        payload.extend_from_slice(b"Exif\0\0");
+        payload.extend_from_slice(sentinel);
+        let seg_len = (2 + payload.len()) as u16; // length bytes include themselves
+        let mut app1 = vec![0xff, 0xe1];
+        app1.extend_from_slice(&seg_len.to_be_bytes());
+        app1.extend_from_slice(&payload);
+
+        // Inject right after the SOI (bytes 0–1 are FF D8).
+        let mut with_exif = Vec::with_capacity(base.len() + app1.len());
+        with_exif.extend_from_slice(&base[..2]);
+        with_exif.extend_from_slice(&app1);
+        with_exif.extend_from_slice(&base[2..]);
+        (with_exif, sentinel)
+    }
+
+    #[test]
+    fn strip_image_metadata_removes_jpeg_exif_sentinel() {
+        let (input, sentinel) = jpeg_with_injected_exif_sentinel();
+        assert!(
+            input.windows(sentinel.len()).any(|w| w == sentinel),
+            "precondition: test fixture must contain the sentinel"
+        );
+
+        let output = strip_image_metadata(&input, "image/jpeg");
+        assert!(
+            !output.windows(sentinel.len()).any(|w| w == sentinel),
+            "strip_image_metadata must drop the EXIF sentinel"
+        );
+        // And the re-encoded output should still start with a valid
+        // JPEG SOI marker (FF D8) so the pipeline downstream can
+        // still handle it.
+        assert_eq!(
+            &output[..2],
+            &[0xff, 0xd8],
+            "re-encoded output must remain a valid JPEG"
+        );
+    }
+
+    #[test]
+    fn strip_image_metadata_falls_back_on_undecodable_input() {
+        // Truncated garbage — the decoder rejects it, and the function
+        // returns the input bytes unchanged. The upstream validation
+        // chain should have rejected this before strip even runs; the
+        // fallback is purely defensive.
+        let garbage = vec![0xff, 0xd8, 0x00, 0x00];
+        let output = strip_image_metadata(&garbage, "image/jpeg");
+        assert_eq!(output, garbage);
+    }
 }

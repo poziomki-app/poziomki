@@ -8,7 +8,7 @@ use crate::api::{
     error_response,
     state::{
         allowed_upload_mime, is_chat_context, max_upload_size_bytes, parse_upload_context,
-        validate_image_dimensions, validate_magic_bytes, UploadContext,
+        strip_image_metadata, validate_image_dimensions, validate_magic_bytes, UploadContext,
     },
     ErrorSpec,
 };
@@ -116,6 +116,15 @@ fn validate_upload_payload(headers: &HeaderMap, parsed: &ParsedUpload) -> Handle
     validate_upload_size(headers, parsed)?;
     validate_upload_content(headers, parsed)?;
     validate_upload_dimensions(headers, parsed)
+}
+
+/// Re-encode the parsed payload without metadata before it moves
+/// downstream to storage or variant generation. Runs last in the
+/// validation chain so the cheap rejections (MIME / size / magic /
+/// dimensions) fire first and we don't waste decode cycles on
+/// already-rejected input.
+fn strip_parsed_metadata(parsed: &mut ParsedUpload) {
+    parsed.bytes = strip_image_metadata(&parsed.bytes, &parsed.mime_type);
 }
 
 fn classify_field(name: Option<&str>) -> UploadFieldKind {
@@ -243,13 +252,14 @@ fn build_parsed_upload(headers: &HeaderMap, draft: UploadDraft) -> HandlerResult
         ))
     })?;
 
-    let parsed = ParsedUpload {
+    let mut parsed = ParsedUpload {
         context: context.unwrap_or(UploadContext::ProfileGallery),
         context_id,
         mime_type,
         bytes,
     };
     validate_upload_payload(headers, &parsed)?;
+    strip_parsed_metadata(&mut parsed);
     Ok(parsed)
 }
 
