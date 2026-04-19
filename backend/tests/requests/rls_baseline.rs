@@ -77,6 +77,8 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     "profiles_in_current_bucket",
     "push_topics_for_users",
     "resolve_session",
+    // Tier-C policy-support helpers.
+    "viewer_owns_event",
     // Tier-B policy-support helpers.
     "conversation_meta_for_insert",
     "delete_event_and_chat",
