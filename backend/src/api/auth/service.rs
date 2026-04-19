@@ -137,7 +137,18 @@ async fn find_authenticated_user(
 ) -> std::result::Result<Option<AuthUserRow>, crate::error::AppError> {
     let mut conn = crate::db::conn().await?;
     let row = db::find_user_for_login(&mut conn, email).await?;
-    Ok(row.filter(|u| crate::security::verify_password(password, &u.password)))
+    // Always run an Argon2 verify — against the row's real hash when
+    // the email matched, or against the module-level dummy hash when
+    // it didn't. Without the dummy branch, a missing email returns
+    // before verify runs and leaks existence via response timing.
+    if let Some(user) = row {
+        if crate::security::verify_password(password, &user.password) {
+            return Ok(Some(user));
+        }
+        return Ok(None);
+    }
+    let _ = crate::security::run_dummy_password_verify(password);
+    Ok(None)
 }
 
 pub(super) async fn sign_in_success_or_unauthorized(
