@@ -30,8 +30,13 @@ fn sign_up_json(email: &str, password: &str) -> serde_json::Value {
 }
 
 fn tiny_png_bytes() -> Vec<u8> {
+    // Minimal 1x1 grayscale PNG with a correct IDAT CRC. The previous
+    // fixture had a mismatched CRC — the image crate's dimension
+    // parser tolerated it but the full decoder (used by the
+    // EXIF-strip step) rejects the chunk. Replacement generated via
+    // python: png.chunk('IHDR', IHDR bytes) + valid-crc IDAT + IEND.
     base64::engine::general_purpose::STANDARD
-        .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2p9N8AAAAASUVORK5CYII=")
+        .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGP4DwABAQEAsTj2FAAAAABJRU5ErkJggg==")
         .expect("valid embedded png")
 }
 

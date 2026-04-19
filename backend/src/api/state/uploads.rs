@@ -161,8 +161,7 @@ pub(in crate::api) fn strip_image_metadata(
 ) -> std::result::Result<Vec<u8>, &'static str> {
     use std::io::Cursor;
 
-    let img =
-        image::load_from_memory(data).map_err(|_| "Could not decode image for metadata strip")?;
+    let img = image::load_from_memory(data).map_err(|_| "Image could not be decoded safely")?;
 
     let mut out = Vec::with_capacity(data.len());
     let result = match mime_type {
@@ -172,10 +171,12 @@ pub(in crate::api) fn strip_image_metadata(
         }
         "image/png" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png),
         "image/webp" => img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::WebP),
-        _ => return Err("Unsupported mime for metadata strip"),
+        _ => return Err("Image could not be sanitized"),
     };
 
-    result.map(|()| out).map_err(|_| "Image re-encode failed")
+    result
+        .map(|()| out)
+        .map_err(|_| "Image could not be sanitized")
 }
 
 pub(in crate::api) fn extension_for_mime(mime_type: &str) -> &'static str {
@@ -302,6 +303,46 @@ mod tests {
         // metadata intact.
         let garbage = vec![0xff, 0xd8, 0x00, 0x00];
         assert!(strip_image_metadata(&garbage, "image/jpeg").is_err());
+    }
+
+    #[test]
+    fn strip_image_metadata_round_trips_small_png() {
+        // Minimal 1x1 grayscale PNG (proper IDAT CRC). Same fixture
+        // shape used by tests/requests/migration_contract.rs so a
+        // regression that breaks PNG strip would fail here first.
+        let bytes: &[u8] = &[
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, b'I', b'H',
+            b'D', b'R', 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00,
+            0x00, 0x3a, 0x7e, 0x9b, 0x55, 0x00, 0x00, 0x00, 0x0a, b'I', b'D', b'A', b'T', 0x78,
+            0x9c, 0x63, 0xf8, 0x0f, 0x00, 0x01, 0x01, 0x01, 0x00, 0xb1, 0x38, 0xf6, 0x14, 0x00,
+            0x00, 0x00, 0x00, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        ];
+        let result = strip_image_metadata(bytes, "image/png");
+        assert!(
+            result.is_ok(),
+            "1x1 grayscale PNG must strip OK; got {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn strip_image_metadata_round_trips_webp() {
+        // Exercise the WebP encoder branch. `image::ImageFormat::WebP`
+        // uses a lossless encoder by default in 0.25.x; if the build
+        // features ever drop the WebP encoder we want a loud test
+        // failure before prod ships uploads that silently 400.
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([0, 128, 255]));
+        let mut webp = Vec::new();
+        img.write_to(&mut Cursor::new(&mut webp), image::ImageFormat::WebP)
+            .expect("seed webp");
+
+        let out =
+            strip_image_metadata(&webp, "image/webp").expect("strip must succeed on a valid webp");
+        assert!(!out.is_empty(), "stripped webp must have bytes");
+        assert!(
+            out.starts_with(b"RIFF"),
+            "stripped webp must remain a valid RIFF container"
+        );
     }
 
     #[test]
