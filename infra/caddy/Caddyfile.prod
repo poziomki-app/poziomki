@@ -1,4 +1,24 @@
+{
+	# Advertise HTTP/3 (QUIC) alongside h1/h2, and pin TLS minimum to
+	# 1.3. HTTP/3 helps on lossy mobile networks via QUIC's per-stream
+	# loss recovery; browsers fall back to h2 transparently if UDP/443
+	# is blocked upstream. Pinning TLS 1.3 drops downgrade-prone 1.2
+	# cipher suites with no client-compat cost for Android 7+ / iOS 12+.
+	# Requires UDP/443 open in the host firewall + any cloud SG.
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
 (secure_headers) {
+	# Pin TLS minimum to 1.3. Default is 1.2, which still permits
+	# cipher suites with known downgrade attacks; 1.3 has no client-
+	# compat cost for Android 7+ / iOS 12+. Applied per-site via this
+	# shared snippet so every vhost gets it.
+	tls {
+		protocols tls1.3
+	}
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
