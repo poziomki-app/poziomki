@@ -37,6 +37,12 @@ struct CountRow {
     count: i64,
 }
 
+#[derive(diesel::deserialize::QueryableByName)]
+struct NullableIdRow {
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
+    id: Option<Uuid>,
+}
+
 struct Fixture {
     alice: User,
     bob: User,
@@ -760,6 +766,150 @@ async fn event_conversation_insert_rejects_pending_attendee() {
         result.is_err(),
         "conversations_insert must reject event chat creation for a pending attendee"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Positive event-chat join flow: a going attendee who is not yet a
+// member of the event conversation can discover the existing row via
+// the SD lookup helper AND self-insert their membership. This
+// exercises the intersection of:
+//   * find_event_conversation — must return the row even though the
+//     viewer isn't yet a member (access gated on `viewer_can_access_event`)
+//   * conversation_members_insert — must allow self-join for a going
+//     attendee via the `conversation_meta_for_insert` SD helper
+// ---------------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn event_conversation_going_attendee_can_join_existing() {
+    let fx = setup_fixture().await;
+    let bob_id = fx.bob.id;
+    let carol_id = fx.carol.id;
+
+    // Bob owns the event; the conversation already exists with Bob as
+    // the only member. Carol is a `going` attendee — she should be
+    // able to find the conversation and self-insert a membership row.
+    let event_id = Uuid::new_v4();
+    let event_conv_id = Uuid::new_v4();
+    {
+        let mut conn = db::conn().await.expect("pool");
+        let now = Utc::now();
+        let bob_profile_id = profiles::table
+            .filter(profiles::user_id.eq(bob_id))
+            .select(profiles::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .expect("bob profile");
+        let carol_profile_id = profiles::table
+            .filter(profiles::user_id.eq(carol_id))
+            .select(profiles::id)
+            .first::<Uuid>(&mut conn)
+            .await
+            .expect("carol profile");
+
+        diesel::insert_into(events::table)
+            .values((
+                events::id.eq(event_id),
+                events::title.eq("Join-Test"),
+                events::starts_at.eq(now + chrono::Duration::days(1)),
+                events::creator_id.eq(bob_profile_id),
+                events::created_at.eq(now),
+                events::updated_at.eq(now),
+                events::requires_approval.eq(false),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed event");
+        diesel::insert_into(event_attendees::table)
+            .values((
+                event_attendees::event_id.eq(event_id),
+                event_attendees::profile_id.eq(carol_profile_id),
+                event_attendees::status.eq("going"),
+            ))
+            .execute(&mut conn)
+            .await
+            .expect("seed carol attendance");
+
+        diesel::insert_into(conversations::table)
+            .values(&NewConversation {
+                id: event_conv_id,
+                kind: "event".into(),
+                title: Some("Join-Test".into()),
+                event_id: Some(event_id),
+                user_low_id: None,
+                user_high_id: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed event conv");
+        diesel::insert_into(conversation_members::table)
+            .values(&NewConversationMember {
+                conversation_id: event_conv_id,
+                user_id: bob_id,
+                joined_at: now,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("seed bob membership");
+    }
+
+    let lookup_id = rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
+        async move {
+            let row: NullableIdRow =
+                diesel::sql_query("SELECT id FROM app.find_event_conversation($1) LIMIT 1")
+                    .bind::<diesel::sql_types::Uuid, _>(event_id)
+                    .get_result(conn)
+                    .await
+                    .unwrap_or(NullableIdRow { id: None });
+            Ok(row.id)
+        }
+        .scope_boxed()
+    })
+    .await
+    .expect("carol lookup tx");
+    assert_eq!(
+        lookup_id,
+        Some(event_conv_id),
+        "find_event_conversation must return the existing row for a going attendee"
+    );
+
+    // Self-insert must succeed.
+    let insert_result: Result<(), diesel::result::Error> =
+        rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
+            async move {
+                let now = Utc::now();
+                diesel::insert_into(conversation_members::table)
+                    .values(&NewConversationMember {
+                        conversation_id: event_conv_id,
+                        user_id: carol_id,
+                        joined_at: now,
+                    })
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    assert!(
+        insert_result.is_ok(),
+        "going attendee must be allowed to self-insert into the event conversation: {insert_result:?}"
+    );
+
+    // Confirm Carol is now visible as a member via the owner pool.
+    let mut conn = db::conn().await.expect("pool");
+    let row: CountRow = diesel::sql_query(
+        "SELECT COUNT(*) AS count FROM public.conversation_members \
+         WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind::<diesel::sql_types::Uuid, _>(event_conv_id)
+    .bind::<diesel::sql_types::Integer, _>(carol_id)
+    .get_result(&mut conn)
+    .await
+    .expect("post-check");
+    assert_eq!(row.count, 1, "Carol's membership row must be persisted");
 }
 
 // ---------------------------------------------------------------------------
