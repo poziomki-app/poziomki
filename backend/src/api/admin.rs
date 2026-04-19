@@ -21,15 +21,19 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel::sql_types::{Integer, Nullable, Text, Uuid as SqlUuid};
+use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::api::{error_response, state, ErrorSpec};
-use crate::db::schema::{sessions, users};
+
+#[derive(diesel::deserialize::QueryableByName)]
+struct BanResult {
+    #[diesel(sql_type = Nullable<Integer>)]
+    user_id: Option<i32>,
+}
 
 #[derive(Debug, Deserialize)]
 pub(super) struct BanBody {
@@ -93,66 +97,49 @@ pub(super) async fn ban_user(
         );
     };
 
-    // Resolve pid → id so the admin caller never touches internal ids
-    // and the audit log records a pid that's safe to share externally.
-    let Ok(user_id) = users::table
-        .filter(users::pid.eq(pid))
-        .select(users::id)
-        .first::<i32>(&mut conn)
-        .await
-    else {
-        return error_response(
-            StatusCode::NOT_FOUND,
-            &headers,
-            ErrorSpec {
-                error: "User not found".to_string(),
-                code: "NOT_FOUND",
-                details: None,
-            },
-        );
-    };
-
     let now = Utc::now();
     let reason = body.reason.unwrap_or_else(|| "no reason provided".into());
 
-    // Flip the ban flag + invalidate every active session atomically
-    // so a banned user can't keep using a cached session past the
-    // ban. The auth middleware also rejects banned users on the
-    // next cache miss, but session purge makes the kick immediate —
-    // and the wrapping transaction is what makes "immediate" real:
-    // without it, a successful UPDATE followed by a failed DELETE
-    // would leave the user banned-but-still-sessioned.
-    let result: Result<(), diesel::result::Error> = conn
-        .transaction(|conn| {
-            async move {
-                diesel::update(users::table.filter(users::id.eq(user_id)))
-                    .set((
-                        users::banned_at.eq(Some(now)),
-                        users::banned_reason.eq(Some(reason.clone())),
-                        users::updated_at.eq(now),
-                    ))
-                    .execute(conn)
-                    .await?;
-                diesel::delete(sessions::table.filter(sessions::user_id.eq(user_id)))
-                    .execute(conn)
-                    .await?;
-                Ok(())
-            }
-            .scope_boxed()
-        })
+    // The admin request has no viewer context, so a plain UPDATE /
+    // DELETE through RLS would filter to zero rows (users policy +
+    // sessions policy both require app.current_user_id()). Route
+    // through app.admin_ban_user, a SECURITY DEFINER helper that
+    // does the pid resolution + UPDATE + session purge in one
+    // owner-privileged transaction. Returns the internal user_id
+    // (for cache invalidation) or NULL if the pid doesn't exist.
+    let ban = diesel::sql_query("SELECT app.admin_ban_user($1, $2) AS user_id")
+        .bind::<SqlUuid, _>(pid)
+        .bind::<Text, _>(&reason)
+        .get_result::<BanResult>(&mut conn)
         .await;
 
-    if result.is_err() {
-        return error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            &headers,
-            ErrorSpec {
-                error: "Ban write failed".to_string(),
-                code: "INTERNAL_ERROR",
-                details: None,
-            },
-        );
-    }
+    let user_id = match ban {
+        Ok(row) => match row.user_id {
+            Some(id) => id,
+            None => {
+                return error_response(
+                    StatusCode::NOT_FOUND,
+                    &headers,
+                    ErrorSpec {
+                        error: "User not found".to_string(),
+                        code: "NOT_FOUND",
+                        details: None,
+                    },
+                );
+            }
+        },
+        Err(_) => {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &headers,
+                ErrorSpec {
+                    error: "Ban write failed".to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            );
+        }
+    };
 
     state::invalidate_auth_cache_for_user_id(user_id).await;
 
