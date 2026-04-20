@@ -99,9 +99,7 @@ services:
     networks: [db, app]
 
   api:
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile
+    image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -170,9 +168,7 @@ services:
     networks: [app]
 
   worker:
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile
+    image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
     entrypoint: ["/usr/local/bin/worker"]
     restart: unless-stopped
     depends_on:
@@ -260,13 +256,14 @@ services:
       IMGPROXY_CACHE_BYTES: ${IMGPROXY_CACHE_BYTES:-67108864}
       IMGPROXY_MAX_CONCURRENT: ${IMGPROXY_MAX_CONCURRENT:-2}
       IMGPROXY_ALLOWED_PREFIX: ${IMGPROXY_ALLOWED_PREFIX:-}
-      IMGPROXY_ALLOW_ALL_PREFIX: ${IMGPROXY_ALLOW_ALL_PREFIX:-false}
       GARAGE_S3_ENDPOINT: http://garage:3900
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads}
       GARAGE_S3_ACCESS_KEY: ${IMGPROXY_S3_ACCESS_KEY:-${GARAGE_S3_ACCESS_KEY}}
       GARAGE_S3_SECRET_KEY: ${IMGPROXY_S3_SECRET_KEY:-${GARAGE_S3_SECRET_KEY}}
       GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
       IMGPROXY_PURGE_SECRET: ${IMGPROXY_PURGE_SECRET:-}
+      IMGPROXY_ORIGIN_SECRET: ${IMGPROXY_ORIGIN_SECRET:?IMGPROXY_ORIGIN_SECRET must be set}
+      IMGPROXY_SOURCE_URL_ENCRYPTION_KEY: ${IMGPROXY_SOURCE_URL_ENCRYPTION_KEY:-}
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck"]
       interval: 10s
