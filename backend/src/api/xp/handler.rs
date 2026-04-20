@@ -267,10 +267,10 @@ pub(in crate::api) async fn scan_token(
 
     if awarded {
         tokio::spawn(async move {
-            if let Err(e) = service::award_xp(my_profile_id, 5).await {
+            if let Err(e) = service::award_xp(my_profile_id, SCAN_XP_REWARD).await {
                 tracing::warn!(error = %e, profile_id = %my_profile_id, "failed to award XP to scanner");
             }
-            if let Err(e) = service::award_xp(scanned_id, 5).await {
+            if let Err(e) = service::award_xp(scanned_id, SCAN_XP_REWARD).await {
                 tracing::warn!(error = %e, profile_id = %scanned_id, "failed to award XP to scanned");
             }
         });
@@ -278,8 +278,10 @@ pub(in crate::api) async fn scan_token(
 
     Ok(Json(DataResponse {
         data: ScanResponse {
-            xp_gained: if awarded { 5 } else { 0 },
+            xp_gained: if awarded { SCAN_XP_REWARD } else { 0 },
         },
     })
     .into_response())
 }
+
+const SCAN_XP_REWARD: i32 = 25;
