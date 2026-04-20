@@ -51,6 +51,7 @@
 
 poziomki.app, www.poziomki.app {
 	import secure_headers
+	encode zstd br gzip
 
 	handle_path /fdroid/repo/* {
 		root * /var/www/fdroid
