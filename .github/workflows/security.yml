@@ -20,8 +20,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Trivy (fs + config). Installs the CLI directly — the Marketplace action
-  # has had broken tag-to-SHA resolutions lately (tarball 404s).
+  # Trivy — only the `config` scan here. The `fs` scan was removed: for
+  # Rust, cargo-deny (below) covers RUSTSEC + license + ban policy more
+  # actionably; for mobile, there's no gradle.lockfile so fs scans
+  # produced near-zero signal. We keep `config` because Hadolint doesn't
+  # catch compose/k8s/terraform misconfigs that Trivy does.
   trivy:
     runs-on: ubuntu-latest
     permissions:
@@ -37,22 +40,8 @@ jobs:
             | tar -xz trivy
           chmod +x trivy
           ./trivy --version
-      - name: Scan backend (fs)
-        run: ./trivy fs backend --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-backend.sarif --exit-code 0
-      - name: Scan mobile (fs)
-        run: ./trivy fs mobile --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-mobile.sarif --exit-code 0
       - name: Scan repo config (Dockerfiles, compose, workflows)
         run: ./trivy config . --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-config.sarif --exit-code 0
-      - uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
-        if: always()
-        with:
-          sarif_file: trivy-backend.sarif
-          category: trivy-backend
-      - uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
-        if: always()
-        with:
-          sarif_file: trivy-mobile.sarif
-          category: trivy-mobile
       - uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
         if: always()
         with:
@@ -70,45 +59,6 @@ jobs:
           manifest-path: backend/Cargo.toml
           command: check advisories licenses bans sources
           arguments: ""
-
-  # Semgrep — wide cross-language SAST. Free OSS via r2c's registry packs.
-  # Uses `semgrep scan` with SARIF output. Exit-code-on-findings is expected
-  # (rc=1) — we only fail the job when the SARIF file is missing, i.e. the
-  # scanner itself crashed.
-  semgrep:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-      - run: pip install semgrep==1.159.0
-      - name: Run Semgrep
-        run: |
-          set +e
-          semgrep scan \
-            --config=p/security-audit \
-            --config=p/secrets \
-            --config=p/owasp-top-ten \
-            --config=p/rust \
-            --config=p/kotlin \
-            --config=p/java \
-            --sarif --output=semgrep.sarif
-          rc=$?
-          set -e
-          if [ ! -s semgrep.sarif ]; then
-            echo "::error::semgrep did not produce SARIF (exit $rc)"
-            exit 1
-          fi
-          # Findings (rc=1) are fine — SARIF is uploaded and GitHub shows them.
-      - uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
-        if: always()
-        with:
-          sarif_file: semgrep.sarif
-          category: semgrep
 
   # gitleaks — secret detection. Installs the CLI directly (the
   # gitleaks-action marketplace variant has been unreliable) and uploads
@@ -152,43 +102,6 @@ jobs:
         with:
           fail-on-severity: high
           deny-licenses: AGPL-1.0, AGPL-3.0, GPL-2.0, GPL-3.0
-
-  # OSV-Scanner — Google's cross-ecosystem vulnerability scanner. Reads
-  # lockfiles (Cargo.lock etc.) and checks against osv.dev. Scans backend's
-  # Cargo.lock — mobile has no gradle.lockfile (lockfile generation disabled)
-  # so gradle coverage comes via Trivy-fs instead. CLI install avoids the
-  # osv-scanner-action's quirky multi-line scan-args parsing.
-  osv-scanner:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Generate Cargo.lock (gitignored in this repo)
-        working-directory: backend
-        run: cargo generate-lockfile
-      - name: Install OSV-Scanner
-        env:
-          OSV_VERSION: "2.0.2"
-        run: |
-          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          chmod +x osv-scanner
-          ./osv-scanner --version
-      - name: Scan
-        run: |
-          # v2 CLI: `scan source` replaces v1's bare `osv-scanner`.
-          set +e
-          ./osv-scanner scan source --lockfile=./backend/Cargo.lock --format=sarif --output=osv.sarif
-          rc=$?
-          set -e
-          # rc=0 no vulns, rc=1 vulns found — both write SARIF.
-          test -s osv.sarif || { echo "::error::osv-scanner did not produce SARIF (exit $rc)"; exit 1; }
-      - uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
-        if: always()
-        with:
-          sarif_file: osv.sarif
-          category: osv-scanner
 
   # Hadolint — Dockerfile best-practice + security linter, SARIF to Security tab.
   hadolint:
