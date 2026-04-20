@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: read
+
 jobs:
   label:
     runs-on: ubuntu-latest
@@ -11,7 +14,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Label PR by size
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const { additions, deletions } = context.payload.pull_request;
