@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           scan-ref: backend
@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           scan-ref: mobile
@@ -135,10 +135,10 @@ jobs:
           fail-on-severity: high
           deny-licenses: AGPL-1.0, AGPL-3.0, GPL-2.0, GPL-3.0
 
-  # OSV-Scanner — Google's cross-ecosystem vulnerability scanner. Reads each
-  # ecosystem's lockfiles directly (Cargo.lock, Gradle resolution output, etc.)
-  # and checks against osv.dev. Explicit scan paths are required — a bare
-  # repo-root scan exits with "No package sources found".
+  # OSV-Scanner — Google's cross-ecosystem vulnerability scanner. Reads
+  # lockfiles (Cargo.lock etc.) and checks against osv.dev. Only scans
+  # backend — mobile has no gradle.lockfile and OSV can't walk
+  # build.gradle.kts alone. Gradle advisories come via Trivy-fs instead.
   osv-scanner:
     runs-on: ubuntu-latest
     steps:
@@ -146,11 +146,9 @@ jobs:
       - uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
         with:
           scan-args: |-
-            --recursive
+            --lockfile=./backend/Cargo.lock
             --format=sarif
             --output=osv.sarif
-            ./backend
-            ./mobile
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
@@ -163,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: config
           scan-ref: .
