@@ -8,16 +8,21 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
+# Top-level perms are the minimum. Scorecard's webapp publisher rejects
+# uploads when workflow-level `security-events: write` is set — see the
+# "workflow-restrictions" section of ossf/scorecard-action. Jobs that need
+# to upload SARIF override with their own `permissions:` block.
 permissions:
-  security-events: write
   contents: read
-  pull-requests: read
 
 jobs:
   # Trivy (fs + config). Installs the CLI directly — the Marketplace action
   # has had broken tag-to-SHA resolutions lately (tarball 404s).
   trivy:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install Trivy
@@ -52,6 +57,8 @@ jobs:
 
   cargo-deny:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -66,6 +73,9 @@ jobs:
   # scanner itself crashed.
   semgrep:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -101,6 +111,9 @@ jobs:
   # SARIF to the Security tab.
   gitleaks:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,6 +139,9 @@ jobs:
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4.5.0
@@ -140,6 +156,9 @@ jobs:
   # osv-scanner-action's quirky multi-line scan-args parsing.
   osv-scanner:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Generate Cargo.lock (gitignored in this repo)
@@ -170,6 +189,9 @@ jobs:
   # Hadolint — Dockerfile best-practice + security linter, SARIF to Security tab.
   hadolint:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: hadolint/hadolint-action@v3.1.0
@@ -190,6 +212,10 @@ jobs:
   # native SARIF output, so we skip the Security-tab upload for this one.
   actionlint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - uses: reviewdog/action-actionlint@v1.65.2
