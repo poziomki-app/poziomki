@@ -1,10 +1,6 @@
-# Polityka bezpieczeństwa
+## Polityka bezpieczeństwa
 
-## Zgłaszanie podatności
-
-Jeśli znalazłeś podatność w aplikacji, zgłoś ją prywatnie.
-
-**Kontakt:** dev@poziomki.app
+Jeśli w aplikacji znajdziesz problem z bezpieczeństwem, zgłoś na mail dev@poziomki.app.
 
 W zgłoszeniu podaj:
 
@@ -12,9 +8,7 @@ W zgłoszeniu podaj:
 - kroki do odtworzenia (proof-of-concept, endpoint, wersja aplikacji),
 - istotne logi lub zrzuty ekranu.
 
-Prosimy nie otwierać publicznych issue na GitHubie ani nie ujawniać problemu publicznie, zanim wydamy poprawkę.
-
-## Zakres
+### Zakres
 
 W zakresie:
 
