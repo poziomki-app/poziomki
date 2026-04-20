@@ -142,6 +142,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate Cargo.lock (gitignored in this repo)
+        working-directory: backend
+        run: cargo generate-lockfile
       - name: Install OSV-Scanner
         env:
           OSV_VERSION: "2.0.2"
