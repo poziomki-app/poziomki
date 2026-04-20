@@ -1,7 +1,7 @@
 name: Deploy (prod)
 
-# Dormant until the `production` environment + secrets are configured.
-# See README.md "CI setup checklist".
+# Dormant until the `production` environment + Tailscale OAuth secrets are
+# configured. See infra/README.md "CI setup checklist".
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +25,13 @@ jobs:
       url: https://api.poziomki.app
     timeout-minutes: 15
 
+    # All untrusted inputs flow through env: so they cannot be interpreted
+    # as shell syntax. Never interpolate ${{ inputs.* }} or ${{ github.event.* }}
+    # directly inside a run: block — that's a shell-injection primitive.
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+      IMAGE: ghcr.io/poziomki-app/poziomki-backend
+
     steps:
       - uses: actions/checkout@v4
 
@@ -47,23 +54,33 @@ jobs:
         id: d
         run: |
           DIGEST=$(docker buildx imagetools inspect \
-            ghcr.io/poziomki-app/poziomki-backend:${{ inputs.tag }} \
+            "$IMAGE:$INPUT_TAG" \
             --format '{{json .Manifest}}' | jq -r .digest)
           test -n "$DIGEST"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Verify signature (gate)
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
         run: |
           cosign verify \
             --certificate-identity-regexp "https://github.com/poziomki-app/poziomki/.github/workflows/backend-image.yml@.*" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            ghcr.io/poziomki-app/poziomki-backend@${{ steps.d.outputs.digest }}
+            "${IMAGE}@${DIGEST}"
 
       - name: Apply on VPS
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+          COMMIT_SHA: ${{ github.sha }}
+        # StrictHostKeyChecking=accept-new is TOFU on first connection; safe
+        # over a tailnet that restricts `tag:ci-deployer` to SSH only
+        # `tag:poziomki-vps`. Replace with pre-seeded known_hosts once
+        # Tailscale SSH tag-based auth lands.
         run: |
-          ssh -o StrictHostKeyChecking=accept-new admin@poziomki \
-            "cd ~/infra && git fetch && git checkout ${{ github.sha }} -- ':!.env' ':!.env.staging' \
-             && ./scripts/deploy.sh prod ghcr.io/poziomki-app/poziomki-backend@${{ steps.d.outputs.digest }}"
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs && git fetch --quiet && \
+             git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
+             ./infra/scripts/deploy.sh prod '$IMAGE@$DIGEST'"
 
       - name: Health check
         run: |
@@ -76,7 +93,7 @@ jobs:
       - name: Rollback on failure
         if: failure()
         run: |
-          ssh admin@poziomki \
-            "cd ~/infra && mv .env.prev .env \
-             && docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker \
-             && docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"
+          ssh ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs/infra && mv .env.prev .env && \
+             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker && \
+             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"

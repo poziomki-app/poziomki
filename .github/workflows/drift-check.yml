@@ -26,13 +26,15 @@ jobs:
       - name: Check VPS tree
         id: check
         run: |
-          ssh -o StrictHostKeyChecking=accept-new admin@poziomki \
-            "cd ~/infra && ./scripts/drift-check.sh" | tee /tmp/drift.log
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+            "cd ~/poziomki-rs/infra && ./scripts/drift-check.sh" | tee /tmp/drift.log
         continue-on-error: true
 
       - name: Alert on drift
         if: steps.check.outcome == 'failure'
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
-          curl -fsS -d "infra drift detected on VPS — see GHA run ${{ github.run_id }}" \
+          curl -fsS -d "infra drift detected on VPS — see GHA run $RUN_ID" \
             https://ntfy.poziomki.app/poziomki-dev
           exit 1

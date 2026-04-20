@@ -29,6 +29,10 @@ jobs:
       url: https://staging.poziomki.app
     timeout-minutes: 10
 
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+      IMAGE: ghcr.io/poziomki-app/poziomki-backend
+
     steps:
       - uses: actions/checkout@v4
 
@@ -48,15 +52,19 @@ jobs:
         id: d
         run: |
           DIGEST=$(docker buildx imagetools inspect \
-            ghcr.io/poziomki-app/poziomki-backend:${{ inputs.tag }} \
+            "$IMAGE:$INPUT_TAG" \
             --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Apply
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          ssh -o StrictHostKeyChecking=accept-new admin@poziomki \
-            "cd ~/infra && git fetch && git checkout ${{ github.sha }} -- ':!.env' ':!.env.staging' \
-             && ./scripts/deploy.sh staging ghcr.io/poziomki-app/poziomki-backend@${{ steps.d.outputs.digest }}"
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs && git fetch --quiet && \
+             git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
+             ./infra/scripts/deploy.sh staging '$IMAGE@$DIGEST'"
 
       - name: Health check
         run: |

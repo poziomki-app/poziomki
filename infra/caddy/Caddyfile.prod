@@ -75,6 +75,7 @@ poziomki.app, www.poziomki.app {
 
 	@umami_collect path /api/ziomki
 	handle @umami_collect {
+		rewrite * /api/send
 		reverse_proxy 127.0.0.1:3090 {
 			header_down -Content-Security-Policy
 			header_down -X-Powered-By

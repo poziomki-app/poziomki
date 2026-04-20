@@ -1,6 +1,6 @@
 .env
-.env.staging
-.env.*.prev
+.env.*
+.env.prev
 .env.new
 .deploy-history
 

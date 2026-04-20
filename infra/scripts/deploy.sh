@@ -36,7 +36,13 @@ fi
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api worker
 
-docker run --rm --env-file "$ENV_FILE" "$DIGEST" /app/poziomki_backend-cli migrate
+# Run migrations in a one-off container on the compose project's network
+# using the api service definition. This gives the migrator the full
+# composed DATABASE_URL + pgdog DNS that the service depends on, which a
+# plain `docker run` on the default bridge can't see. --no-deps avoids
+# starting postgres/pgdog as side effects (they're already running).
+docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
+  run --rm --no-deps --entrypoint /app/poziomki_backend-cli api migrate
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
 
