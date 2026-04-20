@@ -29,9 +29,9 @@ jobs:
             build-mode: manual
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -44,13 +44,13 @@ jobs:
       # real recompilation. Dep cache (gradle home) is still used for speed.
       - name: JDK 21
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: "21"
       - name: Gradle cache
         if: matrix.language == 'java-kotlin'
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: true
       - name: Build mobile
@@ -58,4 +58,4 @@ jobs:
         working-directory: mobile
         run: ./gradlew :androidApp:assembleDebug --no-daemon --no-build-cache --rerun-tasks
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4
