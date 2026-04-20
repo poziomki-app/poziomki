@@ -4,26 +4,26 @@ androidx-activityCompose = "1.12.4"
 androidx-core = "1.17.0"
 androidx-ui-tooling = "1.10.4"
 coil = "3.4.0"
-compose-multiplatform = "1.10.1"
+compose-multiplatform = "1.10.3"
 datastore = "1.2.0"
 detekt = "1.23.8"
-koin = "4.1.1"
-kotlin = "2.3.0"
+koin = "4.2.1"
+kotlin = "2.3.20"
 ktlint = "1.8.0"
-kotlinx-datetime = "0.6.2"
+kotlinx-datetime = "0.7.1"
 maplibre-compose = "0.12.1"
-ktor = "3.4.0"
+ktor = "3.4.2"
 materialIconsCore = "1.7.3"
 phosphorIcons = "1.0.0"
 navigationCompose = "2.9.2"
-lifecycleCompose = "2.9.1"
+lifecycleCompose = "2.10.0"
 
 securityCrypto = "1.1.0"
 playServicesLocation = "21.3.0"
-qrose = "1.0.1"
+qrose = "1.1.2"
 cameraX = "1.5.0"
-zxingCore = "3.5.3"
-sqldelight = "2.2.1"
+zxingCore = "3.5.4"
+sqldelight = "2.3.2"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
@@ -71,7 +71,7 @@ composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "k
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "14.0.1" }
-versions = { id = "com.github.ben-manes.versions", version = "0.52.0" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "14.2.0" }
+versions = { id = "com.github.ben-manes.versions", version = "0.54.0" }
 kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
