@@ -20,6 +20,9 @@ lifecycleCompose = "2.9.1"
 
 securityCrypto = "1.1.0"
 playServicesLocation = "21.3.0"
+qrose = "1.0.1"
+cameraX = "1.5.0"
+zxingCore = "3.5.3"
 sqldelight = "2.2.1"
 
 [libraries]
@@ -52,6 +55,11 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphorIcons" }
 
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+qrose = { module = "io.github.alexzhirkevich:qrose", version.ref = "qrose" }
+camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }
+camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "cameraX" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
