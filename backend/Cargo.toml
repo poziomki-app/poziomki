@@ -30,7 +30,7 @@ multiple_crate_versions = "allow"
 
 [package]
 name = "poziomki-backend"
-version = "0.1.0"
+version = "0.18.4"
 edition = "2021"
 publish = false
 default-run = "poziomki_backend-cli"

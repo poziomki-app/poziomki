@@ -1,0 +1,29 @@
+name: Release Please
+
+# On each main push, open/update a release PR that bumps backend/Cargo.toml
+# and mobile/androidApp/build.gradle.kts (versionName) based on conventional
+# commits. Merging that PR creates the tag `vX.Y.Z`, which triggers
+# android-release.yml (APK) and backend-image.yml (GHCR tag).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create release tags + branches
+      pull-requests: write  # open/update the release PR
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
