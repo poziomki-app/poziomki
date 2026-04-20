@@ -22,6 +22,6 @@ W zakresie:
 - worker i pipeline obrazów (imgproxy, Garage S3),
 - aplikacja Android (APK z `download.poziomki.app`),
 - aplikacja iOS,
-- kod w tym repo oraz `poziomki-app/imgproxy`.
+- kod w tym repo oraz [`poziomki-app/imgproxy`](https://github.com/poziomki-app/imgproxy).
 
 Dzięki, że pomagasz dbać o bezpieczeństwo aplikacji i jej użytkowników.
