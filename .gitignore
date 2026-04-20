@@ -2,7 +2,6 @@
 /target/
 backend/target/
 **/*.rs.bk
-Cargo.lock
 
 # Kotlin / Gradle
 mobile/build/
