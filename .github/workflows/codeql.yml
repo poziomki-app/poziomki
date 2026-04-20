@@ -37,7 +37,11 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
           config-file: .github/codeql-config.yml
 
-      # Kotlin/Java: gradle produces the JAR / class files CodeQL reads.
+      # Kotlin/Java: gradle must actually invoke kotlinc so CodeQL's trace
+      # wrapper can see it. If everything comes from the task build cache
+      # (FROM-CACHE / UP-TO-DATE) CodeQL sees zero compilation and fails
+      # with "no source code seen". `--no-build-cache --rerun-tasks` forces
+      # real recompilation. Dep cache (gradle home) is still used for speed.
       - name: JDK 21
         if: matrix.language == 'java-kotlin'
         uses: actions/setup-java@v4
@@ -47,9 +51,11 @@ jobs:
       - name: Gradle cache
         if: matrix.language == 'java-kotlin'
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
       - name: Build mobile
         if: matrix.language == 'java-kotlin'
         working-directory: mobile
-        run: ./gradlew :androidApp:assembleDebug --no-daemon
+        run: ./gradlew :androidApp:assembleDebug --no-daemon --no-build-cache --rerun-tasks
 
       - uses: github/codeql-action/analyze@v4
