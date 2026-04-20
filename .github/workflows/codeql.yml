@@ -1,11 +1,17 @@
 name: CodeQL
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
 
 permissions:
   security-events: write
+  contents: read
+  actions: read
 
 jobs:
   analyze:
@@ -15,8 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # CodeQL 2.25+ uses source-only extraction for Rust — `build-mode: none`
+          # (no cargo build needed). The manual mode was deprecated upstream.
           - language: rust
-            build-mode: manual
+            build-mode: none
           - language: java-kotlin
             build-mode: manual
 
@@ -29,24 +37,7 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
           config-file: .github/codeql-config.yml
 
-      # Rust: `build-mode: manual` requires an explicit cargo build so
-      # CodeQL can observe MIR. Swatinem/rust-cache keeps weekly runs
-      # under a few minutes after the first green build.
-      - name: Rust toolchain
-        if: matrix.language == 'rust'
-        uses: dtolnay/rust-toolchain@stable
-      - name: Rust cache
-        if: matrix.language == 'rust'
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: backend
-      - name: Build Rust
-        if: matrix.language == 'rust'
-        working-directory: backend
-        run: cargo build --all-targets --locked
-
-      # Kotlin/Java: gradle produces the JAR / class files CodeQL
-      # reads. Uses the same task the mobile PR checks already run.
+      # Kotlin/Java: gradle produces the JAR / class files CodeQL reads.
       - name: JDK 21
         if: matrix.language == 'java-kotlin'
         uses: actions/setup-java@v4
