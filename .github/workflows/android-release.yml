@@ -37,6 +37,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Validate tag matches versionName
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
         run: |
           version_name="$(sed -n 's/.*versionName = "\(.*\)"/\1/p' mobile/androidApp/build.gradle.kts | head -n1)"
           if [[ -z "$version_name" ]]; then
@@ -44,7 +46,7 @@ jobs:
             exit 1
           fi
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            release_tag="${{ github.event.inputs.tag_name }}"
+            release_tag="${INPUT_TAG_NAME}"
             if [[ -z "$release_tag" ]]; then
               release_tag="v${version_name}"
             fi
@@ -70,13 +72,17 @@ jobs:
 
       - name: Build signed Android release
         working-directory: mobile
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew \
             :androidApp:assembleRelease \
             -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks" \
-            -PreleaseStorePassword="${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}" \
-            -PreleaseKeyAlias="${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}" \
-            -PreleaseKeyPassword="${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}"
+            -PreleaseStorePassword="$RELEASE_STORE_PASSWORD" \
+            -PreleaseKeyAlias="$RELEASE_KEY_ALIAS" \
+            -PreleaseKeyPassword="$RELEASE_KEY_PASSWORD"
 
       - name: Prepare release assets
         run: bash scripts/prepare_android_release.sh
