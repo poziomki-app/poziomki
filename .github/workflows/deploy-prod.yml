@@ -85,7 +85,7 @@ jobs:
       - name: Health check
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS https://api.poziomki.app/healthz; then exit 0; fi
+            if curl -fsS https://api.poziomki.app/health; then exit 0; fi
             sleep 2
           done
           exit 1

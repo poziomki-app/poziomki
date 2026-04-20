@@ -42,7 +42,7 @@ docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api 
 # plain `docker run` on the default bridge can't see. --no-deps avoids
 # starting postgres/pgdog as side effects (they're already running).
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
-  run --rm --no-deps --entrypoint /app/poziomki_backend-cli api migrate
+  run --rm --no-deps --entrypoint /usr/local/bin/poziomki_backend-cli api migrate
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
 
