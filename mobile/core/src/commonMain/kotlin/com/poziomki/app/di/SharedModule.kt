@@ -13,6 +13,7 @@ import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.data.repository.SettingsRepository
 import com.poziomki.app.data.repository.TagRepository
+import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.data.sync.PendingOperationsManager
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.db.PoziomkiDatabase
@@ -61,6 +62,7 @@ val sharedModule =
         single { DegreeRepository(get(), get()) }
         single { MatchProfileRepository(get(), get()) }
         single { SettingsRepository(get(), get(), get()) }
+        single { XpRepository(get(), get()) }
         single {
             SyncEngine(
                 pendingOps = get(),

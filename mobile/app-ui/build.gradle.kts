@@ -36,9 +36,11 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.koin.android)
+            implementation(libs.play.services.code.scanner)
         }
         commonMain.dependencies {
             implementation(projects.core)
+            implementation(libs.qrose)
 
             implementation(compose.runtime)
             implementation(compose.foundation)

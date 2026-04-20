@@ -19,6 +19,9 @@ fun ProfileWithTags.toProfile(): Profile =
         program = program,
         gradientStart = gradientStart,
         gradientEnd = gradientEnd,
+        xp = xp,
+        streakCurrent = streakCurrent,
+        streakLongest = streakLongest,
     )
 
 fun com.poziomki.app.db.Profile.toApiModel(): Profile =
@@ -35,6 +38,9 @@ fun com.poziomki.app.db.Profile.toApiModel(): Profile =
         gradientEnd = gradient_end,
         createdAt = created_at,
         updatedAt = updated_at,
+        xp = xp.toInt(),
+        streakCurrent = streak_current.toInt(),
+        streakLongest = streak_longest.toInt(),
     )
 
 fun com.poziomki.app.db.Profile.toApiModelWithTags(tags: List<Tag>): ProfileWithTags =
@@ -51,6 +57,9 @@ fun com.poziomki.app.db.Profile.toApiModelWithTags(tags: List<Tag>): ProfileWith
         gradientEnd = gradient_end,
         tags = tags,
         isBookmarked = is_bookmarked == 1L,
+        xp = xp.toInt(),
+        streakCurrent = streak_current.toInt(),
+        streakLongest = streak_longest.toInt(),
     )
 
 private fun parseImages(jsonStr: String?): List<String> =

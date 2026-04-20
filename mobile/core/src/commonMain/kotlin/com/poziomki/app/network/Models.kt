@@ -99,6 +99,9 @@ data class Profile(
     val gradientEnd: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    val xp: Int = 0,
+    val streakCurrent: Int = 0,
+    val streakLongest: Int = 0,
 )
 
 @Serializable
@@ -115,6 +118,35 @@ data class ProfileWithTags(
     val gradientEnd: String? = null,
     val tags: List<Tag> = emptyList(),
     val isBookmarked: Boolean = false,
+    val xp: Int = 0,
+    val streakCurrent: Int = 0,
+    val streakLongest: Int = 0,
+)
+
+@Serializable
+data class XpTokenResponse(
+    val token: String,
+    val expiresAt: Long? = null,
+)
+
+@Serializable
+data class XpScanRequest(
+    val token: String,
+)
+
+@Serializable
+data class XpScanResponse(
+    val xpGained: Int,
+)
+
+@Serializable
+data class ClaimTaskRequest(
+    val taskId: String,
+)
+
+@Serializable
+data class ClaimTaskResponse(
+    val xpGained: Int,
 )
 
 @Serializable

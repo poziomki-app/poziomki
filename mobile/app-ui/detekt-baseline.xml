@@ -3,9 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ArgumentListWrapping:ChatViewModel.kt$ChatViewModel$(firstVisibleItemIndex = firstVisibleItemIndex, totalItems = totalTimelineItemCount)</ID>
-    <ID>ArgumentListWrapping:EventChatScreen.kt$(eventState.event?.id, eventState.event?.isAttending, eventState.event?.conversationId, eventState.isOpeningChat)</ID>
-    <ID>ArgumentListWrapping:EventCreateScreen.kt$(2, '0')</ID>
-    <ID>ArgumentListWrapping:EventCreateScreen.kt$(initialHour = selectedEndHour, initialMinute = selectedEndMinute)</ID>
     <ID>ArgumentListWrapping:ExploreScreen.kt$(horizontal = 12.dp, vertical = 6.dp)</ID>
     <ID>ArgumentListWrapping:ImagePicker.android.kt$(bytes, 0, bytes.size)</ID>
     <ID>ArgumentListWrapping:LocationPickerSheet.kt$(latitude = result.lat, longitude = result.lng)</ID>
@@ -13,16 +10,10 @@
     <ID>ArgumentListWrapping:RoomRow.kt$(timestampMillis)</ID>
     <ID>CyclomaticComplexMethod:ChatContent.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChatContent( state: ChatUiState, timelineListState: LazyListState, onDraftChanged: (String) -&gt; Unit, onSendMessage: () -&gt; Unit, onToggleReaction: (String, String) -&gt; Unit, onMarkAsRead: () -&gt; Unit, onViewportChanged: (Int?) -&gt; Unit, onJumpToLatest: () -&gt; Unit, onStartReply: (TimelineItem.Event) -&gt; Unit, onStartEdit: (TimelineItem.Event) -&gt; Unit, onCancelComposerMode: () -&gt; Unit, onRedactEvent: (String) -&gt; Unit, onClearError: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, resolveDisplayNames: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, resolveAvatarUrls: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, showSenderMeta: Boolean = !state.isDirectRoom, modifier: Modifier = Modifier, avatarOverrides: Map&lt;String, String&gt; = emptyMap(), avatarOverridesByName: Map&lt;String, String&gt; = emptyMap(), searchQuery: String = "", currentMatchEventId: String? = null, headerContent: (@Composable () -&gt; Unit)? = null, )</ID>
     <ID>CyclomaticComplexMethod:ChatViewModel.kt$ChatViewModel$private suspend fun bindRoom( roomId: String, fallbackDisplayName: String?, fallbackDirectUserId: String?, )</ID>
-    <ID>CyclomaticComplexMethod:EventChatScreen.kt$@Composable fun EventChatScreen( onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, onNavigateToEditEvent: (String) -&gt; Unit, eventDetailViewModel: EventDetailViewModel = koinViewModel(), chatViewModel: ChatViewModel = koinViewModel(), )</ID>
-    <ID>CyclomaticComplexMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
     <ID>CyclomaticComplexMethod:ExploreScreen.kt$@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class) @Composable fun ExploreScreen( onNavigateToProfile: (String) -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit = {}, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: ExploreViewModel = koinViewModel(), )</ID>
     <ID>CyclomaticComplexMethod:MessageEventRow.kt$@Composable internal fun MessageEventRow( event: TimelineItem.Event, groupedWithPrevious: Boolean, showSenderMeta: Boolean, onToggleReaction: (String) -&gt; Unit, onReactionsClick: () -&gt; Unit, onFocusOnReply: () -&gt; Unit, onSenderClick: () -&gt; Unit, onActionsLongPress: () -&gt; Unit, onSwipeReply: () -&gt; Unit, compactTimestamp: Boolean = false, avatarOverride: String? = null, isHighlighted: Boolean = false, )</ID>
     <ID>CyclomaticComplexMethod:NearbyEventsContent.kt$@Composable internal fun NearbyEventsContent( events: List&lt;Event&gt;, selectedEventId: String?, userLat: Double?, userLng: Double?, isPermissionDenied: Boolean, isLocationUnavailable: Boolean, onEventSelected: (String) -&gt; Unit, onEventClick: (String) -&gt; Unit, onRequestPermission: () -&gt; Unit = {}, )</ID>
-    <ID>CyclomaticComplexMethod:ProfilePreview.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun ProfilePreview( name: String, program: String?, bio: String?, tags: List&lt;Tag&gt;, images: List&lt;ProfileImage&gt;, emojiAvatar: String?, gradientStart: String? = null, gradientEnd: String? = null, onClose: () -&gt; Unit, bottomContent: @Composable (() -&gt; Unit)? = null, )</ID>
-    <ID>CyclomaticComplexMethod:ProfileSetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ProfileSetupScreen( onComplete: () -&gt; Unit, onBack: () -&gt; Unit, viewModel: OnboardingViewModel = koinViewModel(), )</ID>
-    <ID>CyclomaticComplexMethod:RoomRow.kt$@Composable fun RoomRow( room: RoomSummary, profilePictureUrl: String? = null, displayNameOverride: String? = null, onClick: () -&gt; Unit, onAvatarClick: (() -&gt; Unit)? = null, )</ID>
     <ID>Indentation:AppNavigation.kt$ </ID>
-    <ID>Indentation:SavedScreen.kt$ </ID>
     <ID>Indentation:AvatarPickerContent.kt$ </ID>
     <ID>Indentation:BasicInfoScreen.kt$ </ID>
     <ID>Indentation:ChatContent.kt$ </ID>
@@ -36,7 +27,7 @@
     <ID>Indentation:ExploreScreen.kt$ </ID>
     <ID>Indentation:FilterTabs.kt$ </ID>
     <ID>Indentation:ForgotPasswordScreen.kt$ </ID>
-    <ID>Indentation:GroupsScreen.kt$ </ID>
+    <ID>Indentation:GamificationScreen.kt$ </ID>
     <ID>Indentation:InterestsScreen.kt$ </ID>
     <ID>Indentation:LocationPickerSheet.kt$ </ID>
     <ID>Indentation:LoginScreen.kt$ </ID>
@@ -46,7 +37,6 @@
     <ID>Indentation:NewChatScreen.kt$ </ID>
     <ID>Indentation:OfflineBanner.kt$ </ID>
     <ID>Indentation:OnboardingLayout.kt$ </ID>
-    <ID>Indentation:PoziomkiButton.kt$ </ID>
     <ID>Indentation:PoziomkiLogo.kt$ </ID>
     <ID>Indentation:PoziomkiSearchBar.kt$ </ID>
     <ID>Indentation:PoziomkiTextField.kt$ </ID>
@@ -63,42 +53,31 @@
     <ID>Indentation:RegisterScreen.kt$ </ID>
     <ID>Indentation:ResetPasswordScreen.kt$ </ID>
     <ID>Indentation:RoomRow.kt$ </ID>
+    <ID>Indentation:SavedScreen.kt$ </ID>
     <ID>Indentation:ScreenHeader.kt$ </ID>
     <ID>Indentation:StackedAvatars.kt$ </ID>
+    <ID>Indentation:StreakBadge.kt$ </ID>
     <ID>Indentation:Type.kt$ </ID>
     <ID>Indentation:TypingIndicator.kt$ </ID>
     <ID>Indentation:UserAvatar.kt$ </ID>
     <ID>Indentation:VerifyScreen.kt$ </ID>
     <ID>LargeClass:ChatViewModel.kt$ChatViewModel : ViewModel</ID>
     <ID>LongMethod:AppNavigation.kt$@Composable fun AppNavigation( startDestination: Route, isLoggedIn: Boolean, navController: NavHostController = rememberNavController(), )</ID>
-    <ID>LongMethod:AppNavigation.kt$@Composable fun MainScreen( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, onNavigateToProfileEdit: () -&gt; Unit, onNavigateToPrivacy: () -&gt; Unit, onNavigateToSaved: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToNewChat: () -&gt; Unit, onSignOut: () -&gt; Unit, )</ID>
-    <ID>LongMethod:AvatarPickerContent.kt$@OptIn(ExperimentalLayoutApi::class) @Composable internal fun AvatarPickerContent( selectedAvatar: String?, galleryImages: List&lt;ByteArray&gt;, onPickGalleryImages: () -&gt; Unit, onRemoveGalleryImage: (Int) -&gt; Unit, onSelectAvatar: (String) -&gt; Unit, onClearAll: () -&gt; Unit, hasContent: Boolean, )</ID>
     <ID>LongMethod:BasicInfoScreen.kt$@Composable fun BasicInfoScreen( onNext: () -&gt; Unit, onBack: () -&gt; Unit, viewModel: OnboardingViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ChatContent.kt$@Composable internal fun ComposerModeBanner( mode: ComposerMode, onCancel: () -&gt; Unit, )</ID>
     <ID>LongMethod:ChatContent.kt$@Composable private fun MessageActionDialog( event: TimelineItem.Event, onDismiss: () -&gt; Unit, onReaction: (String) -&gt; Unit, onReply: () -&gt; Unit, onCopy: () -&gt; Unit, onEdit: () -&gt; Unit, onDelete: () -&gt; Unit, )</ID>
     <ID>LongMethod:ChatContent.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChatContent( state: ChatUiState, timelineListState: LazyListState, onDraftChanged: (String) -&gt; Unit, onSendMessage: () -&gt; Unit, onToggleReaction: (String, String) -&gt; Unit, onMarkAsRead: () -&gt; Unit, onViewportChanged: (Int?) -&gt; Unit, onJumpToLatest: () -&gt; Unit, onStartReply: (TimelineItem.Event) -&gt; Unit, onStartEdit: (TimelineItem.Event) -&gt; Unit, onCancelComposerMode: () -&gt; Unit, onRedactEvent: (String) -&gt; Unit, onClearError: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, resolveDisplayNames: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, resolveAvatarUrls: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, showSenderMeta: Boolean = !state.isDirectRoom, modifier: Modifier = Modifier, avatarOverrides: Map&lt;String, String&gt; = emptyMap(), avatarOverridesByName: Map&lt;String, String&gt; = emptyMap(), searchQuery: String = "", currentMatchEventId: String? = null, headerContent: (@Composable () -&gt; Unit)? = null, )</ID>
     <ID>LongMethod:ChatContent.kt$@Suppress("DEPRECATION") @OptIn(ExperimentalMaterial3Api::class) @Composable private fun ReactionBreakdownSheet( reactions: List&lt;Reaction&gt;, senderDisplayNames: Map&lt;String, String&gt;, senderAvatarUrls: Map&lt;String, String&gt;, avatarOverrides: Map&lt;String, String&gt;, avatarOverridesByName: Map&lt;String, String&gt;, onDismiss: () -&gt; Unit, )</ID>
     <ID>LongMethod:ChatScreen.kt$@Composable private fun ChatSearchBar( query: String, onQueryChange: (String) -&gt; Unit, matchCount: Int, currentMatch: Int, onPrev: () -&gt; Unit, onNext: () -&gt; Unit, onClose: () -&gt; Unit, )</ID>
-    <ID>LongMethod:ChatScreen.kt$@Composable @Suppress("LongParameterList") fun ChatScreen( chatId: String, initialTitle: String? = null, initialDirectUserId: String? = null, initialDirectProfileId: String? = null, onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: ChatViewModel = koinViewModel(), )</ID>
-    <ID>LongParameterList:ChatScreen.kt$( query: String, onQueryChange: (String) -&gt; Unit, matchCount: Int, currentMatch: Int, onPrev: () -&gt; Unit, onNext: () -&gt; Unit, onClose: () -&gt; Unit, )</ID>
     <ID>LongMethod:ChatViewModel.kt$ChatViewModel$private suspend fun bindRoom( roomId: String, fallbackDisplayName: String?, fallbackDirectUserId: String?, )</ID>
-    <ID>LongMethod:EventChatScreen.kt$@Composable fun EventChatScreen( onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, onNavigateToEditEvent: (String) -&gt; Unit, eventDetailViewModel: EventDetailViewModel = koinViewModel(), chatViewModel: ChatViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:EventCreateScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventCreateScreen( onBack: () -&gt; Unit, onCreated: () -&gt; Unit, eventId: String? = null, )</ID>
-    <ID>LongMethod:EventsScreen.kt$@Composable private fun EventCard( event: Event, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable internal fun EventRow( event: Event, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:EventsScreen.kt$@Composable private fun WeekEventsContent( events: List&lt;Event&gt;, onEventClick: (String) -&gt; Unit, )</ID>
-    <ID>LongMethod:EventsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventsScreen( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: EventsViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ExploreScreen.kt$@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class) @Composable fun ExploreScreen( onNavigateToProfile: (String) -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit = {}, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: ExploreViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:LocationPickerSheet.kt$@Composable fun LocationPickerSheet( onDismiss: () -&gt; Unit, onLocationSelected: (name: String, lat: Double, lng: Double) -&gt; Unit, initialLocation: String = "", initialLat: Double? = null, initialLng: Double? = null, )</ID>
-    <ID>LongMethod:LoginScreen.kt$@Composable fun LoginScreen( onNavigateToRegister: () -&gt; Unit, onLoginSuccess: () -&gt; Unit, onNeedsVerification: (String) -&gt; Unit, onNeedsOnboarding: () -&gt; Unit, prefillEmail: String? = null, viewModel: AuthViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:MessageEventRow.kt$@Composable internal fun MessageEventRow( event: TimelineItem.Event, groupedWithPrevious: Boolean, showSenderMeta: Boolean, onToggleReaction: (String) -&gt; Unit, onReactionsClick: () -&gt; Unit, onFocusOnReply: () -&gt; Unit, onSenderClick: () -&gt; Unit, onActionsLongPress: () -&gt; Unit, onSwipeReply: () -&gt; Unit, compactTimestamp: Boolean = false, avatarOverride: String? = null, isHighlighted: Boolean = false, )</ID>
     <ID>LongMethod:MessagesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MessagesScreen( onNavigateToChat: (String) -&gt; Unit, onNavigateToNewChat: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit = {}, profileAvatarAction: @Composable () -&gt; Unit = {}, viewModel: MessagesViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:NearbyEventsContent.kt$@Composable internal fun NearbyEventsContent( events: List&lt;Event&gt;, selectedEventId: String?, userLat: Double?, userLng: Double?, isPermissionDenied: Boolean, isLocationUnavailable: Boolean, onEventSelected: (String) -&gt; Unit, onEventClick: (String) -&gt; Unit, onRequestPermission: () -&gt; Unit = {}, )</ID>
     <ID>LongMethod:OnboardingLayout.kt$@Composable fun OnboardingLayout( currentStep: Int, totalSteps: Int, showBack: Boolean = true, onBack: (() -&gt; Unit)? = null, footer: @Composable () -&gt; Unit, content: @Composable () -&gt; Unit, )</ID>
-    <ID>LongMethod:PoziomkiButton.kt$@Composable fun PoziomkiButton( text: String, onClick: () -&gt; Unit, modifier: Modifier = Modifier, variant: ButtonVariant = ButtonVariant.SECONDARY, enabled: Boolean = true, loading: Boolean = false, loadingText: String? = null, icon: ImageVector? = null, )</ID>
-    <ID>LongMethod:PoziomkiSearchBar.kt$@Composable fun PoziomkiSearchBar( query: String, onQueryChange: (String) -&gt; Unit, placeholder: String, modifier: Modifier = Modifier, )</ID>
-    <ID>LongMethod:PoziomkiTextField.kt$@Composable fun PoziomkiTextField( value: String, onValueChange: (String) -&gt; Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String? = null, error: String? = null, singleLine: Boolean = true, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE, minLines: Int = 1, keyboardOptions: KeyboardOptions = KeyboardOptions.Default, visualTransformation: VisualTransformation = VisualTransformation.None, trailingContent: @Composable (() -&gt; Unit)? = null, )</ID>
-    <ID>LongMethod:PrivacyScreen.kt$@Composable fun PrivacyScreen( onBack: () -&gt; Unit, onAccountDeleted: () -&gt; Unit = {}, viewModel: PrivacyViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ProfileCard.kt$@Composable fun ProfileCard( name: String, program: String?, profilePicture: String?, gradientStart: String? = null, gradientEnd: String? = null, onClick: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:ProfileEditScreen.kt$@Composable fun ProfileEditScreen( onBack: () -&gt; Unit, viewModel: ProfileEditViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ProfileEditScreen.kt$@Composable private fun BioEditorDialog( bio: String, isBioImageUploading: Boolean, onBioChange: (String) -&gt; Unit, onAddImage: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
@@ -106,66 +85,45 @@
     <ID>LongMethod:ProfileEditScreen.kt$@Composable private fun TagSearchBar( query: String, onQueryChange: (String) -&gt; Unit, placeholder: String, )</ID>
     <ID>LongMethod:ProfileEditScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable private fun GradientPickerDialog( name: String, program: String, bio: String, initialStart: String?, initialEnd: String?, onSave: (String?, String?) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
     <ID>LongMethod:ProfileEditScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable private fun TagSection( label: String, query: String, onQueryChange: (String) -&gt; Unit, searchPlaceholder: String, searchResults: List&lt;Tag&gt;, isSearching: Boolean, selectedTags: List&lt;Tag&gt;, onAddTag: (Tag) -&gt; Unit, onRemoveTag: (Tag) -&gt; Unit, onCreateTag: ((String) -&gt; Unit)? = null, isCreatingTag: Boolean = false, )</ID>
-    <ID>LongMethod:ProfilePreview.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun ProfilePreview( name: String, program: String?, bio: String?, tags: List&lt;Tag&gt;, images: List&lt;ProfileImage&gt;, emojiAvatar: String?, gradientStart: String? = null, gradientEnd: String? = null, onClose: () -&gt; Unit, bottomContent: @Composable (() -&gt; Unit)? = null, )</ID>
     <ID>LongMethod:ProfileScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ProfileScreen( onNavigateToEdit: () -&gt; Unit, onNavigateToPrivacy: () -&gt; Unit, onNavigateToSaved: () -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, onSignOut: () -&gt; Unit, viewModel: ProfileViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:SavedScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SavedScreen( onBack: () -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, viewModel: SavedViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:ProfileSetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ProfileSetupScreen( onComplete: () -&gt; Unit, onBack: () -&gt; Unit, viewModel: OnboardingViewModel = koinViewModel(), )</ID>
-    <ID>LongMethod:ProfileViewScreen.kt$@Composable fun ProfileViewScreen( onBack: () -&gt; Unit, onNavigateToChat: (String, String) -&gt; Unit, viewModel: ProfileViewViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:RecommendedPeopleRow.kt$@Composable private fun RecommendedPersonItem( name: String, profilePicture: String?, score: Double, onClick: () -&gt; Unit, )</ID>
     <ID>LongMethod:RegisterScreen.kt$@Composable fun RegisterScreen( onNavigateToLogin: () -&gt; Unit, onRegisterSuccess: (String) -&gt; Unit, onUserExists: (String) -&gt; Unit = {}, viewModel: AuthViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:RoomRow.kt$@Composable fun RoomRow( room: RoomSummary, profilePictureUrl: String? = null, displayNameOverride: String? = null, onClick: () -&gt; Unit, onAvatarClick: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongMethod:SavedScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SavedScreen( onBack: () -&gt; Unit, onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, viewModel: SavedViewModel = koinViewModel(), )</ID>
     <ID>LongMethod:Type.kt$@Composable fun poziomkiTypography(): Typography</ID>
     <ID>LongMethod:TypingIndicator.kt$@Composable fun TypingIndicator( avatarUrl: String?, displayName: String?, showAvatar: Boolean, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:UserAvatar.kt$@Composable fun UserAvatar( picture: String?, fallbackPicture: String? = null, displayName: String?, modifier: Modifier = Modifier, size: Dp = 52.dp, backgroundColor: Color = Border, iconTint: Color = TextMuted, )</ID>
-    <ID>LongMethod:VerifyScreen.kt$@Composable fun VerifyScreen( email: String, onVerifySuccess: () -&gt; Unit, viewModel: AuthViewModel = koinViewModel(), )</ID>
-    <ID>LongParameterList:AppNavigation.kt$( onNavigateToEventDetail: (String) -&gt; Unit, onNavigateToEventCreate: () -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, onNavigateToProfileEdit: () -&gt; Unit, onNavigateToPrivacy: () -&gt; Unit, onNavigateToSaved: () -&gt; Unit, onNavigateToChat: (String) -&gt; Unit, onNavigateToNewChat: () -&gt; Unit, onSignOut: () -&gt; Unit, )</ID>
-    <ID>LongParameterList:ProfileScreen.kt$( onNavigateToEdit: () -&gt; Unit, onNavigateToPrivacy: () -&gt; Unit, onNavigateToSaved: () -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, onSignOut: () -&gt; Unit, viewModel: ProfileViewModel = koinViewModel(), )</ID>
-    <ID>LongParameterList:AvatarPickerContent.kt$( selectedAvatar: String?, galleryImages: List&lt;ByteArray&gt;, onPickGalleryImages: () -&gt; Unit, onRemoveGalleryImage: (Int) -&gt; Unit, onSelectAvatar: (String) -&gt; Unit, onClearAll: () -&gt; Unit, hasContent: Boolean, )</ID>
     <ID>LongParameterList:ChatContent.kt$( event: TimelineItem.Event, onDismiss: () -&gt; Unit, onReaction: (String) -&gt; Unit, onReply: () -&gt; Unit, onCopy: () -&gt; Unit, onEdit: () -&gt; Unit, onDelete: () -&gt; Unit, )</ID>
     <ID>LongParameterList:ChatContent.kt$( reactions: List&lt;Reaction&gt;, senderDisplayNames: Map&lt;String, String&gt;, senderAvatarUrls: Map&lt;String, String&gt;, avatarOverrides: Map&lt;String, String&gt;, avatarOverridesByName: Map&lt;String, String&gt;, onDismiss: () -&gt; Unit, )</ID>
     <ID>LongParameterList:ChatContent.kt$( state: ChatUiState, timelineListState: LazyListState, onDraftChanged: (String) -&gt; Unit, onSendMessage: () -&gt; Unit, onToggleReaction: (String, String) -&gt; Unit, onMarkAsRead: () -&gt; Unit, onViewportChanged: (Int?) -&gt; Unit, onJumpToLatest: () -&gt; Unit, onStartReply: (TimelineItem.Event) -&gt; Unit, onStartEdit: (TimelineItem.Event) -&gt; Unit, onCancelComposerMode: () -&gt; Unit, onRedactEvent: (String) -&gt; Unit, onClearError: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, resolveDisplayNames: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, resolveAvatarUrls: suspend (List&lt;String&gt;) -&gt; Map&lt;String, String&gt;, showSenderMeta: Boolean = !state.isDirectRoom, modifier: Modifier = Modifier, avatarOverrides: Map&lt;String, String&gt; = emptyMap(), avatarOverridesByName: Map&lt;String, String&gt; = emptyMap(), searchQuery: String = "", currentMatchEventId: String? = null, headerContent: (@Composable () -&gt; Unit)? = null, )</ID>
-    <ID>LongParameterList:ChatScreen.kt$( chatId: String, initialTitle: String? = null, initialDirectUserId: String? = null, onBack: () -&gt; Unit, onNavigateToProfile: (String) -&gt; Unit, viewModel: ChatViewModel = koinViewModel(), )</ID>
+    <ID>LongParameterList:ChatScreen.kt$( query: String, onQueryChange: (String) -&gt; Unit, matchCount: Int, currentMatch: Int, onPrev: () -&gt; Unit, onNext: () -&gt; Unit, onClose: () -&gt; Unit, )</ID>
     <ID>LongParameterList:ChatViewModel.kt$ChatViewModel$( summary: RoomSummary?, overrides: Map&lt;String, String&gt;, roomDisplayName: String, currentAvatar: String?, timelineAvatar: String? = null, directUserIdFallback: String? = null, )</ID>
     <ID>LongParameterList:ConfirmDialog.kt$( title: String, message: String, confirmText: String, cancelText: String = "anuluj", isDestructive: Boolean = false, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
-    <ID>LongParameterList:LoginScreen.kt$( onNavigateToRegister: () -&gt; Unit, onLoginSuccess: () -&gt; Unit, onNeedsVerification: (String) -&gt; Unit, onNeedsOnboarding: () -&gt; Unit, prefillEmail: String? = null, viewModel: AuthViewModel = koinViewModel(), )</ID>
     <ID>LongParameterList:MessageEventRow.kt$( event: TimelineItem.Event, groupedWithPrevious: Boolean, showSenderMeta: Boolean, onToggleReaction: (String) -&gt; Unit, onReactionsClick: () -&gt; Unit, onFocusOnReply: () -&gt; Unit, onSenderClick: () -&gt; Unit, onActionsLongPress: () -&gt; Unit, onSwipeReply: () -&gt; Unit, compactTimestamp: Boolean = false, avatarOverride: String? = null, isHighlighted: Boolean = false, )</ID>
     <ID>LongParameterList:NearbyEventsContent.kt$( events: List&lt;Event&gt;, selectedEventId: String?, userLat: Double?, userLng: Double?, isPermissionDenied: Boolean, isLocationUnavailable: Boolean, onEventSelected: (String) -&gt; Unit, onEventClick: (String) -&gt; Unit, onRequestPermission: () -&gt; Unit = {}, )</ID>
     <ID>LongParameterList:OnboardingLayout.kt$( currentStep: Int, totalSteps: Int, showBack: Boolean = true, onBack: (() -&gt; Unit)? = null, footer: @Composable () -&gt; Unit, content: @Composable () -&gt; Unit, )</ID>
-    <ID>LongParameterList:PoziomkiButton.kt$( text: String, onClick: () -&gt; Unit, modifier: Modifier = Modifier, variant: ButtonVariant = ButtonVariant.SECONDARY, enabled: Boolean = true, loading: Boolean = false, loadingText: String? = null, icon: ImageVector? = null, )</ID>
-    <ID>LongParameterList:PoziomkiTextField.kt$( value: String, onValueChange: (String) -&gt; Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String? = null, error: String? = null, keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), )</ID>
-    <ID>LongParameterList:PoziomkiTextField.kt$( value: String, onValueChange: (String) -&gt; Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String? = null, error: String? = null, singleLine: Boolean = true, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE, minLines: Int = 1, keyboardOptions: KeyboardOptions = KeyboardOptions.Default, visualTransformation: VisualTransformation = VisualTransformation.None, trailingContent: @Composable (() -&gt; Unit)? = null, )</ID>
     <ID>LongParameterList:ProfileCard.kt$( name: String, program: String?, profilePicture: String?, gradientStart: String? = null, gradientEnd: String? = null, onClick: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>LongParameterList:ProfileEditScreen.kt$( label: String, query: String, onQueryChange: (String) -&gt; Unit, searchPlaceholder: String, searchResults: List&lt;Tag&gt;, isSearching: Boolean, selectedTags: List&lt;Tag&gt;, onAddTag: (Tag) -&gt; Unit, onRemoveTag: (Tag) -&gt; Unit, onCreateTag: ((String) -&gt; Unit)? = null, isCreatingTag: Boolean = false, )</ID>
     <ID>LongParameterList:ProfileEditScreen.kt$( name: String, program: String, bio: String, initialStart: String?, initialEnd: String?, onSave: (String?, String?) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
-    <ID>LongParameterList:ProfilePreview.kt$( name: String, program: String?, bio: String?, tags: List&lt;Tag&gt;, images: List&lt;ProfileImage&gt;, emojiAvatar: String?, gradientStart: String? = null, gradientEnd: String? = null, onClose: () -&gt; Unit, bottomContent: @Composable (() -&gt; Unit)? = null, )</ID>
-    <ID>LongParameterList:ProfilePreviewDialog.kt$( name: String, program: String, bio: String, tags: List&lt;Tag&gt;, selectedAvatar: String?, avatarImageBytes: ByteArray?, galleryImages: List&lt;ByteArray&gt;, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:ProfileScreen.kt$( onNavigateToEdit: () -&gt; Unit, onNavigateToPrivacy: () -&gt; Unit, onNavigateToSaved: () -&gt; Unit, onNavigateToProfileView: (String) -&gt; Unit, onSignOut: () -&gt; Unit, viewModel: ProfileViewModel = koinViewModel(), )</ID>
     <ID>LongParameterList:UserAvatar.kt$( picture: String?, fallbackPicture: String? = null, displayName: String?, modifier: Modifier = Modifier, size: Dp = 52.dp, backgroundColor: Color = Border, iconTint: Color = TextMuted, )</ID>
     <ID>MaxLineLength:NearbyEventsContent.kt$"""{"type":"Feature","geometry":{"type":"Point","coordinates":[${event.longitude},${event.latitude}]},"properties":{"id":"${event.id}"}}"""</ID>
     <ID>MaximumLineLength:ChatViewModel.kt$ChatViewModel$ </ID>
-    <ID>MaximumLineLength:EventChatScreen.kt$ </ID>
-    <ID>MaximumLineLength:EventCreateScreen.kt$ </ID>
-    <ID>MaximumLineLength:EventCreateViewModel.kt$EventCreateViewModel$ </ID>
     <ID>MaximumLineLength:ExploreScreen.kt$ </ID>
     <ID>MaximumLineLength:ImagePicker.android.kt$actual</ID>
     <ID>MaximumLineLength:LocationPickerSheet.kt$ </ID>
     <ID>MaximumLineLength:MessageEventRow.kt$ </ID>
     <ID>MaximumLineLength:NearbyEventsContent.kt$ </ID>
-    <ID>MaximumLineLength:ProfileSetupScreen.kt$ </ID>
     <ID>MaximumLineLength:RoomRow.kt$ </ID>
-    <ID>MaximumLineLength:ChatContent.kt$ </ID>
     <ID>NoUnusedImports:AppNavigation.kt$com.poziomki.app.ui.navigation.AppNavigation.kt</ID>
     <ID>NoUnusedImports:ChatContent.kt$com.poziomki.app.ui.feature.chat.ChatContent.kt</ID>
-    <ID>NoUnusedImports:EventCreateScreen.kt$com.poziomki.app.ui.feature.event.EventCreateScreen.kt</ID>
-    <ID>NoUnusedImports:EventsScreen.kt$com.poziomki.app.ui.feature.home.EventsScreen.kt</ID>
-    <ID>NoUnusedImports:InterestsScreen.kt$com.poziomki.app.ui.feature.onboarding.InterestsScreen.kt</ID>
     <ID>NoUnusedImports:LoginScreen.kt$com.poziomki.app.ui.feature.auth.LoginScreen.kt</ID>
     <ID>NoUnusedImports:MessagesScreen.kt$com.poziomki.app.ui.feature.home.MessagesScreen.kt</ID>
     <ID>NoUnusedImports:MessagesViewModel.kt$com.poziomki.app.ui.feature.home.MessagesViewModel.kt</ID>
     <ID>NoUnusedImports:NewChatScreen.kt$com.poziomki.app.ui.feature.chat.NewChatScreen.kt</ID>
     <ID>NoUnusedImports:PoziomkiTextField.kt$com.poziomki.app.ui.designsystem.components.PoziomkiTextField.kt</ID>
     <ID>NoUnusedImports:ProfileEditScreen.kt$com.poziomki.app.ui.feature.profile.ProfileEditScreen.kt</ID>
-    <ID>NoUnusedImports:VerifyScreen.kt$com.poziomki.app.ui.feature.auth.VerifyScreen.kt</ID>
-    <ID>PropertyWrapping:EventCreateScreen.kt$val endTimePickerState = rememberTimePickerState(initialHour = selectedEndHour, initialMinute = selectedEndMinute)</ID>
     <ID>TooManyFunctions:ChatContent.kt$com.poziomki.app.ui.feature.chat.ChatContent.kt</ID>
     <ID>TooManyFunctions:ChatViewModel.kt$ChatViewModel : ViewModel</ID>
     <ID>TooManyFunctions:EventCreateViewModel.kt$EventCreateViewModel : ViewModel</ID>
@@ -175,7 +133,6 @@
     <ID>TooManyFunctions:ProfileEditScreen.kt$com.poziomki.app.ui.feature.profile.ProfileEditScreen.kt</ID>
     <ID>TooManyFunctions:ProfileEditViewModel.kt$ProfileEditViewModel : ViewModel</ID>
     <ID>UnusedParameter:MessageEventRow.kt$onToggleReaction: (String) -&gt; Unit</ID>
-    <ID>UnusedPrivateProperty:ProfileSetupScreen.kt$val avatarImagePicker = rememberSingleImagePicker { bytes -&gt; if (bytes != null) { viewModel.setAvatarImage(bytes) } }</ID>
     <ID>Wrapping:MessagesScreen.kt${ onNavigateToProfile(userId) }</ID>
   </CurrentIssues>
 </SmellBaseline>

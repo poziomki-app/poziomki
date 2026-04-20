@@ -5,6 +5,7 @@ import com.poziomki.app.ui.feature.chat.ChatViewModel
 import com.poziomki.app.ui.feature.chat.NewChatViewModel
 import com.poziomki.app.ui.feature.event.EventCreateViewModel
 import com.poziomki.app.ui.feature.event.EventDetailViewModel
+import com.poziomki.app.ui.feature.gamification.GamificationViewModel
 import com.poziomki.app.ui.feature.home.EventsViewModel
 import com.poziomki.app.ui.feature.home.ExploreViewModel
 import com.poziomki.app.ui.feature.home.MessagesViewModel
@@ -33,4 +34,5 @@ val appModule =
         viewModelOf(::ProfileViewViewModel)
         viewModelOf(::PrivacyViewModel)
         viewModelOf(::SavedViewModel)
+        viewModelOf(::GamificationViewModel)
     }
