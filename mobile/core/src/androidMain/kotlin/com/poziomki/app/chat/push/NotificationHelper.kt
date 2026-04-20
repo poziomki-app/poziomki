@@ -77,7 +77,7 @@ class NotificationHelper(
         roomId
             ?.takeIf { it.isNotBlank() }
             ?.let { targetRoomId ->
-                builder.setContentIntent(buildChatPendingIntent(targetRoomId))
+                buildChatPendingIntent(targetRoomId)?.let(builder::setContentIntent)
             }
 
         if (avatarUrl != null) {
@@ -114,14 +114,19 @@ class NotificationHelper(
         notificationManager.notify(summaryId, summary)
     }
 
-    private fun buildChatPendingIntent(roomId: String): PendingIntent {
+    /**
+     * Builds an EXPLICIT PendingIntent that opens the launcher activity.
+     *
+     * Returns null if — for any reason — the package manager cannot resolve our own
+     * launch intent. An implicit fallback would be a CWE-927 vulnerability (a malicious
+     * app could hijack the wrapped Intent), so we drop the content intent instead.
+     */
+    private fun buildChatPendingIntent(roomId: String): PendingIntent? {
         val intent =
-            context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(NotificationChatTarget.EXTRA_OPEN_CHAT_ROOM_ID, roomId)
-            } ?: Intent().apply {
-                putExtra(NotificationChatTarget.EXTRA_OPEN_CHAT_ROOM_ID, roomId)
-            }
+            context.packageManager.getLaunchIntentForPackage(context.packageName)
+                ?: return null
+        intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.putExtra(NotificationChatTarget.EXTRA_OPEN_CHAT_ROOM_ID, roomId)
         return PendingIntent.getActivity(
             context,
             roomId.hashCode(),
