@@ -21,12 +21,15 @@ RUN cargo build --release --bin poziomki_backend-cli --bin worker
 
 # debian:bookworm-slim
 FROM debian@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d AS runtime-deps
-SHELL ["/bin/sh", "-o", "pipefail", "-c"]
+# /bin/sh on bookworm-slim is dash, which doesn't support `-o pipefail`.
+# Install bash first, then switch SHELL so the ldd pipeline below gets pipefail.
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq5 libwebp7 ca-certificates \
+    && apt-get install -y --no-install-recommends libpq5 libwebp7 ca-certificates bash \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # hadolint ignore=DL4006
 RUN set -eux; \
