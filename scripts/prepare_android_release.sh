@@ -61,10 +61,20 @@ done
   sha256sum ./*.apk > "poziomki-${version_name}-sha256.txt"
 )
 
-tar -C "$ROOT_DIR" -czf "$OUTPUT_DIR/poziomki-${version_name}-metadata.tar.gz" \
-  .fdroid.yml \
-  docs/android-distribution.txt \
-  fastlane \
-  fdroid
+# Bundle any distribution metadata that still lives in the repo (historical
+# set: .fdroid.yml, fastlane/, fdroid/, docs/android-distribution.txt — most
+# of which was removed in the 2026-02 cleanup). Skip the tar entirely when
+# none are present so the workflow doesn't fail for a baseline release.
+metadata_paths=()
+for candidate in .fdroid.yml docs/android-distribution.txt fastlane fdroid; do
+  if [[ -e "$ROOT_DIR/$candidate" ]]; then
+    metadata_paths+=("$candidate")
+  fi
+done
+
+if (( ${#metadata_paths[@]} > 0 )); then
+  tar -C "$ROOT_DIR" -czf "$OUTPUT_DIR/poziomki-${version_name}-metadata.tar.gz" \
+    "${metadata_paths[@]}"
+fi
 
 printf 'Prepared Android release assets for version %s (%s) in %s\n' "$version_name" "$version_code" "$OUTPUT_DIR"
