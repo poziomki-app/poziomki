@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Trivy
         env:
-          TRIVY_VERSION: "0.58.1"
+          TRIVY_VERSION: "0.70.0"
         run: |
           curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz trivy
@@ -151,8 +151,13 @@ jobs:
           ./osv-scanner --version
       - name: Scan
         run: |
-          ./osv-scanner --lockfile=./backend/Cargo.lock --format=sarif --output=osv.sarif || true
-          test -s osv.sarif
+          # v2 CLI: `scan source` replaces v1's bare `osv-scanner`.
+          set +e
+          ./osv-scanner scan source --lockfile=./backend/Cargo.lock --format=sarif --output=osv.sarif
+          rc=$?
+          set -e
+          # rc=0 no vulns, rc=1 vulns found — both write SARIF.
+          test -s osv.sarif || { echo "::error::osv-scanner did not produce SARIF (exit $rc)"; exit 1; }
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
