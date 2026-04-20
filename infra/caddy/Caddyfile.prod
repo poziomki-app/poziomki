@@ -50,6 +50,7 @@
 
 poziomki.app, www.poziomki.app {
 	import secure_headers
+	encode zstd br gzip
 	# Landing URLs are public; ship the full referrer so we can see *which* page on
 	# GitHub/Mastodon/etc. linked here. Other vhosts keep the strict default.
 	header Referrer-Policy "no-referrer-when-downgrade"
