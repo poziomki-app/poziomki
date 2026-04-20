@@ -14,43 +14,41 @@ permissions:
   pull-requests: read
 
 jobs:
-  trivy-backend:
+  # Trivy (fs + config). Installs the CLI directly — the Marketplace action
+  # has had broken tag-to-SHA resolutions lately (tarball 404s).
+  trivy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          scan-type: fs
-          scan-ref: backend
-          severity: MEDIUM,HIGH,CRITICAL
-          format: sarif
-          output: trivy-backend.sarif
-
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: "0.58.1"
+        run: |
+          curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz trivy
+          chmod +x trivy
+          ./trivy --version
+      - name: Scan backend (fs)
+        run: ./trivy fs backend --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-backend.sarif --exit-code 0
+      - name: Scan mobile (fs)
+        run: ./trivy fs mobile --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-mobile.sarif --exit-code 0
+      - name: Scan repo config (Dockerfiles, compose, workflows)
+        run: ./trivy config . --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-config.sarif --exit-code 0
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-backend.sarif
           category: trivy-backend
-
-  trivy-mobile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          scan-type: fs
-          scan-ref: mobile
-          severity: MEDIUM,HIGH,CRITICAL
-          format: sarif
-          output: trivy-mobile.sarif
-
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-mobile.sarif
           category: trivy-mobile
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
 
   cargo-deny:
     runs-on: ubuntu-latest
@@ -136,43 +134,30 @@ jobs:
           deny-licenses: AGPL-1.0, AGPL-3.0, GPL-2.0, GPL-3.0
 
   # OSV-Scanner — Google's cross-ecosystem vulnerability scanner. Reads
-  # lockfiles (Cargo.lock etc.) and checks against osv.dev. Only scans
-  # backend — mobile has no gradle.lockfile and OSV can't walk
-  # build.gradle.kts alone. Gradle advisories come via Trivy-fs instead.
+  # lockfiles (Cargo.lock etc.) and checks against osv.dev. Scans backend's
+  # Cargo.lock — mobile has no gradle.lockfile (lockfile generation disabled)
+  # so gradle coverage comes via Trivy-fs instead. CLI install avoids the
+  # osv-scanner-action's quirky multi-line scan-args parsing.
   osv-scanner:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
-        with:
-          scan-args: |-
-            --lockfile=./backend/Cargo.lock
-            --format=sarif
-            --output=osv.sarif
+      - name: Install OSV-Scanner
+        env:
+          OSV_VERSION: "2.0.2"
+        run: |
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          chmod +x osv-scanner
+          ./osv-scanner --version
+      - name: Scan
+        run: |
+          ./osv-scanner --lockfile=./backend/Cargo.lock --format=sarif --output=osv.sarif || true
+          test -s osv.sarif
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: osv.sarif
           category: osv-scanner
-
-  # Trivy config scan — misconfigurations in Dockerfiles, docker-compose,
-  # GitHub Actions workflows, etc. Complements the fs scans above.
-  trivy-config:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: MEDIUM,HIGH,CRITICAL
-          format: sarif
-          output: trivy-config.sarif
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: trivy-config.sarif
-          category: trivy-config
 
   # Hadolint — Dockerfile best-practice + security linter, SARIF to Security tab.
   hadolint:
