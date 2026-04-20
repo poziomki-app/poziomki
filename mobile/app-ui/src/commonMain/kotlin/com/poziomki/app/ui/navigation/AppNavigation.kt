@@ -72,6 +72,7 @@ import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
+import com.poziomki.app.ui.designsystem.components.StreakBadge
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -373,6 +374,7 @@ fun AppNavigation(
                 onNavigateToSaved = { navController.navigate(Route.Saved) },
                 onNavigateToChat = navigateToChat,
                 onNavigateToNewChat = { navController.navigate(Route.NewChat) },
+                onNavigateToGamification = { navController.navigate(Route.Gamification) },
                 onSignOut = {
                     navController.navigate(Route.AuthGraph) {
                         popUpTo(Route.MainGraph) { inclusive = true }
@@ -456,9 +458,15 @@ fun AppNavigation(
                 },
             )
         }
+        composable<Route.Gamification> {
+            com.poziomki.app.ui.feature.gamification.GamificationScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
 
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 fun MainScreen(
     onNavigateToEventDetail: (String) -> Unit,
@@ -469,6 +477,7 @@ fun MainScreen(
     onNavigateToSaved: () -> Unit,
     onNavigateToChat: (String) -> Unit,
     onNavigateToNewChat: () -> Unit,
+    onNavigateToGamification: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val tabNavController = rememberNavController()
@@ -493,11 +502,18 @@ fun MainScreen(
         }
     }
 
+    val streakCurrent = profileState.profile?.streakCurrent ?: 0
     val profileAvatarAction: @Composable () -> Unit = {
-        ProfileAvatarButton(
-            profilePicture = profilePicture,
-            onClick = navigateToProfileTab,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StreakBadge(
+                streak = streakCurrent,
+                onClick = onNavigateToGamification,
+            )
+            ProfileAvatarButton(
+                profilePicture = profilePicture,
+                onClick = navigateToProfileTab,
+            )
+        }
     }
 
     Scaffold(

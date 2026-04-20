@@ -38,6 +38,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.poziomki.app.ui.shared.QrScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
         <service
             android:name="com.poziomki.app.chat.push.NtfyPushService"
             android:foregroundServiceType="specialUse"
