@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   label:
     runs-on: ubuntu-latest
@@ -14,6 +18,9 @@ jobs:
       pull-requests: write
     steps:
       - name: Label PR by size
+        # Fork PRs run under a read-only token, so label add/remove will 403.
+        # Keep the job green so size labels are best-effort, not gating.
+        continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
