@@ -1,0 +1,38 @@
+name: Drift check
+
+# Nightly: verify the VPS working tree matches origin/main.
+# Alerts to ntfy on drift. Dormant until Tailscale secrets are configured.
+on:
+  schedule:
+    - cron: "17 3 * * *"   # 03:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+
+    steps:
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-deployer
+
+      - name: Check VPS tree
+        id: check
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new admin@poziomki \
+            "cd ~/infra && ./scripts/drift-check.sh" | tee /tmp/drift.log
+        continue-on-error: true
+
+      - name: Alert on drift
+        if: steps.check.outcome == 'failure'
+        run: |
+          curl -fsS -d "infra drift detected on VPS — see GHA run ${{ github.run_id }}" \
+            https://ntfy.poziomki.app/poziomki-dev
+          exit 1

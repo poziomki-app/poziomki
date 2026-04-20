@@ -1,0 +1,15 @@
+.env
+.env.staging
+.env.*.prev
+.env.new
+.deploy-history
+
+garage/garage.toml
+
+ops/dkim/private.key
+ops/dkim/*.pem
+ops/**/*.key
+
+*.bak
+*.swp
+.DS_Store

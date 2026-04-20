@@ -1,0 +1,67 @@
+name: Deploy (staging)
+
+# Dormant until the `staging` environment is configured and
+# docker-compose.staging.yml + .env.staging exist on the VPS.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (default: main)"
+        required: false
+        default: "main"
+        type: string
+  # Uncomment once backend-image.yml in the public repo is wired up:
+  # repository_dispatch:
+  #   types: [backend-image-published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.poziomki.app
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-deployer
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve digest
+        id: d
+        run: |
+          DIGEST=$(docker buildx imagetools inspect \
+            ghcr.io/poziomki-app/poziomki-backend:${{ inputs.tag }} \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Apply
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new admin@poziomki \
+            "cd ~/infra && git fetch && git checkout ${{ github.sha }} -- ':!.env' ':!.env.staging' \
+             && ./scripts/deploy.sh staging ghcr.io/poziomki-app/poziomki-backend@${{ steps.d.outputs.digest }}"
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS https://staging.poziomki.app/healthz; then exit 0; fi
+            sleep 2
+          done
+          exit 1
