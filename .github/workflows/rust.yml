@@ -18,7 +18,7 @@ env:
   # in prod), not the owner role behind DATABASE_URL. Kept scoped to
   # the harness — tier tests and tests that seed cross-user data use
   # DATABASE_URL. Password matches what the setup-roles.sql step
-  # creates in the `test` job below.
+  # creates in the `check` job below.
   TEST_API_DATABASE_URL: postgres://poziomki_api:poziomki_api_ci@localhost:5432/poziomki_test
   JWT_SECRET: ci-test-secret
   GARAGE_S3_ENDPOINT: http://localhost:3900
@@ -26,6 +26,8 @@ env:
   GARAGE_S3_ACCESS_KEY: GK000000000000000000000000
   GARAGE_S3_SECRET_KEY: "0000000000000000000000000000000000000000000000000000000000000001"
   GARAGE_S3_REGION: garage
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   fmt:
@@ -40,28 +42,11 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  clippy:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
-
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: backend
-
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-
-  test:
+  # clippy + test + nextest in a single job so they share target/.
+  # Previously these were two jobs, each paying the full workspace
+  # compile (~2 min each). Now clippy warms the dep graph, test+nextest
+  # reuse the artifacts — roughly halves the Rust critical path.
+  check:
     runs-on: ubuntu-latest
 
     services:
@@ -87,13 +72,19 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev libwebp-dev postgresql-client
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: backend
+
+      - uses: taiki-e/install-action@055f5df8c3f65ea01cd41e9dc855becd88953486 # v2
+        with:
+          tool: cargo-nextest
 
       - name: Start Garage
         working-directory: .
@@ -141,10 +132,11 @@ jobs:
         env:
           PGPASSWORD: poziomki
         run: |
-          sudo apt-get install -y postgresql-client
           psql -h localhost -U poziomki -d poziomki_test \
             -v api_password=poziomki_api_ci \
             -v worker_password=poziomki_worker_ci \
             -f infra/ops/postgres/setup-roles.sql
 
-      - run: cargo test --all-targets
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - run: cargo nextest run --all-targets --all-features
