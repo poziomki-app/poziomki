@@ -8,13 +8,21 @@ OUTPUT_DIR="${1:-$ROOT_DIR/dist/android-release}"
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR"/*.apk "$OUTPUT_DIR"/*.txt "$OUTPUT_DIR"/*.tar.gz
 
-version_name="$(sed -n 's/.*versionName = "\(.*\)"/\1/p' "$BUILD_FILE" | head -n1)"
-version_code="$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' "$BUILD_FILE" | head -n1)"
+# Read appVersionName (source of truth, bumped by release-please) and derive
+# versionCode from it using the same formula as build.gradle.kts.
+version_name="$(sed -n 's/.*appVersionName = "\(.*\)".*/\1/p' "$BUILD_FILE" | head -n1)"
 
-if [[ -z "$version_name" || -z "$version_code" ]]; then
-  echo "Could not read versionName/versionCode from $BUILD_FILE" >&2
+if [[ -z "$version_name" ]]; then
+  echo "Could not read appVersionName from $BUILD_FILE" >&2
   exit 1
 fi
+
+IFS=. read -r v_major v_minor v_patch <<<"$version_name"
+if [[ -z "$v_major" || -z "$v_minor" || -z "$v_patch" ]]; then
+  echo "appVersionName '$version_name' is not major.minor.patch" >&2
+  exit 1
+fi
+version_code=$(( v_major * 1000000 + v_minor * 1000 + v_patch ))
 
 apk_dir="$ROOT_DIR/mobile/androidApp/build/outputs/apk/release"
 shopt -s nullglob

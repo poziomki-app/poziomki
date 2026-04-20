@@ -43,9 +43,9 @@ jobs:
         env:
           INPUT_TAG_NAME: ${{ inputs.tag_name }}
         run: |
-          version_name="$(sed -n 's/.*versionName = "\(.*\)"/\1/p' mobile/androidApp/build.gradle.kts | head -n1)"
+          version_name="$(sed -n 's/.*appVersionName = "\(.*\)".*/\1/p' mobile/androidApp/build.gradle.kts | head -n1)"
           if [[ -z "$version_name" ]]; then
-            echo "Could not read versionName" >&2
+            echo "Could not read appVersionName" >&2
             exit 1
           fi
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then

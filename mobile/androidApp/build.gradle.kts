@@ -10,6 +10,23 @@ composeCompiler {
     includeTraceMarkers.set(false)
 }
 
+// Single source of truth for the app version. release-please bumps this line
+// (see .github/.release-please-manifest.json); versionCode is derived so it
+// never drifts out of monotonic order.
+val appVersionName = "0.18.4" // x-release-please-version
+
+fun computeVersionCode(name: String): Int {
+    val parts = name.split(".").map { it.toInt() }
+    require(parts.size == 3) { "appVersionName must be major.minor.patch, got '$name'" }
+    val (major, minor, patch) = parts
+    require(minor in 0..999 && patch in 0..999) {
+        "minor/patch must each be < 1000 in the m*1_000_000 + m*1_000 + p scheme (got '$name')"
+    }
+    return major * 1_000_000 + minor * 1_000 + patch
+}
+
+val appVersionCode = computeVersionCode(appVersionName)
+
 android {
     namespace = "com.poziomki.app"
     compileSdk = 36
@@ -23,8 +40,8 @@ android {
         applicationId = "app.poziomki"
         minSdk = 24
         targetSdk = 36
-        versionCode = 46
-        versionName = "0.18.4"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         val apiUrl = project.findProperty("apiBaseUrl")?.toString() ?: "http://localhost:5150"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
