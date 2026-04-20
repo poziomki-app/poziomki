@@ -1,3 +1,13 @@
+# CodeQL scan config. `security-extended` adds ~60 extra security rules on top
+# of the default pack — including e.g. java/android/implicit-pendingintents.
+# See https://codeql.github.com/codeql-query-help/ for rule lists.
+name: Poziomki CodeQL config
+
+queries:
+  - uses: security-extended
+
 paths-ignore:
   - "**/tests/**"
   - "**/test/**"
+  - "**/build/**"
+  - "**/target/**"
