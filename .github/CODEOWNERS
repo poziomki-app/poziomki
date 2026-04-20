@@ -1,0 +1,28 @@
+# CODEOWNERS — protects paths that materially affect security or supply chain.
+# A PR touching any of these paths requires review from the listed owner(s)
+# before it can merge. Solo-dev shape: @dpiotrkowski owns everything that
+# matters to CI/release/auth.
+
+# CI, workflows, and repo security posture.
+/.github/                 @dpiotrkowski
+/.gitattributes           @dpiotrkowski
+/.gitignore               @dpiotrkowski
+
+# Build + release tooling — anything here can silently change what gets
+# shipped as a signed APK or GHCR image.
+/backend/Dockerfile       @dpiotrkowski
+/backend/Cargo.toml       @dpiotrkowski
+/backend/Cargo.lock       @dpiotrkowski
+/scripts/                 @dpiotrkowski
+
+# Version source of truth for release-please.
+/mobile/androidApp/build.gradle.kts  @dpiotrkowski
+/mobile/androidApp/version.txt       @dpiotrkowski
+
+# Auth-sensitive backend paths. Extend as the auth module grows.
+/backend/src/auth/        @dpiotrkowski
+
+# Security policy + governance docs.
+/SECURITY.md              @dpiotrkowski
+/CODEOWNERS               @dpiotrkowski
+/.github/CODEOWNERS       @dpiotrkowski
