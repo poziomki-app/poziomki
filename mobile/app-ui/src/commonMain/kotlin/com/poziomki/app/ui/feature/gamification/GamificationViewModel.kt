@@ -10,44 +10,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class DailyTask(
-    val id: String,
-    val title: String,
-    val description: String,
-    val xp: Int = 5,
-)
-
-val DefaultDailyTasks: List<DailyTask> =
-    listOf(
-        DailyTask(
-            id = "daily_login",
-            title = "Zajrzyj na Poziomki",
-            description = "Otwórz aplikację dzisiaj — +5 XP i +1 do streaka.",
-        ),
-        DailyTask(
-            id = "say_hi",
-            title = "Powiedz cześć",
-            description = "Napisz do kogoś w czacie i rozpocznij rozmowę.",
-        ),
-        DailyTask(
-            id = "attend_event",
-            title = "Znajdź wydarzenie",
-            description = "Odkryj jedno nowe wydarzenie w zakładce Wydarzenia.",
-        ),
-        DailyTask(
-            id = "meet_irl",
-            title = "Spotkaj kogoś na żywo",
-            description = "Zeskanuj QR znajomego w realu — oboje dostajecie +25 XP.",
-        ),
-    )
-
 data class GamificationState(
     val streakCurrent: Int = 0,
     val streakLongest: Int = 0,
     val xp: Int = 0,
-    val tasks: List<DailyTask> = DefaultDailyTasks,
-    val claimedTaskIds: Set<String> = emptySet(),
-    val claimingTaskId: String? = null,
     val myToken: String? = null,
     val isLoadingToken: Boolean = false,
     val lastScanXp: Int? = null,
@@ -90,30 +56,6 @@ class GamificationViewModel(
                     _state.value =
                         _state.value.copy(
                             isLoadingToken = false,
-                            errorMessage = r.message,
-                        )
-                }
-            }
-        }
-    }
-
-    fun claim(task: DailyTask) {
-        if (task.id in _state.value.claimedTaskIds || _state.value.claimingTaskId != null) return
-        viewModelScope.launch {
-            _state.value = _state.value.copy(claimingTaskId = task.id)
-            when (val r = xpRepository.claimTask(task.id)) {
-                is ApiResult.Success -> {
-                    _state.value =
-                        _state.value.copy(
-                            claimingTaskId = null,
-                            claimedTaskIds = _state.value.claimedTaskIds + task.id,
-                        )
-                }
-
-                is ApiResult.Error -> {
-                    _state.value =
-                        _state.value.copy(
-                            claimingTaskId = null,
                             errorMessage = r.message,
                         )
                 }

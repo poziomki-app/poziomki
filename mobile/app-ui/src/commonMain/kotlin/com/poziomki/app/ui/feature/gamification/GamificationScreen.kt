@@ -3,7 +3,6 @@ package com.poziomki.app.ui.feature.gamification
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,15 +21,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,7 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.CheckCircle
+import com.adamglin.phosphoricons.bold.Info
 import com.adamglin.phosphoricons.bold.QrCode
 import com.adamglin.phosphoricons.bold.Scan
 import com.adamglin.phosphoricons.fill.Flame
@@ -51,10 +56,7 @@ import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.Secondary
-import com.poziomki.app.ui.designsystem.theme.SecondaryLight
-import com.poziomki.app.ui.designsystem.theme.Success
 import com.poziomki.app.ui.designsystem.theme.Surface
-import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -74,6 +76,7 @@ fun GamificationScreen(
     val launchScanner = rememberCodeScanner { token -> viewModel.onScanResult(token) }
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    var showInfo by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -85,7 +88,20 @@ fun GamificationScreen(
             title = "streak",
             onBack = onBack,
             modifier = Modifier.padding(top = statusBarTop),
+            actions = {
+                IconButton(onClick = { showInfo = true }) {
+                    Icon(
+                        PhosphorIcons.Bold.Info,
+                        contentDescription = "Jak działa XP",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            },
         )
+        if (showInfo) {
+            XpInfoDialog(onDismiss = { showInfo = false })
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -98,19 +114,6 @@ fun GamificationScreen(
                 StreakHero(streak = state.streakCurrent, xp = state.xp)
                 Spacer(Modifier.height(PoziomkiTheme.spacing.lg))
 
-                SectionTitle("Codzienne wyzwania")
-                Spacer(Modifier.height(8.dp))
-                state.tasks.forEach { task ->
-                    TaskRow(
-                        task = task,
-                        claimed = task.id in state.claimedTaskIds,
-                        claiming = state.claimingTaskId == task.id,
-                        onClaim = { viewModel.claim(task) },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                Spacer(Modifier.height(PoziomkiTheme.spacing.lg))
                 SectionTitle("Spotkaj kogoś na żywo")
                 Spacer(Modifier.height(8.dp))
 
@@ -210,105 +213,68 @@ private fun StreakHero(
 }
 
 @Composable
+private fun XpInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("rozumiem", fontWeight = FontWeight.Bold)
+            }
+        },
+        title = {
+            Text(
+                "Jak zdobywać XP?",
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp,
+            )
+        },
+        text = {
+            Column {
+                XpInfoRow("+5 XP", "za otwarcie aplikacji dzisiaj")
+                Spacer(Modifier.height(8.dp))
+                XpInfoRow("+5 XP", "za wysłanie wiadomości")
+                Spacer(Modifier.height(8.dp))
+                XpInfoRow("+5 XP", "za otwarcie wydarzenia")
+                Spacer(Modifier.height(8.dp))
+                XpInfoRow("+25 XP", "za spotkanie na żywo — zeskanuj QR znajomego")
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Streak rośnie o 1 każdego dnia, gdy zdobędziesz choć 1 XP. Pomijasz dzień → streak wraca do 1.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun XpInfoRow(
+    amount: String,
+    label: String,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            amount,
+            color = Secondary,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 14.sp,
+            modifier = Modifier.width(64.dp),
+        )
+        Text(label, color = TextPrimary, fontSize = 14.sp)
+    }
+}
+
+@Composable
 private fun SectionTitle(text: String) {
     Text(
         text = text,
         color = TextPrimary,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 18.sp,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
     )
-}
-
-@Composable
-private fun TaskRow(
-    task: DailyTask,
-    claimed: Boolean,
-    claiming: Boolean,
-    onClaim: () -> Unit,
-) {
-    val clickableMod =
-        if (claimed || claiming) Modifier else Modifier.clickable { onClaim() }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(SurfaceElevated)
-                .border(1.dp, Border, RoundedCornerShape(14.dp))
-                .then(clickableMod)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = task.title,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = task.description,
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        TaskTrailing(task = task, claimed = claimed, claiming = claiming)
-    }
-}
-
-@Composable
-private fun TaskTrailing(
-    task: DailyTask,
-    claimed: Boolean,
-    claiming: Boolean,
-) {
-    when {
-        claimed -> {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    PhosphorIcons.Bold.CheckCircle,
-                    contentDescription = null,
-                    tint = Success,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "+${task.xp}",
-                    color = Success,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                )
-            }
-        }
-
-        claiming -> {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = Secondary,
-                strokeWidth = 2.dp,
-            )
-        }
-
-        else -> {
-            Box(
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SecondaryLight.copy(alpha = 0.7f))
-                        .border(1.dp, Secondary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    "+${task.xp} XP",
-                    color = Secondary,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-    }
 }
 
 @Suppress("LongMethod")
@@ -378,7 +344,7 @@ private fun MyQrCard(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Pokaż znajomemu, żeby oboje dostać +25 XP.",
+            text = "Pokaż znajomemu, oboje dostaniecie +25 XP.",
             color = TextSecondary,
             fontSize = 12.sp,
         )

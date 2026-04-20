@@ -15,6 +15,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
@@ -73,6 +74,15 @@ fun App() {
     LaunchedEffect(startDestination) {
         if (startDestination == Route.MainGraph) {
             chatClient.ensureStarted()
+        }
+    }
+
+    // Auto-award daily_login XP when user opens the app already logged in.
+    // Backend is idempotent per (profile_id, task_id, day) so re-fires are no-ops.
+    val xpRepository = koinInject<XpRepository>()
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            runCatching { xpRepository.claimTask("daily_login") }
         }
     }
 

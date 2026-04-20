@@ -49,6 +49,7 @@
     <ID>Indentation:ProfileSetupScreen.kt$ </ID>
     <ID>Indentation:ProfileViewModel.kt$ProfileViewModel$ </ID>
     <ID>Indentation:ProfileViewScreen.kt$ </ID>
+    <ID>Indentation:QrScannerScreen.kt$ </ID>
     <ID>Indentation:RecommendedPeopleRow.kt$ </ID>
     <ID>Indentation:RegisterScreen.kt$ </ID>
     <ID>Indentation:ResetPasswordScreen.kt$ </ID>
@@ -133,6 +134,7 @@
     <ID>TooManyFunctions:ProfileEditScreen.kt$com.poziomki.app.ui.feature.profile.ProfileEditScreen.kt</ID>
     <ID>TooManyFunctions:ProfileEditViewModel.kt$ProfileEditViewModel : ViewModel</ID>
     <ID>UnusedParameter:MessageEventRow.kt$onToggleReaction: (String) -&gt; Unit</ID>
+    <ID>Wrapping:CodeScanner.android.kt${ launcher.launch(Unit) }</ID>
     <ID>Wrapping:MessagesScreen.kt${ onNavigateToProfile(userId) }</ID>
   </CurrentIssues>
 </SmellBaseline>

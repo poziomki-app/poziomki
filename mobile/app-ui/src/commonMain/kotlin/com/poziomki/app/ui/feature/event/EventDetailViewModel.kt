@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.ProfileRepository
+import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
@@ -32,6 +33,7 @@ class EventDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val eventRepository: EventRepository,
     private val profileRepository: ProfileRepository,
+    private val xpRepository: XpRepository,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Route.EventDetail>()
     private val eventId = route.id
@@ -71,6 +73,9 @@ class EventDetailViewModel(
             eventRepository.refreshAttendees(eventId)
             if (!success) {
                 _state.value = _state.value.copy(isLoading = false)
+            } else {
+                // Award attend_event XP — backend idempotent per day.
+                runCatching { xpRepository.claimTask("attend_event") }
             }
         }
     }

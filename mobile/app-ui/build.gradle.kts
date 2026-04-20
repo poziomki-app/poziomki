@@ -36,7 +36,10 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.koin.android)
-            implementation(libs.play.services.code.scanner)
+            implementation(libs.camerax.camera2)
+            implementation(libs.camerax.lifecycle)
+            implementation(libs.camerax.view)
+            implementation(libs.zxing.core)
         }
         commonMain.dependencies {
             implementation(projects.core)
