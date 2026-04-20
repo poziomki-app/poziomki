@@ -37,6 +37,17 @@ jobs:
 
       - run: ./gradlew :androidApp:assembleDebug
 
+      # Upload debug APK on PR runs so the trusted pr-apk-comment workflow
+      # can surface a download link back on the PR. Fork PRs run this step
+      # with a read-only token — no secrets exposed.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          name: debug-apk-${{ github.run_id }}
+          path: mobile/androidApp/build/outputs/apk/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
   lint:
     runs-on: ubuntu-latest
 

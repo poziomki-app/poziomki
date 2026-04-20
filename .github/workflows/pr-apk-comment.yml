@@ -1,0 +1,88 @@
+name: PR APK comment
+
+# Posts a download link for the debug APK built by Mobile CI back onto the PR.
+# Runs from `main` via workflow_run, so it has a write token — but it never
+# checks out PR code and never reads artifact CONTENTS for control flow.
+# PR number comes from the trusted event payload, not from inside the artifact.
+
+on:
+  workflow_run:
+    workflows: ["Mobile CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    # Only run for PRs that built successfully. Fork PRs and in-repo PRs
+    # both satisfy this: event=pull_request is recorded in workflow_run.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      actions: read
+
+    steps:
+      - name: Resolve PR number + artifact URL
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        with:
+          script: |
+            const runId = Number(process.env.RUN_ID);
+            const headSha = process.env.HEAD_SHA;
+
+            // Trust only the event payload, never artifact contents.
+            const prs = context.payload.workflow_run.pull_requests || [];
+            let prNumber = prs.length ? prs[0].number : null;
+
+            // Fork PRs don't populate workflow_run.pull_requests — look it up by head SHA.
+            if (!prNumber) {
+              const { data } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${process.env.REPO} is:pr sha:${headSha}`,
+              });
+              prNumber = data.items.length ? data.items[0].number : null;
+            }
+            if (!prNumber) {
+              core.info(`no PR found for head ${headSha}; skipping`);
+              return;
+            }
+
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              ...context.repo,
+              run_id: runId,
+            });
+            const apk = artifacts.artifacts.find(a => a.name.startsWith('debug-apk-'));
+            if (!apk) {
+              core.info('no debug-apk artifact on this run');
+              return;
+            }
+
+            const artifactUrl = `${process.env.SERVER_URL}/${process.env.REPO}/actions/runs/${runId}/artifacts/${apk.id}`;
+            const marker = '<!-- pr-apk-comment -->';
+            const body = [
+              marker,
+              '### Debug APK',
+              '',
+              `[Download](${artifactUrl}) — built from ${headSha.slice(0, 7)}, expires in 14 days.`,
+              '',
+              'You need to be signed in to GitHub to download workflow artifacts.',
+            ].join('\n');
+
+            const { data: existing } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const mine = existing.find(c => c.body && c.body.includes(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: prNumber, body });
+            }
