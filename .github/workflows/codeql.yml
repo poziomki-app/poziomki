@@ -3,17 +3,20 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
+
+# CodeQL only runs on main pushes and the weekly schedule — PRs don't
+# wait on it. Findings still surface in the Security tab within ~1 day
+# of landing on main, which is the right tradeoff for a small team:
+# cuts PR wall time by ~4 minutes without losing coverage on shipped code.
 
 permissions:
   contents: read
 
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   analyze:
