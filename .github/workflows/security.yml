@@ -3,50 +3,52 @@ name: Security
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
 
 permissions:
   security-events: write
+  contents: read
+  pull-requests: read
 
 jobs:
-  trivy-backend:
+  # Trivy (fs + config). Installs the CLI directly — the Marketplace action
+  # has had broken tag-to-SHA resolutions lately (tarball 404s).
+  trivy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: backend
-          severity: HIGH,CRITICAL
-          format: sarif
-          output: trivy-backend.sarif
-
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: "0.70.0"
+        run: |
+          curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz trivy
+          chmod +x trivy
+          ./trivy --version
+      - name: Scan backend (fs)
+        run: ./trivy fs backend --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-backend.sarif --exit-code 0
+      - name: Scan mobile (fs)
+        run: ./trivy fs mobile --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-mobile.sarif --exit-code 0
+      - name: Scan repo config (Dockerfiles, compose, workflows)
+        run: ./trivy config . --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-config.sarif --exit-code 0
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-backend.sarif
           category: trivy-backend
-
-  trivy-mobile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: mobile
-          severity: HIGH,CRITICAL
-          format: sarif
-          output: trivy-mobile.sarif
-
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-mobile.sarif
           category: trivy-mobile
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
 
   cargo-deny:
     runs-on: ubuntu-latest
@@ -57,3 +59,167 @@ jobs:
           manifest-path: backend/Cargo.toml
           command: check advisories licenses bans sources
           arguments: ""
+
+  # Semgrep — wide cross-language SAST. Free OSS via r2c's registry packs.
+  # Uses `semgrep scan` with SARIF output. Exit-code-on-findings is expected
+  # (rc=1) — we only fail the job when the SARIF file is missing, i.e. the
+  # scanner itself crashed.
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --upgrade semgrep
+      - name: Run Semgrep
+        run: |
+          set +e
+          semgrep scan \
+            --config=p/security-audit \
+            --config=p/secrets \
+            --config=p/owasp-top-ten \
+            --config=p/rust \
+            --config=p/kotlin \
+            --config=p/java \
+            --sarif --output=semgrep.sarif
+          rc=$?
+          set -e
+          if [ ! -s semgrep.sarif ]; then
+            echo "::error::semgrep did not produce SARIF (exit $rc)"
+            exit 1
+          fi
+          # Findings (rc=1) are fine — SARIF is uploaded and GitHub shows them.
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # gitleaks — secret detection. Installs the CLI directly (the
+  # gitleaks-action marketplace variant has been unreliable) and uploads
+  # SARIF to the Security tab.
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        env:
+          GL_VERSION: "8.21.2"
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VERSION}/gitleaks_${GL_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          chmod +x gitleaks
+      - name: Scan repo
+        run: ./gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif --exit-code 0
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  # Dependency Review — blocks PRs that introduce vulnerable or GPL-licensed
+  # dependencies. Only fires on pull_request. Pinned to a specific release
+  # (floating `@v4` has 404'd on stale SHAs before).
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4.5.0
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-1.0, AGPL-3.0, GPL-2.0, GPL-3.0
+
+  # OSV-Scanner — Google's cross-ecosystem vulnerability scanner. Reads
+  # lockfiles (Cargo.lock etc.) and checks against osv.dev. Scans backend's
+  # Cargo.lock — mobile has no gradle.lockfile (lockfile generation disabled)
+  # so gradle coverage comes via Trivy-fs instead. CLI install avoids the
+  # osv-scanner-action's quirky multi-line scan-args parsing.
+  osv-scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Cargo.lock (gitignored in this repo)
+        working-directory: backend
+        run: cargo generate-lockfile
+      - name: Install OSV-Scanner
+        env:
+          OSV_VERSION: "2.0.2"
+        run: |
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          chmod +x osv-scanner
+          ./osv-scanner --version
+      - name: Scan
+        run: |
+          # v2 CLI: `scan source` replaces v1's bare `osv-scanner`.
+          set +e
+          ./osv-scanner scan source --lockfile=./backend/Cargo.lock --format=sarif --output=osv.sarif
+          rc=$?
+          set -e
+          # rc=0 no vulns, rc=1 vulns found — both write SARIF.
+          test -s osv.sarif || { echo "::error::osv-scanner did not produce SARIF (exit $rc)"; exit 1; }
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner
+
+  # Hadolint — Dockerfile best-practice + security linter, SARIF to Security tab.
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+
+  # Actionlint — catches common mistakes in .github/workflows YAMLs
+  # (shellcheck integration, expression errors, deprecated actions).
+  # Uses reviewdog so findings appear inline on the PR; actionlint has no
+  # native SARIF output, so we skip the Security-tab upload for this one.
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1.65.2
+        with:
+          reporter: github-check
+          level: warning
+          fail_level: error
+
+  # OSSF Scorecard — open-source supply-chain health score (branch protection,
+  # pinned deps, token permissions, etc.). Runs on schedule + default-branch
+  # pushes; results flow to the Security tab.
+  scorecard:
+    if: github.event_name == 'schedule' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: scorecard.sarif
+          category: scorecard
