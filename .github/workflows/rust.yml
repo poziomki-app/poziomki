@@ -4,6 +4,9 @@ on:
   pull_request:
     paths: [backend/**]
 
+permissions:
+  contents: read
+
 concurrency:
   group: rust-${{ github.head_ref || github.ref }}
   cancel-in-progress: true

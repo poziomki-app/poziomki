@@ -10,6 +10,9 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: mobile-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
