@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Trivy (fs + config). Installs the CLI directly — the Marketplace action
   # has had broken tag-to-SHA resolutions lately (tarball 404s).
