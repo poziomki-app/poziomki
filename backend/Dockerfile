@@ -28,6 +28,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
+# hadolint ignore=DL4006
 RUN set -eux; \
     mkdir -p /staging/usr/lib/x86_64-linux-gnu /staging/etc/ssl/certs; \
     cp -aL /etc/ssl/certs/ca-certificates.crt /staging/etc/ssl/certs/; \

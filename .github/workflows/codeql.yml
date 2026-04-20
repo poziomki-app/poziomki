@@ -9,13 +9,16 @@ on:
     - cron: "0 6 * * 1"
 
 permissions:
-  security-events: write
   contents: read
-  actions: read
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
 
     strategy:
       fail-fast: false
