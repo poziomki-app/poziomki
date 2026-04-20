@@ -22,6 +22,10 @@
 # Auth-sensitive backend paths. Extend as the auth module grows.
 /backend/src/auth/        @dpiotrkowski
 
+# Deployment configuration. Any edit here changes what runs in prod
+# and must not introduce secrets into the repo.
+/infra/                   @dpiotrkowski
+
 # Security policy + governance docs.
 /SECURITY.md              @dpiotrkowski
 /CODEOWNERS               @dpiotrkowski

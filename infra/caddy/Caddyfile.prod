@@ -29,7 +29,6 @@
 		# are sure every current + near-term subdomain serves HTTPS.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
 		# Clickjacking: refuse to be framed, in both the legacy and
 		# modern dialects so older clients respect at least one.
 		X-Frame-Options "DENY"
@@ -52,21 +51,51 @@
 poziomki.app, www.poziomki.app {
 	import secure_headers
 	encode zstd br gzip
+	# Landing URLs are public; ship the full referrer so we can see *which* page on
+	# GitHub/Mastodon/etc. linked here. Other vhosts keep the strict default.
+	header Referrer-Policy "no-referrer-when-downgrade"
 
 	handle_path /fdroid/repo/* {
 		root * /var/www/fdroid
 		file_server
 	}
 
+	# Umami public tracker. Served under neutral paths to dodge ad-blocker
+	# heuristics; dashboard stays bound to Tailscale/localhost on :3090.
+	@umami_script path /berry.js
+	handle @umami_script {
+		rewrite * /script.js
+		reverse_proxy 127.0.0.1:3090 {
+			header_down -Content-Security-Policy
+			header_down -X-Powered-By
+			# Short cache so config changes (DNT, endpoint rename) propagate in minutes,
+			# not the 24h Umami default. 304 revalidation keeps bandwidth low.
+			header_down Cache-Control "public, max-age=300, must-revalidate"
+		}
+	}
+
+	@umami_collect path /api/ziomki
+	handle @umami_collect {
+		rewrite * /api/send
+		reverse_proxy 127.0.0.1:3090 {
+			header_down -Content-Security-Policy
+			header_down -X-Powered-By
+			# Short cache so config changes (DNT, endpoint rename) propagate in minutes,
+			# not Umami default 24h. 304 revalidation keeps bandwidth low.
+			header_down Cache-Control "public, max-age=300, must-revalidate"
+		}
+	}
+
 	handle {
-		root * /var/www/poziomki-app
-		try_files {path} {path}/ /index.html
+		root * /home/ubuntu/landing-static
+		try_files {path} {path}/index.html =404
 		file_server
 	}
 }
 
 mobile.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 
 	handle_path /download/* {
 		header Content-Disposition "attachment"
@@ -89,6 +118,7 @@ mobile.poziomki.app {
 
 cdn.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	header X-Robots-Tag "noindex, nofollow, noarchive"
 
 	@presigned path /poziomki-uploads/*
@@ -119,6 +149,7 @@ cdn.poziomki.app {
 
 api.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	log {
 		output file /var/log/caddy/api-access.log {
 			roll_size 50MiB
@@ -161,21 +192,25 @@ api.poziomki.app {
 
 chat.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	reverse_proxy localhost:6167
 }
 
 ntfy.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	reverse_proxy localhost:2586
 }
 
 mail.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	respond "OK" 200
 }
 
 mta-sts.poziomki.app {
 	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
 	header Content-Type "text/plain"
 	handle_path /.well-known/mta-sts.txt {
 		respond "version: STSv1

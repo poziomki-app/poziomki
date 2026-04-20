@@ -1,0 +1,75 @@
+name: Deploy (staging)
+
+# Dormant until the `staging` environment is configured and
+# docker-compose.staging.yml + .env.staging exist on the VPS.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (default: main)"
+        required: false
+        default: "main"
+        type: string
+  # Uncomment once backend-image.yml in the public repo is wired up:
+  # repository_dispatch:
+  #   types: [backend-image-published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.poziomki.app
+    timeout-minutes: 10
+
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+      IMAGE: ghcr.io/poziomki-app/poziomki-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-deployer
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve digest
+        id: d
+        run: |
+          DIGEST=$(docker buildx imagetools inspect \
+            "$IMAGE:$INPUT_TAG" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Apply
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs && git fetch --quiet && \
+             git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
+             ./infra/scripts/deploy.sh staging '$IMAGE@$DIGEST'"
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS https://staging.poziomki.app/healthz; then exit 0; fi
+            sleep 2
+          done
+          exit 1

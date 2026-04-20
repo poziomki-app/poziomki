@@ -1,0 +1,99 @@
+name: Deploy (prod)
+
+# Dormant until the `production` environment + Tailscale OAuth secrets are
+# configured. See infra/README.md "CI setup checklist".
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (e.g. v0.19.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.poziomki.app
+    timeout-minutes: 15
+
+    # All untrusted inputs flow through env: so they cannot be interpreted
+    # as shell syntax. Never interpolate ${{ inputs.* }} or ${{ github.event.* }}
+    # directly inside a run: block — that's a shell-injection primitive.
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+      IMAGE: ghcr.io/poziomki-app/poziomki-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-deployer
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Resolve digest from GHCR
+        id: d
+        run: |
+          DIGEST=$(docker buildx imagetools inspect \
+            "$IMAGE:$INPUT_TAG" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          test -n "$DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Verify signature (gate)
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/poziomki-app/poziomki/.github/workflows/backend-image.yml@.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}"
+
+      - name: Apply on VPS
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+          COMMIT_SHA: ${{ github.sha }}
+        # StrictHostKeyChecking=accept-new is TOFU on first connection; safe
+        # over a tailnet that restricts `tag:ci-deployer` to SSH only
+        # `tag:poziomki-vps`. Replace with pre-seeded known_hosts once
+        # Tailscale SSH tag-based auth lands.
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs && git fetch --quiet && \
+             git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
+             ./infra/scripts/deploy.sh prod '$IMAGE@$DIGEST'"
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS https://api.poziomki.app/healthz; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ubuntu@poziomki \
+            "set -e; cd ~/poziomki-rs/infra && mv .env.prev .env && \
+             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker && \
+             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"
