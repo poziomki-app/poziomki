@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: android-release-${{ github.ref }}
@@ -21,6 +21,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
 
     defaults:
       run:
