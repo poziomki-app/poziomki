@@ -19,7 +19,7 @@ x-logging: &default-logging
 
 services:
   pgdog_staging:
-    image: ghcr.io/pgdogdev/pgdog:v0.1.30
+    image: ghcr.io/pgdogdev/pgdog:v0.1.37
     entrypoint: ["/bin/sh", "/opt/pgdog/entrypoint.sh"]
     restart: unless-stopped
     ports:
