@@ -18,7 +18,7 @@ x-logging: &default-logging
 # cluster could affect prod — review migrations before pushing to main.
 
 services:
-  pgdog:
+  pgdog_staging:
     image: ghcr.io/pgdogdev/pgdog:v0.1.30
     entrypoint: ["/bin/sh", "/opt/pgdog/entrypoint.sh"]
     restart: unless-stopped
@@ -65,11 +65,11 @@ services:
     logging: *default-logging
     networks: [prod_db, app]
 
-  api:
+  api_staging:
     image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
     restart: unless-stopped
     depends_on:
-      pgdog:
+      pgdog_staging:
         condition: service_healthy
     ports:
       - "127.0.0.1:6150:5150"
@@ -80,7 +80,7 @@ services:
       METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki_staging}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
       API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL must be set}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
@@ -129,18 +129,18 @@ services:
     logging: *default-logging
     networks: [app]
 
-  worker:
+  worker_staging:
     image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
     entrypoint: ["/usr/local/bin/worker"]
     restart: unless-stopped
     depends_on:
-      pgdog:
+      pgdog_staging:
         condition: service_healthy
     environment:
       RUST_ENV: production
       METRICS_PORT: 9093
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki_staging}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
       WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL must be set}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-4}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
@@ -191,7 +191,7 @@ services:
     logging: *default-logging
     networks: [app]
 
-  imgproxy:
+  imgproxy_staging:
     build:
       context: ../imgproxy
       dockerfile: Dockerfile
