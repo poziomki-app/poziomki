@@ -31,6 +31,17 @@ esac
 
 [[ -f "$ENV_FILE" ]] || { echo "missing $ENV_FILE" >&2; exit 1; }
 
+# Staging imgproxy has no published image tag — the service is built on the
+# host from ../imgproxy. `up -d --no-build` below would fail on first run if
+# the image isn't cached, so build it lazily here. Prod imgproxy pulls a
+# published tag and is unaffected.
+if [[ "$ENV" == "staging" ]]; then
+  if ! docker image inspect poziomki-rs-staging-imgproxy_staging >/dev/null 2>&1; then
+    echo "building imgproxy_staging (first run on this host)…"
+    docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build imgproxy_staging
+  fi
+fi
+
 # Snapshot current digest for rollback before any mutation.
 cp "$ENV_FILE" "${ENV_FILE}.prev"
 

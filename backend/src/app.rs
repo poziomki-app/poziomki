@@ -134,11 +134,25 @@ impl PoolRole {
         }
     }
 
-    const fn expected_db_user(self) -> &'static str {
+    const fn role_env_var(self) -> &'static str {
+        match self {
+            Self::Api => "DB_ROLE_API",
+            Self::Worker => "DB_ROLE_WORKER",
+        }
+    }
+
+    const fn default_db_user(self) -> &'static str {
         match self {
             Self::Api => "poziomki_api",
             Self::Worker => "poziomki_worker",
         }
+    }
+
+    fn expected_db_user(self) -> String {
+        std::env::var(self.role_env_var())
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| self.default_db_user().to_string())
     }
 }
 
@@ -199,7 +213,7 @@ async fn assert_pool_role(role: PoolRole) -> crate::error::AppResult<()> {
         .await
         .map_err(|e| crate::error::AppError::Message(format!("pool role check: {e}")))?;
     let expected = role.expected_db_user();
-    if row.current_user != expected {
+    if row.current_user != expected.as_str() {
         return Err(crate::error::AppError::Message(format!(
             "pool connected as db user {actual:?}, expected {expected:?} — refusing to start \
              (RLS would be bypassed)",
