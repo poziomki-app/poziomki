@@ -36,14 +36,11 @@ fi
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api worker
 
-# Run migrations in a one-off container on the compose project's network
-# using the api service definition. This gives the migrator the full
-# composed DATABASE_URL + pgdog DNS that the service depends on, which a
-# plain `docker run` on the default bridge can't see. --no-deps avoids
-# starting postgres/pgdog as side effects (they're already running).
-docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
-  run --rm --no-deps --entrypoint /usr/local/bin/poziomki_backend-cli api migrate
-
+# Migrations run on api startup (backend/src/app.rs calls run_migrations()
+# before serving). There is no `migrate` subcommand in the CLI. `up -d`
+# below brings up the api container, which applies any pending migration
+# before binding the listener. Pre-deploy migration would need a real
+# one-shot subcommand — add it if we ever want an explicit gate.
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
 
 # Append to deploy history for audit.
