@@ -48,6 +48,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       - name: Resolve digest from GHCR
         id: d
         run: |
@@ -56,6 +59,16 @@ jobs:
             --format '{{json .Manifest}}' | jq -r .digest)
           test -n "$DIGEST"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Verify signature (gate)
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/poziomki-app/poziomki/.github/workflows/backend-image.yml@.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" > /dev/null
+          echo "Signature verified for ${IMAGE}@${DIGEST}"
 
       - name: Apply on VPS
         env:
