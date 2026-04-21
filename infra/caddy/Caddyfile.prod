@@ -221,3 +221,9 @@ max_age: 31557600
 	}
 	respond 404
 }
+
+# Staging vhosts (staging.poziomki.app, staging-api.poziomki.app).
+# Kept in a separate file so prod/staging can be reasoned about
+# independently; global options + shared snippets stay here.
+import Caddyfile.staging
+

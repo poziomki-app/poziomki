@@ -1,10 +1,13 @@
 .env
 .env.*
+!.env.example
+!.env.staging.example
 .env.prev
 .env.new
 .deploy-history
 
 garage/garage.toml
+garage/garage-staging.toml
 
 ops/dkim/private.key
 ops/dkim/*.pem
