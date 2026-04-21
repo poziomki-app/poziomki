@@ -63,7 +63,10 @@ services:
           cpus: '0.25'
           pids: 32
     logging: *default-logging
-    networks: [prod_db, app]
+    # pgdog_staging only needs prod postgres (prod_db) + staging-internal
+    # traffic. Does NOT join prod_app, so it cannot accidentally hit
+    # prod services by hostname.
+    networks: [staging_internal, prod_db]
 
   api_staging:
     image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
@@ -127,7 +130,9 @@ services:
           cpus: '0.5'
           pids: 256
     logging: *default-logging
-    networks: [app]
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
 
   worker_staging:
     image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
@@ -189,7 +194,9 @@ services:
           cpus: '0.25'
           pids: 512
     logging: *default-logging
-    networks: [app]
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
 
   imgproxy_staging:
     build:
@@ -237,16 +244,21 @@ services:
           cpus: '0.25'
           pids: 64
     logging: *default-logging
-    networks: [app]
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
 
 networks:
-  # Join prod's networks as external so staging pgdog/imgproxy can reach
-  # prod's `postgres` and `garage` services by hostname without exposing
-  # them to the public internet. Names are auto-generated from prod's
-  # compose project (`poziomki-rs_db`, `poziomki-rs_app`).
+  # Private staging network — staging services talk to each other here
+  # (api_staging ↔ pgdog_staging ↔ worker_staging ↔ imgproxy_staging).
+  # No prod service is reachable on this network.
+  staging_internal:
+    driver: bridge
+  # Prod postgres network, joined only by pgdog_staging.
   prod_db:
     name: poziomki-rs_db
     external: true
-  app:
+  # Prod app network, joined only by services that need garage.
+  prod_app:
     name: poziomki-rs_app
     external: true
