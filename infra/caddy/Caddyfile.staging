@@ -1,0 +1,87 @@
+# Staging Caddyfile — imported from Caddyfile.prod.
+#
+# Staging shares the prod Garage cluster, so presigned download URLs
+# point at the same :3900 port — just with a staging-scoped bucket in
+# the path.
+
+staging.poziomki.app {
+	import secure_headers
+	encode zstd br gzip
+	header Referrer-Policy "no-referrer-when-downgrade"
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	handle {
+		respond "poziomki staging — not for end users" 200
+	}
+}
+
+staging-api.poziomki.app {
+	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	log {
+		output file /var/log/caddy/staging-api-access.log {
+			roll_size 50MiB
+			roll_keep 3
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "^(/img/)[^/]+(/.*)$" "${1}REDACTED${2}"
+			}
+		}
+	}
+
+	# imgproxy runs as a staging-specific container on host :4080 with
+	# its own HMAC key. Anti-forgery pattern: strip any client-supplied
+	# X-Origin-Secret, inject the configured one.
+	@img path /img/*
+	handle @img {
+		header {
+			X-Robots-Tag "noindex, nofollow, noarchive"
+		}
+		request_header -X-Origin-Secret
+		reverse_proxy localhost:4080 {
+			header_up X-Origin-Secret {$IMGPROXY_ORIGIN_SECRET_STAGING}
+		}
+	}
+
+	# Presigned Garage URLs. Backend rewrites to
+	# staging-api.poziomki.app/poziomki-uploads-staging/<obj>, which
+	# matches here and proxies to the shared prod Garage on :3900.
+	@presigned path /poziomki-uploads-staging/*
+	handle @presigned {
+		header Cache-Control "private, max-age=3600"
+		reverse_proxy localhost:3900 {
+			header_up Host garage:3900
+		}
+	}
+
+	# Authenticated CDN-style path. forward_auth hits the staging API
+	# (host :6150); on accept, rewrite /uploads/<key> →
+	# /poziomki-uploads-staging/<key> and reverse_proxy to shared Garage.
+	@uploads path /uploads/*
+	handle @uploads {
+		header Cache-Control "private, max-age=3600"
+		route {
+			forward_auth localhost:6150 {
+				uri /api/v1/uploads/auth-check
+				copy_headers Authorization
+				header_up X-Original-URI {uri}
+			}
+			uri strip_prefix /uploads
+			uri path_regexp .* /poziomki-uploads-staging{path}
+			reverse_proxy localhost:3900
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:6150 {
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
+			header_down -X-Powered-By
+		}
+	}
+}

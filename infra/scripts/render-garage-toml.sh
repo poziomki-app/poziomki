@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Render garage/garage.toml from garage.toml.tpl using values in .env.
 # The rendered file is gitignored — it contains live secrets.
+# Only called for prod; staging shares the rendered prod config.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
