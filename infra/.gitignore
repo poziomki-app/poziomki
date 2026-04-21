@@ -7,7 +7,6 @@
 .deploy-history
 
 garage/garage.toml
-garage/garage-staging.toml
 
 ops/dkim/private.key
 ops/dkim/*.pem

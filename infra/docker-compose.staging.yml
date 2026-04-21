@@ -5,77 +5,36 @@ x-logging: &default-logging
     max-file: "5"
     compress: "true"
 
-# Staging compose is a full parallel stack. Project name and all
-# ports/volumes are offset (+1000 / -staging suffix) so staging and prod
-# can run side-by-side on the same host with zero shared state — except
-# host Caddy, which routes both.
+# Staging compose is a slim parallel stack on the same VPS:
 #
-# Every staging secret in .env.staging must be distinct from its prod
-# equivalent. Reusing a prod secret here defeats the isolation point.
+# * Shared with prod: postgres, garage (via external networks).
+#   Staging has its own database, roles, bucket and S3 keys — isolated
+#   at the credential/schema level, not container-level.
+# * Separate containers: api, worker, imgproxy, pgdog. All get distinct
+#   host ports and their own HMAC / JWT / pool settings.
+#
+# This trades "absolute blast-radius isolation" for "one Postgres, one
+# Garage, simple bootstrap." A staging migration that breaks the shared
+# cluster could affect prod — review migrations before pushing to main.
 
 services:
-  postgres:
-    image: postgres:18-alpine
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6433:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-poziomki}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-poziomki}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./ops/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-poziomki} -d ${POSTGRES_DB:-poziomki}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
-    read_only: true
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '0.5'
-          pids: 128
-    tmpfs:
-      - /tmp
-      - /run
-      - /var/run/postgresql:uid=999,gid=999
-    logging: *default-logging
-    networks: [db]
-
   pgdog:
     image: ghcr.io/pgdogdev/pgdog:v0.1.30
     entrypoint: ["/bin/sh", "/opt/pgdog/entrypoint.sh"]
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     ports:
       - "127.0.0.1:7432:6432"
       - "127.0.0.1:10187:9187"
     environment:
+      # `postgres` resolves on the shared prod `db` network.
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-poziomki}
-      DB_USER: ${POSTGRES_USER:-poziomki}
+      DB_NAME: ${POSTGRES_DB:-poziomki_staging}
+      DB_USER: ${POSTGRES_USER:-poziomki_staging}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      API_DB_USER: ${POSTGRES_API_USER:-poziomki_api}
+      API_DB_USER: ${POSTGRES_API_USER:-poziomki_staging_api}
       API_DB_PASSWORD: ${POSTGRES_API_PASSWORD:-}
-      WORKER_DB_USER: ${POSTGRES_WORKER_USER:-poziomki_worker}
+      WORKER_DB_USER: ${POSTGRES_WORKER_USER:-poziomki_staging_worker}
       WORKER_DB_PASSWORD: ${POSTGRES_WORKER_PASSWORD:-}
       DEFAULT_POOL_SIZE: ${PGDOG_POOL_SIZE:-8}
       POOL_MODE: transaction
@@ -104,14 +63,12 @@ services:
           cpus: '0.25'
           pids: 32
     logging: *default-logging
-    networks: [db, app]
+    networks: [prod_db, app]
 
   api:
     image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       pgdog:
         condition: service_healthy
     ports:
@@ -123,13 +80,16 @@ services:
       METRICS_PORT: 9092
       SERVER_BINDING: 0.0.0.0
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki_staging}
       API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL must be set}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
       DB_POOL_RECYCLE_TIMEOUT_MS: ${API_DB_POOL_RECYCLE_TIMEOUT_MS:-5000}
       JWT_SECRET: ${JWT_SECRET}
+      # Staging shares the prod Garage cluster; staging uses a distinct
+      # bucket (poziomki-uploads-staging) and distinct S3 access keys
+      # scoped to that bucket only.
       GARAGE_S3_ENDPOINT: http://garage:3900
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads-staging}
       GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
@@ -139,8 +99,6 @@ services:
       GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://staging-api.poziomki.app}
       ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
       NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
-      # Outbound email disabled on staging by default — set SMTP_ENABLE=true
-      # in .env.staging only if you want to test the email flow.
       SMTP_ENABLE: ${SMTP_ENABLE:-false}
       SMTP_FROM: ${SMTP_FROM:-noreply-staging@poziomki.app}
       OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
@@ -176,15 +134,13 @@ services:
     entrypoint: ["/usr/local/bin/worker"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       pgdog:
         condition: service_healthy
     environment:
       RUST_ENV: production
       METRICS_PORT: 9093
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
-      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog:6432/${POSTGRES_DB:-poziomki_staging}
       WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL must be set}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-4}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
@@ -240,9 +196,6 @@ services:
       context: ../imgproxy
       dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      garage:
-        condition: service_started
     ports:
       - "127.0.0.1:4080:3080"
       - "127.0.0.1:10091:9091"
@@ -254,6 +207,8 @@ services:
       IMGPROXY_CACHE_BYTES: ${IMGPROXY_CACHE_BYTES:-33554432}
       IMGPROXY_MAX_CONCURRENT: ${IMGPROXY_MAX_CONCURRENT:-2}
       IMGPROXY_ALLOWED_PREFIX: ${IMGPROXY_ALLOWED_PREFIX:-}
+      # Shared prod Garage hostname resolves via the external prod `app`
+      # network that this service is attached to.
       GARAGE_S3_ENDPOINT: http://garage:3900
       GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads-staging}
       GARAGE_S3_ACCESS_KEY: ${IMGPROXY_S3_ACCESS_KEY:-${GARAGE_S3_ACCESS_KEY}}
@@ -284,42 +239,14 @@ services:
     logging: *default-logging
     networks: [app]
 
-  garage:
-    image: dxflrs/garage:v1.3.1
-    restart: unless-stopped
-    user: "1000:1000"
-    ports:
-      - "127.0.0.1:4900:3900"
-      - "127.0.0.1:4903:3903"
-    environment:
-      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "false"
-    volumes:
-      - garage_data:/var/lib/garage/data
-      - garage_meta:/var/lib/garage/meta
-      - ./garage/garage-staging.toml:/etc/garage.toml:ro,z
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          cpus: '0.5'
-          pids: 128
-    logging: *default-logging
-    networks: [app]
-
-volumes:
-  postgres_data:
-  garage_data:
-  garage_meta:
-
 networks:
-  db:
-    internal: true
+  # Join prod's networks as external so staging pgdog/imgproxy can reach
+  # prod's `postgres` and `garage` services by hostname without exposing
+  # them to the public internet. Names are auto-generated from prod's
+  # compose project (`poziomki-rs_db`, `poziomki-rs_app`).
+  prod_db:
+    name: poziomki-rs_db
+    external: true
   app:
-    driver: bridge
+    name: poziomki-rs_app
+    external: true

@@ -1,7 +1,8 @@
 # Staging Caddyfile — imported from Caddyfile.prod.
 #
-# Global options (HTTP/3, TLS 1.3, shared `secure_headers` snippet) come
-# from the importing file. Add vhosts only; do not redeclare globals.
+# Staging shares the prod Garage cluster, so presigned download URLs
+# point at the same :3900 port — just with a staging-scoped bucket in
+# the path.
 
 staging.poziomki.app {
 	import secure_headers
@@ -9,7 +10,6 @@ staging.poziomki.app {
 	header Referrer-Policy "no-referrer-when-downgrade"
 	header X-Robots-Tag "noindex, nofollow, noarchive"
 
-	# Staging landing — minimal text page for now.
 	handle {
 		respond "poziomki staging — not for end users" 200
 	}
@@ -34,9 +34,9 @@ staging-api.poziomki.app {
 		}
 	}
 
-	# imgproxy for staging — container publishes on host :4080.
-	# Strip any client-supplied X-Origin-Secret and inject the configured
-	# one so a caller cannot bypass the upstream's origin check.
+	# imgproxy runs as a staging-specific container on host :4080 with
+	# its own HMAC key. Anti-forgery pattern: strip any client-supplied
+	# X-Origin-Secret, inject the configured one.
 	@img path /img/*
 	handle @img {
 		header {
@@ -48,21 +48,20 @@ staging-api.poziomki.app {
 		}
 	}
 
-	# Presigned Garage URLs — backend rewrites download links to
-	# staging-api.poziomki.app/poziomki-uploads/*, so that path must
-	# reach staging Garage (host :4900), not the API.
-	@presigned path /poziomki-uploads/*
+	# Presigned Garage URLs. Backend rewrites to
+	# staging-api.poziomki.app/poziomki-uploads-staging/<obj>, which
+	# matches here and proxies to the shared prod Garage on :3900.
+	@presigned path /poziomki-uploads-staging/*
 	handle @presigned {
 		header Cache-Control "private, max-age=3600"
-		reverse_proxy localhost:4900 {
+		reverse_proxy localhost:3900 {
 			header_up Host garage:3900
 		}
 	}
 
 	# Authenticated CDN-style path. forward_auth hits the staging API
-	# (host :6150) to decide whether the caller is allowed to see the
-	# object, then rewrites /uploads/<key> → /poziomki-uploads-staging/
-	# <key> on staging Garage.
+	# (host :6150); on accept, rewrite /uploads/<key> →
+	# /poziomki-uploads-staging/<key> and reverse_proxy to shared Garage.
 	@uploads path /uploads/*
 	handle @uploads {
 		header Cache-Control "private, max-age=3600"
@@ -74,7 +73,7 @@ staging-api.poziomki.app {
 			}
 			uri strip_prefix /uploads
 			uri path_regexp .* /poziomki-uploads-staging{path}
-			reverse_proxy localhost:4900
+			reverse_proxy localhost:3900
 		}
 	}
 
