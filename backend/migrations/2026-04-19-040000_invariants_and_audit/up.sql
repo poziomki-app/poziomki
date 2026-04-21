@@ -217,10 +217,21 @@ CREATE TRIGGER user_settings_audit
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
+-- Role name comes from the `app.api_role` GUC (per-database override) and
+-- defaults to `poziomki_api`. Swallow insufficient_privilege — on a shared
+-- cluster where the role exists but the migration connection is not its
+-- admin (e.g. staging pointing at a prod-owned role), we'd rather skip the
+-- timeout tweak than fail the migration.
 DO $$
+DECLARE
+    api_role text := COALESCE(current_setting('app.api_role', true), 'poziomki_api');
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
-        EXECUTE 'ALTER ROLE poziomki_api SET statement_timeout = ''5s''';
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role) THEN
+        BEGIN
+            EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', api_role, '5s');
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'skipped ALTER ROLE % SET statement_timeout: insufficient privilege', api_role;
+        END;
     END IF;
 END
 $$;

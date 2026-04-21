@@ -1,7 +1,13 @@
 DO $$
+DECLARE
+    api_role text := COALESCE(current_setting('app.api_role', true), 'poziomki_api');
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
-        EXECUTE 'ALTER ROLE poziomki_api RESET statement_timeout';
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role) THEN
+        BEGIN
+            EXECUTE format('ALTER ROLE %I RESET statement_timeout', api_role);
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'skipped ALTER ROLE % RESET statement_timeout: insufficient privilege', api_role;
+        END;
     END IF;
 END
 $$;
