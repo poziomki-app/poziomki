@@ -77,16 +77,27 @@ REVOKE EXECUTE ON FUNCTION app.resolve_session(text) FROM PUBLIC;
 -- setup-roles.sh is forward-compatible: re-running it after this migration
 -- applies catches up USAGE/EXECUTE on the app schema, so bootstrap ordering
 -- doesn't matter in either direction.
+--
+-- Role names come from the `app.api_role` GUC (per-database override) and
+-- default to `poziomki_api`. Default privileges are attributed to the actual
+-- database owner, not a hardcoded role, so staging/dev DBs owned by a
+-- different role still satisfy `ALTER DEFAULT PRIVILEGES FOR ROLE`.
 DO $$
+DECLARE
+    api_role text := COALESCE(current_setting('app.api_role', true), 'poziomki_api');
+    owner_role text;
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
-        EXECUTE 'GRANT USAGE ON SCHEMA app TO poziomki_api';
-        EXECUTE 'GRANT EXECUTE ON FUNCTION app.find_user_for_login(text) TO poziomki_api';
-        EXECUTE 'GRANT EXECUTE ON FUNCTION app.resolve_session(text) TO poziomki_api';
+    SELECT pg_get_userbyid(datdba) INTO owner_role
+      FROM pg_database WHERE datname = current_database();
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role) THEN
+        EXECUTE format('GRANT USAGE ON SCHEMA app TO %I', api_role);
+        EXECUTE format('GRANT EXECUTE ON FUNCTION app.find_user_for_login(text) TO %I', api_role);
+        EXECUTE format('GRANT EXECUTE ON FUNCTION app.resolve_session(text) TO %I', api_role);
         -- Any future function added to `app` by a later migration is
-        -- auto-granted EXECUTE to poziomki_api.
-        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE poziomki IN SCHEMA app '
-             || 'GRANT EXECUTE ON FUNCTIONS TO poziomki_api';
+        -- auto-granted EXECUTE to the API role.
+        EXECUTE format(
+            'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA app GRANT EXECUTE ON FUNCTIONS TO %I',
+            owner_role, api_role);
     END IF;
 END
 $$;

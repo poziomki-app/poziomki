@@ -85,6 +85,11 @@ services:
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
       API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL must be set}
+      # Role the pool is expected to connect as. The staging login role is
+      # GRANTed `poziomki_api` so RLS policies written `TO poziomki_api`
+      # match via role membership (CREATE POLICY is member-aware; role
+      # attributes like BYPASSRLS are not — see the worker role below).
+      DB_ROLE_API: ${POSTGRES_API_USER:-poziomki_staging_api}
       DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-8}
       DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
@@ -147,6 +152,10 @@ services:
       SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
       DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
       WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL must be set}
+      # Role the pool is expected to connect as. BYPASSRLS is a role
+      # **attribute** and is not inherited through role membership, so
+      # setup-roles-staging.sql applies it directly to this login role.
+      DB_ROLE_WORKER: ${POSTGRES_WORKER_USER:-poziomki_staging_worker}
       DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-4}
       DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
       DB_POOL_CREATE_TIMEOUT_MS: ${WORKER_DB_POOL_CREATE_TIMEOUT_MS:-5000}
