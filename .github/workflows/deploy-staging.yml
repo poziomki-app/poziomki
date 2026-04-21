@@ -97,13 +97,15 @@ jobs:
         # Guarded: .env.staging.prev only exists once deploy.sh runs far
         # enough to snapshot it. Failing earlier (cosign, SSH, digest
         # resolve) would otherwise hide the real error behind a secondary
-        # `mv: no such file`.
+        # `mv: no such file`. StrictHostKeyChecking=accept-new also set
+        # here so rollback cannot block on an interactive prompt if this
+        # is the first SSH contact from the runner.
         run: |
-          ssh "ubuntu@${VPS_HOST}" \
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "cd ~/poziomki-rs-staging/infra && \
              if [ ! -f .env.staging.prev ]; then \
                echo 'rollback: no .env.staging.prev — nothing to restore'; exit 0; \
              fi; \
              set -e; mv .env.staging.prev .env.staging && \
-             docker compose -p poziomki-rs-staging --env-file .env.staging -f docker-compose.staging.yml pull api worker && \
+             docker compose -p poziomki-rs-staging --env-file .env.staging -f docker-compose.staging.yml pull api_staging worker_staging && \
              docker compose -p poziomki-rs-staging --env-file .env.staging -f docker-compose.staging.yml up -d --no-build"

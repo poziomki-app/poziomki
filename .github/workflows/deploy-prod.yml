@@ -101,8 +101,11 @@ jobs:
         # Guarded: .env.prev only exists once deploy.sh has snapshotted
         # it. Failing earlier (cosign, digest resolve, SSH) would
         # otherwise hide the real error behind a `mv: no such file`.
+        # StrictHostKeyChecking=accept-new also set here so rollback
+        # cannot block on an interactive host key prompt if this is the
+        # first SSH contact from the runner.
         run: |
-          ssh "ubuntu@${VPS_HOST}" \
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "cd ~/poziomki-rs/infra && \
              if [ ! -f .env.prev ]; then \
                echo 'rollback: no .env.prev — nothing to restore'; exit 0; \
