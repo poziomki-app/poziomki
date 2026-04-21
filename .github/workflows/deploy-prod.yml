@@ -49,12 +49,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install cosign
-        # v3.0+ reads signatures via the OCI 1.1 referrers API that our
-        # publish workflow uses. v2.x only looks at legacy `.sig` sibling
-        # tags and cannot see our signatures at all.
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: v3.0.6
+        # cosign-installer@v4 is required to install cosign v3.x binaries;
+        # @v3 bootstraps via cosign v2.5 which can't verify v3.x signatures.
+        # cosign v3.0+ reads signatures via the OCI 1.1 referrers API that
+        # our publish workflow uses. v2.x only looks at legacy `.sig` tags.
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
 
       - name: Resolve digest from GHCR
         id: d
