@@ -68,7 +68,7 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "set -e; cd ~/poziomki-rs && git fetch --quiet && \
-             git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
+             git checkout '$COMMIT_SHA' -- . ':!infra/.env*' ':!infra/garage/garage.toml' && \
              ./infra/scripts/deploy.sh prod '$IMAGE@$DIGEST'"
 
       - name: Health check
