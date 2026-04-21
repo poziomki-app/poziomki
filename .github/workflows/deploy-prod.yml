@@ -34,15 +34,15 @@ jobs:
       VPS_HOST: ${{ secrets.VPS_HOSTNAME }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: tailscale/github-action@v3
+      - uses: tailscale/github-action@6cae46e2d796f265265cfcf628b72a32b4d7cade # v3.3.0
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci-deployer
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
