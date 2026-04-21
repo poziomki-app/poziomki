@@ -14,8 +14,18 @@ ENV="${1:?environment required: prod|staging}"
 DIGEST="${2:?image digest required}"
 
 case "$ENV" in
-  prod)    COMPOSE_FILE="docker-compose.prod.yml"    ; PROJECT="poziomki-rs"         ; ENV_FILE=".env"         ;;
-  staging) COMPOSE_FILE="docker-compose.staging.yml" ; PROJECT="poziomki-rs-staging" ; ENV_FILE=".env.staging" ;;
+  prod)
+    COMPOSE_FILE="docker-compose.prod.yml"
+    PROJECT="poziomki-rs"
+    ENV_FILE=".env"
+    PULL_SERVICES=(api worker)
+    ;;
+  staging)
+    COMPOSE_FILE="docker-compose.staging.yml"
+    PROJECT="poziomki-rs-staging"
+    ENV_FILE=".env.staging"
+    PULL_SERVICES=(api_staging worker_staging)
+    ;;
   *) echo "unknown env: $ENV" >&2; exit 1 ;;
 esac
 
@@ -29,12 +39,13 @@ awk -v d="$DIGEST" '/^BACKEND_DIGEST=/{print "BACKEND_DIGEST="d; found=1; next} 
   "$ENV_FILE" > "${ENV_FILE}.new"
 mv "${ENV_FILE}.new" "$ENV_FILE"
 
-# Render garage.toml if prod (staging uses its own; extend when staging garage lands).
+# Garage config is rendered once on prod deploys; staging reuses the
+# same shared Garage cluster, so nothing to render here.
 if [[ "$ENV" == "prod" ]]; then
   ./scripts/render-garage-toml.sh
 fi
 
-docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api worker
+docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull "${PULL_SERVICES[@]}"
 
 # Migrations run on api startup (backend/src/app.rs calls run_migrations()
 # before serving). There is no `migrate` subcommand in the CLI. `up -d`

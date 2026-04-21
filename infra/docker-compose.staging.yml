@@ -1,0 +1,264 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    compress: "true"
+
+# Staging compose is a slim parallel stack on the same VPS:
+#
+# * Shared with prod: postgres, garage (via external networks).
+#   Staging has its own database, roles, bucket and S3 keys — isolated
+#   at the credential/schema level, not container-level.
+# * Separate containers: api, worker, imgproxy, pgdog. All get distinct
+#   host ports and their own HMAC / JWT / pool settings.
+#
+# This trades "absolute blast-radius isolation" for "one Postgres, one
+# Garage, simple bootstrap." A staging migration that breaks the shared
+# cluster could affect prod — review migrations before pushing to main.
+
+services:
+  pgdog_staging:
+    image: ghcr.io/pgdogdev/pgdog:v0.1.30
+    entrypoint: ["/bin/sh", "/opt/pgdog/entrypoint.sh"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7432:6432"
+      - "127.0.0.1:10187:9187"
+    environment:
+      # `postgres` resolves on the shared prod `db` network.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-poziomki_staging}
+      DB_USER: ${POSTGRES_USER:-poziomki_staging}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      API_DB_USER: ${POSTGRES_API_USER:-poziomki_staging_api}
+      API_DB_PASSWORD: ${POSTGRES_API_PASSWORD:-}
+      WORKER_DB_USER: ${POSTGRES_WORKER_USER:-poziomki_staging_worker}
+      WORKER_DB_PASSWORD: ${POSTGRES_WORKER_PASSWORD:-}
+      DEFAULT_POOL_SIZE: ${PGDOG_POOL_SIZE:-8}
+      POOL_MODE: transaction
+      LISTEN_PORT: 6432
+      HEALTHCHECK_PORT: 6433
+      OPENMETRICS_PORT: 9187
+    volumes:
+      - ./ops/pgdog/entrypoint.sh:/opt/pgdog/entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6433' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: '0.25'
+          pids: 32
+    logging: *default-logging
+    # pgdog_staging only needs prod postgres (prod_db) + staging-internal
+    # traffic. Does NOT join prod_app, so it cannot accidentally hit
+    # prod services by hostname.
+    networks: [staging_internal, prod_db]
+
+  api_staging:
+    image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
+    restart: unless-stopped
+    depends_on:
+      pgdog_staging:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:6150:5150"
+      - "127.0.0.1:10092:9092"
+    environment:
+      RUST_ENV: production
+      PORT: 5150
+      METRICS_PORT: 9092
+      SERVER_BINDING: 0.0.0.0
+      SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
+      API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL must be set}
+      DB_POOL_MAX_SIZE: ${API_DB_POOL_MAX_SIZE:-8}
+      DB_POOL_WAIT_TIMEOUT_MS: ${API_DB_POOL_WAIT_TIMEOUT_MS:-3000}
+      DB_POOL_CREATE_TIMEOUT_MS: ${API_DB_POOL_CREATE_TIMEOUT_MS:-5000}
+      DB_POOL_RECYCLE_TIMEOUT_MS: ${API_DB_POOL_RECYCLE_TIMEOUT_MS:-5000}
+      JWT_SECRET: ${JWT_SECRET}
+      # Staging shares the prod Garage cluster; staging uses a distinct
+      # bucket (poziomki-uploads-staging) and distinct S3 access keys
+      # scoped to that bucket only.
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads-staging}
+      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
+      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://staging-api.poziomki.app}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
+      SMTP_ENABLE: ${SMTP_ENABLE:-false}
+      SMTP_FROM: ${SMTP_FROM:-noreply-staging@poziomki.app}
+      OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
+      IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
+      IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
+      IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/poziomki_backend-cli", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
+          pids: 256
+    logging: *default-logging
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
+
+  worker_staging:
+    image: ${BACKEND_DIGEST:?BACKEND_DIGEST must be set (bumped by deploy CI)}
+    entrypoint: ["/usr/local/bin/worker"]
+    restart: unless-stopped
+    depends_on:
+      pgdog_staging:
+        condition: service_healthy
+    environment:
+      RUST_ENV: production
+      METRICS_PORT: 9093
+      SERVER_HOST: ${SERVER_HOST:-https://staging-api.poziomki.app}
+      DATABASE_URL: postgres://${POSTGRES_USER:-poziomki_staging}:${POSTGRES_PASSWORD}@pgdog_staging:6432/${POSTGRES_DB:-poziomki_staging}
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL must be set}
+      DB_POOL_MAX_SIZE: ${WORKER_DB_POOL_MAX_SIZE:-4}
+      DB_POOL_WAIT_TIMEOUT_MS: ${WORKER_DB_POOL_WAIT_TIMEOUT_MS:-3000}
+      DB_POOL_CREATE_TIMEOUT_MS: ${WORKER_DB_POOL_CREATE_TIMEOUT_MS:-5000}
+      DB_POOL_RECYCLE_TIMEOUT_MS: ${WORKER_DB_POOL_RECYCLE_TIMEOUT_MS:-5000}
+      JWT_SECRET: ${JWT_SECRET}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads-staging}
+      GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+      GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
+      GARAGE_S3_URL_EXPIRY: ${GARAGE_S3_URL_EXPIRY:-3600}
+      GARAGE_S3_PUBLIC_URL: ${GARAGE_S3_PUBLIC_URL:-https://staging-api.poziomki.app}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-*}
+      NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
+      SMTP_ENABLE: ${SMTP_ENABLE:-false}
+      SMTP_FROM: ${SMTP_FROM:-noreply-staging@poziomki.app}
+      DKIM_DOMAIN: ${DKIM_DOMAIN:-poziomki.app}
+      DKIM_SELECTOR: ${DKIM_SELECTOR:-mail}
+      DKIM_PRIVATE_KEY_PATH: /etc/dkim/private.key
+      IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
+      IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
+      IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
+      IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+    volumes:
+      - ./ops/dkim/private.key:/etc/dkim/private.key:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/worker", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    read_only: true
+    ports:
+      - "127.0.0.1:10093:9093"
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: '0.25'
+          pids: 512
+    logging: *default-logging
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
+
+  imgproxy_staging:
+    build:
+      context: ../imgproxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4080:3080"
+      - "127.0.0.1:10091:9091"
+    environment:
+      IMGPROXY_PORT: 3080
+      IMGPROXY_BIND_ADDRESS: 0.0.0.0
+      IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
+      IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
+      IMGPROXY_CACHE_BYTES: ${IMGPROXY_CACHE_BYTES:-33554432}
+      IMGPROXY_MAX_CONCURRENT: ${IMGPROXY_MAX_CONCURRENT:-2}
+      IMGPROXY_ALLOWED_PREFIX: ${IMGPROXY_ALLOWED_PREFIX:-}
+      # Shared prod Garage hostname resolves via the external prod `app`
+      # network that this service is attached to.
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET:-poziomki-uploads-staging}
+      GARAGE_S3_ACCESS_KEY: ${IMGPROXY_S3_ACCESS_KEY:-${GARAGE_S3_ACCESS_KEY}}
+      GARAGE_S3_SECRET_KEY: ${IMGPROXY_S3_SECRET_KEY:-${GARAGE_S3_SECRET_KEY}}
+      GARAGE_S3_REGION: ${GARAGE_S3_REGION:-garage}
+      IMGPROXY_PURGE_SECRET: ${IMGPROXY_PURGE_SECRET:-}
+      IMGPROXY_ORIGIN_SECRET: ${IMGPROXY_ORIGIN_SECRET:?IMGPROXY_ORIGIN_SECRET must be set}
+      IMGPROXY_SOURCE_URL_ENCRYPTION_KEY: ${IMGPROXY_SOURCE_URL_ENCRYPTION_KEY:-}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: '0.25'
+          pids: 64
+    logging: *default-logging
+    # Talk to pgdog_staging over staging_internal; talk to prod garage
+    # over prod_app. Does NOT need prod_db (no direct postgres access).
+    networks: [staging_internal, prod_app]
+
+networks:
+  # Private staging network — staging services talk to each other here
+  # (api_staging ↔ pgdog_staging ↔ worker_staging ↔ imgproxy_staging).
+  # No prod service is reachable on this network.
+  staging_internal:
+    driver: bridge
+  # Prod postgres network, joined only by pgdog_staging.
+  prod_db:
+    name: poziomki-rs_db
+    external: true
+  # Prod app network, joined only by services that need garage.
+  prod_app:
+    name: poziomki-rs_app
+    external: true

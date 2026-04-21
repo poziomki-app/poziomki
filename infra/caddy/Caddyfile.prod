@@ -221,3 +221,11 @@ max_age: 31557600
 	}
 	respond 404
 }
+
+# Staging vhosts (staging.poziomki.app, staging-api.poziomki.app).
+# Sourced from the staging worktree so a staging deploy updates its
+# own Caddyfile without touching this prod worktree. Absolute path is
+# deliberate: Caddy's default for `import <name>` is relative to this
+# file, which would pull prod's own (stale) Caddyfile.staging copy.
+import /home/ubuntu/poziomki-rs-staging/infra/caddy/Caddyfile.staging
+

@@ -98,8 +98,18 @@ jobs:
 
       - name: Rollback on failure
         if: failure()
+        # Guarded: .env.prev only exists once deploy.sh has snapshotted
+        # it. Failing earlier (cosign, digest resolve, SSH) would
+        # otherwise hide the real error behind a `mv: no such file`.
+        # StrictHostKeyChecking=accept-new also set here so rollback
+        # cannot block on an interactive host key prompt if this is the
+        # first SSH contact from the runner.
         run: |
-          ssh "ubuntu@${VPS_HOST}" \
-            "set -e; cd ~/poziomki-rs/infra && mv .env.prev .env && \
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
+            "cd ~/poziomki-rs/infra && \
+             if [ ! -f .env.prev ]; then \
+               echo 'rollback: no .env.prev — nothing to restore'; exit 0; \
+             fi; \
+             set -e; mv .env.prev .env && \
              docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker && \
              docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"
