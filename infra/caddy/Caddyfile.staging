@@ -34,9 +34,9 @@ staging-api.poziomki.app {
 		}
 	}
 
-	# Staging imgproxy is published on host port 4080 (prod uses 3080).
-	# Same anti-forgery pattern as prod: strip any client-supplied
-	# X-Origin-Secret, inject the configured one.
+	# imgproxy for staging — container publishes on host :4080.
+	# Strip any client-supplied X-Origin-Secret and inject the configured
+	# one so a caller cannot bypass the upstream's origin check.
 	@img path /img/*
 	handle @img {
 		header {
@@ -45,6 +45,36 @@ staging-api.poziomki.app {
 		request_header -X-Origin-Secret
 		reverse_proxy localhost:4080 {
 			header_up X-Origin-Secret {$IMGPROXY_ORIGIN_SECRET_STAGING}
+		}
+	}
+
+	# Presigned Garage URLs — backend rewrites download links to
+	# staging-api.poziomki.app/poziomki-uploads/*, so that path must
+	# reach staging Garage (host :4900), not the API.
+	@presigned path /poziomki-uploads/*
+	handle @presigned {
+		header Cache-Control "private, max-age=3600"
+		reverse_proxy localhost:4900 {
+			header_up Host garage:3900
+		}
+	}
+
+	# Authenticated CDN-style path. forward_auth hits the staging API
+	# (host :6150) to decide whether the caller is allowed to see the
+	# object, then rewrites /uploads/<key> → /poziomki-uploads-staging/
+	# <key> on staging Garage.
+	@uploads path /uploads/*
+	handle @uploads {
+		header Cache-Control "private, max-age=3600"
+		route {
+			forward_auth localhost:6150 {
+				uri /api/v1/uploads/auth-check
+				copy_headers Authorization
+				header_up X-Original-URI {uri}
+			}
+			uri strip_prefix /uploads
+			uri path_regexp .* /poziomki-uploads-staging{path}
+			reverse_proxy localhost:4900
 		}
 	}
 
