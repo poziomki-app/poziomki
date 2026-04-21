@@ -32,6 +32,7 @@ jobs:
     env:
       INPUT_TAG: ${{ inputs.tag }}
       IMAGE: ghcr.io/poziomki-app/poziomki-backend
+      VPS_HOST: ${{ secrets.VPS_HOSTNAME }}
 
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +62,7 @@ jobs:
           DIGEST: ${{ steps.d.outputs.digest }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "set -e; cd ~/poziomki-rs && git fetch --quiet && \
              git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
              ./infra/scripts/deploy.sh staging '$IMAGE@$DIGEST'"
