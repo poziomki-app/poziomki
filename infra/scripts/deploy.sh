@@ -29,7 +29,11 @@ awk -v d="$DIGEST" '/^BACKEND_DIGEST=/{print "BACKEND_DIGEST="d; found=1; next} 
   "$ENV_FILE" > "${ENV_FILE}.new"
 mv "${ENV_FILE}.new" "$ENV_FILE"
 
-./scripts/render-garage-toml.sh "$ENV"
+# Garage config is rendered once on prod deploys; staging reuses the
+# same shared Garage cluster, so nothing to render here.
+if [[ "$ENV" == "prod" ]]; then
+  ./scripts/render-garage-toml.sh
+fi
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api worker
 
