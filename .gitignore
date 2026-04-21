@@ -63,6 +63,9 @@ result-*
 /deploy/
 /org/
 
+# Local-only docs (e.g. runbooks containing tailnet hostnames)
+docs/deploy-setup.*
+
 # OS
 .DS_Store
 Thumbs.db
