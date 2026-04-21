@@ -63,6 +63,11 @@ result-*
 /deploy/
 /org/
 
+# Local-only documents (runbooks, exports, typeset output)
+*.pdf
+*.typ
+*.tex
+
 # OS
 .DS_Store
 Thumbs.db

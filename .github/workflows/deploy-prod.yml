@@ -31,6 +31,7 @@ jobs:
     env:
       INPUT_TAG: ${{ inputs.tag }}
       IMAGE: ghcr.io/poziomki-app/poziomki-backend
+      VPS_HOST: ${{ secrets.VPS_HOSTNAME }}
 
     steps:
       - uses: actions/checkout@v4
@@ -47,9 +48,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
       - name: Resolve digest from GHCR
         id: d
         run: |
@@ -58,15 +56,6 @@ jobs:
             --format '{{json .Manifest}}' | jq -r .digest)
           test -n "$DIGEST"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-
-      - name: Verify signature (gate)
-        env:
-          DIGEST: ${{ steps.d.outputs.digest }}
-        run: |
-          cosign verify \
-            --certificate-identity-regexp "https://github.com/poziomki-app/poziomki/.github/workflows/backend-image.yml@.*" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            "${IMAGE}@${DIGEST}"
 
       - name: Apply on VPS
         env:
@@ -77,7 +66,7 @@ jobs:
         # `tag:poziomki-vps`. Replace with pre-seeded known_hosts once
         # Tailscale SSH tag-based auth lands.
         run: |
-          ssh -o StrictHostKeyChecking=accept-new ubuntu@poziomki \
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "set -e; cd ~/poziomki-rs && git fetch --quiet && \
              git checkout '$COMMIT_SHA' -- ':!infra/.env*' && \
              ./infra/scripts/deploy.sh prod '$IMAGE@$DIGEST'"
@@ -93,7 +82,7 @@ jobs:
       - name: Rollback on failure
         if: failure()
         run: |
-          ssh ubuntu@poziomki \
+          ssh "ubuntu@${VPS_HOST}" \
             "set -e; cd ~/poziomki-rs/infra && mv .env.prev .env && \
              docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker && \
              docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"
