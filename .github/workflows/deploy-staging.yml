@@ -1,7 +1,10 @@
 name: Deploy (staging)
 
-# Dormant until the `staging` environment is configured and
-# docker-compose.staging.yml + .env.staging exist on the VPS.
+# Triggered manually from Actions → Deploy (staging). The `staging`
+# environment has no required reviewer and no wait timer, so a dispatch
+# here runs as soon as it's queued. Default tag is `main` — use a
+# specific `vX.Y.Z` if you want to pin staging to a prior build.
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,9 +13,6 @@ on:
         required: false
         default: "main"
         type: string
-  # Uncomment once backend-image.yml in the public repo is wired up:
-  # repository_dispatch:
-  #   types: [backend-image-published]
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: staging
-      url: https://staging.poziomki.app
+      url: https://staging-api.poziomki.app
     timeout-minutes: 10
 
     env:
@@ -49,28 +49,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve digest
+      - name: Install cosign
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+
+      - name: Resolve digest from GHCR
         id: d
         run: |
           DIGEST=$(docker buildx imagetools inspect \
             "$IMAGE:$INPUT_TAG" \
             --format '{{json .Manifest}}' | jq -r .digest)
+          test -n "$DIGEST"
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
-      - name: Apply
+      - name: Verify signature (gate)
+        env:
+          DIGEST: ${{ steps.d.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/poziomki-app/poziomki/.github/workflows/backend-image.yml@.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" > /dev/null
+          echo "Signature verified for ${IMAGE}@${DIGEST}"
+
+      - name: Apply on VPS
         env:
           DIGEST: ${{ steps.d.outputs.digest }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
             "set -e; cd ~/poziomki-rs && git fetch --quiet && \
-             git checkout '$COMMIT_SHA' -- . ':!infra/.env*' ':!infra/garage/garage.toml' && \
+             git checkout '$COMMIT_SHA' -- . ':!infra/.env*' ':!infra/garage/garage.toml' ':!infra/garage/garage-staging.toml' && \
              ./infra/scripts/deploy.sh staging '$IMAGE@$DIGEST'"
 
       - name: Health check
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS https://staging.poziomki.app/health; then exit 0; fi
+            if curl -fsS https://staging-api.poziomki.app/health; then exit 0; fi
             sleep 2
           done
           exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh "ubuntu@${VPS_HOST}" \
+            "set -e; cd ~/poziomki-rs/infra && mv .env.staging.prev .env.staging && \
+             docker compose -p poziomki-rs-staging --env-file .env.staging -f docker-compose.staging.yml pull api worker && \
+             docker compose -p poziomki-rs-staging --env-file .env.staging -f docker-compose.staging.yml up -d --no-build"

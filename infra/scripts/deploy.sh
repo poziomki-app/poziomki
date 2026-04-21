@@ -29,10 +29,7 @@ awk -v d="$DIGEST" '/^BACKEND_DIGEST=/{print "BACKEND_DIGEST="d; found=1; next} 
   "$ENV_FILE" > "${ENV_FILE}.new"
 mv "${ENV_FILE}.new" "$ENV_FILE"
 
-# Render garage.toml if prod (staging uses its own; extend when staging garage lands).
-if [[ "$ENV" == "prod" ]]; then
-  ./scripts/render-garage-toml.sh
-fi
+./scripts/render-garage-toml.sh "$ENV"
 
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull api worker
 

@@ -1,0 +1,58 @@
+# Staging Caddyfile — imported from Caddyfile.prod.
+#
+# Global options (HTTP/3, TLS 1.3, shared `secure_headers` snippet) come
+# from the importing file. Add vhosts only; do not redeclare globals.
+
+staging.poziomki.app {
+	import secure_headers
+	encode zstd br gzip
+	header Referrer-Policy "no-referrer-when-downgrade"
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	# Staging landing — minimal text page for now.
+	handle {
+		respond "poziomki staging — not for end users" 200
+	}
+}
+
+staging-api.poziomki.app {
+	import secure_headers
+	header Referrer-Policy "strict-origin-when-cross-origin"
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	log {
+		output file /var/log/caddy/staging-api-access.log {
+			roll_size 50MiB
+			roll_keep 3
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "^(/img/)[^/]+(/.*)$" "${1}REDACTED${2}"
+			}
+		}
+	}
+
+	# Staging imgproxy is published on host port 4080 (prod uses 3080).
+	# Same anti-forgery pattern as prod: strip any client-supplied
+	# X-Origin-Secret, inject the configured one.
+	@img path /img/*
+	handle @img {
+		header {
+			X-Robots-Tag "noindex, nofollow, noarchive"
+		}
+		request_header -X-Origin-Secret
+		reverse_proxy localhost:4080 {
+			header_up X-Origin-Secret {$IMGPROXY_ORIGIN_SECRET_STAGING}
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:6150 {
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
+			header_down -X-Powered-By
+		}
+	}
+}
