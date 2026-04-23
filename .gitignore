@@ -46,6 +46,10 @@ DerivedData/
 # DKIM private key
 infra/ops/dkim/
 
+# Moderation model artefact (gated on HuggingFace, ~125 MB, mounted at
+# runtime — see docs/moderation-deploy.md).
+infra/ops/moderation/
+
 # Environment
 .env
 
@@ -73,3 +77,7 @@ result-*
 Thumbs.db
 play-store/
 backend/seed/
+
+# Python build cache
+__pycache__/
+*.pyc
