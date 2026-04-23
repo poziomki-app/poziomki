@@ -111,7 +111,34 @@ pub async fn create_message(
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
     let payload = single_message_payload(&msg, 0, conn).await?;
+
+    // Moderation scan enqueue happens at the WebSocket callsite AFTER the
+    // `with_viewer_tx` transaction commits — see `spawn_message_moderation_scan`.
+    // Doing it here (inside the tx closure) would race: the outbox row would
+    // land on a separate pool connection, potentially becoming visible to
+    // the worker before this tx commits. The worker would then see no
+    // matching message row and silently skip the scan.
     Ok((msg, payload, true))
+}
+
+/// Enqueue a moderation scan for a message that has already been committed
+/// to the DB. Spawns a detached tokio task — failures are logged but not
+/// propagated, because the message is already durable and the sender has
+/// already been told their message was delivered.
+///
+/// Call this only AFTER `with_viewer_tx` has returned Ok; otherwise the
+/// scan can race the commit.
+pub fn spawn_message_moderation_scan(message_id: Uuid) {
+    tokio::spawn(async move {
+        if let Err(e) = crate::jobs::outbox::enqueue_moderation_scan(
+            crate::jobs::outbox::ModerationTarget::Message,
+            &message_id,
+        )
+        .await
+        {
+            tracing::warn!(%message_id, error = %e, "failed to enqueue moderation scan");
+        }
+    });
 }
 
 /// Edit a message body. Returns the updated message.
@@ -143,6 +170,8 @@ pub async fn edit_message(
     .await
     .optional()?;
 
+    // Moderation re-scan happens at the WebSocket callsite after the tx
+    // commits (same reasoning as create_message).
     updated.ok_or_else(|| crate::error::AppError::message("message not found or not editable"))
 }
 
