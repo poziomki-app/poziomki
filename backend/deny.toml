@@ -15,6 +15,13 @@ ignore = [
     # num-bigint-dig for email crypto. Re-evaluate when lettre ships an
     # update that no longer depends on rand 0.8.
     "RUSTSEC-2026-0097",
+    # RUSTSEC-2024-0436: paste 1.0.15 is archived / unmaintained. Pulled in
+    # transitively by tokenizers via macro_rules_attribute — a proc-macro
+    # helper used at build time only, no runtime code path. No CVE, no
+    # observable behaviour; upstream tokenizers has no direct replacement
+    # path. Re-evaluate when tokenizers or macro_rules_attribute migrates
+    # off paste (likely to `pastey`).
+    "RUSTSEC-2024-0436",
 ]
 
 [licenses]

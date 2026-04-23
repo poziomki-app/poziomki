@@ -14,6 +14,8 @@ static OUTBOX_WORKER_STARTED: AtomicBool = AtomicBool::new(false);
 pub(super) const OUTBOX_LOCK_TIMEOUT_SECS: i64 = 300;
 const OUTBOX_DEFAULT_MAX_ATTEMPTS: i32 = 10;
 pub const OUTBOX_WORKER_HEARTBEAT_PATH: &str = "/tmp/poziomki-outbox-worker-heartbeat";
+pub const MODERATION_WORKER_HEARTBEAT_PATH: &str =
+    "/tmp/poziomki-outbox-moderation-worker-heartbeat";
 
 #[derive(Debug, Clone)]
 pub(super) struct OutboxJob {
@@ -72,6 +74,45 @@ pub async fn enqueue_chat_membership_sync(
     enqueue_job(outbox_dispatch::OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC, payload).await
 }
 
+/// Enqueue a moderation scan for a chat message on the caller's existing
+/// transaction.
+///
+/// Must be called with the same `conn` the caller is using for the
+/// original INSERT/UPDATE (e.g. a message insert inside `with_viewer_tx`).
+/// The outbox row is then atomic with the target write: the worker can
+/// only observe the job after the enclosing transaction commits, and if
+/// the tx rolls back the job never existed. This is the transactional
+/// outbox pattern — it closes the dual-write gap the fire-and-forget
+/// `tokio::spawn` path had.
+///
+/// The message body is snapshotted into the payload so that the worker
+/// scans exactly what the recipients received. An earlier version
+/// re-read the current row at dispatch time for privacy reasons, but
+/// that left a narrow window where a sender could post abusive text,
+/// wait for delivery, then edit or delete it before the worker picked
+/// up the job — and the scan would see only the cleaned-up body. That
+/// defeats the whole point of a safety scan. The short-lived copy is
+/// mitigated by `purge_processed_outbox_jobs` in the cleanup loop
+/// (retention: `OUTBOX_PROCESSED_RETENTION_DAYS`, currently 7 days).
+///
+/// Bios are moderated synchronously at publish time — they don't go
+/// through this path. When a batch bio rescan lands, reintroduce a
+/// target enum then.
+pub async fn enqueue_moderation_scan_in_tx(
+    conn: &mut diesel_async::AsyncPgConnection,
+    message_id: &uuid::Uuid,
+    body: &str,
+) -> Result<()> {
+    let payload = json!({
+        "target_kind": "message",
+        "target_id": message_id.to_string(),
+        "body": body,
+    })
+    .to_string();
+
+    enqueue_job_with_conn(conn, outbox_dispatch::OUTBOX_TOPIC_MODERATION_SCAN, payload).await
+}
+
 pub async fn enqueue_upload_variants_generation(upload_id: &uuid::Uuid) -> Result<()> {
     let payload = json!({
         "upload_id": upload_id.to_string(),
@@ -87,7 +128,14 @@ pub async fn enqueue_upload_variants_generation(upload_id: &uuid::Uuid) -> Resul
 
 async fn enqueue_job(topic: &str, payload: String) -> Result<()> {
     let mut conn = crate::db::conn().await?;
+    enqueue_job_with_conn(&mut conn, topic, payload).await
+}
 
+async fn enqueue_job_with_conn(
+    conn: &mut diesel_async::AsyncPgConnection,
+    topic: &str,
+    payload: String,
+) -> Result<()> {
     diesel::sql_query(
         r"
         INSERT INTO job_outbox (
@@ -107,7 +155,7 @@ async fn enqueue_job(topic: &str, payload: String) -> Result<()> {
     .bind::<Text, _>(topic)
     .bind::<Text, _>(payload)
     .bind::<Integer, _>(OUTBOX_DEFAULT_MAX_ATTEMPTS)
-    .execute(&mut conn)
+    .execute(conn)
     .await?;
     Ok(())
 }
@@ -125,13 +173,25 @@ pub fn maybe_start_worker(_ctx: &AppContext) {
         return;
     }
 
+    // Two workers:
+    //  * general loop claims everything EXCEPT moderation_scan — same
+    //    FIFO / 100 ms inter-job sleep as before, so OTP/upload/membership
+    //    jobs keep their familiar pacing.
+    //  * moderation loop claims ONLY moderation_scan jobs — tight inner
+    //    loop (no inter-job sleep when jobs are available) so high chat
+    //    volume can't backlog the general queue. Bielik int8 inference
+    //    runs ~10 ms per job; at 0 ms pause this saturates one core,
+    //    which is what we sized the worker container for.
     tokio::spawn(async move {
-        outbox_worker::run_worker_loop().await;
+        outbox_worker::run_general_worker_loop().await;
+    });
+    tokio::spawn(async move {
+        outbox_worker::run_moderation_worker_loop().await;
     });
     tokio::spawn(async move {
         outbox_worker::run_metrics_loop().await;
     });
-    tracing::info!("Outbox worker started");
+    tracing::info!("Outbox workers started (general + moderation)");
 }
 
 #[derive(Debug, QueryableByName)]

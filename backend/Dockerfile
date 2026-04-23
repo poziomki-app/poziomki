@@ -1,5 +1,11 @@
-# rust:1.93-bookworm
-FROM rust@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS chef
+# rust:1.93-trixie
+#
+# NB: bumped from bookworm → trixie to pick up glibc ≥ 2.38. The `ort` crate
+# (ONNX Runtime, used by the moderation engine) ships a pre-built
+# `libonnxruntime.a` that references `__isoc23_strtol` / `__isoc23_strtoull`,
+# which are only present in glibc 2.38+. bookworm ships glibc 2.36 and fails
+# to link with `undefined symbol`.
+FROM rust@sha256:f7c649bf7cc388826273a4977e8304778b7f8ad2e20838c1d52283cf23e49f7a AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app/backend
 
@@ -19,8 +25,8 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . /app/
 RUN cargo build --release --bin poziomki_backend-cli --bin worker
 
-# debian:bookworm-slim
-FROM debian@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d AS runtime-deps
+# debian:trixie-slim
+FROM debian@sha256:e18da95f66066b7c5fa31491b524e83121271eca59a3d140f4906c8d0a090367 AS runtime-deps
 # /bin/sh on bookworm-slim is dash, which doesn't support `-o pipefail`.
 # Install bash first, then switch SHELL so the ldd pipeline below gets pipefail.
 # hadolint ignore=DL3008
@@ -48,13 +54,18 @@ RUN set -eux; \
         cp -aL "$dep" "$dest"; \
     done
 
-# gcr.io/distroless/cc-debian12:nonroot
-FROM gcr.io/distroless/cc-debian12@sha256:e2d29aec8061843706b7e484c444f78fafb05bfe47745505252b1769a05d14f1 AS runtime
+# gcr.io/distroless/cc-debian13:nonroot  (trixie-based — matches glibc 2.41)
+FROM gcr.io/distroless/cc-debian13@sha256:951d10263d9a00fafaadb57615d3299811dde143fab6e64663685ee48c48137e AS runtime
 WORKDIR /app
 
 COPY --from=runtime-deps /staging/ /
 COPY --from=builder /app/backend/target/release/poziomki_backend-cli /usr/local/bin/poziomki_backend-cli
 COPY --from=builder /app/backend/target/release/worker /usr/local/bin/worker
+
+# The int8 Bielik-Guard model (~125 MB) is NOT baked into the image — it's
+# mounted read-only from the host at /app/moderation via docker-compose,
+# mirroring the DKIM key pattern. See docs/moderation-deploy.md for the
+# ops step, and scripts/guard-bench/export_onnx.py to regenerate.
 
 USER nonroot
 EXPOSE 5150
