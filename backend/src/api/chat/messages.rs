@@ -111,6 +111,18 @@ pub async fn create_message(
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
     let payload = single_message_payload(&msg, 0, conn).await?;
+
+    // Enqueue moderation scan in the same transaction as the message insert
+    // (transactional outbox): the worker cannot observe the job until this
+    // tx commits, and if the tx rolls back the scan never existed. This
+    // closes the dual-write gap the earlier fire-and-forget path had.
+    //
+    // Only scan non-empty text messages; system/kind=other payloads are
+    // not user-authored text.
+    if matches!(msg.kind.as_str(), "text" | "") && !msg.body.trim().is_empty() {
+        crate::jobs::outbox::enqueue_moderation_scan_in_tx(conn, &msg.id, &msg.body).await?;
+    }
+
     Ok((msg, payload, true))
 }
 
@@ -132,6 +144,20 @@ pub async fn edit_message(
 
     let now = Utc::now();
 
+    // Read the current body within the same tx so we can detect no-op
+    // edits and avoid enqueueing a redundant moderation scan. Runs at
+    // READ COMMITTED; any concurrent edit that beats ours is still safe
+    // because the UPDATE below overwrites and the subsequent scan sees
+    // our new value.
+    let prev_body: Option<String> = messages::table
+        .filter(messages::id.eq(message_id))
+        .filter(messages::sender_id.eq(sender_id))
+        .filter(messages::deleted_at.is_null())
+        .select(messages::body)
+        .first(conn)
+        .await
+        .optional()?;
+
     let updated = diesel::update(
         messages::table
             .filter(messages::id.eq(message_id))
@@ -143,7 +169,24 @@ pub async fn edit_message(
     .await
     .optional()?;
 
-    updated.ok_or_else(|| crate::error::AppError::message("message not found or not editable"))
+    let updated = updated
+        .ok_or_else(|| crate::error::AppError::message("message not found or not editable"))?;
+
+    // Re-scan only if the body actually changed. Without this, a user
+    // tapping Edit twice (or clients that echo back the current body as
+    // part of an autosave) would trigger redundant inference on
+    // unchanged text. Symmetrical with create_message for the "abusive
+    // edit after benign send" case.
+    let body_changed = prev_body.as_deref() != Some(updated.body.as_str());
+    if body_changed
+        && matches!(updated.kind.as_str(), "text" | "")
+        && !updated.body.trim().is_empty()
+    {
+        crate::jobs::outbox::enqueue_moderation_scan_in_tx(conn, &updated.id, &updated.body)
+            .await?;
+    }
+
+    Ok(updated)
 }
 
 /// Soft-delete a message.
