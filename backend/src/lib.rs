@@ -5,6 +5,7 @@ pub mod db;
 pub mod error;
 pub mod healthcheck;
 pub mod jobs;
+pub mod moderation;
 pub mod search;
 pub mod security;
 pub mod telemetry;

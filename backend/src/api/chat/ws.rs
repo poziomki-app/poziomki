@@ -508,6 +508,9 @@ async fn handle_send(
 
     match result {
         Ok(Ok(outcome)) => {
+            // NB: moderation scan is enqueued transactionally inside
+            // create_message, so nothing to do here — the job is already
+            // durable if this branch was reached.
             let server_msg = ServerMessage::Message {
                 msg: Box::new(outcome.payload),
             };
@@ -643,6 +646,8 @@ async fn handle_edit(
             edited_at,
             members,
         }) => {
+            // NB: moderation re-scan is enqueued transactionally inside
+            // edit_message.
             let server_msg = ServerMessage::Edited {
                 message_id,
                 conversation_id,

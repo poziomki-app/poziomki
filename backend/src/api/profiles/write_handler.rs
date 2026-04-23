@@ -14,6 +14,8 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
+use crate::api::common::{error_response, ErrorSpec};
+
 use super::{full_profile_response, parse_tag_uuids, sync_profile_tags};
 use crate::api::{
     extract_filename,
@@ -102,6 +104,23 @@ pub(in crate::api) async fn profile_create(
                 Ok(u) => u,
                 Err(response) => return Ok::<Response, diesel::result::Error>(*response),
             };
+
+            // Bio moderation runs AFTER validate_create so unauthenticated,
+            // unauthorized, or duplicate-profile requests still get their
+            // existing 401/403/409 instead of being masked by a 422 — and
+            // we don't spend inference CPU on requests that would be
+            // rejected cheaply either way.
+            if let Some(ref bio) = payload_clone.bio {
+                match moderate_bio_text(bio, &headers_clone).await {
+                    Ok(None) => {}
+                    Ok(Some(rejection)) => return Ok(rejection),
+                    Err(error) => {
+                        tracing::error!(%error, "bio moderation failed; rolling back create");
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+            }
+
             let picture = match resolve_picture_filename(
                 conn,
                 &headers_clone,
@@ -184,6 +203,22 @@ pub(in crate::api) async fn profile_update(
                     return Ok::<Response, diesel::result::Error>(*response);
                 }
             };
+
+            // Bio moderation runs AFTER validate_and_prepare_update so
+            // unauthorised-profile and not-found requests still get 403/
+            // 404 instead of a misleading 422, and we don't burn inference
+            // CPU on them.
+            if let Some(ref bio) = payload_clone.bio {
+                match moderate_bio_text(bio, &headers_clone).await {
+                    Ok(None) => {}
+                    Ok(Some(rejection)) => return Ok(rejection),
+                    Err(error) => {
+                        tracing::error!(%error, "bio moderation failed; rolling back update");
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+            }
+
             let changeset = build_update_changeset(&payload_clone, picture);
             let updated = apply_update(conn, &profile, &payload_clone, changeset)
                 .await
@@ -198,6 +233,96 @@ pub(in crate::api) async fn profile_update(
     })
     .await
     .map_err(Into::into)
+}
+
+/// Run the moderation engine on a bio string. Returns:
+/// - `Ok(None)` when moderation is disabled, the engine allows, or only
+///   flags for review (flag is logged, publish proceeds).
+/// - `Ok(Some(response))` when the engine blocks — caller must return it
+///   as the handler's final response.
+/// - `Err(_)` on an unexpected infrastructure error (inference panic,
+///   spawn failure). Hard errors surface as 500; we never fall through to
+///   "allow" on failure, because that would defeat the gate.
+async fn moderate_bio_text(bio: &str, headers: &HeaderMap) -> Result<Option<Response>> {
+    let trimmed = bio.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let Some(engine) = crate::moderation::shared() else {
+        return Ok(None);
+    };
+
+    let owned = trimmed.to_string();
+    let started = std::time::Instant::now();
+    let scores = tokio::task::spawn_blocking(move || engine.score(&owned))
+        .await
+        .map_err(|e| crate::error::AppError::Message(format!("moderation task: {e}")))?
+        .map_err(|e| crate::error::AppError::Message(format!("moderation inference: {e}")))?;
+    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+
+    let thresholds = crate::moderation::Thresholds::BIO;
+    let verdict = scores.verdict(&thresholds);
+    let flagged = scores.flagged(&thresholds);
+
+    metrics::histogram!("moderation_inference_latency_ms", "kind" => "bio").record(elapsed_ms);
+    metrics::counter!(
+        "moderation_verdicts_total",
+        "kind" => "bio",
+        "verdict" => verdict.as_str()
+    )
+    .increment(1);
+
+    match verdict {
+        crate::moderation::Verdict::Allow => Ok(None),
+        crate::moderation::Verdict::Flag => {
+            // Bio flag without block is rare with the BIO preset (flag and
+            // block thresholds are equal), but we handle it defensively so
+            // a future threshold tweak doesn't silently drop flagged bios.
+            tracing::warn!(
+                flagged = ?flagged.iter().map(|(c, s)| format!("{}={s:.2}", c.as_str())).collect::<Vec<_>>(),
+                elapsed_ms,
+                "bio moderation: flagged for review (allowed to publish)"
+            );
+            Ok(None)
+        }
+        crate::moderation::Verdict::Block => {
+            let categories: Vec<&'static str> = flagged.iter().map(|(c, _)| c.as_str()).collect();
+            tracing::warn!(
+                categories = ?categories,
+                elapsed_ms,
+                "bio moderation: blocked on publish"
+            );
+            let error_msg = rejection_message(&flagged);
+            Ok(Some(error_response(
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                headers,
+                ErrorSpec {
+                    error: error_msg,
+                    code: "BIO_CONTENT_REJECTED",
+                    details: Some(serde_json::json!({
+                        "categories": categories,
+                    })),
+                },
+            )))
+        }
+    }
+}
+
+/// Build a user-facing rejection message. Polish-first (this is a Polish
+/// product), falls back to a category listing.
+fn rejection_message(flagged: &[(crate::moderation::Category, f32)]) -> String {
+    use crate::moderation::Category;
+    if flagged.iter().any(|(c, _)| matches!(c, Category::SelfHarm)) {
+        return "Twój opis zawiera treści dotyczące samookaleczenia lub myśli samobójczych. \
+                Jeśli potrzebujesz wsparcia, zadzwoń pod 116 123 (bezpłatny telefon zaufania). \
+                Prosimy o edycję opisu przed publikacją."
+            .to_string();
+    }
+    let labels: Vec<&'static str> = flagged.iter().map(|(c, _)| c.as_str()).collect();
+    format!(
+        "Twój opis narusza zasady społeczności ({}). Proszę go zmienić przed zapisaniem.",
+        labels.join(", ")
+    )
 }
 
 pub(in crate::api) async fn profile_delete(

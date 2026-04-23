@@ -145,6 +145,16 @@ services:
       IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+      # Moderation model dir, mounted read-only below. Unset → moderation
+      # disabled (handlers pass through, dispatch worker no-ops).
+      MODERATION_MODEL_PATH: ${MODERATION_MODEL_PATH-/app/moderation}
+      MODERATION_THREADS: ${MODERATION_THREADS:-1}
+      # Strict mode in prod: if the model mount is missing the process
+      # fails to boot instead of silently accepting everything. Override
+      # to `false` only for a deliberate unmoderated rollout.
+      MODERATION_REQUIRED: ${MODERATION_REQUIRED:-true}
+    volumes:
+      - ./ops/moderation/bielik-guard-onnx:/app/moderation:ro
     healthcheck:
       test: ["CMD", "/usr/local/bin/poziomki_backend-cli", "healthcheck"]
       interval: 10s
@@ -161,7 +171,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          # 768 MB to accommodate the moderation engine: ~370 MB steady-state
+          # RSS (int8 Bielik-Guard model + ORT arenas) on top of the Axum
+          # app baseline (~150 MB). Validated via podman cgroup v2 runs of
+          # the moderation-stress bench — OOM reproducible at <=320 MB, so
+          # the previous 512 MB would have been borderline once moderation
+          # loaded. See scripts/guard-bench/Dockerfile.bench.
+          memory: 768m
           cpus: '1.0'
           pids: 256
     logging: *default-logging
@@ -211,8 +227,17 @@ services:
       IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+      # Async chat-message moderation (outbox topic `moderation_scan`) runs
+      # here. Path matches the model baked into backend/Dockerfile.
+      MODERATION_MODEL_PATH: ${MODERATION_MODEL_PATH-/app/moderation}
+      MODERATION_THREADS: ${MODERATION_THREADS:-1}
+      # Strict mode in prod: if the model mount is missing the process
+      # fails to boot instead of silently accepting everything. Override
+      # to `false` only for a deliberate unmoderated rollout.
+      MODERATION_REQUIRED: ${MODERATION_REQUIRED:-true}
     volumes:
       - ./ops/dkim/private.key:/etc/dkim/private.key:ro
+      - ./ops/moderation/bielik-guard-onnx:/app/moderation:ro
     healthcheck:
       test: ["CMD", "/usr/local/bin/worker", "healthcheck"]
       interval: 10s
@@ -231,7 +256,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256m
+          # 512 MB to fit the moderation engine (~370 MB) plus worker
+          # baseline. Validated via podman cgroup v2: hard OOM at 256 MB
+          # during model load (exit 137), minimum safe is 384 MB with no
+          # file-cache thrashing.
+          memory: 512m
           cpus: '0.5'
           pids: 512
     logging: *default-logging

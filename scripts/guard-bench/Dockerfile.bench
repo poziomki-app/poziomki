@@ -1,0 +1,39 @@
+# Build + run the `moderation-stress` binary under real Docker cgroup v2
+# enforcement, inside the same bookworm base as the prod image, to validate
+# OVH container limits before shipping.
+#
+# Build (from repo root):
+#   podman build -f scripts/guard-bench/Dockerfile.bench -t moderation-bench .
+#
+# Run (worker-profile, hard 256 MB cap, 0.5 CPU):
+#   podman run --rm --memory=256m --cpus=0.5 moderation-bench \
+#     --iters 5000 --concurrency 1 --threads 1
+
+# --- builder: trixie, matches the prod backend/Dockerfile ---
+FROM rust:1.93-trixie AS builder
+# `cargo build --bin moderation-stress` still compiles the full lib crate,
+# so the bench needs the same native deps as the prod Dockerfile
+# (libpq/libwebp/libssl for diesel, rust-s3, image, etc.).
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev libpq-dev libwebp-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app/backend
+COPY backend /app/backend
+RUN cargo build --release --bin moderation-stress
+
+# --- runtime: trixie-slim (glibc 2.41, same family as prod distroless) ---
+FROM debian:trixie-slim
+COPY --from=builder /app/backend/target/release/moderation-stress \
+     /usr/local/bin/moderation-stress
+# Reuse the ops-provisioned model directory (same path prod compose
+# mounts from). The bench operator runs `cp -r ~/models/bielik-guard-onnx
+# infra/ops/moderation/` once before building, or points an existing
+# deploy tree at the repo root.
+COPY infra/ops/moderation/bielik-guard-onnx /app/model
+ENV MODERATION_MODEL_PATH=/app/model
+# Run as a non-privileged UID. This image has no package-management needs
+# at runtime, so a numeric UID/GID is sufficient — avoids the Trivy
+# DS-0002 finding for root-owned container processes.
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/moderation-stress"]

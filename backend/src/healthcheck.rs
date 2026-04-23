@@ -1,7 +1,7 @@
 use std::process::exit;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::jobs::outbox::OUTBOX_WORKER_HEARTBEAT_PATH;
+use crate::jobs::outbox::{MODERATION_WORKER_HEARTBEAT_PATH, OUTBOX_WORKER_HEARTBEAT_PATH};
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(3);
 const WORKER_HEARTBEAT_STALE_AFTER_SECS: u64 = 30;
@@ -19,16 +19,24 @@ pub async fn api_healthcheck() -> ! {
     exit(i32::from(!ok));
 }
 
-pub fn worker_healthcheck() -> ! {
-    let Ok(contents) = std::fs::read_to_string(OUTBOX_WORKER_HEARTBEAT_PATH) else {
-        exit(1);
+fn heartbeat_fresh(path: &str) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return false;
     };
     let Ok(ts_secs) = contents.trim().parse::<u64>() else {
-        exit(1);
+        return false;
     };
     let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-        exit(1);
+        return false;
     };
-    let age_secs = now.as_secs().saturating_sub(ts_secs);
-    exit(i32::from(age_secs >= WORKER_HEARTBEAT_STALE_AFTER_SECS))
+    now.as_secs().saturating_sub(ts_secs) < WORKER_HEARTBEAT_STALE_AFTER_SECS
+}
+
+pub fn worker_healthcheck() -> ! {
+    // Both worker loops (general + moderation) must be alive — a wedged
+    // moderation loop would otherwise let moderation_scan jobs backlog
+    // indefinitely while the container stays healthy.
+    let ok = heartbeat_fresh(OUTBOX_WORKER_HEARTBEAT_PATH)
+        && heartbeat_fresh(MODERATION_WORKER_HEARTBEAT_PATH);
+    exit(i32::from(!ok));
 }
