@@ -508,6 +508,17 @@ async fn handle_send(
 
     match result {
         Ok(Ok(outcome)) => {
+            // Enqueue moderation scan AFTER the tx commits — otherwise the
+            // worker can read the outbox row before the message INSERT is
+            // visible and treat the row as missing. Only scan freshly
+            // created non-empty text messages; dedup hits and system-kind
+            // payloads are skipped.
+            if outcome.created
+                && matches!(outcome.payload.kind.as_str(), "text" | "")
+                && !outcome.payload.body.trim().is_empty()
+            {
+                chat_messages::spawn_message_moderation_scan(outcome.payload.id);
+            }
             let server_msg = ServerMessage::Message {
                 msg: Box::new(outcome.payload),
             };
@@ -643,6 +654,13 @@ async fn handle_edit(
             edited_at,
             members,
         }) => {
+            // Re-scan the edited body after the tx commits. Without this,
+            // a user can send benign text and edit it into abuse to bypass
+            // moderation entirely. Enqueuing here (not inside the tx)
+            // guarantees the worker will see the updated row.
+            if !body.trim().is_empty() {
+                chat_messages::spawn_message_moderation_scan(message_id);
+            }
             let server_msg = ServerMessage::Edited {
                 message_id,
                 conversation_id,

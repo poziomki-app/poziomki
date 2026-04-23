@@ -73,3 +73,7 @@ result-*
 Thumbs.db
 play-store/
 backend/seed/
+
+# Python build cache
+__pycache__/
+*.pyc

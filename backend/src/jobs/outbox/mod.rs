@@ -72,6 +72,50 @@ pub async fn enqueue_chat_membership_sync(
     enqueue_job(outbox_dispatch::OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC, payload).await
 }
 
+/// Surface that produced a moderation payload. Used by the worker only for
+/// log/metric labelling; the underlying inference is identical. Only the
+/// `Message` variant is enqueued today — bios are moderated synchronously
+/// on publish — but the enum keeps the dispatch handler's labelling
+/// symmetric in case we later add batch bio rescans.
+#[derive(Debug, Clone, Copy)]
+pub enum ModerationTarget {
+    #[allow(dead_code)]
+    Bio,
+    Message,
+}
+
+impl ModerationTarget {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Bio => "bio",
+            Self::Message => "message",
+        }
+    }
+}
+
+/// Enqueue an asynchronous moderation scan. The worker fetches the current
+/// target body from the DB at dispatch time; we deliberately do NOT serialise
+/// the text into the outbox row, to avoid creating a second long-lived copy
+/// of user content that shadows the `messages` table's own retention rules
+/// (soft-delete, future GDPR deletion, etc.).
+///
+/// This writes to `job_outbox` via a fresh pool connection, not within the
+/// caller's transaction, matching the convention of `enqueue_otp_email` et
+/// al. If the caller's transaction later rolls back, the scan still runs;
+/// the dispatch handler's DB lookup simply finds no matching row and exits.
+pub async fn enqueue_moderation_scan(
+    target: ModerationTarget,
+    target_id: &uuid::Uuid,
+) -> Result<()> {
+    let payload = json!({
+        "target_kind": target.as_str(),
+        "target_id": target_id.to_string(),
+    })
+    .to_string();
+
+    enqueue_job(outbox_dispatch::OUTBOX_TOPIC_MODERATION_SCAN, payload).await
+}
+
 pub async fn enqueue_upload_variants_generation(upload_id: &uuid::Uuid) -> Result<()> {
     let payload = json!({
         "upload_id": upload_id.to_string(),
