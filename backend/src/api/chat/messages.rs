@@ -111,6 +111,32 @@ pub async fn create_message(
     // viewer_user_id=0 so broadcast payload has is_mine=false for all recipients.
     // Each client computes isMine locally; sender matches via client_id.
     let payload = single_message_payload(&msg, 0, conn).await?;
+
+    // Fire-and-forget async moderation scan. We deliberately do NOT await
+    // or propagate errors: the message is already persisted, and a failed
+    // enqueue just means this one row goes unmoderated — acceptable, and
+    // far better than holding up message delivery. Enqueue via a fresh
+    // pool connection (inside `tokio::spawn`) so we never race the caller's
+    // transaction's conn slot.
+    //
+    // We only scan non-empty text messages; system/kind=other payloads may
+    // not be user text at all.
+    if matches!(msg.kind.as_str(), "text" | "") && !msg.body.trim().is_empty() {
+        let body = msg.body.clone();
+        let message_id = msg.id;
+        tokio::spawn(async move {
+            if let Err(e) = crate::jobs::outbox::enqueue_moderation_scan(
+                crate::jobs::outbox::ModerationTarget::Message,
+                &message_id,
+                &body,
+            )
+            .await
+            {
+                tracing::warn!(%message_id, error = %e, "failed to enqueue moderation scan");
+            }
+        });
+    }
+
     Ok((msg, payload, true))
 }
 

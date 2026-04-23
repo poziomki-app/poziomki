@@ -1,0 +1,28 @@
+# Build + run the `moderation-stress` binary under real Docker cgroup v2
+# enforcement, inside the same bookworm base as the prod image, to validate
+# OVH container limits before shipping.
+#
+# Build (from repo root):
+#   podman build -f scripts/guard-bench/Dockerfile.bench -t moderation-bench .
+#
+# Run (worker-profile, hard 256 MB cap, 0.5 CPU):
+#   podman run --rm --memory=256m --cpus=0.5 moderation-bench \
+#     --iters 5000 --concurrency 1 --threads 1
+
+# --- builder: trixie (glibc 2.41) ---
+# NB: the prod backend/Dockerfile is still on rust:1.93-bookworm (glibc 2.36),
+# which cannot link `ort-sys`'s pre-built onnxruntime (needs `__isoc23_strtol`
+# introduced in glibc 2.38). Until prod is bumped to trixie we use trixie here
+# so the bench is representative of the *intended* target, not the broken one.
+FROM rust:1.93-trixie AS builder
+WORKDIR /app/backend
+COPY backend /app/backend
+RUN cargo build --release --bin moderation-stress
+
+# --- runtime: trixie-slim ---
+FROM debian:trixie-slim
+COPY --from=builder /app/backend/target/release/moderation-stress \
+     /usr/local/bin/moderation-stress
+COPY models/bielik-guard-onnx /app/model
+ENV MODERATION_MODEL_PATH=/app/model
+ENTRYPOINT ["/usr/local/bin/moderation-stress"]

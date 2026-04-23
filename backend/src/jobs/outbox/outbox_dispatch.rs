@@ -7,6 +7,7 @@ use super::OutboxJob;
 pub(super) const OUTBOX_TOPIC_OTP_EMAIL: &str = "otp_email_send";
 pub(super) const OUTBOX_TOPIC_UPLOAD_VARIANTS_GENERATION: &str = "upload_variants_generation";
 pub(super) const OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC: &str = "chat_membership_sync";
+pub(super) const OUTBOX_TOPIC_MODERATION_SCAN: &str = "moderation_scan";
 
 #[derive(Debug, Deserialize)]
 struct OtpEmailJobPayload {
@@ -26,6 +27,17 @@ struct ChatMembershipSyncJobPayload {
     leave: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct ModerationScanJobPayload {
+    // `bio` or `message` — which surface produced this text. Used only for
+    // log/metric labelling today; the dispatch handler is the same either
+    // way. Accept unknown values rather than rejecting the job; the payload
+    // originates from our own enqueue helpers.
+    target_kind: String,
+    target_id: String,
+    text: String,
+}
+
 #[tracing::instrument(skip(job), fields(job_id = %job.id, job_topic = %job.topic))]
 pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), String> {
     match job.topic.as_str() {
@@ -34,6 +46,7 @@ pub(super) async fn dispatch_job(job: &OutboxJob) -> std::result::Result<(), Str
             dispatch_upload_variants(&job.payload_json).await
         }
         OUTBOX_TOPIC_CHAT_MEMBERSHIP_SYNC => dispatch_chat_membership_sync(&job.payload_json).await,
+        OUTBOX_TOPIC_MODERATION_SCAN => dispatch_moderation_scan(&job.payload_json).await,
         other => Err(format!("unsupported outbox topic: {other}")),
     }
 }
@@ -52,6 +65,79 @@ async fn dispatch_chat_membership_sync(payload_json: &str) -> std::result::Resul
     let profile_id = uuid::Uuid::parse_str(&payload.profile_id)
         .map_err(|e| format!("invalid chat membership sync profile_id: {e}"))?;
     crate::api::deliver_chat_membership_sync_job(event_id, profile_id, payload.leave).await
+}
+
+async fn dispatch_moderation_scan(payload_json: &str) -> std::result::Result<(), String> {
+    let payload: ModerationScanJobPayload = serde_json::from_str(payload_json)
+        .map_err(|e| format!("invalid moderation scan payload: {e}"))?;
+
+    let Some(engine) = crate::moderation::shared() else {
+        // Operator didn't wire a model in this process — drop the job
+        // silently. Worth logging once at boot (`global.rs` already does
+        // that), so here we just no-op to avoid log spam.
+        metrics::counter!("moderation_scan_skipped_total", "reason" => "engine_disabled")
+            .increment(1);
+        return Ok(());
+    };
+
+    let started = std::time::Instant::now();
+    let text = payload.text.clone();
+    // ONNX inference is CPU-bound and blocking; run it off the async
+    // runtime. `spawn_blocking` propagates panics as `JoinError`.
+    let scores = tokio::task::spawn_blocking(move || engine.score(&text))
+        .await
+        .map_err(|e| format!("moderation inference panicked: {e}"))?
+        .map_err(|e| format!("moderation inference failed: {e}"))?;
+
+    let thresholds = if payload.target_kind == "bio" {
+        crate::moderation::Thresholds::BIO
+    } else {
+        crate::moderation::Thresholds::CHAT
+    };
+    let verdict = scores.verdict(&thresholds);
+    let flagged = scores.flagged(&thresholds);
+
+    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+    metrics::histogram!("moderation_inference_latency_ms", "kind" => payload.target_kind.clone())
+        .record(elapsed_ms);
+    metrics::counter!(
+        "moderation_verdicts_total",
+        "kind" => payload.target_kind.clone(),
+        "verdict" => format!("{verdict:?}")
+    )
+    .increment(1);
+
+    if matches!(
+        verdict,
+        crate::moderation::Verdict::Flag | crate::moderation::Verdict::Block
+    ) {
+        let flagged_labels: Vec<String> = flagged
+            .iter()
+            .map(|(c, s)| format!("{}={:.2}", c.as_str(), s))
+            .collect();
+        tracing::warn!(
+            target_kind = %payload.target_kind,
+            target_id = %payload.target_id,
+            verdict = ?verdict,
+            self_harm = scores.self_harm,
+            hate = scores.hate,
+            vulgar = scores.vulgar,
+            sex = scores.sex,
+            crime = scores.crime,
+            flagged = ?flagged_labels,
+            elapsed_ms,
+            "moderation: content flagged"
+        );
+    } else {
+        tracing::debug!(
+            target_kind = %payload.target_kind,
+            target_id = %payload.target_id,
+            elapsed_ms,
+            "moderation: content allowed"
+        );
+    }
+
+    Ok(())
 }
 
 async fn dispatch_upload_variants(payload_json: &str) -> std::result::Result<(), String> {
