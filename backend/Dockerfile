@@ -38,6 +38,16 @@ RUN apt-get update \
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # hadolint ignore=DL4006
+#
+# Canonicalise every staged path under /usr: on trixie (usrmerge) /lib
+# and /bin are symlinks to /usr/lib and /usr/bin, so `ldd` reports deps
+# via the short /lib/... form. Letting those land at /staging/lib/...
+# creates a real directory in the staging tarball that then collides
+# with the runtime image's /lib → /usr/lib symlink when buildkit tries
+# `COPY --from=runtime-deps /staging/ /` ("cannot copy to non-directory"
+# errors in Build + push CI). Copying everything under /staging/usr/*
+# sidesteps the collision while still reaching the real files via the
+# same symlinks.
 RUN set -eux; \
     mkdir -p /staging/usr/lib/x86_64-linux-gnu /staging/etc/ssl/certs; \
     cp -aL /etc/ssl/certs/ca-certificates.crt /staging/etc/ssl/certs/; \
@@ -47,11 +57,13 @@ RUN set -eux; \
     for root in /staging/usr/lib/x86_64-linux-gnu/libpq.so.5 \
                 /staging/usr/lib/x86_64-linux-gnu/libwebp.so.7; do \
         ldd "$root" | awk '/=>/ && $3 ~ /^\// { print $3 }'; \
-    done | sort -u | while read -r dep; do \
+    done | sort -u | sed -e 's#^/lib/#/usr/lib/#' -e 's#^/bin/#/usr/bin/#' | while read -r dep; do \
         dest="/staging${dep}"; \
         [ -e "$dest" ] && continue; \
         mkdir -p "$(dirname "$dest")"; \
-        cp -aL "$dep" "$dest"; \
+        src="$dep"; \
+        [ -e "$src" ] || src="$(echo "$dep" | sed -e 's#^/usr/lib/#/lib/#' -e 's#^/usr/bin/#/bin/#')"; \
+        cp -aL "$src" "$dest"; \
     done
 
 # gcr.io/distroless/cc-debian13:nonroot  (trixie-based — matches glibc 2.41)
