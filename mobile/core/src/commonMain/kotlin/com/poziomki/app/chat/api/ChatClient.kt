@@ -36,6 +36,10 @@ data class RoomSummary(
     val latestMessageSendStatus: EventSendStatus? = null,
     val latestMessageReadByCount: Int = 0,
     val isBlocked: Boolean = false,
+    /** Bielik-Guard verdict for the latest message body, or null when unscanned / mine. */
+    val latestModerationVerdict: String? = null,
+    /** Categories that exceeded the flag threshold for the latest message. */
+    val latestModerationCategories: List<String> = emptyList(),
 )
 
 data class RoomTimelineCacheSnapshot(

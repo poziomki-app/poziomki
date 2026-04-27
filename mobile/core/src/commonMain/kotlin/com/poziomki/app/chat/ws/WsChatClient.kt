@@ -144,6 +144,13 @@ class WsChatClient(
                     latestMessageSendStatus = EventSendStatus.Sent,
                     unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
                     latestMessageReadByCount = 0,
+                    // Live broadcasts pre-date the worker scan (verdict
+                    // is null at this point). Carry whatever the WS
+                    // payload says — typically null until the next
+                    // refreshRooms cycle, when the server returns the
+                    // verdict that the worker has since written.
+                    latestModerationVerdict = if (isMine) null else msg.moderationVerdict,
+                    latestModerationCategories = if (isMine) emptyList() else msg.moderationCategories,
                 )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
@@ -334,6 +341,8 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
         isBlocked = isBlocked,
+        latestModerationVerdict = latestModerationVerdict,
+        latestModerationCategories = latestModerationCategories,
     )
 
 internal fun parseTimestamp(iso8601: String): Long =
