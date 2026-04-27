@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -220,7 +219,6 @@ internal fun MessageEventRow(
                                     event = event,
                                     onFocusOnReply = onFocusOnReply,
                                     compactTimestamp = compactTimestamp,
-                                    onRevealModeration = onRevealModeration,
                                 )
                             }
                             if (event.reactions.isNotEmpty()) {
@@ -292,9 +290,10 @@ internal fun MessageEventRow(
                                                 .padding(top = 2.dp, bottom = 2.dp),
                                     )
                                 }
-                                val showReportFlag =
-                                    event.locallyRevealed &&
-                                        event.moderationVerdict in setOf("flag", "block")
+                                val isFlagged =
+                                    event.moderationVerdict in setOf("flag", "block")
+                                val isBlurred = isFlagged && !event.locallyRevealed
+                                val showReportFlag = isFlagged && event.locallyRevealed
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     val maxBubbleWidthForRow =
                                         if (showSenderMeta) {
@@ -302,27 +301,42 @@ internal fun MessageEventRow(
                                         } else {
                                             maxBubbleWidth
                                         }
-                                    Surface(
-                                        color = bubbleColor,
-                                        shape = bubbleShape,
-                                        modifier =
-                                            Modifier
-                                                .then(highlightBorderModifier)
-                                                .widthIn(max = maxBubbleWidthForRow)
-                                                .combinedClickable(
-                                                    onClick = {},
-                                                    onLongClick = onActionsLongPress,
-                                                ),
-                                    ) {
-                                        BubbleContent(
-                                            event = event,
-                                            onFocusOnReply = onFocusOnReply,
-                                            compactTimestamp = compactTimestamp,
-                                            onRevealModeration = onRevealModeration,
-                                        )
+                                    Box {
+                                        Surface(
+                                            color = bubbleColor,
+                                            shape = bubbleShape,
+                                            modifier =
+                                                Modifier
+                                                    .then(highlightBorderModifier)
+                                                    .widthIn(max = maxBubbleWidthForRow)
+                                                    .then(
+                                                        if (isBlurred) {
+                                                            Modifier.blur(radius = 22.dp)
+                                                        } else {
+                                                            Modifier
+                                                        },
+                                                    ).combinedClickable(
+                                                        onClick = {
+                                                            if (isBlurred) onRevealModeration()
+                                                        },
+                                                        onLongClick = onActionsLongPress,
+                                                    ),
+                                        ) {
+                                            BubbleContent(
+                                                event = event,
+                                                onFocusOnReply = onFocusOnReply,
+                                                compactTimestamp = compactTimestamp,
+                                            )
+                                        }
+                                        if (isBlurred) {
+                                            FlaggedRevealOverlay(
+                                                categories = event.moderationCategories,
+                                                modifier = Modifier.align(Alignment.Center),
+                                            )
+                                        }
                                     }
                                     if (showReportFlag) {
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         FloatingReportFlag(onClick = onReportFlagged)
                                     }
                                 }
@@ -380,7 +394,6 @@ private fun BubbleContent(
     event: TimelineItem.Event,
     onFocusOnReply: () -> Unit,
     compactTimestamp: Boolean,
-    onRevealModeration: () -> Unit,
 ) {
     Column(
         modifier =
@@ -396,33 +409,14 @@ private fun BubbleContent(
             )
             Spacer(modifier = Modifier.height(6.dp))
         }
-        // Recipient-side flagged messages: render the body with a
-        // gaussian blur until tap-to-reveal. Visual-only — body is
-        // already on the wire so the tap is local.
-        // Senders see their own message normally with a subtle
-        // warning note (they wrote it; blurring is patronising).
-        val isFlaggedRecipient =
-            !event.isMine &&
-                event.moderationVerdict in setOf("flag", "block")
-        if (isFlaggedRecipient && !event.locallyRevealed) {
-            BlurredFlaggedBody(
-                body = event.body,
-                categories = event.moderationCategories,
-                onReveal = onRevealModeration,
-            )
-        } else {
-            Text(
-                text = event.body,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TextPrimary,
-            )
-            if (event.isMine && event.moderationVerdict in setOf("flag", "block")) {
-                Spacer(modifier = Modifier.height(4.dp))
-                OwnFlaggedNote(categories = event.moderationCategories)
-            }
-            // Note: the floating flag lives outside the bubble (in
-            // MessageEventRow) so the bubble keeps its shape and the
-            // affordance reads as "this message" not "this paragraph".
+        Text(
+            text = event.body,
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextPrimary,
+        )
+        if (event.isMine && event.moderationVerdict in setOf("flag", "block")) {
+            Spacer(modifier = Modifier.height(4.dp))
+            OwnFlaggedNote(categories = event.moderationCategories)
         }
         Row(
             modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
@@ -447,85 +441,70 @@ private fun BubbleContent(
 }
 
 @Composable
-private fun BlurredFlaggedBody(
-    body: String,
+private fun FlaggedRevealOverlay(
     categories: List<String>,
-    onReveal: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val label = polishCategoryList(categories)
-    Box(
-        modifier =
-            Modifier
-                .clickable(onClick = onReveal),
-        contentAlignment = Alignment.Center,
+    Surface(
+        color = Background.copy(alpha = 0.78f),
+        shape = RoundedCornerShape(999.dp),
+        modifier = modifier,
     ) {
-        // Blurred body, dimmed slightly to soften residual letter-shape
-        // hints and let the overlay pill stand out cleanly. Italic adds
-        // texture so the row doesn't read as a loading skeleton.
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyLarge.copy(fontStyle = FontStyle.Italic),
-            color = TextPrimary.copy(alpha = 0.6f),
-            modifier = Modifier.blur(radius = 18.dp),
-        )
-        // Centered glass pill — backdrop alpha keeps the blurred body
-        // visible behind it so the user sees there's content to reveal.
-        Surface(
-            color = Background.copy(alpha = 0.55f),
-            shape = RoundedCornerShape(999.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.Eye,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(13.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Pokaż",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier =
-                        Modifier
-                            .size(width = 1.dp, height = 10.dp)
-                            .background(TextSecondary.copy(alpha = 0.4f)),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                )
-            }
+            Icon(
+                imageVector = PhosphorIcons.Bold.Eye,
+                contentDescription = null,
+                tint = Primary,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Pokaż",
+                style = MaterialTheme.typography.labelSmall,
+                color = Primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier =
+                    Modifier
+                        .size(width = 1.dp, height = 10.dp)
+                        .background(TextSecondary.copy(alpha = 0.4f)),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
         }
     }
 }
 
 @Composable
 private fun FloatingReportFlag(onClick: () -> Unit) {
-    // Floating circular flag beside the bubble. Single tap reports.
+    // Floating circular flag beside the bubble. Single tap opens the
+    // report dialog; bigger than a typical chat-icon hit-target so it
+    // reads as the primary affordance after reveal.
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = CircleShape,
+        shadowElevation = 2.dp,
         modifier =
             Modifier
-                .size(28.dp)
+                .size(36.dp)
                 .clickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = PhosphorIcons.Bold.Flag,
                 contentDescription = "Zgłoś",
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
     }
