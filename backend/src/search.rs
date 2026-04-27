@@ -19,6 +19,7 @@ pub struct ProfileDocument {
     pub id: String,
     pub name: String,
     pub bio: Option<String>,
+    pub status: Option<String>,
     pub program: Option<String>,
     pub profile_picture: Option<String>,
     pub tags: Vec<String>,
@@ -125,6 +126,7 @@ async fn search_profiles(
             p.id,
             p.name,
             p.bio,
+            p.status_text AS status,
             CASE
                 WHEN p.user_id = $4 THEN p.program
                 WHEN COALESCE(us.privacy_show_program, true) THEN p.program
@@ -157,7 +159,7 @@ async fn search_profiles(
                 )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
+            p.id, p.name, p.bio, p.status_text, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
             GREATEST(
@@ -185,6 +187,7 @@ async fn search_profiles(
             id: row.id.to_string(),
             name: row.name,
             bio: row.bio,
+            status: row.status,
             program: row.program,
             profile_picture: row.profile_picture,
             tags: row.tags,
@@ -479,6 +482,8 @@ struct ProfileSearchRow {
     name: String,
     #[diesel(sql_type = Nullable<Text>)]
     bio: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    status: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]
     program: Option<String>,
     #[diesel(sql_type = Nullable<Text>)]

@@ -79,6 +79,7 @@ async fn insert_profile(user: &User, name: &str) -> Uuid {
         user_id: user.id,
         name: name.to_string(),
         bio: None,
+        status_text: None,
         profile_picture: None,
         images: None,
         program: None,

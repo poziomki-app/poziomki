@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -38,10 +39,12 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
 
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 fun ProfileCard(
     name: String,
     program: String?,
+    status: String? = null,
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
@@ -141,6 +144,24 @@ fun ProfileCard(
                         .size(20.dp)
                         .align(Alignment.Top),
                 tint = TextMuted,
+            )
+        }
+
+        if (!status.isNullOrBlank()) {
+            Text(
+                text = status.trim(),
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 10.dp, top = 8.dp, end = 56.dp)
+                        .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(50))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
     }

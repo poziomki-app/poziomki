@@ -91,6 +91,7 @@ data class Profile(
     val userId: String,
     val name: String,
     val bio: String? = null,
+    val status: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -110,6 +111,7 @@ data class ProfileWithTags(
     val userId: String,
     val name: String,
     val bio: String? = null,
+    val status: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -153,6 +155,7 @@ data class ClaimTaskResponse(
 data class CreateProfileRequest(
     val name: String,
     val bio: String? = null,
+    val status: String? = null,
     val program: String? = null,
     val tagIds: List<String> = emptyList(),
 )
@@ -161,6 +164,7 @@ data class CreateProfileRequest(
 data class UpdateProfileRequest(
     val name: String? = null,
     val bio: String? = null,
+    val status: String? = null,
     val program: String? = null,
     val profilePicture: JsonElement? = null,
     val images: List<String>? = null,
@@ -327,6 +331,7 @@ data class MatchProfile(
     val userId: String = "",
     val name: String,
     val bio: String? = null,
+    val status: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -396,6 +401,7 @@ data class SearchProfile(
     val id: String,
     val name: String,
     val bio: String? = null,
+    val status: String? = null,
     val program: String? = null,
     @SerialName("profile_picture")
     val profilePicture: String? = null,

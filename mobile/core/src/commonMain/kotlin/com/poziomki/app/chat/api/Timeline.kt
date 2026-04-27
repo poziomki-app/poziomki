@@ -48,6 +48,7 @@ sealed interface TimelineItem {
         val senderPid: String? = null,
         val senderDisplayName: String?,
         val senderAvatarUrl: String? = null,
+        val senderStatus: String? = null,
         val isMine: Boolean,
         val body: String,
         val timestampMillis: Long,

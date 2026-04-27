@@ -28,6 +28,7 @@ data class ProfileEditState(
     val profileId: String = "",
     val name: String = "",
     val bio: String = "",
+    val status: String = "",
     val program: String = "",
     val images: List<String> = emptyList(),
     val allTags: List<Tag> = emptyList(),
@@ -121,6 +122,7 @@ class ProfileEditViewModel(
                 }
             }
             tagRepository.refreshTags()
+            tagRepository.refreshTags("activity")
 
             // Load profile from cache or network
             profileRepository.refreshOwnProfile()
@@ -132,6 +134,7 @@ class ProfileEditViewModel(
                             profileId = profile.id,
                             name = profile.name,
                             bio = profile.bio ?: "",
+                            status = profile.status ?: "",
                             program = profile.program ?: "",
                             images = profile.images,
                             selectedTags = profile.tags,
@@ -152,6 +155,16 @@ class ProfileEditViewModel(
 
     fun updateProgram(program: String) {
         _state.value = _state.value.copy(program = program)
+    }
+
+    fun updateStatus(status: String) {
+        if (status.length <= 160) {
+            _state.value = _state.value.copy(status = status)
+        }
+    }
+
+    fun clearStatus() {
+        _state.value = _state.value.copy(status = "")
     }
 
     fun clearProgram() {
@@ -290,6 +303,7 @@ class ProfileEditViewModel(
             val request =
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
+                    status = s.status.trim(),
                     program = s.program.ifBlank { null },
                     profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
                     images = s.images,

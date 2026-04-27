@@ -46,6 +46,8 @@ class TagRepository(
         withContext(Dispatchers.IO) {
             if (scope == "interest") {
                 ensureInterestSeed()
+            } else if (scope == "activity") {
+                ensureActivitySeed()
             }
             val key = cacheKey(scope)
             val lastRefreshMs =
@@ -146,6 +148,23 @@ class TagRepository(
         withContext(Dispatchers.IO) {
             db.transaction {
                 LOCAL_ONBOARDING_INTEREST_TAGS.forEach { tag ->
+                    db.tagQueries.upsert(
+                        id = tag.id,
+                        name = tag.name,
+                        scope = tag.scope,
+                        category = tag.category,
+                        emoji = tag.emoji,
+                        parent_id = tag.parentId,
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun ensureActivitySeed() {
+        withContext(Dispatchers.IO) {
+            db.transaction {
+                LOCAL_ACTIVITY_TAGS.forEach { tag ->
                     db.tagQueries.upsert(
                         id = tag.id,
                         name = tag.name,

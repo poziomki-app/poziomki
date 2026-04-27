@@ -15,10 +15,39 @@ private fun interestTag(
         category = category,
     )
 
+private fun activityTag(
+    id: String,
+    name: String,
+): Tag =
+    Tag(
+        id = id,
+        name = name,
+        scope = "activity",
+        category = "activity",
+    )
+
 private fun degree(
     id: String,
     name: String,
 ): Degree = Degree(id = id, name = name)
+
+internal val LOCAL_ACTIVITY_TAGS: List<Tag> =
+    listOf(
+        activityTag("7b01dd2e-01ff-501e-bba5-e75f8ee3d4fa", "Nauka"),
+        activityTag("c7104ef3-a7fe-5eb0-b0eb-542c1f46618a", "Sport"),
+        activityTag("89f5603c-9974-5e2c-8b76-21097f40e6b0", "Siłownia"),
+        activityTag("45d64e17-4069-5db5-a4a4-8f6c3aa79908", "Bieganie"),
+        activityTag("e63fb3e4-a029-5ae2-b33c-9e5b99f765d2", "Rower"),
+        activityTag("934d8002-cea6-524f-aab0-dae497fbf067", "Planszówki"),
+        activityTag("da79350b-bf17-5c7b-8d2f-7294229f53f4", "Kawa"),
+        activityTag("77ed4d70-4523-525e-aced-e2498dda21b3", "Spacer"),
+        activityTag("aac2fb77-2ab8-5e47-b930-1610ba7cb462", "Koncerty"),
+        activityTag("e83e83b7-1a35-503f-b8e6-1355afc16ff0", "Gotowanie"),
+        activityTag("2b42b1c9-35ae-50a8-8d43-7487f67684c5", "Wolontariat"),
+        activityTag("19889079-09b1-5a5e-981d-d8ff5000b4f8", "Programowanie"),
+        activityTag("869196ff-32cf-57d3-9997-a06070b5cfbb", "Film"),
+        activityTag("05126d48-de28-5e2c-a9a5-a78934b7dd1c", "Czytanie"),
+    )
 
 internal val LOCAL_ONBOARDING_INTEREST_TAGS: List<Tag> =
     listOf(

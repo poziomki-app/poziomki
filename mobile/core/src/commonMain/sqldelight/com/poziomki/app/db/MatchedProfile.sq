@@ -3,6 +3,7 @@ CREATE TABLE matched_profile (
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     bio TEXT,
+    status TEXT,
     profile_picture TEXT,
     thumbhash TEXT,
     images_json TEXT,
@@ -31,10 +32,10 @@ WHERE user_id = ?;
 
 upsert:
 INSERT OR REPLACE INTO matched_profile(
-    id, user_id, name, bio, profile_picture, thumbhash,
+    id, user_id, name, bio, status, profile_picture, thumbhash,
     images_json, program, gradient_start, gradient_end,
     tags_json, score, cached_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteAll:
 DELETE FROM matched_profile;

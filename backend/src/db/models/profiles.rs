@@ -11,6 +11,7 @@ pub struct Profile {
     pub user_id: i32,
     pub name: String,
     pub bio: Option<String>,
+    pub status_text: Option<String>,
     pub profile_picture: Option<String>,
     pub images: Option<serde_json::Value>,
     pub program: Option<String>,
@@ -31,6 +32,7 @@ pub struct NewProfile {
     pub user_id: i32,
     pub name: String,
     pub bio: Option<String>,
+    pub status_text: Option<String>,
     pub profile_picture: Option<String>,
     pub images: Option<serde_json::Value>,
     pub program: Option<String>,
@@ -45,6 +47,7 @@ pub struct NewProfile {
 pub struct ProfileChangeset {
     pub name: Option<String>,
     pub bio: Option<Option<String>>,
+    pub status_text: Option<Option<String>>,
     pub profile_picture: Option<Option<String>>,
     pub images: Option<Option<serde_json::Value>>,
     pub program: Option<Option<String>>,

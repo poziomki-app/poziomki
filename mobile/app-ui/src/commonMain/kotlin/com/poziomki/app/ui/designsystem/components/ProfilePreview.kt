@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -77,6 +78,7 @@ fun ProfilePreview(
     name: String,
     program: String?,
     bio: String?,
+    status: String? = null,
     tags: List<Tag>,
     images: List<ProfileImage>,
     emojiAvatar: String? = null,
@@ -92,6 +94,8 @@ fun ProfilePreview(
     val hasGradient = startColor != null && endColor != null
     val darkStart = startColor?.let { blendWithBackground(it, 0.18f) }
     val darkEnd = endColor?.let { blendWithBackground(it, 0.18f) }
+    val activityTags = remember(tags) { tags.filter { it.scope == "activity" } }
+    val interestTags = remember(tags) { tags.filter { it.scope != "activity" } }
     val pageBackground =
         if (hasGradient && darkStart != null && darkEnd != null) {
             Modifier.background(
@@ -279,6 +283,56 @@ fun ProfilePreview(
                 )
             }
 
+            if (!status.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+                Text(
+                    text = status.trim(),
+                    fontFamily = nunito,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
+                    color = TextPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(50))
+                            .border(1.dp, Border, RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+
+            // Activities
+            if (activityTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+                Text(
+                    text = "aktywności",
+                    fontFamily = montserrat,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.sp,
+                    color = TextPrimary,
+                )
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    activityTags.forEach { tag ->
+                        Text(
+                            text = tag.name.lowercase(),
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                            modifier =
+                                Modifier
+                                    .background(Surface, RoundedCornerShape(50))
+                                    .border(1.dp, Border, RoundedCornerShape(50))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
+            }
+
             // Bio
             if (!bio.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
@@ -293,8 +347,8 @@ fun ProfilePreview(
                 RichBio(bio = bio)
             }
 
-            // Tags — compact
-            if (tags.isNotEmpty()) {
+            // Interest tags — compact
+            if (interestTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
                 Text(
                     text = "zainteresowania",
@@ -308,7 +362,7 @@ fun ProfilePreview(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    tags.forEach { tag ->
+                    interestTags.forEach { tag ->
                         Text(
                             text = tag.name.lowercase(),
                             fontFamily = nunito,

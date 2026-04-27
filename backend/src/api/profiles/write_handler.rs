@@ -48,6 +48,13 @@ fn build_create_model(
         user_id: user.id,
         name: payload.name.trim().to_string(),
         bio: payload.bio.clone(),
+        status_text: payload.status.as_deref().map(str::trim).and_then(|s| {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        }),
         profile_picture,
         images: images_json,
         program: payload.program.clone(),
@@ -111,11 +118,21 @@ pub(in crate::api) async fn profile_create(
             // we don't spend inference CPU on requests that would be
             // rejected cheaply either way.
             if let Some(ref bio) = payload_clone.bio {
-                match moderate_bio_text(bio, &headers_clone).await {
+                match moderate_profile_text(bio, &headers_clone).await {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
                         tracing::error!(%error, "bio moderation failed; rolling back create");
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+            }
+            if let Some(ref status) = payload_clone.status {
+                match moderate_profile_text(status, &headers_clone).await {
+                    Ok(None) => {}
+                    Ok(Some(rejection)) => return Ok(rejection),
+                    Err(error) => {
+                        tracing::error!(%error, "status moderation failed; rolling back create");
                         return Err(diesel::result::Error::RollbackTransaction);
                     }
                 }
@@ -209,11 +226,21 @@ pub(in crate::api) async fn profile_update(
             // 404 instead of a misleading 422, and we don't burn inference
             // CPU on them.
             if let Some(ref bio) = payload_clone.bio {
-                match moderate_bio_text(bio, &headers_clone).await {
+                match moderate_profile_text(bio, &headers_clone).await {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
                         tracing::error!(%error, "bio moderation failed; rolling back update");
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+            }
+            if let Some(ref status) = payload_clone.status {
+                match moderate_profile_text(status, &headers_clone).await {
+                    Ok(None) => {}
+                    Ok(Some(rejection)) => return Ok(rejection),
+                    Err(error) => {
+                        tracing::error!(%error, "status moderation failed; rolling back update");
                         return Err(diesel::result::Error::RollbackTransaction);
                     }
                 }
@@ -243,8 +270,8 @@ pub(in crate::api) async fn profile_update(
 /// - `Err(_)` on an unexpected infrastructure error (inference panic,
 ///   spawn failure). Hard errors surface as 500; we never fall through to
 ///   "allow" on failure, because that would defeat the gate.
-async fn moderate_bio_text(bio: &str, headers: &HeaderMap) -> Result<Option<Response>> {
-    let trimmed = bio.trim();
+async fn moderate_profile_text(text: &str, headers: &HeaderMap) -> Result<Option<Response>> {
+    let trimmed = text.trim();
     if trimmed.is_empty() {
         return Ok(None);
     }

@@ -263,3 +263,13 @@ pub(super) fn validate_profile_program(
         Ok(())
     }
 }
+
+pub(super) fn validate_profile_status(
+    value: Option<&String>,
+) -> std::result::Result<(), &'static str> {
+    if value.is_some_and(|text| text.chars().count() > 160) {
+        Err("Status must be at most 160 characters")
+    } else {
+        Ok(())
+    }
+}

@@ -272,17 +272,34 @@ internal fun MessageEventRow(
                             Column {
                                 if (showAvatar) {
                                     val senderNameColor = ChatNameColors[abs(event.senderId.hashCode()) % ChatNameColors.size]
-                                    Text(
-                                        text = event.senderDisplayName ?: event.senderId,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = senderNameColor,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier =
-                                            Modifier
-                                                .clickable(onClick = onSenderClick)
-                                                .padding(top = 2.dp, bottom = 2.dp),
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
+                                    ) {
+                                        Text(
+                                            text = event.senderDisplayName ?: event.senderId,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = senderNameColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.clickable(onClick = onSenderClick),
+                                        )
+                                        val senderStatus = event.senderStatus?.trim()
+                                        if (!senderStatus.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = senderStatus,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier =
+                                                    Modifier
+                                                        .background(SurfaceColor, RoundedCornerShape(50))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
                                 }
                                 Surface(
                                     color = bubbleColor,

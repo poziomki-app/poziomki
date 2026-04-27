@@ -73,6 +73,7 @@ fun ProfileViewScreen(
                         name = p.name,
                         program = p.program,
                         bio = p.bio,
+                        status = p.status,
                         tags = p.tags,
                         images = images,
                         emojiAvatar = emoji,

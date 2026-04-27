@@ -13,6 +13,7 @@ fun Matched_profile.toApiModel(): MatchProfile =
         userId = user_id,
         name = name,
         bio = bio,
+        status = status,
         profilePicture = profile_picture,
         thumbhash = thumbhash,
         images = parseImages(images_json),

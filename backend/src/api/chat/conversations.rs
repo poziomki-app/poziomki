@@ -214,6 +214,8 @@ pub async fn list_for_user(
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
     use super::protocol::ConversationPayload;
     use std::collections::HashMap;
+    type ProfileRow = (i32, uuid::Uuid, String, Option<String>, Option<String>);
+    type ProfileMap = HashMap<i32, (uuid::Uuid, String, Option<String>, Option<String>)>;
 
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
@@ -341,25 +343,25 @@ pub async fn list_for_user(
 
     // Batch-load profiles (filter on profiles.user_id directly — no need
     // to join users, which would require broad SELECT on a sensitive table).
-    let profile_rows: Vec<(i32, uuid::Uuid, String, Option<String>)> =
-        if profile_user_ids.is_empty() {
-            Vec::new()
-        } else {
-            profiles::table
-                .filter(profiles::user_id.eq_any(&profile_user_ids))
-                .select((
-                    profiles::user_id,
-                    profiles::id,
-                    profiles::name,
-                    profiles::profile_picture,
-                ))
-                .load(conn)
-                .await?
-        };
+    let profile_rows: Vec<ProfileRow> = if profile_user_ids.is_empty() {
+        Vec::new()
+    } else {
+        profiles::table
+            .filter(profiles::user_id.eq_any(&profile_user_ids))
+            .select((
+                profiles::user_id,
+                profiles::id,
+                profiles::name,
+                profiles::profile_picture,
+                profiles::status_text,
+            ))
+            .load(conn)
+            .await?
+    };
 
-    let profile_map: HashMap<i32, (uuid::Uuid, String, Option<String>)> = profile_rows
+    let profile_map: ProfileMap = profile_rows
         .into_iter()
-        .map(|(uid, pid, name, avatar)| (uid, (pid, name, avatar)))
+        .map(|(uid, pid, name, avatar, status)| (uid, (pid, name, avatar, status)))
         .collect();
 
     // Resolve current user's profile ID for block checks
@@ -402,38 +404,44 @@ pub async fn list_for_user(
         let unread_count = unread_map.get(&conv.id).copied().unwrap_or(0);
 
         // DM profile
-        let (direct_user_id, direct_user_pid, direct_user_name, direct_user_avatar) =
-            if conv.kind == "dm" {
-                let other_id = if conv.user_low_id == Some(user_id) {
-                    conv.user_high_id
-                } else {
-                    conv.user_low_id
-                };
-                other_id
-                    .and_then(|oid| {
-                        profile_map.get(&oid).map(|(pid, name, avatar)| {
-                            let avatar_url = avatar.as_ref().map(|filename| {
-                                crate::api::imgproxy_signing::signed_avatar_url(filename)
-                                    .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
-                            });
-                            (
-                                Some(oid.to_string()),
-                                Some(pid.to_string()),
-                                Some(name.clone()),
-                                avatar_url,
-                            )
-                        })
-                    })
-                    .unwrap_or((None, None, None, None))
+        let (
+            direct_user_id,
+            direct_user_pid,
+            direct_user_name,
+            direct_user_avatar,
+            direct_user_status,
+        ) = if conv.kind == "dm" {
+            let other_id = if conv.user_low_id == Some(user_id) {
+                conv.user_high_id
             } else {
-                (None, None, None, None)
+                conv.user_low_id
             };
+            other_id
+                .and_then(|oid| {
+                    profile_map.get(&oid).map(|(pid, name, avatar, status)| {
+                        let avatar_url = avatar.as_ref().map(|filename| {
+                            crate::api::imgproxy_signing::signed_avatar_url(filename)
+                                .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
+                        });
+                        (
+                            Some(oid.to_string()),
+                            Some(pid.to_string()),
+                            Some(name.clone()),
+                            avatar_url,
+                            status.clone(),
+                        )
+                    })
+                })
+                .unwrap_or((None, None, None, None, None))
+        } else {
+            (None, None, None, None, None)
+        };
 
         // Latest message sender name
         let latest_sender_name = latest.and_then(|msg| {
             profile_map
                 .get(&msg.sender_id)
-                .map(|(_, name, _)| name.clone())
+                .map(|(_, name, _, _)| name.clone())
         });
 
         // Check if the DM partner is blocked (either direction)
@@ -445,7 +453,7 @@ pub async fn list_for_user(
             };
             other_id
                 .and_then(|oid| profile_map.get(&oid))
-                .is_some_and(|(pid, _, _)| blocked_profile_ids.contains(pid))
+                .is_some_and(|(pid, _, _, _)| blocked_profile_ids.contains(pid))
         } else {
             false
         };
@@ -459,6 +467,7 @@ pub async fn list_for_user(
             direct_user_pid,
             direct_user_name,
             direct_user_avatar,
+            direct_user_status,
             unread_count,
             latest_message: latest.map(|m| m.body.clone()),
             latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),
