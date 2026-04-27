@@ -62,6 +62,12 @@ pub(in crate::api) struct AuthContext {
     pub(in crate::api) user: User,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::api) enum AuthFailure {
+    Unauthorized,
+    Banned,
+}
+
 #[derive(Clone)]
 struct CachedAuthEntry {
     session: Session,
@@ -162,12 +168,23 @@ pub(in crate::api) async fn require_auth_context(
 ) -> std::result::Result<AuthContext, Box<axum::response::Response>> {
     let token =
         extract_bearer_token(headers).ok_or_else(|| Box::new(unauthorized_response(headers)))?;
-    let hashed = session_token_hash(&token);
+    require_auth_token(&token)
+        .await
+        .map_err(|failure| match failure {
+            AuthFailure::Unauthorized => Box::new(unauthorized_response(headers)),
+            AuthFailure::Banned => Box::new(banned_response(headers)),
+        })
+}
+
+pub(in crate::api) async fn require_auth_token(
+    token: &str,
+) -> std::result::Result<AuthContext, AuthFailure> {
+    let hashed = session_token_hash(token);
 
     if let Some((session, user)) = cache_auth_get(&hashed).await {
         if user.banned_at.is_some() {
             invalidate_auth_cache_for_user_id(user.id).await;
-            return Err(Box::new(banned_response(headers)));
+            return Err(AuthFailure::Banned);
         }
         let elapsed = Utc::now() - session.updated_at;
         if elapsed >= Duration::seconds(SESSION_UPDATE_AGE_SECS) {
@@ -184,7 +201,7 @@ pub(in crate::api) async fn require_auth_context(
     // the correct RLS scope.
     let mut conn = crate::db::conn()
         .await
-        .map_err(|_| Box::new(unauthorized_response(headers)))?;
+        .map_err(|_| AuthFailure::Unauthorized)?;
     let now = Utc::now();
 
     let hashed_for_tx = hashed.clone();
@@ -220,14 +237,14 @@ pub(in crate::api) async fn require_auth_context(
             .scope_boxed()
         })
         .await
-        .map_err(|_| Box::new(unauthorized_response(headers)))?;
+        .map_err(|_| AuthFailure::Unauthorized)?;
 
-    let (session, user) = result.ok_or_else(|| Box::new(unauthorized_response(headers)))?;
+    let (session, user) = result.ok_or(AuthFailure::Unauthorized)?;
     if user.banned_at.is_some() {
         // Don't cache a banned user — they'd be a fast-path back in.
         // The admin-ban path also purges sessions, so a banned user
         // should normally not reach this branch.
-        return Err(Box::new(banned_response(headers)));
+        return Err(AuthFailure::Banned);
     }
     cache_auth_put(hashed, &session, &user).await;
     tracing::Span::current().record("user_id", user.id);
