@@ -265,7 +265,12 @@ impl MatchingRepository {
         conn: &mut diesel_async::AsyncPgConnection,
     ) -> std::result::Result<Vec<Event>, crate::error::AppError> {
         events::table
-            .filter(events::starts_at.ge(now))
+            .filter(
+                events::ends_at
+                    .is_null()
+                    .and(events::starts_at.ge(now))
+                    .or(events::ends_at.ge(now)),
+            )
             .order(events::starts_at.asc())
             .limit(limit)
             .load::<Event>(conn)
