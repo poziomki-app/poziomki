@@ -267,7 +267,7 @@ pub(in crate::api) async fn profile_update(
 }
 
 #[derive(Clone, Copy)]
-enum ProfileTextField {
+pub(super) enum ProfileTextField {
     Bio,
     Status,
 }
@@ -297,7 +297,7 @@ impl ProfileTextField {
 /// - `Err(_)` on an unexpected infrastructure error (inference panic,
 ///   spawn failure). Hard errors surface as 500; we never fall through to
 ///   "allow" on failure, because that would defeat the gate.
-async fn moderate_profile_text(
+pub(super) async fn moderate_profile_text(
     text: &str,
     field: ProfileTextField,
     headers: &HeaderMap,

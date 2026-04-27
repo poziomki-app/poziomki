@@ -100,6 +100,8 @@ fun SavedScreen(
                                             name = profile.name,
                                             program = profile.program,
                                             status = profile.status,
+                                            statusEmoji = profile.statusEmoji,
+                                            statusExpiresAt = profile.statusExpiresAt,
                                             profilePicture = profile.profilePicture,
                                             gradientStart = profile.gradientStart,
                                             gradientEnd = profile.gradientEnd,
