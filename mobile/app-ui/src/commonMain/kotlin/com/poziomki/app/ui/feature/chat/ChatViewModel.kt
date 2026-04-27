@@ -333,25 +333,17 @@ class ChatViewModel(
         }
     }
 
-    /** Open the existing ReportDialog targeted at this message. */
+    /**
+     * One-tap report: auto-picks a reason from the moderation
+     * categories so the user doesn't have to re-select something
+     * the engine already determined. Categories that don't have a
+     * matching report reason fall through to "inappropriate".
+     */
     fun reportFlaggedMessage(event: TimelineItem.Event) {
-        if (event.eventId == null) return
-        _uiState.update { it.copy(pendingMessageReport = event) }
-    }
-
-    fun dismissMessageReport() {
-        _uiState.update { it.copy(pendingMessageReport = null) }
-    }
-
-    fun submitMessageReport(
-        reason: String,
-        description: String?,
-    ) {
-        val target = _uiState.value.pendingMessageReport ?: return
-        val messageId = target.eventId ?: return
-        _uiState.update { it.copy(pendingMessageReport = null) }
+        val messageId = event.eventId ?: return
+        val reason = autoPickReportReason(event.moderationCategories)
         viewModelScope.launch {
-            when (apiService.reportChatMessage(messageId, reason, description)) {
+            when (apiService.reportChatMessage(messageId, reason, null)) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(error = "Zgłoszenie wysłane. Dzięki.") }
                 }
@@ -360,6 +352,25 @@ class ChatViewModel(
                     _uiState.update { it.copy(error = "Nie udało się wysłać zgłoszenia.") }
                 }
             }
+        }
+    }
+
+    private fun autoPickReportReason(categories: List<String>): String {
+        // Map auto-mod categories → conversation report reasons.
+        // Order matters: the first hit wins, so worst-case categories
+        // (hate, violence) outrank vulgar.
+        val priority = listOf("hate", "self_harm", "crime", "sex", "vulgar")
+        val first = priority.firstOrNull { it in categories } ?: return "inappropriate"
+        return when (first) {
+            "hate" -> "hate_speech"
+
+            "crime" -> "violence"
+
+            "self_harm" -> "other"
+
+            // vulgar + sex collapse to "inappropriate" — the picker
+            // doesn't have a finer-grained reason for them.
+            else -> "inappropriate"
         }
     }
 

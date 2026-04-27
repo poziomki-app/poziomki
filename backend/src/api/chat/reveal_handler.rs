@@ -17,7 +17,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 
 use crate::api::common::{auth_or_respond, error_response, parse_uuid_response, ErrorSpec};
-use crate::api::state::SuccessResponse;
+use crate::api::state::{DataResponse, SuccessResponse};
 use crate::app::AppContext;
 use crate::db;
 use crate::db::schema::chat_message_reveals::dsl as r;
@@ -92,6 +92,9 @@ pub(in crate::api) async fn message_reveal(
                 details: None,
             },
         )),
-        RevealOutcome::Inserted => Ok(Json(SuccessResponse { success: true }).into_response()),
+        RevealOutcome::Inserted => Ok(Json(DataResponse {
+            data: SuccessResponse { success: true },
+        })
+        .into_response()),
     }
 }
