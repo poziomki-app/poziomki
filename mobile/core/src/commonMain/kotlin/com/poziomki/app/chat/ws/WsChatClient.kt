@@ -210,7 +210,10 @@ class WsChatClient(
             }
 
         return if (connected == true) {
-            roomTimelineCacheStore.clearAll()
+            // Don't clear the persistent timeline cache here — server
+            // snapshots overwrite stale entries as they arrive, and
+            // wiping on every cold start defeats the offline-open path
+            // (UI reads the cache first in ChatViewModel.openRoom).
             Result.success(Unit)
         } else {
             _state.value = ChatClientState.Error("Connection timeout")
