@@ -163,6 +163,7 @@ fun ChatScreen(
             onCancelComposerMode = viewModel::cancelComposerMode,
             onRedactEvent = viewModel::redactEvent,
             onRevealModeration = viewModel::revealModeration,
+            onReportFlagged = viewModel::reportFlaggedMessage,
             onClearError = viewModel::clearError,
             onNavigateToProfile = onNavigateToProfile,
             resolveDisplayNames = viewModel::resolveDisplayNames,

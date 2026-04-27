@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -29,7 +28,6 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.RoomSummary
@@ -142,71 +140,19 @@ fun RoomRow(
                 val flagged =
                     !room.latestMessageIsMine &&
                         room.latestModerationVerdict in setOf("flag", "block")
-                if (flagged) {
-                    FlaggedRoomPreview(
-                        body = room.latestMessagePreview(),
-                        unread = room.unreadCount > 0,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                } else {
-                    Text(
-                        text = room.latestMessagePreview(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FlaggedRoomPreview(
-    body: String,
-    unread: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    // Visual-only blur — body is on the wire so this is a UX hint, not
-    // an access control. The "Zgłoś" pill nudges the user toward
-    // reporting if the moderation hit was wrong-shaped or harassing.
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier,
-    ) {
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (unread) TextPrimary else TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontStyle = FontStyle.Italic,
-            modifier =
-                Modifier
-                    .weight(1f, fill = false)
-                    .blur(radius = 6.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Surface(
-            color = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            shape = RoundedCornerShape(8.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.Flag,
-                    contentDescription = null,
-                    modifier = Modifier.size(10.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = "Zgłoś",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    text = room.latestMessagePreview(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
+                    fontStyle = if (flagged) FontStyle.Italic else null,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        if (flagged) {
+                            Modifier.blur(radius = 8.dp)
+                        } else {
+                            Modifier
+                        },
                 )
             }
         }

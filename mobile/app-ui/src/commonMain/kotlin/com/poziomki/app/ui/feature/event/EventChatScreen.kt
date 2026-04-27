@@ -144,6 +144,7 @@ fun EventChatScreen(
                         onCancelComposerMode = chatViewModel::cancelComposerMode,
                         onRedactEvent = chatViewModel::redactEvent,
                         onRevealModeration = chatViewModel::revealModeration,
+                        onReportFlagged = chatViewModel::reportFlaggedMessage,
                         onClearError = chatViewModel::clearError,
                         onNavigateToProfile = onNavigateToProfile,
                         resolveDisplayNames = chatViewModel::resolveDisplayNames,

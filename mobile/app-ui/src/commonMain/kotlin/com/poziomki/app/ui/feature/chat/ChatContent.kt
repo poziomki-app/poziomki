@@ -101,6 +101,7 @@ fun ChatContent(
     onCancelComposerMode: () -> Unit,
     onRedactEvent: (String) -> Unit,
     onRevealModeration: (TimelineItem.Event) -> Unit,
+    onReportFlagged: (TimelineItem.Event) -> Unit,
     onClearError: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     resolveDisplayNames: suspend (List<String>) -> Map<String, String>,
@@ -220,6 +221,7 @@ fun ChatContent(
                                         onActionsLongPress = { selectedActionEvent = item },
                                         onSwipeReply = { onStartReply(item) },
                                         onRevealModeration = { onRevealModeration(item) },
+                                        onReportFlagged = { onReportFlagged(item) },
                                         compactTimestamp = showSenderMeta,
                                         avatarOverride =
                                             resolveAvatarOverride(item.senderId, avatarOverrides)
