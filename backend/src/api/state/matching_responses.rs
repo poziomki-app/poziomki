@@ -10,6 +10,10 @@ pub(in crate::api) struct ProfileRecommendation {
     pub(in crate::api) name: String,
     pub(in crate::api) bio: Option<String>,
     pub(in crate::api) status: Option<String>,
+    #[serde(rename = "statusEmoji", skip_serializing_if = "Option::is_none")]
+    pub(in crate::api) status_emoji: Option<String>,
+    #[serde(rename = "statusExpiresAt", skip_serializing_if = "Option::is_none")]
+    pub(in crate::api) status_expires_at: Option<String>,
     #[serde(rename = "profilePicture")]
     pub(in crate::api) profile_picture: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

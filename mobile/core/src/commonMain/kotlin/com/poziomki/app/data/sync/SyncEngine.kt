@@ -372,6 +372,8 @@ class SyncEngine(
                     name = profile.name,
                     bio = profile.bio,
                     status = profile.status,
+                    status_emoji = profile.statusEmoji,
+                    status_expires_at = profile.statusExpiresAt,
                     profile_picture = profile.profilePicture,
                     thumbhash = profile.thumbhash,
                     images_json = json.encodeToString(profile.images),

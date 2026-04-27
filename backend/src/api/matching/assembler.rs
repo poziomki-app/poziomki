@@ -60,12 +60,15 @@ fn build_profile_recommendation(
     } else {
         None
     };
+    let (status, status_emoji, status_expires_at) = crate::api::profiles::live_status(profile);
     ProfileRecommendation {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
-        status: profile.status_text.clone(),
+        status,
+        status_emoji,
+        status_expires_at: status_expires_at.map(|t| t.to_rfc3339()),
         profile_picture,
         thumbhash,
         program,

@@ -126,7 +126,13 @@ async fn search_profiles(
             p.id,
             p.name,
             p.bio,
-            p.status_text AS status,
+            -- Read-time TTL: only return live status fields. NULL expiry
+            -- = legacy row, treat as live indefinitely.
+            CASE
+                WHEN p.status_expires_at IS NULL OR p.status_expires_at > now()
+                THEN p.status_text
+                ELSE NULL
+            END AS status,
             CASE
                 WHEN p.user_id = $4 THEN p.program
                 WHEN COALESCE(us.privacy_show_program, true) THEN p.program
@@ -159,7 +165,7 @@ async fn search_profiles(
                 )
             )
         GROUP BY
-            p.id, p.name, p.bio, p.status_text, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
+            p.id, p.name, p.bio, p.status_text, p.status_expires_at, p.program, p.profile_picture, p.updated_at, p.public_search_vector,
             us.privacy_show_program, us.privacy_discoverable
         ORDER BY
             GREATEST(

@@ -69,6 +69,23 @@ class ProfileRepository(
             .mapToOneOrNull(Dispatchers.IO)
             .map { it?.toApiModel() }
 
+    // Optimistic local-cache write for the ephemeral status. Called
+    // by the Poznaj composer after the server accepts a setMyStatus
+    // call, so the pill updates without waiting for the next sync.
+    suspend fun applyOwnStatusLocally(
+        text: String?,
+        emoji: String?,
+        expiresAt: String?,
+    ) {
+        withContext(Dispatchers.IO) {
+            db.profileQueries.setOwnStatus(
+                status = text,
+                status_emoji = emoji,
+                status_expires_at = expiresAt,
+            )
+        }
+    }
+
     fun observeOwnProfileWithTags(): Flow<ProfileWithTags?> {
         val profileFlow =
             db.profileQueries
@@ -177,6 +194,8 @@ class ProfileRepository(
                     name = request.name ?: current.name,
                     bio = request.bio ?: current.bio,
                     status = request.status ?: current.status,
+                    status_emoji = current.status_emoji,
+                    status_expires_at = current.status_expires_at,
                     profile_picture =
                         when (request.profilePicture) {
                             is JsonNull -> null
@@ -290,6 +309,8 @@ class ProfileRepository(
                 name = profile.name,
                 bio = profile.bio,
                 status = profile.status,
+                status_emoji = profile.statusEmoji,
+                status_expires_at = profile.statusExpiresAt,
                 profile_picture = profile.profilePicture,
                 thumbhash = profile.thumbhash,
                 images_json = json.encodeToString(profile.images),

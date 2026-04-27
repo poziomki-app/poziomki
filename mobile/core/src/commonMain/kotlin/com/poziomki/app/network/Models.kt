@@ -92,6 +92,8 @@ data class Profile(
     val name: String,
     val bio: String? = null,
     val status: String? = null,
+    val statusEmoji: String? = null,
+    val statusExpiresAt: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -112,6 +114,8 @@ data class ProfileWithTags(
     val name: String,
     val bio: String? = null,
     val status: String? = null,
+    val statusEmoji: String? = null,
+    val statusExpiresAt: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -171,6 +175,19 @@ data class UpdateProfileRequest(
     val tagIds: List<String>? = null,
     val gradientStart: String? = null,
     val gradientEnd: String? = null,
+)
+
+@Serializable
+data class SetStatusRequest(
+    val emoji: String? = null,
+    val text: String? = null,
+)
+
+@Serializable
+data class StatusResponse(
+    val status: String? = null,
+    val statusEmoji: String? = null,
+    val statusExpiresAt: String? = null,
 )
 
 // Event models
@@ -332,6 +349,8 @@ data class MatchProfile(
     val name: String,
     val bio: String? = null,
     val status: String? = null,
+    val statusEmoji: String? = null,
+    val statusExpiresAt: String? = null,
     val profilePicture: String? = null,
     val thumbhash: String? = null,
     val images: List<String> = emptyList(),
@@ -402,6 +421,10 @@ data class SearchProfile(
     val name: String,
     val bio: String? = null,
     val status: String? = null,
+    @SerialName("statusEmoji")
+    val statusEmoji: String? = null,
+    @SerialName("statusExpiresAt")
+    val statusExpiresAt: String? = null,
     val program: String? = null,
     @SerialName("profile_picture")
     val profilePicture: String? = null,

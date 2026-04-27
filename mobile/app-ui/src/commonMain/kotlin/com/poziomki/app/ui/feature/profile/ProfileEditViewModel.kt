@@ -28,7 +28,6 @@ data class ProfileEditState(
     val profileId: String = "",
     val name: String = "",
     val bio: String = "",
-    val status: String = "",
     val program: String = "",
     val images: List<String> = emptyList(),
     val allTags: List<Tag> = emptyList(),
@@ -134,7 +133,6 @@ class ProfileEditViewModel(
                             profileId = profile.id,
                             name = profile.name,
                             bio = profile.bio ?: "",
-                            status = profile.status ?: "",
                             program = profile.program ?: "",
                             images = profile.images,
                             selectedTags = profile.tags,
@@ -155,16 +153,6 @@ class ProfileEditViewModel(
 
     fun updateProgram(program: String) {
         _state.value = _state.value.copy(program = program)
-    }
-
-    fun updateStatus(status: String) {
-        if (status.length <= 160) {
-            _state.value = _state.value.copy(status = status)
-        }
-    }
-
-    fun clearStatus() {
-        _state.value = _state.value.copy(status = "")
     }
 
     fun clearProgram() {
@@ -300,10 +288,12 @@ class ProfileEditViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
             val s = _state.value
+            // status is intentionally not sent: it has its own ephemeral
+            // endpoint (POST /profiles/me/status) and 24h TTL. Profile-edit
+            // covers permanent fields only.
             val request =
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
-                    status = s.status.trim().ifBlank { null },
                     program = s.program.ifBlank { null },
                     profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
                     images = s.images,

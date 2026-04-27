@@ -230,7 +230,16 @@ pub(super) fn build_update_changeset(
     ProfileChangeset {
         name: payload.name.as_ref().map(|n| n.trim().to_string()),
         bio: payload.bio.as_ref().map(|b| Some(b.clone())),
+        // Legacy: pre-PR-B clients still POST status via profile-update.
+        // We honour it but stamp the 24h TTL so it expires like a
+        // composer-set status. New clients hit the dedicated endpoint
+        // (POST /profiles/me/status) which also sets status_emoji.
         status_text: payload.status.as_deref().map(non_empty_or_null),
+        status_emoji: None,
+        status_expires_at: payload
+            .status
+            .as_deref()
+            .map(|_| Some(chrono::Utc::now() + chrono::Duration::hours(24))),
         program: payload.program.as_ref().map(|p| Some(p.clone())),
         profile_picture,
         images: payload.images.as_ref().map(|imgs| build_images_json(imgs)),
