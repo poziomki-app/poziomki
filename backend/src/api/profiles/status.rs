@@ -38,6 +38,7 @@ pub(in crate::api) struct SetStatusBody {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::api) struct StatusResponse {
     pub status: Option<String>,
     pub status_emoji: Option<String>,
@@ -96,6 +97,27 @@ pub(in crate::api) async fn set_status(
                     details: None,
                 },
             ));
+        }
+    }
+
+    // Moderate the free-text portion through the same Bielik-Guard gate
+    // as bio. A 24h ephemeral status reaches every viewer the user shows
+    // up to, so the same content rules apply. Emoji is not moderated —
+    // we control the picker palette client-side.
+    if let Some(ref t) = trimmed_text {
+        match super::profiles_write_handler::moderate_profile_text(
+            t,
+            super::profiles_write_handler::ProfileTextField::Status,
+            &headers,
+        )
+        .await
+        {
+            Ok(None) => {}
+            Ok(Some(rejection)) => return Ok(rejection),
+            Err(error) => {
+                tracing::error!(%error, "status moderation failed; rejecting save");
+                return Err(error);
+            }
         }
     }
 

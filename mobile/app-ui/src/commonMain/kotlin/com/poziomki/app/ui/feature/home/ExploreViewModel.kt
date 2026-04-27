@@ -74,11 +74,19 @@ class ExploreViewModel(
             _state.value = _state.value.copy(isSavingStatus = true)
             when (val result = apiService.setMyStatus(emoji, text)) {
                 is ApiResult.Success -> {
+                    // Optimistic local-cache write so the composer pill
+                    // reflects the new status without waiting for a sync.
                     profileRepository.applyOwnStatusLocally(
                         text = result.data.status,
                         emoji = result.data.statusEmoji,
                         expiresAt = result.data.statusExpiresAt,
                     )
+                    // If there's no own profile in the local cache yet
+                    // (first-run / freshly-cleared cache), the optimistic
+                    // UPDATE was a no-op. Trigger a profile refresh so
+                    // the cache catches up; cheap network call, never
+                    // worse than what we'd do on next foreground anyway.
+                    profileRepository.refreshOwnProfile(forceRefresh = true)
                 }
 
                 is ApiResult.Error -> {
