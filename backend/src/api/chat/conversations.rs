@@ -456,20 +456,17 @@ pub async fn list_for_user(
         };
 
         let latest_is_mine = latest.is_some_and(|m| m.sender_id == user_id);
-        // Redact the preview when the latest message is moderation-flagged
-        // and it isn't the viewer's own message. Otherwise the chat list
-        // leaks the body of the very content we're trying to blur in the
-        // chat view. Senders keep their own preview verbatim, matching
-        // the in-chat behavior (own message is annotated, not blurred).
-        let latest_message_text = latest.map(|m| {
-            if latest_is_mine {
-                return m.body.clone();
-            }
-            match m.moderation_verdict.as_deref() {
-                Some("flag" | "block") => redacted_preview(&m.moderation_categories),
-                _ => m.body.clone(),
-            }
-        });
+        // Send the raw body; the client renders a gaussian blur over
+        // the text when verdict is flag/block (and the message isn't
+        // the viewer's own). Visual-only — the body is on the wire so
+        // tap-to-reveal in the chat works without a round-trip.
+        let (latest_verdict, latest_categories) = match latest {
+            Some(m) if !latest_is_mine => (
+                m.moderation_verdict.clone(),
+                m.moderation_categories.clone(),
+            ),
+            _ => (None, Vec::new()),
+        };
 
         payloads.push(ConversationPayload {
             id: conv.id,
@@ -481,11 +478,13 @@ pub async fn list_for_user(
             direct_user_name,
             direct_user_avatar,
             unread_count,
-            latest_message: latest_message_text,
+            latest_message: latest.map(|m| m.body.clone()),
             latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),
             latest_message_is_mine: latest_is_mine,
             latest_sender_name,
             is_blocked,
+            latest_moderation_verdict: latest_verdict,
+            latest_moderation_categories: latest_categories,
         });
     }
 
@@ -493,30 +492,6 @@ pub async fn list_for_user(
     payloads.sort_by(|a, b| b.latest_timestamp.cmp(&a.latest_timestamp));
 
     Ok(payloads)
-}
-
-/// Polish, category-aware placeholder used in the conversation list
-/// when the latest message has been moderation-flagged. Mirrors the
-/// in-chat overlay text in the mobile UI so the experience is
-/// consistent across the chat-list preview and the chat itself.
-fn redacted_preview(categories: &[String]) -> String {
-    let label = if categories.is_empty() {
-        "potencjalnie nieodpowiednia".to_string()
-    } else {
-        categories
-            .iter()
-            .map(|c| match c.as_str() {
-                "vulgar" => "wulgarna",
-                "hate" => "mowa nienawiści",
-                "sex" => "treść seksualna",
-                "self_harm" => "samookaleczenie",
-                "crime" => "treść przestępcza",
-                other => other,
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    format!("Wiadomość oznaczona jako {label}")
 }
 
 /// Helper struct for raw SQL unread count query.
