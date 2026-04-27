@@ -21,7 +21,7 @@ use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
 use crate::api::common::{auth_or_respond, error_response, parse_uuid_response, ErrorSpec};
-use crate::api::state::SuccessResponse;
+use crate::api::state::{DataResponse, SuccessResponse};
 use crate::app::AppContext;
 use crate::db;
 use crate::db::schema::{chat_message_reports::dsl as r, messages::dsl as m};
@@ -152,6 +152,9 @@ pub(in crate::api) async fn message_report(
                 details: None,
             },
         )),
-        ReportOutcome::Inserted => Ok(Json(SuccessResponse { success: true }).into_response()),
+        ReportOutcome::Inserted => Ok(Json(DataResponse {
+            data: SuccessResponse { success: true },
+        })
+        .into_response()),
     }
 }

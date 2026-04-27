@@ -205,15 +205,6 @@ fun ChatScreen(
             onDismiss = { showReportDialog = false },
         )
     }
-
-    if (state.pendingMessageReport != null) {
-        ReportDialog(
-            onConfirm = { reason, description ->
-                viewModel.submitMessageReport(reason, description)
-            },
-            onDismiss = viewModel::dismissMessageReport,
-        )
-    }
 }
 
 @Composable

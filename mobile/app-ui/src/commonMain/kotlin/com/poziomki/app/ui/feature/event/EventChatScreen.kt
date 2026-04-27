@@ -167,15 +167,6 @@ fun EventChatScreen(
             )
         }
 
-        if (chatState.pendingMessageReport != null) {
-            ReportDialog(
-                onConfirm = { reason, description ->
-                    chatViewModel.submitMessageReport(reason, description)
-                },
-                onDismiss = chatViewModel::dismissMessageReport,
-            )
-        }
-
         // Snackbar overlay
         eventState.snackbarMessage?.let { message ->
             AppSnackbar(
