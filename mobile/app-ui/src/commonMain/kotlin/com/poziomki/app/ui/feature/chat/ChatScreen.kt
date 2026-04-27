@@ -165,6 +165,7 @@ fun ChatScreen(
             onRevealModeration = viewModel::revealModeration,
             onReportFlagged = viewModel::reportFlaggedMessage,
             onClearError = viewModel::clearError,
+            onClearTransientNotice = viewModel::clearTransientNotice,
             onNavigateToProfile = onNavigateToProfile,
             resolveDisplayNames = viewModel::resolveDisplayNames,
             resolveAvatarUrls = viewModel::resolveAvatarUrls,
