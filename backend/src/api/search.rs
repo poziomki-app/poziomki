@@ -169,7 +169,11 @@ pub(super) async fn search(
 
     let geo = build_geo_params(&query);
 
-    let mut results = crate::search::search_all(&q, limit, geo.as_ref(), user.id)
+    let viewer = crate::db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let mut results = crate::search::search_all(&q, limit, geo.as_ref(), viewer)
         .await
         .map_err(|e| {
             tracing::error!("Search query failed: {e}");
