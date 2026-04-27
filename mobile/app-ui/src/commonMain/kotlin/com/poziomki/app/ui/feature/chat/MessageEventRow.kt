@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -56,6 +57,7 @@ import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.Eye
 import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
@@ -92,6 +94,7 @@ internal fun MessageEventRow(
     onActionsLongPress: () -> Unit,
     onSwipeReply: () -> Unit,
     onRevealModeration: () -> Unit,
+    onReportFlagged: () -> Unit,
     compactTimestamp: Boolean = false,
     avatarOverride: String? = null,
     isHighlighted: Boolean = false,
@@ -289,25 +292,39 @@ internal fun MessageEventRow(
                                                 .padding(top = 2.dp, bottom = 2.dp),
                                     )
                                 }
-                                Surface(
-                                    color = bubbleColor,
-                                    shape = bubbleShape,
-                                    modifier =
-                                        Modifier
-                                            .then(highlightBorderModifier)
-                                            .widthIn(
-                                                max = if (showSenderMeta) maxBubbleWidth - AvatarSize - AvatarSpacing else maxBubbleWidth,
-                                            ).combinedClickable(
-                                                onClick = {},
-                                                onLongClick = onActionsLongPress,
-                                            ),
-                                ) {
-                                    BubbleContent(
-                                        event = event,
-                                        onFocusOnReply = onFocusOnReply,
-                                        compactTimestamp = compactTimestamp,
-                                        onRevealModeration = onRevealModeration,
-                                    )
+                                val showReportFlag =
+                                    event.locallyRevealed &&
+                                        event.moderationVerdict in setOf("flag", "block")
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val maxBubbleWidthForRow =
+                                        if (showSenderMeta) {
+                                            maxBubbleWidth - AvatarSize - AvatarSpacing
+                                        } else {
+                                            maxBubbleWidth
+                                        }
+                                    Surface(
+                                        color = bubbleColor,
+                                        shape = bubbleShape,
+                                        modifier =
+                                            Modifier
+                                                .then(highlightBorderModifier)
+                                                .widthIn(max = maxBubbleWidthForRow)
+                                                .combinedClickable(
+                                                    onClick = {},
+                                                    onLongClick = onActionsLongPress,
+                                                ),
+                                    ) {
+                                        BubbleContent(
+                                            event = event,
+                                            onFocusOnReply = onFocusOnReply,
+                                            compactTimestamp = compactTimestamp,
+                                            onRevealModeration = onRevealModeration,
+                                        )
+                                    }
+                                    if (showReportFlag) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        FloatingReportFlag(onClick = onReportFlagged)
+                                    }
                                 }
                                 if (event.reactions.isNotEmpty()) {
                                     Row(
@@ -402,12 +419,10 @@ private fun BubbleContent(
             if (event.isMine && event.moderationVerdict in setOf("flag", "block")) {
                 Spacer(modifier = Modifier.height(4.dp))
                 OwnFlaggedNote(categories = event.moderationCategories)
-            } else if (isFlaggedRecipient) {
-                // Revealed: still nudge toward reporting in case the
-                // moderation engine missed the mark or it's harassment.
-                Spacer(modifier = Modifier.height(6.dp))
-                ReportFlaggedChip()
             }
+            // Note: the floating flag lives outside the bubble (in
+            // MessageEventRow) so the bubble keeps its shape and the
+            // affordance reads as "this message" not "this paragraph".
         }
         Row(
             modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
@@ -444,34 +459,30 @@ private fun BlurredFlaggedBody(
                 .clickable(onClick = onReveal),
         contentAlignment = Alignment.Center,
     ) {
-        // Blurred body — radius is high enough that no glyphs are
-        // legible, low enough that the bubble keeps roughly the
-        // same shape so the row doesn't reflow on reveal.
+        // Blurred body, dimmed slightly to soften residual letter-shape
+        // hints and let the overlay pill stand out cleanly. Italic adds
+        // texture so the row doesn't read as a loading skeleton.
         Text(
             text = body,
-            style = MaterialTheme.typography.bodyLarge,
-            color = TextPrimary,
-            modifier = Modifier.blur(radius = 14.dp),
+            style = MaterialTheme.typography.bodyLarge.copy(fontStyle = FontStyle.Italic),
+            color = TextPrimary.copy(alpha = 0.6f),
+            modifier = Modifier.blur(radius = 18.dp),
         )
-        // "Tap to show" pill on top, keeps the affordance visible.
+        // Centered glass pill — backdrop alpha keeps the blurred body
+        // visible behind it so the user sees there's content to reveal.
         Surface(
-            color = SurfaceColor.copy(alpha = 0.92f),
+            color = Background.copy(alpha = 0.55f),
             shape = RoundedCornerShape(999.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
             ) {
-                Text(
-                    text = "Oznaczono jako $label",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "·",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
+                Icon(
+                    imageVector = PhosphorIcons.Bold.Eye,
+                    contentDescription = null,
+                    tint = Primary,
+                    modifier = Modifier.size(13.dp),
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -480,32 +491,41 @@ private fun BlurredFlaggedBody(
                     color = Primary,
                     fontWeight = FontWeight.SemiBold,
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier =
+                        Modifier
+                            .size(width = 1.dp, height = 10.dp)
+                            .background(TextSecondary.copy(alpha = 0.4f)),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ReportFlaggedChip() {
+private fun FloatingReportFlag(onClick: () -> Unit) {
+    // Floating circular flag beside the bubble. Single tap reports.
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        shape = RoundedCornerShape(999.dp),
+        shape = CircleShape,
+        modifier =
+            Modifier
+                .size(28.dp)
+                .clickable(onClick = onClick),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-        ) {
+        Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = PhosphorIcons.Bold.Flag,
-                contentDescription = null,
-                modifier = Modifier.size(11.dp),
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Zgłoś",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
+                contentDescription = "Zgłoś",
+                modifier = Modifier.size(14.dp),
             )
         }
     }
