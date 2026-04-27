@@ -51,6 +51,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    chat_message_reports (message_id, reporter_user_id) {
+        message_id -> Uuid,
+        reporter_user_id -> Int4,
+        reason -> Text,
+        description -> Nullable<Text>,
+        automoderation_verdict -> Nullable<Text>,
+        automoderation_categories -> Array<Text>,
+        status -> Text,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     message_reactions (id) {
         id -> Uuid,
         message_id -> Uuid,
@@ -340,6 +353,8 @@ diesel::joinable!(messages -> uploads (attachment_upload_id));
 diesel::joinable!(message_reactions -> messages (message_id));
 diesel::joinable!(chat_message_reveals -> messages (message_id));
 diesel::joinable!(chat_message_reveals -> users (viewer_user_id));
+diesel::joinable!(chat_message_reports -> messages (message_id));
+diesel::joinable!(chat_message_reports -> users (reporter_user_id));
 diesel::joinable!(recommendation_feedback -> events (event_id));
 diesel::joinable!(recommendation_feedback -> profiles (profile_id));
 diesel::joinable!(event_attendees -> events (event_id));
@@ -360,6 +375,7 @@ diesel::joinable!(task_completions -> profiles (profile_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     auth_rate_limits,
+    chat_message_reports,
     chat_message_reveals,
     conversation_members,
     conversations,
