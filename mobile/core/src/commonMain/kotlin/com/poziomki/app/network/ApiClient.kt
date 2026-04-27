@@ -2,6 +2,7 @@ package com.poziomki.app.network
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.plugins.defaultRequest
@@ -47,6 +48,16 @@ class ApiClient(
                 json(json)
             }
             install(HttpCookies)
+            install(HttpTimeout) {
+                // Total budget for a request including TLS, redirects, body
+                // streaming. 60s accommodates uploads on slow mobile networks
+                // without leaving spinners pinned forever on dead connections.
+                requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                // Per-read inactivity. A stalled stream gets killed after 30s
+                // even if the overall request budget hasn't expired.
+                socketTimeoutMillis = SOCKET_TIMEOUT_MS
+            }
             if (enableHttpLogging) {
                 install(Logging) {
                     level = LogLevel.INFO
@@ -62,8 +73,19 @@ class ApiClient(
     private val rawClient =
         HttpClient(engine) {
             install(HttpCookies)
+            install(HttpTimeout) {
+                requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                socketTimeoutMillis = SOCKET_TIMEOUT_MS
+            }
             defaultRequest { url(baseUrl) }
         }
+
+    private companion object {
+        const val REQUEST_TIMEOUT_MS = 60_000L
+        const val CONNECT_TIMEOUT_MS = 15_000L
+        const val SOCKET_TIMEOUT_MS = 30_000L
+    }
 
     suspend inline fun <reified T> get(path: String): ApiResult<T> =
         request {
