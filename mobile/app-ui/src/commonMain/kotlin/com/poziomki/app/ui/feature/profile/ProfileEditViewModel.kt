@@ -303,7 +303,7 @@ class ProfileEditViewModel(
             val request =
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
-                    status = s.status.trim(),
+                    status = s.status.trim().ifBlank { null },
                     program = s.program.ifBlank { null },
                     profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
                     images = s.images,
@@ -325,7 +325,9 @@ class ProfileEditViewModel(
 
                 is ApiResult.Error -> {
                     val message =
-                        if (result.code == "BIO_CONTENT_REJECTED") {
+                        if (result.code == "BIO_CONTENT_REJECTED" ||
+                            result.code == "STATUS_CONTENT_REJECTED"
+                        ) {
                             // Server returns a Polish, category-aware
                             // sentence \u2014 surface it verbatim instead
                             // of the generic save-failed snackbar.

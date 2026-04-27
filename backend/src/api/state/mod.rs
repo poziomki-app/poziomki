@@ -273,3 +273,41 @@ pub(super) fn validate_profile_status(
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_profile_status_accepts_none() {
+        assert!(validate_profile_status(None).is_ok());
+    }
+
+    #[test]
+    fn validate_profile_status_accepts_empty() {
+        let s = String::new();
+        assert!(validate_profile_status(Some(&s)).is_ok());
+    }
+
+    #[test]
+    fn validate_profile_status_accepts_160_chars() {
+        let s = "a".repeat(160);
+        assert!(validate_profile_status(Some(&s)).is_ok());
+    }
+
+    #[test]
+    fn validate_profile_status_rejects_161_chars() {
+        let s = "a".repeat(161);
+        assert!(validate_profile_status(Some(&s)).is_err());
+    }
+
+    #[test]
+    fn validate_profile_status_counts_codepoints_not_bytes() {
+        // "ł" is 2 bytes in UTF-8 but one chars()-codepoint. 160 of them
+        // (320 bytes) must still be accepted.
+        let s = "ł".repeat(160);
+        assert!(validate_profile_status(Some(&s)).is_ok());
+        let s = "ł".repeat(161);
+        assert!(validate_profile_status(Some(&s)).is_err());
+    }
+}

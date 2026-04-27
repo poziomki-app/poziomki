@@ -28,7 +28,7 @@ use crate::db::schema::profiles;
 #[path = "write_service.rs"]
 mod write_service;
 use write_service::{
-    build_update_changeset, load_and_verify_profile, resolve_picture_filename,
+    build_update_changeset, load_and_verify_profile, non_empty_or_null, resolve_picture_filename,
     validate_and_prepare_update, validate_create,
 };
 
@@ -48,13 +48,7 @@ fn build_create_model(
         user_id: user.id,
         name: payload.name.trim().to_string(),
         bio: payload.bio.clone(),
-        status_text: payload.status.as_deref().map(str::trim).and_then(|s| {
-            if s.is_empty() {
-                None
-            } else {
-                Some(s.to_string())
-            }
-        }),
+        status_text: payload.status.as_deref().and_then(non_empty_or_null),
         profile_picture,
         images: images_json,
         program: payload.program.clone(),
@@ -118,7 +112,7 @@ pub(in crate::api) async fn profile_create(
             // we don't spend inference CPU on requests that would be
             // rejected cheaply either way.
             if let Some(ref bio) = payload_clone.bio {
-                match moderate_profile_text(bio, &headers_clone).await {
+                match moderate_profile_text(bio, ProfileTextField::Bio, &headers_clone).await {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
@@ -128,7 +122,8 @@ pub(in crate::api) async fn profile_create(
                 }
             }
             if let Some(ref status) = payload_clone.status {
-                match moderate_profile_text(status, &headers_clone).await {
+                match moderate_profile_text(status, ProfileTextField::Status, &headers_clone).await
+                {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
@@ -226,7 +221,7 @@ pub(in crate::api) async fn profile_update(
             // 404 instead of a misleading 422, and we don't burn inference
             // CPU on them.
             if let Some(ref bio) = payload_clone.bio {
-                match moderate_profile_text(bio, &headers_clone).await {
+                match moderate_profile_text(bio, ProfileTextField::Bio, &headers_clone).await {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
@@ -236,7 +231,8 @@ pub(in crate::api) async fn profile_update(
                 }
             }
             if let Some(ref status) = payload_clone.status {
-                match moderate_profile_text(status, &headers_clone).await {
+                match moderate_profile_text(status, ProfileTextField::Status, &headers_clone).await
+                {
                     Ok(None) => {}
                     Ok(Some(rejection)) => return Ok(rejection),
                     Err(error) => {
@@ -262,7 +258,30 @@ pub(in crate::api) async fn profile_update(
     .map_err(Into::into)
 }
 
-/// Run the moderation engine on a bio string. Returns:
+#[derive(Clone, Copy)]
+enum ProfileTextField {
+    Bio,
+    Status,
+}
+
+impl ProfileTextField {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Bio => "bio",
+            Self::Status => "status",
+        }
+    }
+
+    const fn rejection_code(self) -> &'static str {
+        match self {
+            Self::Bio => "BIO_CONTENT_REJECTED",
+            Self::Status => "STATUS_CONTENT_REJECTED",
+        }
+    }
+}
+
+/// Run the moderation engine on a profile free-text field (bio / status).
+/// Returns:
 /// - `Ok(None)` when moderation is disabled, the engine allows, or only
 ///   flags for review (flag is logged, publish proceeds).
 /// - `Ok(Some(response))` when the engine blocks — caller must return it
@@ -270,7 +289,11 @@ pub(in crate::api) async fn profile_update(
 /// - `Err(_)` on an unexpected infrastructure error (inference panic,
 ///   spawn failure). Hard errors surface as 500; we never fall through to
 ///   "allow" on failure, because that would defeat the gate.
-async fn moderate_profile_text(text: &str, headers: &HeaderMap) -> Result<Option<Response>> {
+async fn moderate_profile_text(
+    text: &str,
+    field: ProfileTextField,
+    headers: &HeaderMap,
+) -> Result<Option<Response>> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Ok(None);
@@ -291,10 +314,11 @@ async fn moderate_profile_text(text: &str, headers: &HeaderMap) -> Result<Option
     let verdict = scores.verdict(&thresholds);
     let flagged = scores.flagged(&thresholds);
 
-    metrics::histogram!("moderation_inference_latency_ms", "kind" => "bio").record(elapsed_ms);
+    let kind = field.as_str();
+    metrics::histogram!("moderation_inference_latency_ms", "kind" => kind).record(elapsed_ms);
     metrics::counter!(
         "moderation_verdicts_total",
-        "kind" => "bio",
+        "kind" => kind,
         "verdict" => verdict.as_str()
     )
     .increment(1);
@@ -302,31 +326,34 @@ async fn moderate_profile_text(text: &str, headers: &HeaderMap) -> Result<Option
     match verdict {
         crate::moderation::Verdict::Allow => Ok(None),
         crate::moderation::Verdict::Flag => {
-            // Bio flag without block is rare with the BIO preset (flag and
+            // Flag without block is rare with the BIO preset (flag and
             // block thresholds are equal), but we handle it defensively so
-            // a future threshold tweak doesn't silently drop flagged bios.
+            // a future threshold tweak doesn't silently drop flagged input.
             tracing::warn!(
+                field = kind,
                 flagged = ?flagged.iter().map(|(c, s)| format!("{}={s:.2}", c.as_str())).collect::<Vec<_>>(),
                 elapsed_ms,
-                "bio moderation: flagged for review (allowed to publish)"
+                "profile moderation: flagged for review (allowed to publish)"
             );
             Ok(None)
         }
         crate::moderation::Verdict::Block => {
             let categories: Vec<&'static str> = flagged.iter().map(|(c, _)| c.as_str()).collect();
             tracing::warn!(
+                field = kind,
                 categories = ?categories,
                 elapsed_ms,
-                "bio moderation: blocked on publish"
+                "profile moderation: blocked on publish"
             );
-            let error_msg = rejection_message(&flagged);
+            let error_msg = rejection_message(field, &flagged);
             Ok(Some(error_response(
                 axum::http::StatusCode::UNPROCESSABLE_ENTITY,
                 headers,
                 ErrorSpec {
                     error: error_msg,
-                    code: "BIO_CONTENT_REJECTED",
+                    code: field.rejection_code(),
                     details: Some(serde_json::json!({
+                        "field": kind,
                         "categories": categories,
                     })),
                 },
@@ -336,18 +363,27 @@ async fn moderate_profile_text(text: &str, headers: &HeaderMap) -> Result<Option
 }
 
 /// Build a user-facing rejection message. Polish-first (this is a Polish
-/// product), falls back to a category listing.
-fn rejection_message(flagged: &[(crate::moderation::Category, f32)]) -> String {
+/// product), falls back to a category listing. Wording is field-aware so
+/// the snackbar reads naturally for either bio ("opis") or status.
+fn rejection_message(
+    field: ProfileTextField,
+    flagged: &[(crate::moderation::Category, f32)],
+) -> String {
     use crate::moderation::Category;
+    let noun = match field {
+        ProfileTextField::Bio => "opis",
+        ProfileTextField::Status => "status",
+    };
     if flagged.iter().any(|(c, _)| matches!(c, Category::SelfHarm)) {
-        return "Twój opis zawiera treści dotyczące samookaleczenia lub myśli samobójczych. \
-                Jeśli potrzebujesz wsparcia, zadzwoń pod 116 123 (bezpłatny telefon zaufania). \
-                Prosimy o edycję opisu przed publikacją."
-            .to_string();
+        return format!(
+            "Twój {noun} zawiera treści dotyczące samookaleczenia lub myśli samobójczych. \
+             Jeśli potrzebujesz wsparcia, zadzwoń pod 116 123 (bezpłatny telefon zaufania). \
+             Prosimy o edycję przed publikacją."
+        );
     }
     let labels: Vec<&'static str> = flagged.iter().map(|(c, _)| c.as_str()).collect();
     format!(
-        "Twój opis narusza zasady społeczności ({}). Proszę go zmienić przed zapisaniem.",
+        "Twój {noun} narusza zasady społeczności ({}). Proszę go zmienić przed zapisaniem.",
         labels.join(", ")
     )
 }

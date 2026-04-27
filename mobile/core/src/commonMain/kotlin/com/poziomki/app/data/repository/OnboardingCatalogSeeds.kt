@@ -31,6 +31,10 @@ private fun degree(
     name: String,
 ): Degree = Degree(id = id, name = name)
 
+// Mirrors backend/migrations/2026-04-27-190000_profile_activities_statuses/up.sql.
+// UUIDs must stay identical so the offline-first cache and the server agree on
+// activity-tag identity. When adding/removing tags, edit both files in the same
+// commit.
 internal val LOCAL_ACTIVITY_TAGS: List<Tag> =
     listOf(
         activityTag("7b01dd2e-01ff-501e-bba5-e75f8ee3d4fa", "Nauka"),
