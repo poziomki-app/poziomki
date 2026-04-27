@@ -99,7 +99,7 @@ path = "src/bin/moderation_stress.rs"
 
 [dev-dependencies]
 serial_test = { version = "=3.4.0" }
-axum-test = { version = "=19.0.0" }
+axum-test = { version = "=20.0.0" }
 
 [profile.release]
 lto = "fat"
