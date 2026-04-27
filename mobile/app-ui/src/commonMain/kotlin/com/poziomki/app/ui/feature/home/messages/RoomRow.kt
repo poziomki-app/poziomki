@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,6 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,6 +29,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.RoomSummary
@@ -40,6 +44,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun RoomRow(
     room: RoomSummary,
@@ -134,12 +139,74 @@ fun RoomRow(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
+                val flagged =
+                    !room.latestMessageIsMine &&
+                        room.latestModerationVerdict in setOf("flag", "block")
+                if (flagged) {
+                    FlaggedRoomPreview(
+                        body = room.latestMessagePreview(),
+                        unread = room.unreadCount > 0,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                } else {
+                    Text(
+                        text = room.latestMessagePreview(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlaggedRoomPreview(
+    body: String,
+    unread: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    // Visual-only blur — body is on the wire so this is a UX hint, not
+    // an access control. The "Zgłoś" pill nudges the user toward
+    // reporting if the moderation hit was wrong-shaped or harassing.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier,
+    ) {
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (unread) TextPrimary else TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontStyle = FontStyle.Italic,
+            modifier =
+                Modifier
+                    .weight(1f, fill = false)
+                    .blur(radius = 6.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Icon(
+                    imageVector = PhosphorIcons.Bold.Flag,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp),
+                )
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = room.latestMessagePreview(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    text = "Zgłoś",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }

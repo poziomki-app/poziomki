@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.poziomki.app.ui.feature.chat
 
 import androidx.compose.animation.core.LinearEasing
@@ -38,10 +40,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -52,6 +56,7 @@ import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
+import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.ReplyDetails
@@ -374,17 +379,17 @@ private fun BubbleContent(
             )
             Spacer(modifier = Modifier.height(6.dp))
         }
-        // Hide flagged/blocked content from recipients until they tap
-        // to reveal. Senders see their own message normally with a
-        // subtle warning chip — they wrote it, so blurring it would
-        // be patronising; instead we surface that the message was
-        // flagged so they don't repeat the pattern.
-        val isFlagged =
+        // Recipient-side flagged messages: render the body with a
+        // gaussian blur until tap-to-reveal. Visual-only — body is
+        // already on the wire so the tap is local.
+        // Senders see their own message normally with a subtle
+        // warning note (they wrote it; blurring is patronising).
+        val isFlaggedRecipient =
             !event.isMine &&
-                !event.locallyRevealed &&
                 event.moderationVerdict in setOf("flag", "block")
-        if (isFlagged) {
-            FlaggedMessagePlaceholder(
+        if (isFlaggedRecipient && !event.locallyRevealed) {
+            BlurredFlaggedBody(
+                body = event.body,
                 categories = event.moderationCategories,
                 onReveal = onRevealModeration,
             )
@@ -397,6 +402,11 @@ private fun BubbleContent(
             if (event.isMine && event.moderationVerdict in setOf("flag", "block")) {
                 Spacer(modifier = Modifier.height(4.dp))
                 OwnFlaggedNote(categories = event.moderationCategories)
+            } else if (isFlaggedRecipient) {
+                // Revealed: still nudge toward reporting in case the
+                // moderation engine missed the mark or it's harassment.
+                Spacer(modifier = Modifier.height(6.dp))
+                ReportFlaggedChip()
             }
         }
         Row(
@@ -422,31 +432,80 @@ private fun BubbleContent(
 }
 
 @Composable
-private fun FlaggedMessagePlaceholder(
+private fun BlurredFlaggedBody(
+    body: String,
     categories: List<String>,
     onReveal: () -> Unit,
 ) {
     val label = polishCategoryList(categories)
-    Surface(
-        color = SurfaceColor,
-        shape = RoundedCornerShape(8.dp),
+    Box(
         modifier =
             Modifier
                 .clickable(onClick = onReveal),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        // Blurred body — radius is high enough that no glyphs are
+        // legible, low enough that the bubble keeps roughly the
+        // same shape so the row doesn't reflow on reveal.
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextPrimary,
+            modifier = Modifier.blur(radius = 14.dp),
+        )
+        // "Tap to show" pill on top, keeps the affordance visible.
+        Surface(
+            color = SurfaceColor.copy(alpha = 0.92f),
+            shape = RoundedCornerShape(999.dp),
         ) {
-            Text(
-                text = "Wiadomość oznaczona jako $label",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = "Oznaczono jako $label",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "·",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Pokaż",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportFlaggedChip() {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(999.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.Bold.Flag,
+                contentDescription = null,
+                modifier = Modifier.size(11.dp),
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Stuknij, aby pokazać",
+                text = "Zgłoś",
                 style = MaterialTheme.typography.labelSmall,
-                color = Primary,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
