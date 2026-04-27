@@ -274,12 +274,17 @@ pub async fn list_for_user(
         return Ok(Vec::new());
     }
 
-    // Batch-load latest message per conversation (DISTINCT ON)
+    // Batch-load latest message per conversation (DISTINCT ON).
+    // Column list must match the `Message` struct field-for-field —
+    // QueryableByName binds by name and a missing column rolls the
+    // entire transaction back. Keep moderation_* explicit so future
+    // schema additions don't break the chat list silently.
     let latest_messages: Vec<crate::db::models::messages::Message> = diesel::sql_query(
         "SELECT DISTINCT ON (conversation_id) \
                  id, conversation_id, sender_id, body, kind, \
                  attachment_upload_id, reply_to_id, client_id, \
-                 edited_at, deleted_at, created_at \
+                 edited_at, deleted_at, created_at, \
+                 moderation_verdict, moderation_categories, moderation_scanned_at \
              FROM messages \
              WHERE conversation_id = ANY($1) AND deleted_at IS NULL \
              ORDER BY conversation_id, created_at DESC, id DESC",
