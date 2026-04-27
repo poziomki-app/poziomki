@@ -229,6 +229,7 @@ async fn search_events(
          WHERE (e.search_vector @@ websearch_to_tsquery('simple', $1) \
                 OR LOWER(e.title) LIKE $2 \
                 OR LOWER(COALESCE(p.name, '')) LIKE $2) \
+         AND COALESCE(e.ends_at, e.starts_at) >= NOW() \
          {geo_filter} \
          ORDER BY {order_by} \
          LIMIT {limit_param}"
