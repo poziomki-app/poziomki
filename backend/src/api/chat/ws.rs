@@ -9,7 +9,7 @@ use super::conversations;
 use super::hub::ChatHub;
 use super::messages as chat_messages;
 use super::protocol::{ClientMessage, ServerMessage};
-use crate::api::state::hash_session_token;
+use crate::api::state::{require_auth_token, AuthFailure};
 use crate::db;
 use crate::db::schema::{conversations as conversations_table, profile_blocks, profiles};
 
@@ -201,8 +201,8 @@ fn into_diesel(e: crate::error::AppError) -> diesel::result::Error {
 }
 
 /// Authenticate the first message. Returns a `SocketViewer` + user pid, or
-/// None on failure. Routes through `app.resolve_session` so it works once
-/// Tier-A RLS lands on the sessions table.
+/// None on failure. Uses the same token auth path as REST so expiry caps,
+/// bans, session renewal, and RLS-ready user loading stay consistent.
 async fn authenticate(
     ws_tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     ws_rx: &mut futures_util::stream::SplitStream<WebSocket>,
@@ -237,58 +237,35 @@ async fn authenticate(
         return None;
     };
 
-    let hashed = hash_session_token(&token);
-
-    let Ok(mut conn) = crate::db::conn().await else {
-        let _ = send_json(
-            ws_tx,
-            &ServerMessage::AuthError {
-                message: "internal error".to_string(),
-            },
-        )
-        .await;
-        return None;
+    let auth = match require_auth_token(&token).await {
+        Ok(auth) => auth,
+        Err(AuthFailure::Banned) => {
+            tracing::warn!("WS auth failed: account suspended");
+            let _ = send_json(
+                ws_tx,
+                &ServerMessage::AuthError {
+                    message: "account suspended".to_string(),
+                },
+            )
+            .await;
+            return None;
+        }
+        Err(AuthFailure::Unauthorized) => {
+            tracing::warn!("WS auth failed: invalid token");
+            let _ = send_json(
+                ws_tx,
+                &ServerMessage::AuthError {
+                    message: "invalid token".to_string(),
+                },
+            )
+            .await;
+            return None;
+        }
     };
-
-    let Ok(session) = db::resolve_session(&mut conn, &hashed).await else {
-        tracing::warn!("WS auth failed: database query error");
-        let _ = send_json(
-            ws_tx,
-            &ServerMessage::AuthError {
-                message: "internal error".to_string(),
-            },
-        )
-        .await;
-        return None;
-    };
-
-    let Some(session) = session else {
-        tracing::warn!("WS auth failed: invalid token");
-        let _ = send_json(
-            ws_tx,
-            &ServerMessage::AuthError {
-                message: "invalid token".to_string(),
-            },
-        )
-        .await;
-        return None;
-    };
-
-    if session.expires_at <= chrono::Utc::now() {
-        tracing::warn!("WS auth failed: session expired");
-        let _ = send_json(
-            ws_tx,
-            &ServerMessage::AuthError {
-                message: "invalid token".to_string(),
-            },
-        )
-        .await;
-        return None;
-    }
 
     let viewer = SocketViewer {
-        user_id: session.user_id,
-        is_review_stub: session.is_review_stub,
+        user_id: auth.user.id,
+        is_review_stub: auth.user.is_review_stub,
     };
 
     let _ = send_json(
@@ -298,7 +275,7 @@ async fn authenticate(
         },
     )
     .await;
-    Some((viewer, session.user_pid))
+    Some((viewer, auth.user.pid))
 }
 
 /// Process a single client message.
