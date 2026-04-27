@@ -197,4 +197,15 @@ pub struct ConversationPayload {
     pub latest_message_is_mine: bool,
     pub latest_sender_name: Option<String>,
     pub is_blocked: bool,
+    /// Bielik-Guard verdict for the latest message body — `None` until
+    /// scanned, `"allow"`/`"flag"`/`"block"` after. Clients render the
+    /// blur overlay in the chat list using this field; the body is
+    /// still delivered so the blur is purely visual (and the user can
+    /// reveal in the chat itself).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_moderation_verdict: Option<String>,
+    /// Categories that exceeded the flag threshold for the latest
+    /// message. Empty when verdict is allow / not yet scanned.
+    #[serde(default)]
+    pub latest_moderation_categories: Vec<String>,
 }
