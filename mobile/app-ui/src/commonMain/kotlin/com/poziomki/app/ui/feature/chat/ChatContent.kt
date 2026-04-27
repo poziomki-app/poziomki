@@ -85,6 +85,7 @@ import kotlinx.datetime.toLocalDateTime
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun ChatContent(
     state: ChatUiState,
@@ -99,6 +100,7 @@ fun ChatContent(
     onStartEdit: (TimelineItem.Event) -> Unit,
     onCancelComposerMode: () -> Unit,
     onRedactEvent: (String) -> Unit,
+    onRevealModeration: (TimelineItem.Event) -> Unit,
     onClearError: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     resolveDisplayNames: suspend (List<String>) -> Map<String, String>,
@@ -217,6 +219,7 @@ fun ChatContent(
                                         onSenderClick = { item.senderPid?.let { onNavigateToProfile(it) } },
                                         onActionsLongPress = { selectedActionEvent = item },
                                         onSwipeReply = { onStartReply(item) },
+                                        onRevealModeration = { onRevealModeration(item) },
                                         compactTimestamp = showSenderMeta,
                                         avatarOverride =
                                             resolveAvatarOverride(item.senderId, avatarOverrides)

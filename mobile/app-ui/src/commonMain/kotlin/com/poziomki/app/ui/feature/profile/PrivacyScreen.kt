@@ -97,6 +97,7 @@ fun PrivacyScreen(
             onDelete = { showDeleteDialog = true },
             onToggleDiscoverable = viewModel::toggleDiscoverable,
             onToggleShowProgram = viewModel::toggleShowProgram,
+            onToggleScreenshots = viewModel::toggleScreenshotsAllowed,
         )
     }
 
@@ -138,6 +139,7 @@ private fun PrivacyContent(
     onDelete: () -> Unit,
     onToggleDiscoverable: (Boolean) -> Unit,
     onToggleShowProgram: (Boolean) -> Unit,
+    onToggleScreenshots: (Boolean) -> Unit,
 ) {
     Column(
         modifier =
@@ -164,6 +166,17 @@ private fun PrivacyContent(
             description = "Inni widzą Twój kierunek na profilu",
             checked = state.showProgram,
             onCheckedChange = onToggleShowProgram,
+            nunito = nunito,
+        )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        SectionLabel("ZRZUTY EKRANU", color = TextMuted)
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        PrivacyToggleRow(
+            label = "zezwalaj na zrzuty ekranu",
+            description = "Pozwala robić screenshoty i pokazuje aplikację w podglądzie ostatnich aplikacji",
+            checked = state.screenshotsAllowed,
+            onCheckedChange = onToggleScreenshots,
             nunito = nunito,
         )
 

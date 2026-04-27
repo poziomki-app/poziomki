@@ -543,6 +543,8 @@ async fn batch_messages_to_payloads(
             is_mine: msg.sender_id == viewer_user_id,
             is_edited: msg.edited_at.is_some(),
             created_at: msg.created_at.to_rfc3339(),
+            moderation_verdict: msg.moderation_verdict.clone(),
+            moderation_categories: msg.moderation_categories.clone(),
         });
     }
 

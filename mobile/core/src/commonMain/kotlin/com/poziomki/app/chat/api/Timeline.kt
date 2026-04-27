@@ -57,6 +57,21 @@ sealed interface TimelineItem {
         val sendStatus: EventSendStatus?,
         val readByCount: Int,
         val canReply: Boolean,
+        /**
+         * Bielik-Guard verdict for this message body. `null` until the
+         * async scan completes (clients render as allow). `"allow"` /
+         * `"flag"` / `"block"` once scanned.
+         */
+        val moderationVerdict: String? = null,
+        /** Categories that exceeded the flag threshold, e.g. `["vulgar"]`. */
+        val moderationCategories: List<String> = emptyList(),
+        /**
+         * `true` once the local viewer has tapped to reveal a
+         * flagged/blocked message. Not persisted server-side per
+         * device — re-blurs on app restart unless the cache layer
+         * later carries the reveal state.
+         */
+        val locallyRevealed: Boolean = false,
     ) : TimelineItem
 
     data class DateDivider(
@@ -117,6 +132,15 @@ interface Timeline : AutoCloseable {
     suspend fun markAsRead(): Result<Unit>
 
     suspend fun sendReadReceipt(eventId: String): Result<Unit>
+
+    /**
+     * Locally unblur a moderation-flagged message. The audit-trail
+     * POST to `/chat/messages/:id/reveal` is the caller's
+     * responsibility — keeping it out of the timeline lets a
+     * higher-level view-model fail loudly on network errors without
+     * blocking the UI from updating. Idempotent.
+     */
+    suspend fun markModerationRevealed(eventId: String): Result<Unit>
 
     override fun close()
 }

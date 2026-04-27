@@ -132,6 +132,9 @@ private sealed interface CachedTimelineItem {
         val sendStatus: CachedEventSendStatus?,
         val readByCount: Int,
         val canReply: Boolean,
+        val moderationVerdict: String? = null,
+        val moderationCategories: List<String> = emptyList(),
+        val locallyRevealed: Boolean = false,
     ) : CachedTimelineItem {
         override fun toDomain(): TimelineItem =
             TimelineItem.Event(
@@ -150,6 +153,9 @@ private sealed interface CachedTimelineItem {
                 sendStatus = sendStatus?.toDomain(),
                 readByCount = readByCount,
                 canReply = canReply,
+                moderationVerdict = moderationVerdict,
+                moderationCategories = moderationCategories,
+                locallyRevealed = locallyRevealed,
             )
     }
 
@@ -190,6 +196,9 @@ private sealed interface CachedTimelineItem {
                         sendStatus = item.sendStatus?.toCached(),
                         readByCount = item.readByCount,
                         canReply = item.canReply,
+                        moderationVerdict = item.moderationVerdict,
+                        moderationCategories = item.moderationCategories,
+                        locallyRevealed = item.locallyRevealed,
                     )
                 }
 

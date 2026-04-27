@@ -20,6 +20,7 @@ import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.network.ApiClient
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.GeocodingService
+import com.poziomki.app.session.AppPreferences
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,7 @@ import org.koin.dsl.module
 val sharedModule =
     module {
         single { SessionManager(get(), get()) }
+        single { AppPreferences(get()) }
         single<RoomComposerDraftStore> { SqlDelightRoomComposerDraftStore(get()) }
         single<RoomTimelineCacheStore> { SqlDelightRoomTimelineCacheStore(get()) }
         single {

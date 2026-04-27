@@ -195,6 +195,10 @@ fn chat_routes() -> Router<AppContext> {
             "/conversations/{id}/report",
             post(chat::report_handler::conversation_report),
         )
+        .route(
+            "/messages/{id}/reveal",
+            post(chat::reveal_handler::message_reveal),
+        )
         .route("/push/register", post(chat::push_register))
         .route("/push/unregister", post(chat::push_unregister))
         .layer(cache_layer("no-store"))
