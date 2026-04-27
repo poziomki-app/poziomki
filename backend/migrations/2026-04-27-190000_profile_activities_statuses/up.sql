@@ -34,6 +34,11 @@ ALTER TABLE public.profiles ADD COLUMN public_search_vector tsvector
 CREATE INDEX IF NOT EXISTS idx_profiles_fts ON public.profiles USING GIN (search_vector);
 CREATE INDEX IF NOT EXISTS idx_profiles_public_fts ON public.profiles USING GIN (public_search_vector);
 
+-- Activity-tag seeds. Same UUIDs are duplicated client-side in
+-- mobile/core/.../OnboardingCatalogSeeds.kt::LOCAL_ACTIVITY_TAGS
+-- so TagRepository.ensureActivitySeed can render activities offline.
+-- Keep both lists in sync — adding a tag here without updating the
+-- Kotlin list will hide it from offline clients until next refresh.
 INSERT INTO public.tags (id, name, scope, category, parent_id)
 SELECT seed.id::uuid, seed.name, 'activity', 'activity', NULL
 FROM (VALUES

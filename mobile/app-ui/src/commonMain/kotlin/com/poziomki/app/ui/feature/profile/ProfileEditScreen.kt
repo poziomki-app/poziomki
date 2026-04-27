@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -253,6 +254,15 @@ fun ProfileEditScreen(
                         } else {
                             null
                         },
+                )
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
+                Text(
+                    text = "${state.status.length}/160",
+                    fontFamily = nunito,
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End,
                 )
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))

@@ -208,7 +208,7 @@ fn validate_update_payload(
     check_validation(headers, validate_profile_program(payload.program.as_ref()))
 }
 
-fn non_empty_or_null(value: &str) -> Option<String> {
+pub(super) fn non_empty_or_null(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         None
