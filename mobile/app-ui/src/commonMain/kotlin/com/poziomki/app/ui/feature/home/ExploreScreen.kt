@@ -145,6 +145,7 @@ fun ExploreScreen(
                                         ProfileCard(
                                             name = profile.name,
                                             program = profile.program,
+                                            status = profile.status,
                                             profilePicture = profile.profilePicture,
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
@@ -234,6 +235,7 @@ fun ExploreScreen(
                                     ProfileCard(
                                         name = profile.name,
                                         program = profile.program,
+                                        status = profile.status,
                                         profilePicture = profile.profilePicture,
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,

@@ -8,7 +8,7 @@ use crate::api::{
     error_response, extract_filename,
     state::{
         require_auth_db, validate_filename, validate_profile_bio, validate_profile_name,
-        validate_profile_program, CreateProfileBody, UpdateProfileBody,
+        validate_profile_program, validate_profile_status, CreateProfileBody, UpdateProfileBody,
     },
     ErrorSpec,
 };
@@ -32,6 +32,7 @@ pub(super) fn validate_profile_fields(
 ) -> std::result::Result<(), Box<Response>> {
     check_validation(headers, validate_profile_name(&payload.name))?;
     check_validation(headers, validate_profile_bio(payload.bio.as_ref()))?;
+    check_validation(headers, validate_profile_status(payload.status.as_ref()))?;
     check_validation(headers, validate_profile_program(payload.program.as_ref()))
 }
 
@@ -203,14 +204,16 @@ fn validate_update_payload(
         check_validation(headers, validate_profile_name(name))?;
     }
     check_validation(headers, validate_profile_bio(payload.bio.as_ref()))?;
+    check_validation(headers, validate_profile_status(payload.status.as_ref()))?;
     check_validation(headers, validate_profile_program(payload.program.as_ref()))
 }
 
 fn non_empty_or_null(value: &str) -> Option<String> {
-    if value.is_empty() {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
         None
     } else {
-        Some(value.to_string())
+        Some(trimmed.to_string())
     }
 }
 
@@ -227,6 +230,7 @@ pub(super) fn build_update_changeset(
     ProfileChangeset {
         name: payload.name.as_ref().map(|n| n.trim().to_string()),
         bio: payload.bio.as_ref().map(|b| Some(b.clone())),
+        status_text: payload.status.as_deref().map(non_empty_or_null),
         program: payload.program.as_ref().map(|p| Some(p.clone())),
         profile_picture,
         images: payload.images.as_ref().map(|imgs| build_images_json(imgs)),

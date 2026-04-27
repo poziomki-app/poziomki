@@ -230,6 +230,33 @@ fun ProfileEditScreen(
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+                // --- status ---
+                SectionLabel("status")
+
+                PoziomkiTextField(
+                    value = state.status,
+                    onValueChange = { viewModel.updateStatus(it.take(160)) },
+                    placeholder = "co teraz robisz?",
+                    trailingContent =
+                        if (state.status.isNotEmpty()) {
+                            {
+                                Icon(
+                                    PhosphorIcons.Bold.X,
+                                    contentDescription = "Wyczyść",
+                                    tint = TextMuted,
+                                    modifier =
+                                        Modifier
+                                            .size(20.dp)
+                                            .clickable { viewModel.clearStatus() },
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
                 // --- kolor profilu ---
                 SectionLabel("kolor profilu")
 

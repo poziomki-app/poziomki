@@ -176,6 +176,7 @@ class ProfileRepository(
                     user_id = current.user_id,
                     name = request.name ?: current.name,
                     bio = request.bio ?: current.bio,
+                    status = request.status ?: current.status,
                     profile_picture =
                         when (request.profilePicture) {
                             is JsonNull -> null
@@ -288,6 +289,7 @@ class ProfileRepository(
                 user_id = profile.userId,
                 name = profile.name,
                 bio = profile.bio,
+                status = profile.status,
                 profile_picture = profile.profilePicture,
                 thumbhash = profile.thumbhash,
                 images_json = json.encodeToString(profile.images),

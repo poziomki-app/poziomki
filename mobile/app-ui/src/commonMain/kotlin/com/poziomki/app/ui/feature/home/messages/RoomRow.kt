@@ -40,6 +40,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun RoomRow(
     room: RoomSummary,
@@ -138,6 +139,17 @@ fun RoomRow(
                     text = room.latestMessagePreview(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val directUserStatus = room.directUserStatus?.trim()
+            if (room.isDirect && !directUserStatus.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = directUserStatus,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -100,6 +100,7 @@ fun ProfileScreen(
                                 ProfileCard(
                                     name = profile.name,
                                     program = profile.program,
+                                    status = profile.status,
                                     profilePicture = profile.profilePicture,
                                     gradientStart = profile.gradientStart,
                                     gradientEnd = profile.gradientEnd,

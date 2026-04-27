@@ -214,6 +214,7 @@ diesel::table! {
         user_id -> Int4,
         name -> Varchar,
         bio -> Nullable<Text>,
+        status_text -> Nullable<Text>,
         profile_picture -> Nullable<Varchar>,
         images -> Nullable<Jsonb>,
         program -> Nullable<Varchar>,

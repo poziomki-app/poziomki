@@ -65,6 +65,7 @@ fn build_profile_recommendation(
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio: profile.bio.clone(),
+        status: profile.status_text.clone(),
         profile_picture,
         thumbhash,
         program,

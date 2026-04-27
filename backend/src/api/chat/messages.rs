@@ -8,6 +8,10 @@ use crate::db::models::message_reactions::NewMessageReaction;
 use crate::db::models::messages::{Message, NewMessage};
 use crate::db::schema::{message_reactions, messages, profiles};
 
+type SenderProfileRow = (i32, String, Uuid, Option<String>, Option<String>);
+type SenderProfileMap =
+    std::collections::HashMap<i32, (String, Uuid, Option<String>, Option<String>)>;
+
 /// Convert a single message to a payload via the batch path.
 async fn single_message_payload(
     msg: &Message,
@@ -391,19 +395,20 @@ async fn batch_messages_to_payloads(
 
     // Batch-load sender profiles. Filter on profiles.user_id directly so
     // we don't need SELECT on users (which carries sensitive columns).
-    let sender_rows: Vec<(i32, String, Uuid, Option<String>)> = profiles::table
+    let sender_rows: Vec<SenderProfileRow> = profiles::table
         .filter(profiles::user_id.eq_any(&sender_ids))
         .select((
             profiles::user_id,
             profiles::name,
             profiles::id,
             profiles::profile_picture,
+            profiles::status_text,
         ))
         .load(conn)
         .await?;
-    let sender_map: HashMap<i32, (String, Uuid, Option<String>)> = sender_rows
+    let sender_map: SenderProfileMap = sender_rows
         .into_iter()
-        .map(|(id, name, pid, avatar)| (id, (name, pid, avatar)))
+        .map(|(id, name, pid, avatar, status)| (id, (name, pid, avatar, status)))
         .collect();
 
     // Batch-load reply messages
@@ -467,15 +472,21 @@ async fn batch_messages_to_payloads(
     // Assemble payloads
     let mut payloads = Vec::with_capacity(msgs.len());
     for msg in msgs {
-        let (sender_name, sender_pid, sender_avatar) = sender_map.get(&msg.sender_id).map_or_else(
-            || ("Unknown".to_string(), None, None),
-            |(name, pid, avatar)| {
-                let avatar_url = avatar
-                    .as_ref()
-                    .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
-                (name.clone(), Some(pid.to_string()), avatar_url)
-            },
-        );
+        let (sender_name, sender_pid, sender_avatar, sender_status) =
+            sender_map.get(&msg.sender_id).map_or_else(
+                || ("Unknown".to_string(), None, None, None),
+                |(name, pid, avatar, status)| {
+                    let avatar_url = avatar
+                        .as_ref()
+                        .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
+                    (
+                        name.clone(),
+                        Some(pid.to_string()),
+                        avatar_url,
+                        status.clone(),
+                    )
+                },
+            );
 
         let reply_to = msg.reply_to_id.and_then(|rid| {
             reply_msgs.get(&rid).and_then(|rm| {
@@ -535,6 +546,7 @@ async fn batch_messages_to_payloads(
             sender_pid,
             sender_name,
             sender_avatar,
+            sender_status,
             body: msg.body.clone(),
             kind: msg.kind.clone(),
             reply_to,

@@ -431,6 +431,7 @@ pub(in crate::api) async fn export_data(
             "userId": user_pid_str,
             "name": p.name,
             "bio": p.bio,
+            "status": p.status_text,
             "profilePicture": p.profile_picture,
             "images": p.images,
             "program": p.program,

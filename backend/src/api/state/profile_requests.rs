@@ -15,6 +15,8 @@ pub(in crate::api) struct CreateProfileBody {
     #[serde(default)]
     pub(in crate::api) bio: Option<String>,
     #[serde(default)]
+    pub(in crate::api) status: Option<String>,
+    #[serde(default)]
     pub(in crate::api) program: Option<String>,
     #[serde(default)]
     pub(in crate::api) profile_picture: Option<String>,
@@ -38,6 +40,8 @@ pub(in crate::api) struct UpdateProfileBody {
     pub(in crate::api) name: Option<String>,
     #[serde(default)]
     pub(in crate::api) bio: Option<String>,
+    #[serde(default)]
+    pub(in crate::api) status: Option<String>,
     #[serde(default)]
     pub(in crate::api) program: Option<String>,
     #[serde(default, deserialize_with = "deserialize_some")]

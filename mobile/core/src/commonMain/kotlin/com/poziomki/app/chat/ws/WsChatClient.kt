@@ -328,6 +328,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         avatarUrl = directUserAvatar,
         isDirect = isDirect,
         directUserId = directUserPid ?: directUserId,
+        directUserStatus = directUserStatus,
         unreadCount = unreadCount.toInt(),
         latestMessage = latestMessage,
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },

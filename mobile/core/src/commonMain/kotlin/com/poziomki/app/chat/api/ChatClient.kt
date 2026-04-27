@@ -29,6 +29,7 @@ data class RoomSummary(
     val avatarUrl: String?,
     val isDirect: Boolean,
     val directUserId: String? = null,
+    val directUserStatus: String? = null,
     val unreadCount: Int,
     val latestMessage: String?,
     val latestTimestampMillis: Long?,
