@@ -49,6 +49,14 @@ fn build_create_model(
         name: payload.name.trim().to_string(),
         bio: payload.bio.clone(),
         status_text: payload.status.as_deref().and_then(non_empty_or_null),
+        status_emoji: None,
+        // 24h TTL for legacy profile-create-with-status path; matches
+        // the dedicated /profiles/me/status endpoint behavior.
+        status_expires_at: payload
+            .status
+            .as_deref()
+            .and_then(non_empty_or_null)
+            .map(|_| now + chrono::Duration::hours(24)),
         profile_picture,
         images: images_json,
         program: payload.program.clone(),

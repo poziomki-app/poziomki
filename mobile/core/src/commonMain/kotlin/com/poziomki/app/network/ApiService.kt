@@ -271,4 +271,14 @@ class ApiService(
     @Suppress("ktlint:standard:function-signature")
     suspend fun revealChatMessage(messageId: String): ApiResult<SuccessResponse> =
         client.post("/api/v1/chat/messages/$messageId/reveal")
+
+    // Set / clear the caller's ephemeral status. Empty body clears it.
+    suspend fun setMyStatus(
+        emoji: String?,
+        text: String?,
+    ): ApiResult<StatusResponse> =
+        client.post(
+            "/api/v1/profiles/me/status",
+            SetStatusRequest(emoji = emoji, text = text),
+        )
 }

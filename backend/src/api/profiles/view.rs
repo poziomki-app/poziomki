@@ -10,6 +10,35 @@ use crate::db::models::profiles::Profile;
 
 use super::profiles_tags_repo::load_profile_tags;
 
+/// Returns `(status_text, status_emoji, status_expires_at)` only when
+/// the status is still live. A row past its `status_expires_at` reads
+/// as having no status — the daily sweep will eventually clear the
+/// columns, but read-time filtering means clients never see stale
+/// vibes even before the sweep runs.
+///
+/// `expires_at == None` means a legacy row written before the TTL
+/// existed; treat it as live indefinitely.
+pub(in crate::api) fn live_status(
+    profile: &Profile,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<chrono::DateTime<chrono::Utc>>,
+) {
+    let live = profile
+        .status_expires_at
+        .is_none_or(|exp| exp > chrono::Utc::now());
+    if live {
+        (
+            profile.status_text.clone(),
+            profile.status_emoji.clone(),
+            profile.status_expires_at,
+        )
+    } else {
+        (None, None, None)
+    }
+}
+
 fn decode_profile_images(profile: &Profile) -> Vec<String> {
     profile
         .images
@@ -75,12 +104,16 @@ pub(in crate::api) async fn profile_to_response(
         None => None,
     };
 
+    let (status, status_emoji, status_expires_at) = live_status(profile);
+
     ProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio,
-        status: profile.status_text.clone(),
+        status,
+        status_emoji,
+        status_expires_at: status_expires_at.map(|t| t.to_rfc3339()),
         profile_picture,
         thumbhash,
         images,
@@ -126,12 +159,16 @@ pub(in crate::api) async fn full_profile_response(
         None => None,
     };
 
+    let (status, status_emoji, status_expires_at) = live_status(profile);
+
     Ok(FullProfileResponse {
         id: profile.id.to_string(),
         user_id: user_pid.to_string(),
         name: profile.name.clone(),
         bio,
-        status: profile.status_text.clone(),
+        status,
+        status_emoji,
+        status_expires_at: status_expires_at.map(|t| t.to_rfc3339()),
         profile_picture,
         thumbhash,
         images,

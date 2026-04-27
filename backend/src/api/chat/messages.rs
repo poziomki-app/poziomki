@@ -8,9 +8,27 @@ use crate::db::models::message_reactions::NewMessageReaction;
 use crate::db::models::messages::{Message, NewMessage};
 use crate::db::schema::{message_reactions, messages, profiles};
 
-type SenderProfileRow = (i32, String, Uuid, Option<String>, Option<String>);
-type SenderProfileMap =
-    std::collections::HashMap<i32, (String, Uuid, Option<String>, Option<String>)>;
+// (user_id, name, profile_id, avatar, status_text, status_emoji, status_expires_at)
+type SenderProfileRow = (
+    i32,
+    String,
+    Uuid,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
+type SenderProfileMap = std::collections::HashMap<
+    i32,
+    (
+        String,
+        Uuid,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ),
+>;
 
 /// Convert a single message to a payload via the batch path.
 async fn single_message_payload(
@@ -403,12 +421,16 @@ async fn batch_messages_to_payloads(
             profiles::id,
             profiles::profile_picture,
             profiles::status_text,
+            profiles::status_emoji,
+            profiles::status_expires_at,
         ))
         .load(conn)
         .await?;
     let sender_map: SenderProfileMap = sender_rows
         .into_iter()
-        .map(|(id, name, pid, avatar, status)| (id, (name, pid, avatar, status)))
+        .map(|(id, name, pid, avatar, status, emoji, expires)| {
+            (id, (name, pid, avatar, status, emoji, expires))
+        })
         .collect();
 
     // Batch-load reply messages
@@ -472,18 +494,26 @@ async fn batch_messages_to_payloads(
     // Assemble payloads
     let mut payloads = Vec::with_capacity(msgs.len());
     for msg in msgs {
-        let (sender_name, sender_pid, sender_avatar, sender_status) =
+        let now = chrono::Utc::now();
+        let (sender_name, sender_pid, sender_avatar, sender_status, sender_status_emoji) =
             sender_map.get(&msg.sender_id).map_or_else(
-                || ("Unknown".to_string(), None, None, None),
-                |(name, pid, avatar, status)| {
+                || ("Unknown".to_string(), None, None, None, None),
+                |(name, pid, avatar, status, emoji, expires)| {
                     let avatar_url = avatar
                         .as_ref()
                         .and_then(|f| crate::api::imgproxy_signing::signed_avatar_url(f));
+                    let live = expires.is_none_or(|exp| exp > now);
+                    let (status_out, emoji_out) = if live {
+                        (status.clone(), emoji.clone())
+                    } else {
+                        (None, None)
+                    };
                     (
                         name.clone(),
                         Some(pid.to_string()),
                         avatar_url,
-                        status.clone(),
+                        status_out,
+                        emoji_out,
                     )
                 },
             );
@@ -547,6 +577,7 @@ async fn batch_messages_to_payloads(
             sender_name,
             sender_avatar,
             sender_status,
+            sender_status_emoji,
             body: msg.body.clone(),
             kind: msg.kind.clone(),
             reply_to,

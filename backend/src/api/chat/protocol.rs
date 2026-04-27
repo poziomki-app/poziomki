@@ -145,6 +145,8 @@ pub struct MessagePayload {
     pub sender_name: String,
     pub sender_avatar: Option<String>,
     pub sender_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_status_emoji: Option<String>,
     pub body: String,
     pub kind: String,
     pub reply_to: Option<ReplyPayload>,
@@ -193,6 +195,8 @@ pub struct ConversationPayload {
     pub direct_user_name: Option<String>,
     pub direct_user_avatar: Option<String>,
     pub direct_user_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_user_status_emoji: Option<String>,
     pub unread_count: i64,
     pub latest_message: Option<String>,
     pub latest_timestamp: Option<String>,

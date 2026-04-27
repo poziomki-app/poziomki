@@ -6,6 +6,8 @@ mod profiles_bookmarks;
 mod profiles_http;
 #[path = "repo.rs"]
 mod profiles_repo;
+#[path = "status.rs"]
+mod profiles_status;
 #[path = "tags_repo.rs"]
 mod profiles_tags_repo;
 #[path = "tags_service.rs"]
@@ -32,9 +34,10 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use profiles_http::not_found_profile;
 pub(super) use profiles_http::validation_error;
 use profiles_repo::{load_profile_by_user_id, load_profile_with_owner_pid};
+pub(super) use profiles_status::set_status as profile_set_status;
 pub(super) use profiles_tags_repo::sync_profile_tags;
 pub(super) use profiles_tags_service::parse_tag_uuids;
-pub(super) use profiles_view::{full_profile_response, profile_to_response};
+pub(super) use profiles_view::{full_profile_response, live_status, profile_to_response};
 pub(super) use profiles_write_handler::{profile_create, profile_delete, profile_update};
 
 pub(super) async fn profile_me(

@@ -3,6 +3,7 @@ package com.poziomki.app.ui.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.repository.MatchProfileRepository
+import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.MatchProfile
@@ -23,6 +24,11 @@ data class ExploreState(
     val query: String = "",
     val searchResults: SearchResults? = null,
     val isSearching: Boolean = false,
+    // Caller's own ephemeral status — drives the Poznaj composer pill.
+    val myStatus: String? = null,
+    val myStatusEmoji: String? = null,
+    val myStatusExpiresAt: String? = null,
+    val isSavingStatus: Boolean = false,
 ) {
     companion object {
         const val RECOMMENDED_COUNT = 4
@@ -34,6 +40,7 @@ data class ExploreState(
 
 class ExploreViewModel(
     private val matchProfileRepository: MatchProfileRepository,
+    private val profileRepository: ProfileRepository,
     private val apiService: ApiService,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ExploreState())
@@ -42,7 +49,52 @@ class ExploreViewModel(
 
     init {
         observeProfiles()
+        observeOwnStatus()
         refreshProfiles()
+    }
+
+    private fun observeOwnStatus() {
+        viewModelScope.launch {
+            profileRepository.observeOwnProfile().collect { profile ->
+                _state.value =
+                    _state.value.copy(
+                        myStatus = profile?.status,
+                        myStatusEmoji = profile?.statusEmoji,
+                        myStatusExpiresAt = profile?.statusExpiresAt,
+                    )
+            }
+        }
+    }
+
+    fun setMyStatus(
+        emoji: String?,
+        text: String?,
+    ) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isSavingStatus = true)
+            when (val result = apiService.setMyStatus(emoji, text)) {
+                is ApiResult.Success -> {
+                    profileRepository.applyOwnStatusLocally(
+                        text = result.data.status,
+                        emoji = result.data.statusEmoji,
+                        expiresAt = result.data.statusExpiresAt,
+                    )
+                }
+
+                is ApiResult.Error -> {
+                    // Surface a transient error via refreshError so the
+                    // existing snackbar handles it; the composer stays
+                    // open for the user to retry.
+                    _state.value =
+                        _state.value.copy(refreshError = "Nie udało się zapisać statusu")
+                }
+            }
+            _state.value = _state.value.copy(isSavingStatus = false)
+        }
+    }
+
+    fun clearMyStatus() {
+        setMyStatus(emoji = null, text = null)
     }
 
     private fun observeProfiles() {

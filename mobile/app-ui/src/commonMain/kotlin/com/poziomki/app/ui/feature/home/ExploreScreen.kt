@@ -72,6 +72,17 @@ fun ExploreScreen(
             placeholder = "szukaj os\u00f3b, wydarze\u0144...",
         )
 
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+
+        StatusComposer(
+            currentStatus = state.myStatus,
+            currentEmoji = state.myStatusEmoji,
+            currentExpiresAt = state.myStatusExpiresAt,
+            isSaving = state.isSavingStatus,
+            onSave = { emoji, text -> viewModel.setMyStatus(emoji, text) },
+            onClear = viewModel::clearMyStatus,
+        )
+
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -146,6 +157,8 @@ fun ExploreScreen(
                                             name = profile.name,
                                             program = profile.program,
                                             status = profile.status,
+                                            statusEmoji = profile.statusEmoji,
+                                            statusExpiresAt = profile.statusExpiresAt,
                                             profilePicture = profile.profilePicture,
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
@@ -236,6 +249,8 @@ fun ExploreScreen(
                                         name = profile.name,
                                         program = profile.program,
                                         status = profile.status,
+                                        statusEmoji = profile.statusEmoji,
+                                        statusExpiresAt = profile.statusExpiresAt,
                                         profilePicture = profile.profilePicture,
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,

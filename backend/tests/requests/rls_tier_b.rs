@@ -97,6 +97,8 @@ async fn insert_profile(user: &User, name: &str) -> Uuid {
         name: name.to_string(),
         bio: None,
         status_text: None,
+        status_emoji: None,
+        status_expires_at: None,
         profile_picture: None,
         images: None,
         program: None,

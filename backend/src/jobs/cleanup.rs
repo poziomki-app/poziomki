@@ -3,7 +3,7 @@ use diesel::sql_types::BigInt;
 use diesel_async::RunQueryDsl;
 use std::time::Duration;
 
-use crate::db::schema::{otp_codes, sessions};
+use crate::db::schema::{otp_codes, profiles, sessions};
 
 const CLEANUP_INTERVAL_SECS: u64 = 3600;
 
@@ -23,8 +23,35 @@ pub(super) async fn run_cleanup_loop() {
         if let Err(error) = purge_processed_outbox_jobs().await {
             tracing::warn!(%error, "processed outbox cleanup failed");
         }
+        if let Err(error) = clear_expired_status().await {
+            tracing::warn!(%error, "expired-status sweep failed");
+        }
         tokio::time::sleep(Duration::from_secs(CLEANUP_INTERVAL_SECS)).await;
     }
+}
+
+/// Clear status fields on rows whose 24h TTL has lapsed. Read paths
+/// already filter on `status_expires_at > now()`, so this sweep is
+/// purely a hygiene job — it stops dead vibes from accumulating in
+/// the table indefinitely. Runs hourly; expired rows linger up to
+/// `CLEANUP_INTERVAL_SECS` before being wiped, which is fine because
+/// they're invisible to clients the whole time.
+async fn clear_expired_status() -> Result<(), crate::error::AppError> {
+    let mut conn = crate::db::conn().await?;
+    let cleared =
+        diesel::update(profiles::table.filter(profiles::status_expires_at.lt(chrono::Utc::now())))
+            .set((
+                profiles::status_text.eq::<Option<String>>(None),
+                profiles::status_emoji.eq::<Option<String>>(None),
+                profiles::status_expires_at.eq::<Option<chrono::DateTime<chrono::Utc>>>(None),
+            ))
+            .execute(&mut conn)
+            .await?;
+
+    if cleared > 0 {
+        tracing::info!(profiles_cleared = cleared, "expired status fields wiped");
+    }
+    Ok(())
 }
 
 async fn purge_expired_rows() -> Result<(), crate::error::AppError> {

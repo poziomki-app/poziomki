@@ -1,0 +1,4 @@
+ALTER TABLE profile ADD COLUMN status_emoji TEXT;
+ALTER TABLE profile ADD COLUMN status_expires_at TEXT;
+ALTER TABLE matched_profile ADD COLUMN status_emoji TEXT;
+ALTER TABLE matched_profile ADD COLUMN status_expires_at TEXT;

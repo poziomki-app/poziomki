@@ -4,6 +4,8 @@ CREATE TABLE profile (
     name TEXT NOT NULL,
     bio TEXT,
     status TEXT,
+    status_emoji TEXT,
+    status_expires_at TEXT,
     profile_picture TEXT,
     thumbhash TEXT,
     images_json TEXT,
@@ -43,12 +45,18 @@ WHERE user_id = ?;
 
 upsert:
 INSERT OR REPLACE INTO profile(
-    id, user_id, name, bio, status, profile_picture, thumbhash,
+    id, user_id, name, bio, status, status_emoji, status_expires_at,
+    profile_picture, thumbhash,
     images_json, program, gradient_start, gradient_end,
     is_own, is_bookmarked, created_at, updated_at,
     cached_at, is_dirty,
     xp, streak_current, streak_longest
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+setOwnStatus:
+UPDATE profile
+SET status = ?, status_emoji = ?, status_expires_at = ?
+WHERE is_own = 1;
 
 deleteById:
 DELETE FROM profile

@@ -215,6 +215,8 @@ diesel::table! {
         name -> Varchar,
         bio -> Nullable<Text>,
         status_text -> Nullable<Text>,
+        status_emoji -> Nullable<Text>,
+        status_expires_at -> Nullable<Timestamptz>,
         profile_picture -> Nullable<Varchar>,
         images -> Nullable<Jsonb>,
         program -> Nullable<Varchar>,

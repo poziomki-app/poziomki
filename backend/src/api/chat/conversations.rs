@@ -214,8 +214,27 @@ pub async fn list_for_user(
 ) -> Result<Vec<super::protocol::ConversationPayload>, crate::error::AppError> {
     use super::protocol::ConversationPayload;
     use std::collections::HashMap;
-    type ProfileRow = (i32, uuid::Uuid, String, Option<String>, Option<String>);
-    type ProfileMap = HashMap<i32, (uuid::Uuid, String, Option<String>, Option<String>)>;
+    // (user_id, profile_id, name, avatar, status_text, status_emoji, status_expires_at)
+    type ProfileRow = (
+        i32,
+        uuid::Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    type ProfileMap = HashMap<
+        i32,
+        (
+            uuid::Uuid,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<chrono::DateTime<chrono::Utc>>,
+        ),
+    >;
 
     let conv_ids: Vec<Uuid> = conversation_members::table
         .filter(conversation_members::user_id.eq(user_id))
@@ -354,6 +373,8 @@ pub async fn list_for_user(
                 profiles::name,
                 profiles::profile_picture,
                 profiles::status_text,
+                profiles::status_emoji,
+                profiles::status_expires_at,
             ))
             .load(conn)
             .await?
@@ -361,7 +382,9 @@ pub async fn list_for_user(
 
     let profile_map: ProfileMap = profile_rows
         .into_iter()
-        .map(|(uid, pid, name, avatar, status)| (uid, (pid, name, avatar, status)))
+        .map(|(uid, pid, name, avatar, status, emoji, expires)| {
+            (uid, (pid, name, avatar, status, emoji, expires))
+        })
         .collect();
 
     // Resolve current user's profile ID for block checks
@@ -403,13 +426,15 @@ pub async fn list_for_user(
         let latest = latest_map.get(&conv.id).copied();
         let unread_count = unread_map.get(&conv.id).copied().unwrap_or(0);
 
-        // DM profile
+        // DM profile. Status is filtered by expiry here (read-time TTL).
+        let now = chrono::Utc::now();
         let (
             direct_user_id,
             direct_user_pid,
             direct_user_name,
             direct_user_avatar,
             direct_user_status,
+            direct_user_status_emoji,
         ) = if conv.kind == "dm" {
             let other_id = if conv.user_low_id == Some(user_id) {
                 conv.user_high_id
@@ -418,30 +443,39 @@ pub async fn list_for_user(
             };
             other_id
                 .and_then(|oid| {
-                    profile_map.get(&oid).map(|(pid, name, avatar, status)| {
-                        let avatar_url = avatar.as_ref().map(|filename| {
-                            crate::api::imgproxy_signing::signed_avatar_url(filename)
-                                .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
-                        });
-                        (
-                            Some(oid.to_string()),
-                            Some(pid.to_string()),
-                            Some(name.clone()),
-                            avatar_url,
-                            status.clone(),
-                        )
-                    })
+                    profile_map
+                        .get(&oid)
+                        .map(|(pid, name, avatar, status, emoji, expires)| {
+                            let avatar_url = avatar.as_ref().map(|filename| {
+                                crate::api::imgproxy_signing::signed_avatar_url(filename)
+                                    .unwrap_or_else(|| format!("/api/v1/uploads/{filename}"))
+                            });
+                            let live = expires.is_none_or(|exp| exp > now);
+                            let (status_out, emoji_out) = if live {
+                                (status.clone(), emoji.clone())
+                            } else {
+                                (None, None)
+                            };
+                            (
+                                Some(oid.to_string()),
+                                Some(pid.to_string()),
+                                Some(name.clone()),
+                                avatar_url,
+                                status_out,
+                                emoji_out,
+                            )
+                        })
                 })
-                .unwrap_or((None, None, None, None, None))
+                .unwrap_or((None, None, None, None, None, None))
         } else {
-            (None, None, None, None, None)
+            (None, None, None, None, None, None)
         };
 
         // Latest message sender name
         let latest_sender_name = latest.and_then(|msg| {
             profile_map
                 .get(&msg.sender_id)
-                .map(|(_, name, _, _)| name.clone())
+                .map(|(_, name, _, _, _, _)| name.clone())
         });
 
         // Check if the DM partner is blocked (either direction)
@@ -453,7 +487,7 @@ pub async fn list_for_user(
             };
             other_id
                 .and_then(|oid| profile_map.get(&oid))
-                .is_some_and(|(pid, _, _, _)| blocked_profile_ids.contains(pid))
+                .is_some_and(|(pid, _, _, _, _, _)| blocked_profile_ids.contains(pid))
         } else {
             false
         };
@@ -468,6 +502,7 @@ pub async fn list_for_user(
             direct_user_name,
             direct_user_avatar,
             direct_user_status,
+            direct_user_status_emoji,
             unread_count,
             latest_message: latest.map(|m| m.body.clone()),
             latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),

@@ -45,6 +45,8 @@ fun ProfileCard(
     name: String,
     program: String?,
     status: String? = null,
+    statusEmoji: String? = null,
+    statusExpiresAt: String? = null,
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
@@ -147,22 +149,56 @@ fun ProfileCard(
             )
         }
 
-        if (!status.isNullOrBlank()) {
-            Text(
-                text = status.trim(),
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 10.dp, top = 8.dp, end = 56.dp)
-                        .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(50))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
+        if (!status.isNullOrBlank() || !statusEmoji.isNullOrBlank()) {
+            // Fade the pill linearly over the last 2h before expiry so a
+            // status near its TTL visually signals staleness. Past expiry
+            // we don't render at all (server should have hidden it, but
+            // be defensive against clock skew / cached payloads).
+            val freshness = statusFreshness(statusExpiresAt)
+            if (freshness > 0f) {
+                val pillText =
+                    listOfNotNull(
+                        statusEmoji?.takeIf { it.isNotBlank() },
+                        status?.trim()?.takeIf { it.isNotEmpty() },
+                    ).joinToString(" ")
+                Text(
+                    text = pillText,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = TextPrimary.copy(alpha = freshness),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 10.dp, top = 8.dp, end = 56.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.42f * freshness),
+                                RoundedCornerShape(50),
+                            ).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
         }
+    }
+}
+
+// Returns a 0..1 freshness factor: 1.0 outside the last 2h before
+// expiry, linearly fading to 0.0 at expiry. Null expiry (legacy
+// rows) reads as fully fresh. Past expiry returns 0 so callers can
+// short-circuit rendering.
+private fun statusFreshness(expiresAt: String?): Float {
+    if (expiresAt.isNullOrBlank()) return 1f
+    val expiry =
+        runCatching { kotlinx.datetime.Instant.parse(expiresAt) }.getOrNull() ?: return 1f
+    val now =
+        kotlinx.datetime.Clock.System
+            .now()
+    val remaining = expiry.minus(now)
+    val twoHours = kotlin.time.Duration.parse("2h")
+    return when {
+        remaining <= kotlin.time.Duration.ZERO -> 0f
+        remaining >= twoHours -> 1f
+        else -> (remaining.inWholeMilliseconds.toFloat() / twoHours.inWholeMilliseconds.toFloat())
     }
 }
