@@ -6,11 +6,14 @@ import com.poziomki.app.data.CacheManager
 import com.poziomki.app.data.repository.SettingsRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
+import com.poziomki.app.session.AppPreferences
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 data class PrivacyState(
@@ -23,6 +26,7 @@ data class PrivacyState(
     val error: String? = null,
     val discoverable: Boolean = true,
     val showProgram: Boolean = true,
+    val screenshotsAllowed: Boolean = false,
 )
 
 class PrivacyViewModel(
@@ -30,6 +34,7 @@ class PrivacyViewModel(
     private val sessionManager: SessionManager,
     private val cacheManager: CacheManager,
     private val settingsRepository: SettingsRepository,
+    private val appPreferences: AppPreferences,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PrivacyState())
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
@@ -46,6 +51,17 @@ class PrivacyViewModel(
                         showProgram = settings.privacy_show_program != 0L,
                     )
             }
+        }
+        appPreferences.screenshotsAllowed
+            .onEach { allowed ->
+                _state.value = _state.value.copy(screenshotsAllowed = allowed)
+            }.launchIn(viewModelScope)
+    }
+
+    fun toggleScreenshotsAllowed(enabled: Boolean) {
+        _state.value = _state.value.copy(screenshotsAllowed = enabled)
+        viewModelScope.launch {
+            appPreferences.setScreenshotsAllowed(enabled)
         }
     }
 

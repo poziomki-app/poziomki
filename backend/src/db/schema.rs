@@ -36,6 +36,17 @@ diesel::table! {
         edited_at -> Nullable<Timestamptz>,
         deleted_at -> Nullable<Timestamptz>,
         created_at -> Timestamptz,
+        moderation_verdict -> Nullable<Text>,
+        moderation_categories -> Array<Text>,
+        moderation_scanned_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    chat_message_reveals (message_id, viewer_user_id) {
+        message_id -> Uuid,
+        viewer_user_id -> Int4,
+        revealed_at -> Timestamptz,
     }
 }
 
@@ -327,6 +338,8 @@ diesel::joinable!(conversations -> events (event_id));
 diesel::joinable!(messages -> conversations (conversation_id));
 diesel::joinable!(messages -> uploads (attachment_upload_id));
 diesel::joinable!(message_reactions -> messages (message_id));
+diesel::joinable!(chat_message_reveals -> messages (message_id));
+diesel::joinable!(chat_message_reveals -> users (viewer_user_id));
 diesel::joinable!(recommendation_feedback -> events (event_id));
 diesel::joinable!(recommendation_feedback -> profiles (profile_id));
 diesel::joinable!(event_attendees -> events (event_id));
@@ -347,6 +360,7 @@ diesel::joinable!(task_completions -> profiles (profile_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     auth_rate_limits,
+    chat_message_reveals,
     conversation_members,
     conversations,
     degrees,

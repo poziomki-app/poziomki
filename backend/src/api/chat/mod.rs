@@ -5,6 +5,7 @@ pub mod protocol;
 pub mod push;
 pub mod report_handler;
 pub mod report_repo;
+pub mod reveal_handler;
 pub mod ws;
 
 use axum::{

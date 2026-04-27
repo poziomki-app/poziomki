@@ -425,6 +425,24 @@ class WsTimeline(
     override suspend fun sendReadReceipt(eventId: String): Result<Unit> =
         sendOrFail(WsClientMessage.Read(conversationId = conversationId, messageId = eventId), Unit)
 
+    override suspend fun markModerationRevealed(eventId: String): Result<Unit> {
+        itemsMutex.withLock {
+            val current = _items.value.toMutableList()
+            val idx =
+                current.indexOfFirst {
+                    it is TimelineItem.Event && it.eventId == eventId
+                }
+            if (idx >= 0) {
+                val event = current[idx] as TimelineItem.Event
+                if (!event.locallyRevealed) {
+                    current[idx] = event.copy(locallyRevealed = true)
+                    emitAndPersist(current)
+                }
+            }
+        }
+        return Result.success(Unit)
+    }
+
     private suspend fun <T> sendOrFail(
         msg: WsClientMessage,
         value: T,
@@ -501,6 +519,8 @@ private fun toTimelineEvent(
     createdAt: String,
     replyTo: WsReplyPayload?,
     reactions: List<WsReactionPayload>,
+    moderationVerdict: String? = null,
+    moderationCategories: List<String> = emptyList(),
 ): TimelineItem.Event {
     val replyDetails =
         replyTo?.let {
@@ -526,12 +546,27 @@ private fun toTimelineEvent(
         sendStatus = EventSendStatus.Sent,
         readByCount = 0,
         canReply = true,
+        moderationVerdict = moderationVerdict,
+        moderationCategories = moderationCategories,
     )
 }
 
 private fun WsServerMessage.Message.toTimelineItem(currentUserId: String?): TimelineItem.Event {
     val mine = currentUserId != null && senderId.toString() == currentUserId
-    return toTimelineEvent(id, senderId, senderPid, senderName, senderAvatar, mine, body, createdAt, replyTo, reactions)
+    return toTimelineEvent(
+        id,
+        senderId,
+        senderPid,
+        senderName,
+        senderAvatar,
+        mine,
+        body,
+        createdAt,
+        replyTo,
+        reactions,
+        moderationVerdict,
+        moderationCategories,
+    )
 }
 
 private fun WsReactionPayload.toReaction(): Reaction {
@@ -549,5 +584,18 @@ private fun WsReactionPayload.toReaction(): Reaction {
 
 internal fun WsMessagePayload.toTimelineItem(currentUserId: String? = null): TimelineItem.Event {
     val mine = if (currentUserId != null) senderId.toString() == currentUserId else isMine
-    return toTimelineEvent(id, senderId, senderPid, senderName, senderAvatar, mine, body, createdAt, replyTo, reactions)
+    return toTimelineEvent(
+        id,
+        senderId,
+        senderPid,
+        senderName,
+        senderAvatar,
+        mine,
+        body,
+        createdAt,
+        replyTo,
+        reactions,
+        moderationVerdict,
+        moderationCategories,
+    )
 }

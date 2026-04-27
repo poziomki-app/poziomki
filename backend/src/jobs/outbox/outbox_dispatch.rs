@@ -1,6 +1,9 @@
+use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Text};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
+
+use crate::db::schema::messages::dsl as m;
 
 use super::OutboxJob;
 
@@ -149,6 +152,41 @@ async fn dispatch_moderation_scan(payload_json: &str) -> std::result::Result<(),
             elapsed_ms,
             "moderation: content allowed"
         );
+    }
+
+    // Persist the verdict on the message row so clients can render a
+    // blur overlay on next history fetch / conversation reload. Worker
+    // connects with BYPASSRLS, so a direct UPDATE bypasses the chat
+    // membership policies that gate normal callers.
+    //
+    // Live WS broadcast of the verdict change is intentionally not
+    // wired in this PR — would require LISTEN/NOTIFY plumbing between
+    // worker and api processes. Eventual consistency on next read is
+    // acceptable for v1 (typical user opens the chat and sees the
+    // blur immediately on history load).
+    if target_kind == "message" {
+        let message_uuid = match uuid::Uuid::parse_str(&target_id) {
+            Ok(u) => u,
+            Err(e) => return Err(format!("invalid message target_id {target_id}: {e}")),
+        };
+        let verdict_str = verdict.as_str().to_string();
+        let categories: Vec<String> = flagged
+            .iter()
+            .map(|(c, _)| c.as_str().to_string())
+            .collect();
+        let mut conn = crate::db::conn()
+            .await
+            .map_err(|e| format!("moderation write-back: pool: {e}"))?;
+        let now = chrono::Utc::now();
+        diesel::update(m::messages.filter(m::id.eq(message_uuid)))
+            .set((
+                m::moderation_verdict.eq(verdict_str),
+                m::moderation_categories.eq(categories),
+                m::moderation_scanned_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .await
+            .map_err(|e| format!("moderation write-back: update: {e}"))?;
     }
 
     Ok(())

@@ -297,7 +297,7 @@ class ProfileEditViewModel(
                     gradientStart = s.gradientStart ?: "",
                     gradientEnd = s.gradientEnd ?: "",
                 )
-            when (profileRepository.updateProfile(s.profileId, request)) {
+            when (val result = profileRepository.updateProfile(s.profileId, request)) {
                 is ApiResult.Success -> {
                     for (imageUrl in removedImages) {
                         val filename = imageUrl.substringAfterLast("/").substringBefore("?")
@@ -310,9 +310,18 @@ class ProfileEditViewModel(
                 }
 
                 is ApiResult.Error -> {
+                    val message =
+                        if (result.code == "BIO_CONTENT_REJECTED") {
+                            // Server returns a Polish, category-aware
+                            // sentence \u2014 surface it verbatim instead
+                            // of the generic save-failed snackbar.
+                            result.message
+                        } else {
+                            "nie uda\u0142o si\u0119 zapisa\u0107 profilu"
+                        }
                     _state.value =
                         _state.value.copy(
-                            snackbarMessage = "nie uda\u0142o si\u0119 zapisa\u0107 profilu",
+                            snackbarMessage = message,
                             snackbarType = SnackbarType.ERROR,
                         )
                 }

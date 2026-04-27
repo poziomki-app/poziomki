@@ -241,7 +241,7 @@ class EventCreateViewModel(
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = s.requiresApproval,
             )
-        when (eventRepository.updateEvent(eventId, request)) {
+        when (val result = eventRepository.updateEvent(eventId, request)) {
             is ApiResult.Success -> {
                 onSaved()
             }
@@ -250,7 +250,7 @@ class EventCreateViewModel(
                 _state.value =
                     _state.value.copy(
                         isLoading = false,
-                        error = "Nie udało się zaktualizować wydarzenia",
+                        error = moderationAwareError(result, "Nie udało się zaktualizować wydarzenia"),
                     )
             }
         }
@@ -275,7 +275,7 @@ class EventCreateViewModel(
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = if (s.requiresApproval) true else null,
             )
-        when (eventRepository.createEvent(request)) {
+        when (val result = eventRepository.createEvent(request)) {
             is ApiResult.Success -> {
                 onSaved()
             }
@@ -284,11 +284,24 @@ class EventCreateViewModel(
                 _state.value =
                     _state.value.copy(
                         isLoading = false,
-                        error = "Nie udało się utworzyć wydarzenia",
+                        error = moderationAwareError(result, "Nie udało się utworzyć wydarzenia"),
                     )
             }
         }
     }
+
+    private fun moderationAwareError(
+        result: ApiResult.Error,
+        fallback: String,
+    ): String =
+        if (result.code == "EVENT_CONTENT_REJECTED" || result.code == "BIO_CONTENT_REJECTED") {
+            // Server-side moderation rejection — its `message` is
+            // already a user-facing Polish sentence with the
+            // categories listed. Surface it verbatim.
+            result.message
+        } else {
+            fallback
+        }
 
     companion object {
         private const val MAX_EVENT_TAGS = 15
