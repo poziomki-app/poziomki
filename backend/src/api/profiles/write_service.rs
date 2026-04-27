@@ -78,6 +78,25 @@ pub(super) async fn validate_create(
 ) -> std::result::Result<crate::db::models::users::User, Box<Response>> {
     let (_session, user) = require_auth_db(headers).await?;
     validate_profile_fields(headers, payload)?;
+    // Reject image references on create: uploads require an existing
+    // profile (uploads/write_handler.rs:198) so a not-yet-created
+    // profile cannot legitimately own any. Allowing arbitrary
+    // filenames here lets a fresh account claim another user's
+    // uploads as their profile picture or gallery. The canonical flow
+    // is create-with-no-images → upload (now owner_id = new profile)
+    // → PATCH images.
+    if payload.profile_picture.is_some() {
+        return Err(Box::new(validation_error(
+            headers,
+            "Profile picture cannot be set on create — upload it after the profile exists",
+        )));
+    }
+    if payload.images.as_ref().is_some_and(|v| !v.is_empty()) {
+        return Err(Box::new(validation_error(
+            headers,
+            "Gallery images cannot be set on create — upload them after the profile exists",
+        )));
+    }
     check_no_existing_profile(conn, headers, user.id).await?;
     Ok(user)
 }
@@ -114,6 +133,36 @@ async fn verify_upload_ownership(
         return Err(Box::new(validation_error(
             headers,
             "Profile picture must reference your uploaded image",
+        )));
+    }
+    Ok(())
+}
+
+/// Verify that every entry in `filenames` is a non-deleted upload owned
+/// by `profile_id`. Without this, a caller could PATCH their profile
+/// with another user's filename and the API would issue signed URLs
+/// pointing at the original owner's bytes — content theft, no copy.
+pub(super) async fn verify_uploads_ownership(
+    conn: &mut AsyncPgConnection,
+    headers: &HeaderMap,
+    profile_id: Uuid,
+    filenames: &[String],
+) -> std::result::Result<(), Box<Response>> {
+    if filenames.is_empty() {
+        return Ok(());
+    }
+    let owned: Vec<String> = uploads::table
+        .filter(uploads::owner_id.eq(Some(profile_id)))
+        .filter(uploads::filename.eq_any(filenames))
+        .filter(uploads::deleted.eq(false))
+        .select(uploads::filename)
+        .load::<String>(conn)
+        .await
+        .map_err(|_| uploads_unavailable(headers))?;
+    if owned.len() != filenames.len() {
+        return Err(Box::new(validation_error(
+            headers,
+            "Profile images must reference your uploaded files",
         )));
     }
     Ok(())
@@ -192,6 +241,15 @@ pub(super) async fn validate_and_prepare_update(
             Some(filename) // Some(Some(filename))
         }
     };
+    // Gallery images get the same ownership check as profile_picture —
+    // every filename must reference an upload that this profile owns.
+    if let Some(images) = payload.images.as_ref() {
+        let filenames: Vec<String> = images.iter().map(|raw| extract_filename(raw)).collect();
+        for f in &filenames {
+            check_validation(headers, validate_filename(f))?;
+        }
+        verify_uploads_ownership(conn, headers, profile.id, &filenames).await?;
+    }
     Ok((profile, user, picture))
 }
 
