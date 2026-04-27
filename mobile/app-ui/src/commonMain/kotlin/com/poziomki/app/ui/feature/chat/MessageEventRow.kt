@@ -40,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -56,7 +55,7 @@ import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.Eye
+import com.adamglin.phosphoricons.bold.EyeSlash
 import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
@@ -292,7 +291,7 @@ internal fun MessageEventRow(
                                 }
                                 val isFlagged =
                                     event.moderationVerdict in setOf("flag", "block")
-                                val isBlurred = isFlagged && !event.locallyRevealed
+                                val isHidden = isFlagged && !event.locallyRevealed
                                 val showReportFlag = isFlagged && event.locallyRevealed
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     val maxBubbleWidthForRow =
@@ -301,37 +300,29 @@ internal fun MessageEventRow(
                                         } else {
                                             maxBubbleWidth
                                         }
-                                    Box {
-                                        Surface(
-                                            color = bubbleColor,
-                                            shape = bubbleShape,
-                                            modifier =
-                                                Modifier
-                                                    .then(highlightBorderModifier)
-                                                    .widthIn(max = maxBubbleWidthForRow)
-                                                    .then(
-                                                        if (isBlurred) {
-                                                            Modifier.blur(radius = 22.dp)
-                                                        } else {
-                                                            Modifier
-                                                        },
-                                                    ).combinedClickable(
-                                                        onClick = {
-                                                            if (isBlurred) onRevealModeration()
-                                                        },
-                                                        onLongClick = onActionsLongPress,
-                                                    ),
-                                        ) {
+                                    Surface(
+                                        color = bubbleColor,
+                                        shape = bubbleShape,
+                                        modifier =
+                                            Modifier
+                                                .then(highlightBorderModifier)
+                                                .widthIn(max = maxBubbleWidthForRow)
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (isHidden) onRevealModeration()
+                                                    },
+                                                    onLongClick = onActionsLongPress,
+                                                ),
+                                    ) {
+                                        if (isHidden) {
+                                            HiddenFlaggedContent(
+                                                categories = event.moderationCategories,
+                                            )
+                                        } else {
                                             BubbleContent(
                                                 event = event,
                                                 onFocusOnReply = onFocusOnReply,
                                                 compactTimestamp = compactTimestamp,
-                                            )
-                                        }
-                                        if (isBlurred) {
-                                            FlaggedRevealOverlay(
-                                                categories = event.moderationCategories,
-                                                modifier = Modifier.align(Alignment.Center),
                                             )
                                         }
                                     }
@@ -441,48 +432,42 @@ private fun BubbleContent(
 }
 
 @Composable
-private fun FlaggedRevealOverlay(
-    categories: List<String>,
-    modifier: Modifier = Modifier,
-) {
-    val label = polishCategoryList(categories)
-    Surface(
-        color = Background.copy(alpha = 0.78f),
-        shape = RoundedCornerShape(999.dp),
-        modifier = modifier,
+private fun HiddenFlaggedContent(categories: List<String>) {
+    // Replaces the bubble body with a deliberate "hidden content"
+    // placeholder. We don't try to gaussian-blur the live text — the
+    // Compose blur is API-31+ and produces inconsistent results; a
+    // typed placeholder is what mature apps (Reddit/Discord/Reddit
+    // NSFW filters) use and works on every device.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        ) {
-            Icon(
-                imageVector = PhosphorIcons.Bold.Eye,
-                contentDescription = null,
-                tint = Primary,
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
+        Icon(
+            imageVector = PhosphorIcons.Bold.EyeSlash,
+            contentDescription = null,
+            tint = TextPrimary.copy(alpha = 0.7f),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
             Text(
-                text = "Pokaż",
-                style = MaterialTheme.typography.labelSmall,
-                color = Primary,
+                text = polishCategoryHeading(categories),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextPrimary,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier =
-                    Modifier
-                        .size(width = 1.dp, height = 10.dp)
-                        .background(TextSecondary.copy(alpha = 0.4f)),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = label,
+                text = "Stuknij, aby pokazać",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
+                color = Primary,
             )
         }
     }
+}
+
+private fun polishCategoryHeading(categories: List<String>): String {
+    val label = polishCategoryList(categories)
+    return "Treść oznaczona jako $label"
 }
 
 @Composable
