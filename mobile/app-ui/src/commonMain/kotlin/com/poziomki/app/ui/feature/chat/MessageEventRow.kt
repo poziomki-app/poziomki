@@ -74,6 +74,7 @@ import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 private val AvatarSize = 28.dp
 private val AvatarSpacing = 6.dp
 
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 internal fun MessageEventRow(
     event: TimelineItem.Event,
@@ -85,6 +86,7 @@ internal fun MessageEventRow(
     onSenderClick: () -> Unit,
     onActionsLongPress: () -> Unit,
     onSwipeReply: () -> Unit,
+    onRevealModeration: () -> Unit,
     compactTimestamp: Boolean = false,
     avatarOverride: String? = null,
     isHighlighted: Boolean = false,
@@ -210,6 +212,7 @@ internal fun MessageEventRow(
                                     event = event,
                                     onFocusOnReply = onFocusOnReply,
                                     compactTimestamp = compactTimestamp,
+                                    onRevealModeration = onRevealModeration,
                                 )
                             }
                             if (event.reactions.isNotEmpty()) {
@@ -298,6 +301,7 @@ internal fun MessageEventRow(
                                         event = event,
                                         onFocusOnReply = onFocusOnReply,
                                         compactTimestamp = compactTimestamp,
+                                        onRevealModeration = onRevealModeration,
                                     )
                                 }
                                 if (event.reactions.isNotEmpty()) {
@@ -354,6 +358,7 @@ private fun BubbleContent(
     event: TimelineItem.Event,
     onFocusOnReply: () -> Unit,
     compactTimestamp: Boolean,
+    onRevealModeration: () -> Unit,
 ) {
     Column(
         modifier =
@@ -369,11 +374,31 @@ private fun BubbleContent(
             )
             Spacer(modifier = Modifier.height(6.dp))
         }
-        Text(
-            text = event.body,
-            style = MaterialTheme.typography.bodyLarge,
-            color = TextPrimary,
-        )
+        // Hide flagged/blocked content from recipients until they tap
+        // to reveal. Senders see their own message normally with a
+        // subtle warning chip — they wrote it, so blurring it would
+        // be patronising; instead we surface that the message was
+        // flagged so they don't repeat the pattern.
+        val isFlagged =
+            !event.isMine &&
+                !event.locallyRevealed &&
+                event.moderationVerdict in setOf("flag", "block")
+        if (isFlagged) {
+            FlaggedMessagePlaceholder(
+                categories = event.moderationCategories,
+                onReveal = onRevealModeration,
+            )
+        } else {
+            Text(
+                text = event.body,
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextPrimary,
+            )
+            if (event.isMine && event.moderationVerdict in setOf("flag", "block")) {
+                Spacer(modifier = Modifier.height(4.dp))
+                OwnFlaggedNote(categories = event.moderationCategories)
+            }
+        }
         Row(
             modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -395,6 +420,61 @@ private fun BubbleContent(
         }
     }
 }
+
+@Composable
+private fun FlaggedMessagePlaceholder(
+    categories: List<String>,
+    onReveal: () -> Unit,
+) {
+    val label = polishCategoryList(categories)
+    Surface(
+        color = SurfaceColor,
+        shape = RoundedCornerShape(8.dp),
+        modifier =
+            Modifier
+                .clickable(onClick = onReveal),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = "Wiadomość oznaczona jako $label",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Stuknij, aby pokazać",
+                style = MaterialTheme.typography.labelSmall,
+                color = Primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OwnFlaggedNote(categories: List<String>) {
+    Text(
+        text = "Twoja wiadomość została oznaczona jako ${polishCategoryList(categories)}.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.error,
+    )
+}
+
+private fun polishCategoryList(categories: List<String>): String {
+    if (categories.isEmpty()) return "potencjalnie nieodpowiednia"
+    return categories.joinToString(", ") { translateCategory(it) }
+}
+
+private fun translateCategory(category: String): String =
+    when (category) {
+        "vulgar" -> "wulgarna"
+        "hate" -> "mowa nienawiści"
+        "sex" -> "treść seksualna"
+        "self_harm" -> "samookaleczenie"
+        "crime" -> "treść przestępcza"
+        else -> category
+    }
 
 @Composable
 private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {

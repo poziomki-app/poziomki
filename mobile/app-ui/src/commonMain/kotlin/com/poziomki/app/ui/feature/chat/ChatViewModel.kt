@@ -318,6 +318,21 @@ class ChatViewModel(
         }
     }
 
+    fun revealModeration(event: TimelineItem.Event) {
+        // Local unblur is fire-and-forget — no point blocking the UI
+        // on the audit POST. The server-side audit row is best-effort;
+        // if the network drops we still let the user see what they
+        // asked for. The server-side row is for misuse detection,
+        // not access control.
+        viewModelScope.launch {
+            val timeline = activeTimeline ?: return@launch
+            timeline.markModerationRevealed(event.eventOrTransactionId)
+            event.eventId?.let { messageId ->
+                apiService.revealChatMessage(messageId)
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }

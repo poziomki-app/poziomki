@@ -18,6 +18,9 @@ pub struct Message {
     pub edited_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub moderation_verdict: Option<String>,
+    pub moderation_categories: Vec<String>,
+    pub moderation_scanned_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Insertable)]

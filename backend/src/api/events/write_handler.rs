@@ -14,6 +14,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
+use crate::api::common::{error_response, ErrorSpec};
 use crate::api::state::{
     AttendEventBody, AttendeeStatus, CreateEventBody, DataResponse, EventResponse, SuccessResponse,
     UpdateEventBody,
@@ -37,6 +38,90 @@ use super::events_tags_service::{
 use super::events_view::{build_event_response_raw, created_event_response, resolve_event_images};
 use super::events_write_repo::{self, is_serialization_failure};
 use super::events_write_service::prepare_update_changeset;
+
+/// Run Bielik-Guard against the supplied event text. Returns
+/// `Ok(None)` when moderation passes (allow / flag) or is disabled,
+/// `Ok(Some(response))` when the engine blocks — caller must return
+/// it as the handler's final response. Mirrors `moderate_bio_text`
+/// with the same `BIO` preset (conservative for sync gates) and a
+/// distinct error code so the client can decide which form field
+/// to highlight.
+async fn moderate_event_text(
+    text: &str,
+    field: &'static str,
+    headers: &HeaderMap,
+) -> Result<Option<Response>> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let Some(engine) = crate::moderation::shared() else {
+        return Ok(None);
+    };
+
+    let owned = trimmed.to_string();
+    let started = std::time::Instant::now();
+    let scores = tokio::task::spawn_blocking(move || engine.score(&owned))
+        .await
+        .map_err(|e| crate::error::AppError::Message(format!("moderation task: {e}")))?
+        .map_err(|e| crate::error::AppError::Message(format!("moderation inference: {e}")))?;
+    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+
+    let thresholds = crate::moderation::Thresholds::BIO;
+    let verdict = scores.verdict(&thresholds);
+    let flagged = scores.flagged(&thresholds);
+
+    metrics::histogram!("moderation_inference_latency_ms", "kind" => "event").record(elapsed_ms);
+    metrics::counter!(
+        "moderation_verdicts_total",
+        "kind" => "event",
+        "verdict" => verdict.as_str()
+    )
+    .increment(1);
+
+    match verdict {
+        crate::moderation::Verdict::Allow => Ok(None),
+        crate::moderation::Verdict::Flag => {
+            tracing::warn!(
+                field = field,
+                flagged = ?flagged.iter().map(|(c, s)| format!("{}={s:.2}", c.as_str())).collect::<Vec<_>>(),
+                elapsed_ms,
+                "event moderation: flagged for review (allowed to publish)"
+            );
+            Ok(None)
+        }
+        crate::moderation::Verdict::Block => {
+            let categories: Vec<&'static str> = flagged.iter().map(|(c, _)| c.as_str()).collect();
+            tracing::warn!(
+                field = field,
+                categories = ?categories,
+                elapsed_ms,
+                "event moderation: blocked on publish"
+            );
+            let label = match field {
+                "title" => "Tytuł",
+                "description" => "Opis",
+                _ => "Treść",
+            };
+            let error_msg = format!(
+                "{label} wydarzenia narusza zasady społeczności ({}). Proszę go zmienić przed zapisaniem.",
+                categories.join(", ")
+            );
+            Ok(Some(error_response(
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                headers,
+                ErrorSpec {
+                    error: error_msg,
+                    code: "EVENT_CONTENT_REJECTED",
+                    details: Some(serde_json::json!({
+                        "field": field,
+                        "categories": categories,
+                    })),
+                },
+            )))
+        }
+    }
+}
 
 /// Wrap an `AppError` into a diesel-level error so it can propagate through
 /// transaction boundaries. `Message` / `Validation` preserve their text for
@@ -138,6 +223,19 @@ pub(in crate::api) async fn event_create(
         Ok(v) => v,
         Err(response) => return Ok(*response),
     };
+
+    // Sync moderation gate for user-supplied free-text fields, mirroring
+    // the bio path. Title runs first because it's required; description
+    // only runs if present + non-empty.
+    if let Some(response) = moderate_event_text(&validated.title, "title", &headers).await? {
+        return Ok(response);
+    }
+    if let Some(desc) = payload.description.as_deref() {
+        if let Some(response) = moderate_event_text(desc, "description", &headers).await? {
+            return Ok(response);
+        }
+    }
+
     let tag_names = payload.tags.clone();
     let user_id = viewer.user_id;
 
@@ -269,6 +367,19 @@ pub(in crate::api) async fn event_update(
         },
         None => None,
     };
+
+    // Sync moderation gate. Only run on fields the caller is actually
+    // changing — partial updates omit unchanged fields.
+    if let Some(ref new_title) = payload.title {
+        if let Some(response) = moderate_event_text(new_title, "title", &headers).await? {
+            return Ok(response);
+        }
+    }
+    if let Some(Some(ref new_desc)) = payload.description {
+        if let Some(response) = moderate_event_text(new_desc, "description", &headers).await? {
+            return Ok(response);
+        }
+    }
 
     let mut conn = crate::db::conn().await?;
     let user_id = viewer.user_id;

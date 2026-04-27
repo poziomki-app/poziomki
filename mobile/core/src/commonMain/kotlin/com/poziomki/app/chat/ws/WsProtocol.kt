@@ -115,6 +115,8 @@ sealed interface WsServerMessage {
         val isMine: Boolean = false,
         val isEdited: Boolean = false,
         val createdAt: String,
+        val moderationVerdict: String? = null,
+        val moderationCategories: List<String> = emptyList(),
     ) : WsServerMessage
 
     @Serializable
@@ -202,6 +204,8 @@ data class WsMessagePayload(
     val isMine: Boolean = false,
     val isEdited: Boolean = false,
     val createdAt: String,
+    val moderationVerdict: String? = null,
+    val moderationCategories: List<String> = emptyList(),
 )
 
 @Serializable

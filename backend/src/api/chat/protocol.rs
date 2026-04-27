@@ -152,6 +152,14 @@ pub struct MessagePayload {
     pub is_mine: bool,
     pub is_edited: bool,
     pub created_at: String,
+    /// Bielik-Guard verdict: `None` = not yet scanned (clients render
+    /// as allow), `"allow"` / `"flag"` / `"block"` once scanned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moderation_verdict: Option<String>,
+    /// Categories above the flag threshold. Always present (possibly
+    /// empty) so clients don't need to default-construct.
+    #[serde(default)]
+    pub moderation_categories: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
