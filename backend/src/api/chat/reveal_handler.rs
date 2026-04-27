@@ -51,21 +51,19 @@ pub(in crate::api) async fn message_reveal(
         async move {
             // RLS on chat_message_reveals enforces both that the
             // viewer is a member of the message's conversation and
-            // that they're inserting for themselves. So the only
-            // failure mode we need to surface is "message doesn't
-            // exist" — which RLS would surface as a CHECK violation
-            // we can't distinguish, hence the explicit pre-check.
-            let exists: bool = crate::db::schema::messages::table
-                .filter(crate::db::schema::messages::id.eq(message_id))
-                .count()
-                .get_result::<i64>(conn)
-                .await?
-                > 0;
-            if !exists {
-                return Ok::<_, diesel::result::Error>(RevealOutcome::NotFound);
-            }
-
-            diesel::insert_into(r::chat_message_reveals)
+            // that they're inserting for themselves. The FK on
+            // `message_id` enforces existence.
+            //
+            // We deliberately do NOT pre-check existence: an existence
+            // probe before the RLS-gated insert would let any caller
+            // distinguish "message doesn't exist" (404 from probe)
+            // from "exists but not in your conversation" (RLS reject)
+            // — i.e. enumerate every message UUID in the system. The
+            // insert itself is the source of truth: success means the
+            // viewer can see this message and it exists; any failure
+            // collapses to NOT_FOUND so the responses are
+            // indistinguishable from the outside.
+            let insert_result = diesel::insert_into(r::chat_message_reveals)
                 .values((
                     r::message_id.eq(message_id),
                     r::viewer_user_id.eq(viewer_user_id),
@@ -74,9 +72,24 @@ pub(in crate::api) async fn message_reveal(
                 .on_conflict((r::message_id, r::viewer_user_id))
                 .do_nothing()
                 .execute(conn)
-                .await?;
+                .await;
 
-            Ok(RevealOutcome::Inserted)
+            match insert_result {
+                Ok(_) => Ok::<_, diesel::result::Error>(RevealOutcome::Inserted),
+                Err(err) => {
+                    // FK violation (message gone) and RLS rejection
+                    // (not your conversation, or somebody else's
+                    // viewer_user_id) both surface here. Log so real
+                    // outages aren't silently 404'd, then collapse.
+                    tracing::debug!(
+                        message_id = %message_id,
+                        viewer_user_id,
+                        error = %err,
+                        "chat reveal rejected (treating as not-found for response uniformity)"
+                    );
+                    Ok(RevealOutcome::NotFound)
+                }
+            }
         }
         .scope_boxed()
     })
