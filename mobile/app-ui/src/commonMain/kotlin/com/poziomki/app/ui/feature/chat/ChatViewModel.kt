@@ -15,8 +15,10 @@ import com.poziomki.app.data.repository.MatchProfileRepository
 import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
+import com.poziomki.app.ui.designsystem.components.SnackbarType
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
+import com.poziomki.app.ui.feature.chat.model.TransientNotice
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -340,19 +342,41 @@ class ChatViewModel(
      * matching report reason fall through to "inappropriate".
      */
     fun reportFlaggedMessage(event: TimelineItem.Event) {
+        if (event.locallyReported) return
         val messageId = event.eventId ?: return
         val reason = autoPickReportReason(event.moderationCategories)
         viewModelScope.launch {
             when (apiService.reportChatMessage(messageId, reason, null)) {
                 is ApiResult.Success -> {
-                    _uiState.update { it.copy(error = "Zgłoszenie wysłane. Dzięki.") }
+                    activeTimeline?.markModerationReported(event.eventOrTransactionId)
+                    _uiState.update {
+                        it.copy(
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Zgłoszenie wysłane. Dzięki!",
+                                    type = SnackbarType.SUCCESS,
+                                ),
+                        )
+                    }
                 }
 
                 is ApiResult.Error -> {
-                    _uiState.update { it.copy(error = "Nie udało się wysłać zgłoszenia.") }
+                    _uiState.update {
+                        it.copy(
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Nie udało się wysłać zgłoszenia.",
+                                    type = SnackbarType.ERROR,
+                                ),
+                        )
+                    }
                 }
             }
         }
+    }
+
+    fun clearTransientNotice() {
+        _uiState.update { it.copy(transientNotice = null) }
     }
 
     private fun autoPickReportReason(categories: List<String>): String {

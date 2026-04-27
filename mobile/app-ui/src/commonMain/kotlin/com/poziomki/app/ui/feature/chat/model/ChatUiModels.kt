@@ -2,6 +2,17 @@ package com.poziomki.app.ui.feature.chat.model
 
 import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.chat.api.TimelineMode
+import com.poziomki.app.ui.designsystem.components.SnackbarType
+
+/**
+ * Auto-dismissing toast-like message for one-off feedback (e.g.
+ * "Report sent. Thanks."). Distinct from `error` which is reserved
+ * for persistent errors that the user has to clear manually.
+ */
+data class TransientNotice(
+    val message: String,
+    val type: SnackbarType,
+)
 
 sealed interface ComposerMode {
     data object NewMessage : ComposerMode
@@ -43,6 +54,7 @@ data class ChatUiState(
     val searchMatchIndices: List<Int> = emptyList(),
     val currentSearchMatchIndex: Int = -1,
     val isBlocked: Boolean = false,
+    val transientNotice: TransientNotice? = null,
 )
 
 data class NewChatUiState(
