@@ -232,6 +232,22 @@ internal fun NearbyEventsContent(
                     )
                 }
 
+                // User location dot
+                if (userLat != null && userLng != null) {
+                    val userSource =
+                        rememberGeoJsonSource(
+                            data = pointGeoJson(userLat, userLng),
+                        )
+                    CircleLayer(
+                        id = "user-location",
+                        source = userSource,
+                        radius = const(8.dp),
+                        color = const(White),
+                        strokeColor = const(Primary),
+                        strokeWidth = const(3.dp),
+                    )
+                }
+
                 // Selected dot
                 val selEvent = geoEvents.find { it.id == selectedEventId }
                 if (selEvent != null) {
