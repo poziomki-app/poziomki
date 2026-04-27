@@ -271,4 +271,15 @@ class ApiService(
     @Suppress("ktlint:standard:function-signature")
     suspend fun revealChatMessage(messageId: String): ApiResult<SuccessResponse> =
         client.post("/api/v1/chat/messages/$messageId/reveal")
+
+    /** File a per-message moderation report. */
+    suspend fun reportChatMessage(
+        messageId: String,
+        reason: String,
+        description: String? = null,
+    ): ApiResult<SuccessResponse> =
+        client.post(
+            "/api/v1/chat/messages/$messageId/report",
+            ReportConversationRequest(reason = reason, description = description),
+        )
 }

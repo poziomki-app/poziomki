@@ -43,6 +43,11 @@ data class ChatUiState(
     val searchMatchIndices: List<Int> = emptyList(),
     val currentSearchMatchIndex: Int = -1,
     val isBlocked: Boolean = false,
+    /**
+     * Set when the user taps the floating flag on a flagged message
+     * — drives the report dialog. Cleared on submit/dismiss.
+     */
+    val pendingMessageReport: TimelineItem.Event? = null,
 )
 
 data class NewChatUiState(

@@ -333,16 +333,25 @@ class ChatViewModel(
         }
     }
 
+    /** Open the existing ReportDialog targeted at this message. */
     fun reportFlaggedMessage(event: TimelineItem.Event) {
-        val roomId = boundRoomId ?: return
-        // Reuse the existing conversation-level report endpoint —
-        // we don't have per-message reporting yet but conversation
-        // reason="inappropriate" is the right shape for a model
-        // miss. Description carries the message id so the admin
-        // tooling can correlate.
-        val description = event.eventId?.let { "Flagged message: $it" }
+        if (event.eventId == null) return
+        _uiState.update { it.copy(pendingMessageReport = event) }
+    }
+
+    fun dismissMessageReport() {
+        _uiState.update { it.copy(pendingMessageReport = null) }
+    }
+
+    fun submitMessageReport(
+        reason: String,
+        description: String?,
+    ) {
+        val target = _uiState.value.pendingMessageReport ?: return
+        val messageId = target.eventId ?: return
+        _uiState.update { it.copy(pendingMessageReport = null) }
         viewModelScope.launch {
-            when (apiService.reportConversation(roomId, "inappropriate", description)) {
+            when (apiService.reportChatMessage(messageId, reason, description)) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(error = "Zgłoszenie wysłane. Dzięki.") }
                 }
