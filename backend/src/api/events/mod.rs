@@ -142,8 +142,9 @@ pub(super) async fn events_mine(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    list_events_with_viewer(&headers, |conn, profile_id| {
-        Box::pin(async move { events_repo::list_events_by_creator(conn, profile_id).await })
+    let now = Utc::now();
+    list_events_with_viewer(&headers, move |conn, profile_id| {
+        Box::pin(async move { events_repo::list_events_by_creator(conn, profile_id, now).await })
     })
     .await
 }
@@ -152,8 +153,9 @@ pub(super) async fn events_saved(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
 ) -> Result<Response> {
-    list_events_with_viewer(&headers, |conn, profile_id| {
-        Box::pin(async move { events_repo::list_saved_events(conn, profile_id).await })
+    let now = Utc::now();
+    list_events_with_viewer(&headers, move |conn, profile_id| {
+        Box::pin(async move { events_repo::list_saved_events(conn, profile_id, now).await })
     })
     .await
 }

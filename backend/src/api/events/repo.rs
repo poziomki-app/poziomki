@@ -28,10 +28,17 @@ pub(in crate::api) async fn list_upcoming_events(
 pub(in crate::api) async fn list_events_by_creator(
     conn: &mut AsyncPgConnection,
     creator_id: Uuid,
+    now: DateTime<Utc>,
 ) -> std::result::Result<Vec<Event>, crate::error::AppError> {
     let models = events::table
         .filter(events::creator_id.eq(creator_id))
-        .order(events::starts_at.desc())
+        .filter(
+            events::ends_at
+                .is_null()
+                .and(events::starts_at.ge(now))
+                .or(events::ends_at.ge(now)),
+        )
+        .order(events::starts_at.asc())
         .load::<Event>(conn)
         .await?;
     Ok(models)
@@ -40,6 +47,7 @@ pub(in crate::api) async fn list_events_by_creator(
 pub(in crate::api) async fn list_saved_events(
     conn: &mut AsyncPgConnection,
     profile_id: Uuid,
+    now: DateTime<Utc>,
 ) -> std::result::Result<Vec<Event>, crate::error::AppError> {
     let models = events::table
         .inner_join(
@@ -47,6 +55,12 @@ pub(in crate::api) async fn list_saved_events(
                 .eq(events::id)
                 .and(event_interactions::profile_id.eq(profile_id))
                 .and(event_interactions::kind.eq(super::EVENT_INTERACTION_SAVED))),
+        )
+        .filter(
+            events::ends_at
+                .is_null()
+                .and(events::starts_at.ge(now))
+                .or(events::ends_at.ge(now)),
         )
         .order(event_interactions::created_at.desc())
         .select(events::all_columns)
