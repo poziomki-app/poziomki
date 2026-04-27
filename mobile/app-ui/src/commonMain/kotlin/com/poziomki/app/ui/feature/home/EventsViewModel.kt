@@ -12,6 +12,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class EventsState(
     val allEvents: List<Event> = emptyList(),
@@ -212,15 +219,18 @@ class EventsViewModel(
         viewModelScope.launch {
             when (val result = apiService.getMatchingEvents(lat = lat, lng = lng, radiusM = radiusM)) {
                 is ApiResult.Success -> {
-                    val nearby = result.data
-                    val closest =
-                        nearby
+                    val sortedNearby =
+                        result.data
                             .filter { it.latitude != null && it.longitude != null }
-                            .minByOrNull { distanceDeg(lat, lng, it.latitude!!, it.longitude!!) }
+                            .map { it to distanceMeters(lat, lng, it.latitude!!, it.longitude!!) }
+                            .filter { (_, d) -> d <= radiusM }
+                            .sortedBy { (_, d) -> d }
+                            .map { (event, _) -> event }
                     _state.value =
                         _state.value.copy(
-                            nearbyEvents = nearby,
-                            selectedNearbyEventId = closest?.id ?: _state.value.selectedNearbyEventId,
+                            nearbyEvents = sortedNearby,
+                            selectedNearbyEventId =
+                                sortedNearby.firstOrNull()?.id ?: _state.value.selectedNearbyEventId,
                         )
                     filterEvents()
                 }
@@ -230,16 +240,24 @@ class EventsViewModel(
         }
     }
 
-    private fun distanceDeg(
+    private fun distanceMeters(
         lat1: Double,
         lng1: Double,
         lat2: Double,
         lng2: Double,
     ): Double {
-        val dLat = lat1 - lat2
-        val dLng = lng1 - lng2
-        return dLat * dLat + dLng * dLng
+        val earthRadiusM = 6_371_000.0
+        val dLat = (lat2 - lat1).toRadians()
+        val dLng = (lng2 - lng1).toRadians()
+        val a =
+            sin(dLat / 2) * sin(dLat / 2) +
+                cos(lat1.toRadians()) * cos(lat2.toRadians()) *
+                sin(dLng / 2) * sin(dLng / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return earthRadiusM * c
     }
+
+    private fun Double.toRadians(): Double = this * PI / 180.0
 
     fun onSwipeFeedback(
         eventId: String,
@@ -306,8 +324,10 @@ class EventsViewModel(
                 TimeFilter.NEARBY -> current.nearbyEvents
                 else -> current.allEvents
             }
+        val now = Clock.System.now()
         val filtered =
             source.filter { event ->
+                val notFinished = !event.hasFinished(now)
                 val notDismissed =
                     current.activeFilter != TimeFilter.ALL || event.id !in current.dismissedEventIds
                 val matchesSearch =
@@ -320,8 +340,14 @@ class EventsViewModel(
                 val matchesTags =
                     current.selectedCategories.isEmpty() ||
                         event.tags.any { it.category in current.selectedCategories }
-                notDismissed && matchesSearch && matchesTime && matchesTags
+                notFinished && notDismissed && matchesSearch && matchesTime && matchesTags
             }
         _state.value = current.copy(events = filtered)
+    }
+
+    private fun Event.hasFinished(now: Instant): Boolean {
+        val end = endsAt ?: startsAt
+        val endInstant = runCatching { Instant.parse(end) }.getOrNull() ?: return false
+        return endInstant < now
     }
 }
