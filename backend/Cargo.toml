@@ -63,7 +63,7 @@ dashmap = { version = "6" }
 futures-util = { version = "0.3" }
 subtle = { version = "2" }
 lettre = { version = "=0.11.21", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "dkim"] }
-hickory-resolver = { version = "0.25", features = ["tokio"] }
+hickory-resolver = { version = "0.26", features = ["tokio"] }
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 fast_image_resize = "=6.0.0"
 webp = "=0.3.1"
