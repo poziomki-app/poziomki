@@ -28,11 +28,20 @@ class MainActivity : ComponentActivity() {
         // in via Privacy settings; the toggle defaults off so the first
         // frame is always protected.
         applySecureFlag(secure = true)
+        // Wrap defensively at the coroutine boundary — a failure to
+        // read the privacy flag must never crash the activity. Worst
+        // case the user stays on the safe default (FLAG_SECURE on).
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                appPreferences.screenshotsAllowed.collect { allowed ->
-                    applySecureFlag(secure = !allowed)
+            try {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    appPreferences.screenshotsAllowed.collect { allowed ->
+                        applySecureFlag(secure = !allowed)
+                    }
                 }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") t: Throwable,
+            ) {
+                android.util.Log.e("MainActivity", "screenshotsAllowed observer crashed", t)
             }
         }
         if (savedInstanceState == null) {
