@@ -11,7 +11,7 @@ use crate::api::{error_response, ErrorSpec};
 use crate::db;
 use crate::db::models::profile_bookmarks::ProfileBookmark;
 use crate::db::models::profiles::Profile;
-use crate::db::schema::{profile_bookmarks, profiles};
+use crate::db::schema::{profile_blocks, profile_bookmarks, profiles};
 
 use super::profiles_view::profile_to_response;
 use crate::api::state::ProfileResponse;
@@ -106,8 +106,29 @@ pub(in crate::api) async fn profiles_bookmarked(
         .load(conn)
         .await?;
 
+    // Filter symmetric blocks. Mirrors matching/repo.rs:209-234 and
+    // search.rs — without this, a profile that bookmarked someone
+    // before either side blocked still sees the blocked profile's
+    // full data on `GET /api/v1/profiles/bookmarked`.
+    let block_rows: Vec<(Uuid, Uuid)> = profile_blocks::table
+        .filter(
+            profile_blocks::blocker_id
+                .eq(my_profile_id)
+                .or(profile_blocks::blocked_id.eq(my_profile_id)),
+        )
+        .select((profile_blocks::blocker_id, profile_blocks::blocked_id))
+        .load(conn)
+        .await?;
+    let blocked: std::collections::HashSet<Uuid> = block_rows
+        .into_iter()
+        .map(|(a, b)| if a == my_profile_id { b } else { a })
+        .collect();
+
     let mut responses = Vec::with_capacity(bookmarked_profiles.len());
     for (_bookmark, profile) in bookmarked_profiles {
+        if blocked.contains(&profile.id) {
+            continue;
+        }
         // Narrow public-projection helper avoids reading the owner's full
         // users row just to get their pid.
         let owner_pid = db::user_pid_for_id(conn, profile.user_id)
