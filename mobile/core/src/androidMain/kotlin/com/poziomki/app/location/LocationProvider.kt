@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.os.Build
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationListenerCompat
@@ -87,19 +88,30 @@ actual class LocationProvider(
         }
 
     private companion object {
-        const val LOCATION_TIMEOUT_MS = 5_000L
-        val ACTIVE_PROVIDERS =
-            listOf(
-                LocationManager.NETWORK_PROVIDER,
-                LocationManager.GPS_PROVIDER,
-                LocationManager.PASSIVE_PROVIDER,
-            )
-        val LAST_KNOWN_PROVIDERS =
-            listOf(
-                LocationManager.PASSIVE_PROVIDER,
-                LocationManager.NETWORK_PROVIDER,
-                LocationManager.GPS_PROVIDER,
-            )
+        const val LOCATION_TIMEOUT_MS = 15_000L
+
+        // FUSED on Android 12+ is the cheapest and most reliable; otherwise NETWORK
+        // (cell+wifi) under COARSE permission. PASSIVE is intentionally excluded —
+        // it only forwards fixes other apps already requested, so it cannot
+        // deliver an active update on its own.
+        val ACTIVE_PROVIDERS: List<String> =
+            buildList {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    add(LocationManager.FUSED_PROVIDER)
+                }
+                add(LocationManager.NETWORK_PROVIDER)
+                add(LocationManager.GPS_PROVIDER)
+            }
+
+        val LAST_KNOWN_PROVIDERS: List<String> =
+            buildList {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    add(LocationManager.FUSED_PROVIDER)
+                }
+                add(LocationManager.PASSIVE_PROVIDER)
+                add(LocationManager.NETWORK_PROVIDER)
+                add(LocationManager.GPS_PROVIDER)
+            }
     }
 }
 
