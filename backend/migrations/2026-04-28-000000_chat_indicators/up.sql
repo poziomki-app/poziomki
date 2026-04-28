@@ -208,3 +208,20 @@ JOIN public.messages m
  AND (m.created_at < rm.created_at
       OR (m.created_at = rm.created_at AND m.id <= rm.id))
 ON CONFLICT (message_id, user_id) DO NOTHING;
+
+-- Backfill deliveries for the same (member, message) universe: every
+-- non-self, non-deleted message in a conversation the user belongs to.
+-- Without this, every existing chat regresses to a single grey ✓ on
+-- the sender's screen on first launch after the upgrade — even though
+-- the message was clearly delivered (the recipient already read some
+-- of them). We use the message's created_at as the delivered_at floor;
+-- in practice delivery happened within seconds of send, so anchoring
+-- at created_at is a safe lower bound that won't lie about ordering.
+INSERT INTO public.message_deliveries (message_id, user_id, delivered_at)
+SELECT m.id, cm.user_id, m.created_at
+FROM public.conversation_members cm
+JOIN public.messages m
+  ON m.conversation_id = cm.conversation_id
+ AND m.sender_id <> cm.user_id
+ AND m.deleted_at IS NULL
+ON CONFLICT (message_id, user_id) DO NOTHING;
