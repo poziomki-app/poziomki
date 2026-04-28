@@ -63,6 +63,49 @@ fun EventChatLoadingView(onBack: () -> Unit) {
 }
 
 @Composable
+fun EventChatErrorView(
+    message: String,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            Icon(
+                imageVector = PhosphorIcons.Bold.ArrowLeft,
+                contentDescription = "Wstecz",
+                tint = TextPrimary,
+            )
+        }
+        Column(
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = message,
+                color = TextSecondary,
+                fontFamily = NunitoFamily,
+                fontSize = 15.sp,
+            )
+            Spacer(Modifier.height(16.dp))
+            AppButton(
+                text = "Spróbuj ponownie",
+                onClick = onRetry,
+                variant = ButtonVariant.PRIMARY,
+            )
+        }
+    }
+}
+
+@Composable
 fun EventChatNotFoundView(onBack: () -> Unit) {
     Box(
         modifier =
