@@ -1,6 +1,8 @@
 package com.poziomki.app
 
+import android.app.ActivityManager
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -21,6 +23,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Recents carousel placeholder background — kept in sync with our
+        // AMOLED-dark splash (windowBackground = #000). Because FLAG_SECURE is
+        // on by default, Android renders this placeholder in place of the
+        // live snapshot, and without an explicit TaskDescription backgroundColor
+        // it defaults to a system-themed white card on light-mode devices.
+        setTaskDescription(
+            ActivityManager.TaskDescription
+                .Builder()
+                .setBackgroundColor(Color.BLACK)
+                .setPrimaryColor(Color.BLACK)
+                .build(),
+        )
         // Block screenshots + recent-apps previews by default. Chat
         // messages, profile edit, and password-reset flows all surface
         // PII that shouldn't leak to a device's recents carousel,
