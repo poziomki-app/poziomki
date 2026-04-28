@@ -22,7 +22,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlin.concurrent.Volatile
+
+private fun Event.hasFinished(now: Instant): Boolean {
+    val end = endsAt ?: startsAt
+    val endInstant = runCatching { Instant.parse(end) }.getOrNull() ?: return false
+    return endInstant < now
+}
+
+private fun List<Event>.dropFinished(): List<Event> {
+    val now = Clock.System.now()
+    return filterNot { it.hasFinished(now) }
+}
 
 class EventRepository(
     private val db: PoziomkiDatabase,
@@ -75,21 +87,21 @@ class EventRepository(
             .selectAll()
             .asFlow()
             .mapToList(Dispatchers.IO)
-            .map { rows -> rows.map { it.toApiModel() } }
+            .map { rows -> rows.map { it.toApiModel() }.dropFinished() }
 
     fun observeRecommendedEvents(): Flow<List<Event>> =
         db.eventQueries
             .selectRecommended()
             .asFlow()
             .mapToList(Dispatchers.IO)
-            .map { rows -> rows.map { it.toApiModel() } }
+            .map { rows -> rows.map { it.toApiModel() }.dropFinished() }
 
     fun observeSavedEvents(): Flow<List<Event>> =
         db.eventQueries
             .selectSaved()
             .asFlow()
             .mapToList(Dispatchers.IO)
-            .map { rows -> rows.map { it.toApiModel() } }
+            .map { rows -> rows.map { it.toApiModel() }.dropFinished() }
 
     fun observeEvent(id: String): Flow<Event?> =
         db.eventQueries
@@ -134,6 +146,7 @@ class EventRepository(
                         .selectRecommended()
                         .executeAsList()
                         .map { it.toApiModel() }
+                        .dropFinished()
                 }
             }
 
@@ -155,7 +168,7 @@ class EventRepository(
                     lastLat = lat
                     lastLng = lng
                     lastRadius = radiusM
-                    result.data
+                    result.data.dropFinished()
                 }
 
                 is ApiResult.Error -> {
@@ -163,6 +176,7 @@ class EventRepository(
                         .selectRecommended()
                         .executeAsList()
                         .map { it.toApiModel() }
+                        .dropFinished()
                 }
             }
         }
