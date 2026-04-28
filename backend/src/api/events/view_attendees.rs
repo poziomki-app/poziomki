@@ -1,12 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use diesel_async::AsyncPgConnection;
+use diesel::prelude::*;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use super::events_view_images::resolve_image_map;
 use super::events_view_repo::{load_attendee_rows, AttendeeRow};
 use crate::api::state::AttendeeFullInfo;
 use crate::db;
+use crate::db::schema::{profile_blocks, profiles};
 
 /// Resolve `profile.user_id -> user.pid` for a set of attendee profiles via
 /// the narrow `app.user_pids_for_ids` SECURITY DEFINER helper. The API role
@@ -53,14 +55,66 @@ fn build_attendee_info(
     }
 }
 
+/// Resolve the set of profile ids that are on either side of a block with the
+/// viewer. Mirrors `api::matching::repo::load_candidate_profiles` so that
+/// attendee listings hide blocked users in both directions.
+async fn load_blocked_profile_ids(
+    conn: &mut AsyncPgConnection,
+    viewer_user_id: i32,
+) -> std::result::Result<HashSet<Uuid>, crate::error::AppError> {
+    let viewer_profile_ids: Vec<Uuid> = profiles::table
+        .filter(profiles::user_id.eq(viewer_user_id))
+        .select(profiles::id)
+        .load(conn)
+        .await?;
+
+    if viewer_profile_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let rows: Vec<(Uuid, Uuid)> = profile_blocks::table
+        .filter(
+            profile_blocks::blocker_id
+                .eq_any(&viewer_profile_ids)
+                .or(profile_blocks::blocked_id.eq_any(&viewer_profile_ids)),
+        )
+        .select((profile_blocks::blocker_id, profile_blocks::blocked_id))
+        .load(conn)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .flat_map(|(a, b)| {
+            let mut out = Vec::with_capacity(2);
+            if !viewer_profile_ids.contains(&a) {
+                out.push(a);
+            }
+            if !viewer_profile_ids.contains(&b) {
+                out.push(b);
+            }
+            out
+        })
+        .collect())
+}
+
 /// Collect attendee rows + the viewer-facing pid/name/picture tuples required
 /// to render them. Must run inside an existing viewer-scoped transaction.
+///
+/// Filters out attendees on either side of a block with `viewer_user_id`. The
+/// raw `event_attendees` table has no block awareness, and RLS on profiles is
+/// bucket-only, so without this filter blocked users leak through the
+/// attendee list (matching/search/chat already filter — this closes the gap).
 pub(in crate::api) async fn attendee_info(
     conn: &mut AsyncPgConnection,
     event_id: Uuid,
     creator_id: Uuid,
+    viewer_user_id: i32,
 ) -> std::result::Result<Vec<AttendeeFullInfo>, crate::error::AppError> {
-    let rows = load_attendee_rows(conn, event_id).await?;
+    let mut rows = load_attendee_rows(conn, event_id).await?;
+    let blocked = load_blocked_profile_ids(conn, viewer_user_id).await?;
+    if !blocked.is_empty() {
+        rows.retain(|row| !blocked.contains(&row.profile.id));
+    }
     let user_pids = load_user_pids(conn, &rows).await?;
 
     let filenames = rows
