@@ -52,6 +52,12 @@ class SessionManager(
         email: String,
         name: String,
     ) {
+        // Order matters: token first (durably flushed by tokenStore),
+        // then DataStore. USER_ID is the gate that `isLoggedIn` reads,
+        // so committing it last guarantees we never observe
+        // logged-in-without-token. If the second write fails, USER_ID
+        // stays unset, the app shows the login screen, and the next
+        // sign-in overwrites the orphaned token cleanly.
         tokenStore.saveToken(token)
         dataStore.edit { prefs ->
             prefs[USER_ID] = userId
@@ -100,12 +106,18 @@ class SessionManager(
     }
 
     suspend fun clearSession() {
-        tokenStore.clearToken()
-        // Preserve device_id across logouts
+        // Order matters (mirrors saveSession): clear USER_ID first so
+        // `isLoggedIn` immediately observes false, *then* drop the
+        // token. If we crash between the two, we'd have an orphaned
+        // token but no USER_ID — the app shows the login screen, the
+        // next sign-in overwrites the token, and there's no stuck
+        // logged-in-without-token state.
+        // Preserve device_id across logouts.
         val deviceId = dataStore.data.first()[DEVICE_ID]
         dataStore.edit {
             it.clear()
             if (deviceId != null) it[DEVICE_ID] = deviceId
         }
+        tokenStore.clearToken()
     }
 }
