@@ -111,47 +111,21 @@ jobs:
             "ubuntu@${VPS_HOST}:/var/www/download/"
 
       - name: Verify HTTP availability
-        id: verify
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           # Spot-check the canonical short alias; Caddy serves /download/
           # with file_server browse + Content-Disposition: attachment.
+          # /usr/local/bin/apk-notify.sh on the VPS picks the file up via
+          # inotifywait and fires its own ntfy notification (with the app
+          # logo + Zaktualizuj action button), so this workflow stays quiet.
           url="https://poziomki.app/download/poziomki-v${VERSION}.apk"
           for i in $(seq 1 10); do
             if curl -fsSI "$url" >/dev/null; then
               echo "OK: $url"
-              echo "url=$url" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 3
           done
           echo "FAIL: $url did not become available" >&2
-          echo "url=$url" >> "$GITHUB_OUTPUT"
           exit 1
-
-      - name: Notify ntfy on success
-        if: success()
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-          URL: ${{ steps.verify.outputs.url }}
-        run: |
-          curl -fsS \
-            -H "Title: poziomki ${TAG} APK published" \
-            -H "Priority: default" \
-            -H "Tags: rocket,android" \
-            -d "Live at ${URL}" \
-            https://ntfy.poziomki.app/server-alerts
-
-      - name: Notify ntfy on failure
-        if: failure()
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          curl -fsS \
-            -H "Title: poziomki ${TAG} APK publish FAILED" \
-            -H "Priority: high" \
-            -H "Tags: warning,android" \
-            -d "See https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}" \
-            https://ntfy.poziomki.app/server-alerts || true
