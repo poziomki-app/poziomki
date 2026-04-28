@@ -232,6 +232,7 @@ class WsChatClient(
             current[idx] =
                 current[idx].copy(
                     latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
+                    latestMessageSendStatus = EventSendStatus.Read,
                 )
             _rooms.value = current
         }
