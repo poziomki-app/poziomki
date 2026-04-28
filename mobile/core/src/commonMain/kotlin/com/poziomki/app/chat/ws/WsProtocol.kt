@@ -278,6 +278,7 @@ data class WsConversationPayload(
     val directUserAvatar: String? = null,
     val unreadCount: Long = 0,
     val latestMessage: String? = null,
+    val latestMessageId: String? = null,
     val latestTimestamp: String? = null,
     val latestMessageIsMine: Boolean = false,
     val latestSenderName: String? = null,

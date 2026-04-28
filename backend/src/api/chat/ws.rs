@@ -1094,8 +1094,7 @@ async fn handle_typing(
             // Note typing TTL on the hub so the janitor can emit a
             // stop-typing fanout if the user goes silent or
             // disconnects without explicitly clearing it.
-            hub.note_typing(user_id, conversation_id);
-            hub.note_typing_members(user_id, conversation_id, members.clone());
+            hub.note_typing(user_id, conversation_id, members.clone());
         } else {
             hub.clear_typing(user_id, conversation_id);
         }
