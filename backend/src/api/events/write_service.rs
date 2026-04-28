@@ -1,14 +1,52 @@
 use axum::http::HeaderMap;
 use chrono::Utc;
+use diesel::prelude::*;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
+use crate::api::extract_filename;
 use crate::api::state::UpdateEventBody;
 use crate::db::models::events::{Event, EventChangeset};
+use crate::db::schema::uploads;
 
 use super::events_service::{
     self, forbidden, validate_event_category, validate_event_description, validate_event_location,
     validate_max_attendees,
 };
+
+/// Verify that `filename` is a non-deleted upload owned by `profile_id`.
+/// Without this, a creator could set `cover_image` to any filename they
+/// observed (e.g. extracted from a public profile/event URL) and the
+/// API would issue signed URLs pointing at the original owner's bytes.
+pub(in crate::api) async fn verify_event_cover_ownership(
+    conn: &mut AsyncPgConnection,
+    headers: &HeaderMap,
+    profile_id: Uuid,
+    raw: &str,
+) -> std::result::Result<String, Box<axum::response::Response>> {
+    let filename = extract_filename(raw);
+    let owned: Option<String> = uploads::table
+        .filter(uploads::owner_id.eq(Some(profile_id)))
+        .filter(uploads::filename.eq(&filename))
+        .filter(uploads::deleted.eq(false))
+        .select(uploads::filename)
+        .first::<String>(conn)
+        .await
+        .optional()
+        .map_err(|_| {
+            Box::new(events_service::validation_error(
+                headers,
+                "Upload storage is temporarily unavailable",
+            ))
+        })?;
+    if owned.is_none() {
+        return Err(Box::new(events_service::validation_error(
+            headers,
+            "Cover image must reference your uploaded file",
+        )));
+    }
+    Ok(filename)
+}
 
 type EventDates = (chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>);
 

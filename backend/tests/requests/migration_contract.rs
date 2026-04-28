@@ -1462,3 +1462,109 @@ async fn event_report_flow() {
     })
     .await;
 }
+
+// Regression: PATCH /profiles/{id} with `images: [F, F]` was rejected
+// because `verify_uploads_ownership` compared `owned.len()` to the raw
+// `filenames.len()` while SQL `IN` dedupes — owned came back as 1 even
+// when F was owned. Set-membership now passes iff every requested
+// filename is owned, so duplicates are accepted.
+#[tokio::test]
+#[serial]
+async fn profile_images_patch_accepts_duplicate_owned_filename() {
+    request(|request, _ctx| async move {
+        let (auth_key, auth_value) =
+            create_user_with_profile(&request, "dup_owner@example.com", "Dup").await;
+
+        let upload = upload_png(&request, &auth_key, &auth_value).await;
+        let filename = upload["data"]["filename"]
+            .as_str()
+            .expect("upload returns filename")
+            .to_string();
+
+        let me = request
+            .get("/api/v1/profiles/me")
+            .add_header(auth_key.clone(), auth_value.clone())
+            .await;
+        assert_eq!(me.status_code(), 200);
+        let profile_id = me.json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("profile id")
+            .to_string();
+
+        let resp = request
+            .patch(&format!("/api/v1/profiles/{profile_id}"))
+            .add_header(auth_key.clone(), auth_value.clone())
+            .json(&serde_json::json!({
+                "images": [filename.clone(), filename.clone()],
+            }))
+            .await;
+        assert_eq!(
+            resp.status_code(),
+            200,
+            "duplicate owned filenames must be accepted, body: {}",
+            resp.text()
+        );
+
+        // And both copies of the filename should appear in the rendered
+        // gallery — server returns signed URLs, so just look for the
+        // base filename as a substring twice.
+        let payload: serde_json::Value = resp.json();
+        let images = payload["data"]["images"].as_array().expect("images array");
+        assert_eq!(images.len(), 2);
+        for url in images {
+            let s = url.as_str().expect("image url is a string");
+            assert!(
+                s.contains(&filename),
+                "expected url {s} to reference {filename}"
+            );
+        }
+    })
+    .await;
+}
+
+// Companion negative test: a stranger's filename in `images[]` must be
+// rejected. Without the ownership check, the API would issue signed
+// URLs over the original owner's bytes — a content-theft, no-copy.
+#[tokio::test]
+#[serial]
+async fn profile_images_patch_rejects_other_users_filename() {
+    request(|request, _ctx| async move {
+        let (a_key, a_val) = create_user_with_profile(&request, "stealer_a@example.com", "A").await;
+        let upload_a = upload_png(&request, &a_key, &a_val).await;
+        let a_filename = upload_a["data"]["filename"]
+            .as_str()
+            .expect("a filename")
+            .to_string();
+
+        let (b_key, b_val) = create_user_with_profile(&request, "stealer_b@example.com", "B").await;
+        let upload_b = upload_png(&request, &b_key, &b_val).await;
+        let b_filename = upload_b["data"]["filename"]
+            .as_str()
+            .expect("b filename")
+            .to_string();
+
+        let me_b = request
+            .get("/api/v1/profiles/me")
+            .add_header(b_key.clone(), b_val.clone())
+            .await;
+        let b_profile_id = me_b.json::<serde_json::Value>()["data"]["id"]
+            .as_str()
+            .expect("b profile id")
+            .to_string();
+
+        let resp = request
+            .patch(&format!("/api/v1/profiles/{b_profile_id}"))
+            .add_header(b_key.clone(), b_val.clone())
+            .json(&serde_json::json!({
+                "images": [b_filename.clone(), a_filename.clone()],
+            }))
+            .await;
+        assert_eq!(
+            resp.status_code(),
+            400,
+            "B must not be able to claim A's filename, body: {}",
+            resp.text()
+        );
+    })
+    .await;
+}
