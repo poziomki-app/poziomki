@@ -83,6 +83,7 @@ fun RoomRow(
                 if (room.unreadCount == 0 && room.latestMessageIsMine) {
                     latestRoomStatusIconSpec(
                         sendStatus = room.latestMessageSendStatus,
+                        readByCount = room.latestMessageReadByCount,
                     )
                 } else {
                     null
@@ -241,8 +242,20 @@ private data class RoomStatusIconSpec(
 )
 
 @Composable
-private fun latestRoomStatusIconSpec(sendStatus: EventSendStatus?): RoomStatusIconSpec? =
-    when (sendStatus) {
+private fun latestRoomStatusIconSpec(
+    sendStatus: EventSendStatus?,
+    readByCount: Int,
+): RoomStatusIconSpec? {
+    // Defence-in-depth for the cold-start path: the conversation list
+    // payload from the server doesn't (yet) carry an explicit Read
+    // status, only the per-message `readByCount` counter restored from
+    // cache. Live ReadReceipt events flip [sendStatus] to Read at the
+    // data layer; until that fires after a fresh launch, fall back on
+    // the counter so the blue tick still renders.
+    if (readByCount > 0 && sendStatus != EventSendStatus.Failed && sendStatus != EventSendStatus.Sending) {
+        return RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = Primary)
+    }
+    return when (sendStatus) {
         EventSendStatus.Failed -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
         }
@@ -267,3 +280,4 @@ private fun latestRoomStatusIconSpec(sendStatus: EventSendStatus?): RoomStatusIc
             null
         }
     }
+}
