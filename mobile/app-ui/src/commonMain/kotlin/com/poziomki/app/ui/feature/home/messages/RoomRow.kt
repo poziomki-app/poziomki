@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -84,35 +85,38 @@ fun RoomRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                // Right-hand meta column. Width is reserved (not wrapContent)
-                // so adding/removing the unread badge does not change the
-                // column width — that was what made the name + preview jiggle
-                // a few pixels left when a new message arrived.
+                // Right-hand meta column. Width AND height are reserved so
+                // adding/removing the unread badge never changes the row's
+                // size — neither this row's name + preview position, nor the
+                // surrounding rows in the LazyColumn. The badge slot is
+                // always laid out at full size; a transparent placeholder
+                // takes its place when there's nothing to show.
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(
                     horizontalAlignment = Alignment.End,
                     modifier = Modifier.width(48.dp),
                 ) {
-                    room.latestTimestampMillis?.let {
-                        Text(
-                            text = formatRoomTimestamp(it),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (room.unreadCount > 0) Primary else TextSecondary,
-                        )
-                    }
+                    Text(
+                        text = room.latestTimestampMillis?.let { formatRoomTimestamp(it) } ?: " ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (room.unreadCount > 0) Primary else TextSecondary,
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
-                    if (room.unreadCount > 0) {
-                        Surface(
-                            color = Primary,
-                            contentColor = Background,
-                            shape = CircleShape,
-                        ) {
-                            Text(
-                                text = if (room.unreadCount > 99) "99+" else room.unreadCount.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                            )
+                    Box(modifier = Modifier.size(width = 24.dp, height = 18.dp)) {
+                        if (room.unreadCount > 0) {
+                            Surface(
+                                color = Primary,
+                                contentColor = Background,
+                                shape = CircleShape,
+                                modifier = Modifier.align(Alignment.CenterEnd),
+                            ) {
+                                Text(
+                                    text = if (room.unreadCount > 99) "99+" else room.unreadCount.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                )
+                            }
                         }
                     }
                 }
