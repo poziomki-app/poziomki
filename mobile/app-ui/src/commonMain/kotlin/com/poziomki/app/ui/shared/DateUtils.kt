@@ -1,9 +1,9 @@
 package com.poziomki.app.ui.shared
 
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 enum class TimeFilter {
     ALL,
@@ -51,8 +51,8 @@ fun formatEventDate(isoString: String): String {
     val instant = Instant.parse(isoString)
     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     val weekday = POLISH_WEEKDAYS[dt.dayOfWeek.ordinal]
-    val day = dt.dayOfMonth
-    val month = POLISH_MONTHS[dt.monthNumber - 1]
+    val day = dt.day
+    val month = POLISH_MONTHS[dt.month.ordinal]
     val hour = dt.hour.toString().padStart(2, '0')
     val minute = dt.minute.toString().padStart(2, '0')
     return "$weekday, $day $month · $hour:$minute"
@@ -62,8 +62,8 @@ fun formatEventDateFull(isoString: String): String {
     val instant = Instant.parse(isoString)
     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     val weekday = POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]
-    val day = dt.dayOfMonth
-    val month = POLISH_MONTHS_GENITIVE[dt.monthNumber - 1]
+    val day = dt.day
+    val month = POLISH_MONTHS_GENITIVE[dt.month.ordinal]
     val hour = dt.hour.toString().padStart(2, '0')
     val minute = dt.minute.toString().padStart(2, '0')
     return "$weekday, $day $month · $hour:$minute"
@@ -83,10 +83,10 @@ fun formatEventDateCompact(isoString: String): String {
     val minute = dt.minute.toString().padStart(2, '0')
     val time = "$hour:$minute"
     return when {
-        daysDiff == 0 -> "dziś, $time"
-        daysDiff == 1 -> "jutro, $time"
-        daysDiff in 2..6 -> "${POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]}, $time"
-        else -> "${dt.dayOfMonth} ${POLISH_MONTHS_GENITIVE[dt.monthNumber - 1]}, $time"
+        daysDiff == 0L -> "dziś, $time"
+        daysDiff == 1L -> "jutro, $time"
+        daysDiff in 2L..6L -> "${POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]}, $time"
+        else -> "${dt.day} ${POLISH_MONTHS_GENITIVE[dt.month.ordinal]}, $time"
     }
 }
 
@@ -104,7 +104,7 @@ fun pluralizePolish(
     }
 }
 
-fun eventDateKey(startsAt: String): Int {
+fun eventDateKey(startsAt: String): Long {
     val tz = TimeZone.currentSystemDefault()
     val eventDate = Instant.parse(startsAt).toLocalDateTime(tz).date
     return eventDate.toEpochDays()
@@ -120,8 +120,8 @@ fun dayLabel(startsAt: String): String {
             .date
     val daysDiff = eventDate.toEpochDays() - today.toEpochDays()
     return when (daysDiff) {
-        0 -> "dzisiaj"
-        1 -> "jutro"
+        0L -> "dzisiaj"
+        1L -> "jutro"
         else -> POLISH_WEEKDAYS_FULL[eventDate.dayOfWeek.ordinal]
     }
 }
@@ -151,7 +151,7 @@ fun matchesTimeFilter(
 
         TimeFilter.WEEK -> {
             val daysDiff = eventDate.toEpochDays() - today.toEpochDays()
-            daysDiff in 0..6
+            daysDiff in 0L..6L
         }
 
         TimeFilter.NEARBY -> {

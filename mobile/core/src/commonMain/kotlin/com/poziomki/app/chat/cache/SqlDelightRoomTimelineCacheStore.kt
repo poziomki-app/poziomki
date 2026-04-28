@@ -6,11 +6,11 @@ import com.poziomki.app.chat.api.ReactionSender
 import com.poziomki.app.chat.api.ReplyDetails
 import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.db.PoziomkiDatabase
-import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
 
 class SqlDelightRoomTimelineCacheStore(
     private val db: PoziomkiDatabase,

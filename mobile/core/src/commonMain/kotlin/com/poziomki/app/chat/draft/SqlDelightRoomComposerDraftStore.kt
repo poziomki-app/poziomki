@@ -1,7 +1,7 @@
 package com.poziomki.app.chat.draft
 
 import com.poziomki.app.db.PoziomkiDatabase
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class SqlDelightRoomComposerDraftStore(
     private val db: PoziomkiDatabase,

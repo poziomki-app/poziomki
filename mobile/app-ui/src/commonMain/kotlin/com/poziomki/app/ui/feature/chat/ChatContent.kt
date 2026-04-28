@@ -78,11 +78,11 @@ import com.poziomki.app.ui.feature.chat.model.ChatUiState
 import com.poziomki.app.ui.feature.chat.model.ComposerMode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -823,11 +823,11 @@ internal fun formatDate(timestampMillis: Long): String {
     val daysDiff = now.toEpochDays() - date.toEpochDays()
 
     return when {
-        daysDiff == 0 -> "Dzisiaj"
-        daysDiff == 1 -> "Wczoraj"
-        daysDiff in 2..6 -> weekdayShort(date.dayOfWeek)
-        now.year == date.year -> "${date.dayOfMonth} ${monthShort(date.monthNumber)}"
-        else -> "${date.dayOfMonth} ${monthShort(date.monthNumber)} ${date.year}"
+        daysDiff == 0L -> "Dzisiaj"
+        daysDiff == 1L -> "Wczoraj"
+        daysDiff in 2L..6L -> weekdayShort(date.dayOfWeek)
+        now.year == date.year -> "${date.day} ${monthShort(date.month.ordinal + 1)}"
+        else -> "${date.day} ${monthShort(date.month.ordinal + 1)} ${date.year}"
     }
 }
 
