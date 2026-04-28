@@ -242,7 +242,7 @@ class WsChatClient(
     /** Sum unread across non-muted rooms. UnreadUpdate events overwrite this. */
     private fun recomputeTotalUnread() {
         val now =
-            kotlinx.datetime.Clock.System
+            kotlin.time.Clock.System
                 .now()
                 .toEpochMilliseconds()
         _totalUnread.value =
@@ -284,7 +284,7 @@ class WsChatClient(
     ): Result<Unit> {
         val iso =
             mutedUntilMillis?.let {
-                kotlinx.datetime.Instant
+                kotlin.time.Instant
                     .fromEpochMilliseconds(it)
                     .toString()
             }
