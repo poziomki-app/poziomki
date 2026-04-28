@@ -7,6 +7,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.Looper
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationListenerCompat
 import androidx.core.location.LocationManagerCompat
@@ -28,11 +29,27 @@ actual class LocationProvider(
 
     @Suppress("MissingPermission")
     actual suspend fun getCurrentLocation(): LocationResult? {
-        if (!isPermissionGranted() || locationManager == null) return null
+        if (!isPermissionGranted()) {
+            Log.w(TAG, "permission not granted")
+            return null
+        }
+        if (locationManager == null) {
+            Log.w(TAG, "LocationManager unavailable")
+            return null
+        }
+        val enabledProviders = ACTIVE_PROVIDERS.filter { isEnabled(it) }
+        Log.i(TAG, "active providers enabled: $enabledProviders")
+        lastKnownLocation()?.let {
+            Log.i(TAG, "using last-known fix from ${it.provider}")
+            return it.toLocationResult()
+        }
+        val provider = enabledProviders.firstOrNull()
+        if (provider == null) {
+            Log.w(TAG, "no usable provider; aborting active fix")
+            return null
+        }
+        Log.i(TAG, "requesting active fix from $provider (timeout ${LOCATION_TIMEOUT_MS}ms)")
         return try {
-            lastKnownLocation()?.let { return it.toLocationResult() }
-
-            val provider = activeProvider() ?: return null
             withTimeoutOrNull(LOCATION_TIMEOUT_MS) {
                 suspendCancellableCoroutine { continuation ->
                     val request =
@@ -62,32 +79,28 @@ actual class LocationProvider(
                         Looper.getMainLooper(),
                     )
                 }
+            }.also { result ->
+                if (result == null) Log.w(TAG, "active fix from $provider timed out")
             }
         } catch (
-            @Suppress("TooGenericExceptionCaught") _: Exception,
+            @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
+            Log.w(TAG, "active fix from $provider threw", e)
             null
         }
     }
 
+    private fun isEnabled(provider: String): Boolean =
+        locationManager?.let { runCatching { it.isProviderEnabled(provider) }.getOrDefault(false) } ?: false
+
     private fun lastKnownLocation(): Location? =
         LAST_KNOWN_PROVIDERS
-            .filter { provider ->
-                locationManager
-                    ?.let { manager -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
-                    ?: false
-            }.mapNotNull { provider ->
-                runCatching { locationManager?.getLastKnownLocation(provider) }.getOrNull()
-            }.maxByOrNull(Location::getTime)
-
-    private fun activeProvider(): String? =
-        ACTIVE_PROVIDERS.firstOrNull { provider ->
-            locationManager
-                ?.let { manager -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
-                ?: false
-        }
+            .filter(::isEnabled)
+            .mapNotNull { runCatching { locationManager?.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull(Location::getTime)
 
     private companion object {
+        const val TAG = "LocationProvider"
         const val LOCATION_TIMEOUT_MS = 15_000L
 
         // FUSED on Android 12+ is the cheapest and most reliable; otherwise NETWORK
