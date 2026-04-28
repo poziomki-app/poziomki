@@ -196,7 +196,11 @@ class EventsViewModel(
         viewModelScope.launch {
             val loc = locationProvider.getCurrentLocation()
             if (loc == null) {
-                _state.value = _state.value.copy(isLocationUnavailable = true)
+                // Permission was granted but providers couldn't deliver a fix
+                // (no GPS lock, NETWORK provider unavailable, etc.). Rather than
+                // dead-end into an error state, fetch events around a default
+                // center so the map still has content to render.
+                loadNearbyEvents(DEFAULT_FALLBACK_LAT, DEFAULT_FALLBACK_LNG)
                 return@launch
             }
             _state.value = _state.value.copy(userLat = loc.latitude, userLng = loc.longitude)
@@ -323,5 +327,12 @@ class EventsViewModel(
                 notDismissed && matchesSearch && matchesTime && matchesTags
             }
         _state.value = current.copy(events = filtered)
+    }
+
+    private companion object {
+        // Warsaw — used when the user granted location but the device couldn't
+        // deliver a fix (no recent GPS, unavailable NETWORK provider, etc.).
+        const val DEFAULT_FALLBACK_LAT = 52.2297
+        const val DEFAULT_FALLBACK_LNG = 21.0122
     }
 }
