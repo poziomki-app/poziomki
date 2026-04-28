@@ -8,9 +8,7 @@ pub mod event_tags;
 pub mod events;
 pub mod job_outbox;
 
-pub mod message_deliveries;
 pub mod message_reactions;
-pub mod message_reads;
 pub mod messages;
 pub mod otp_codes;
 pub mod profile_blocks;

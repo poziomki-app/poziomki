@@ -11,7 +11,6 @@ pub struct ConversationMember {
     pub user_id: i32,
     pub joined_at: DateTime<Utc>,
     pub last_read_message_id: Option<Uuid>,
-    pub muted_until: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Insertable)]
