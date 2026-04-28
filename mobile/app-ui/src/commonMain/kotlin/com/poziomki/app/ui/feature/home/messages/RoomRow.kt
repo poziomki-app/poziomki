@@ -91,7 +91,7 @@ fun RoomRow(
             val isMuted =
                 room.mutedUntilMillis?.let {
                     it >
-                        kotlinx.datetime.Clock.System
+                        kotlin.time.Clock.System
                             .now()
                             .toEpochMilliseconds()
                 } ?: false
