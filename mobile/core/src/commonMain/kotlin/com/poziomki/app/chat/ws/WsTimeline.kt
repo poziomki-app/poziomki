@@ -443,6 +443,24 @@ class WsTimeline(
         return Result.success(Unit)
     }
 
+    override suspend fun markModerationReported(eventId: String): Result<Unit> {
+        itemsMutex.withLock {
+            val current = _items.value.toMutableList()
+            val idx =
+                current.indexOfFirst {
+                    it is TimelineItem.Event && it.eventId == eventId
+                }
+            if (idx >= 0) {
+                val event = current[idx] as TimelineItem.Event
+                if (!event.locallyReported) {
+                    current[idx] = event.copy(locallyReported = true)
+                    emitAndPersist(current)
+                }
+            }
+        }
+        return Result.success(Unit)
+    }
+
     private suspend fun <T> sendOrFail(
         msg: WsClientMessage,
         value: T,

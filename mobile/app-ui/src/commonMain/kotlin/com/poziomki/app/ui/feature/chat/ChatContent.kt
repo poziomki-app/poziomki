@@ -66,6 +66,7 @@ import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.chat.api.Reaction
 import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -103,6 +104,7 @@ fun ChatContent(
     onRevealModeration: (TimelineItem.Event) -> Unit,
     onReportFlagged: (TimelineItem.Event) -> Unit,
     onClearError: () -> Unit,
+    onClearTransientNotice: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     resolveDisplayNames: suspend (List<String>) -> Map<String, String>,
     resolveAvatarUrls: suspend (List<String>) -> Map<String, String>,
@@ -268,6 +270,21 @@ fun ChatContent(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
+                }
+
+                state.transientNotice?.let { notice ->
+                    LaunchedEffect(notice) {
+                        kotlinx.coroutines.delay(2_500L)
+                        onClearTransientNotice()
+                    }
+                    AppSnackbar(
+                        message = notice.message,
+                        type = notice.type,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 12.dp, start = 16.dp, end = 16.dp),
+                    )
                 }
 
                 if (state.isAwayFromLatest && state.unreadBelowCount > 0) {

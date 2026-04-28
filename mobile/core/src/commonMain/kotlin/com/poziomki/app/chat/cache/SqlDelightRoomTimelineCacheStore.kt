@@ -135,6 +135,7 @@ private sealed interface CachedTimelineItem {
         val moderationVerdict: String? = null,
         val moderationCategories: List<String> = emptyList(),
         val locallyRevealed: Boolean = false,
+        val locallyReported: Boolean = false,
     ) : CachedTimelineItem {
         override fun toDomain(): TimelineItem =
             TimelineItem.Event(
@@ -156,6 +157,7 @@ private sealed interface CachedTimelineItem {
                 moderationVerdict = moderationVerdict,
                 moderationCategories = moderationCategories,
                 locallyRevealed = locallyRevealed,
+                locallyReported = locallyReported,
             )
     }
 
@@ -199,6 +201,7 @@ private sealed interface CachedTimelineItem {
                         moderationVerdict = item.moderationVerdict,
                         moderationCategories = item.moderationCategories,
                         locallyRevealed = item.locallyRevealed,
+                        locallyReported = item.locallyReported,
                     )
                 }
 

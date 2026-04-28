@@ -292,7 +292,10 @@ internal fun MessageEventRow(
                                 val isFlagged =
                                     event.moderationVerdict in setOf("flag", "block")
                                 val isHidden = isFlagged && !event.locallyRevealed
-                                val showReportFlag = isFlagged && event.locallyRevealed
+                                // Flag disappears once reported — one report per
+                                // device per message, idempotent at the server too.
+                                val showReportFlag =
+                                    isFlagged && event.locallyRevealed && !event.locallyReported
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     val maxBubbleWidthForRow =
                                         if (showSenderMeta) {
