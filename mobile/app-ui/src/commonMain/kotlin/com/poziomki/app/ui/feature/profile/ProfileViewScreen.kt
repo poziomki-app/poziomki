@@ -1,20 +1,18 @@
 package com.poziomki.app.ui.feature.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,8 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
@@ -39,7 +35,6 @@ import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
 import com.poziomki.app.ui.designsystem.theme.Background
-import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
@@ -48,7 +43,7 @@ import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-@Suppress("LongMethod")
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun ProfileViewScreen(
     onBack: () -> Unit,
     onNavigateToChat: (String, String, String?) -> Unit,
@@ -68,80 +63,66 @@ fun ProfileViewScreen(
                     }
                 val emoji = p.profilePicture?.takeUnless { isImageUrl(it) }
 
-                Box(Modifier.fillMaxSize()) {
-                    ProfilePreview(
-                        name = p.name,
-                        program = p.program,
-                        bio = p.bio,
-                        tags = p.tags,
-                        images = images,
-                        emojiAvatar = emoji,
-                        gradientStart = p.gradientStart,
-                        gradientEnd = p.gradientEnd,
-                        onClose = onBack,
-                    )
-
-                    val bottomInsets =
-                        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-                    if (!state.isOwnProfile) {
-                        // Bookmark button
-                        Surface(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(
-                                        start = 16.dp,
-                                        bottom = bottomInsets + 20.dp,
-                                    ),
-                            shape = RoundedCornerShape(28.dp),
-                            color = Color.Transparent,
-                            border = BorderStroke(1.dp, Border),
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.toggleBookmark() },
-                                modifier =
-                                    Modifier.background(
-                                        Brush.verticalGradient(
-                                            colors =
-                                                listOf(
-                                                    Color(0xFF1A2029),
-                                                    Color(0xFF161B22),
-                                                ),
-                                        ),
-                                    ),
-                            ) {
-                                Icon(
-                                    imageVector =
-                                        if (state.isBookmarked) {
-                                            PhosphorIcons.Fill.BookmarkSimple
-                                        } else {
-                                            PhosphorIcons.Bold.BookmarkSimple
-                                        },
-                                    contentDescription =
-                                        if (state.isBookmarked) "Usuń zakładkę" else "Dodaj zakładkę",
-                                    tint = if (state.isBookmarked) Primary else White,
-                                    modifier = Modifier.size(22.dp),
-                                )
+                val bottomInsets =
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                ProfilePreview(
+                    name = p.name,
+                    program = p.program,
+                    bio = p.bio,
+                    tags = p.tags,
+                    images = images,
+                    emojiAvatar = emoji,
+                    gradientStart = p.gradientStart,
+                    gradientEnd = p.gradientEnd,
+                    onClose = onBack,
+                    headerAction =
+                        if (!state.isOwnProfile) {
+                            {
+                                IconButton(onClick = { viewModel.toggleBookmark() }) {
+                                    Icon(
+                                        imageVector =
+                                            if (state.isBookmarked) {
+                                                PhosphorIcons.Fill.BookmarkSimple
+                                            } else {
+                                                PhosphorIcons.Bold.BookmarkSimple
+                                            },
+                                        contentDescription =
+                                            if (state.isBookmarked) "Usuń zakładkę" else "Dodaj zakładkę",
+                                        tint = if (state.isBookmarked) Primary else White,
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
                             }
-                        }
-
-                        // Message button
-                        AppButton(
-                            text = "Wiadomość",
-                            onClick = { onNavigateToChat(p.userId, p.name, p.id) },
-                            variant = ButtonVariant.PRIMARY,
-                            icon = PhosphorIcons.Fill.PaperPlaneRight,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(
-                                        end = 16.dp,
-                                        bottom = bottomInsets + 20.dp,
-                                    ),
-                        )
-                    }
-                }
+                        } else {
+                            null
+                        },
+                    bottomContent =
+                        if (!state.isOwnProfile) {
+                            {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                start = 16.dp,
+                                                end = 16.dp,
+                                                top = 12.dp,
+                                                bottom = bottomInsets + 20.dp,
+                                            ),
+                                    contentAlignment = Alignment.CenterEnd,
+                                ) {
+                                    AppButton(
+                                        text = "Wiadomość",
+                                        onClick = { onNavigateToChat(p.userId, p.name, p.id) },
+                                        variant = ButtonVariant.PRIMARY,
+                                        icon = PhosphorIcons.Fill.PaperPlaneRight,
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                )
             }
         }
 
