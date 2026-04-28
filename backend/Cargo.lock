@@ -2726,7 +2726,7 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "poziomki-backend"
-version = "0.18.4"
+version = "0.19.0"
 dependencies = [
  "argon2",
  "axum",
