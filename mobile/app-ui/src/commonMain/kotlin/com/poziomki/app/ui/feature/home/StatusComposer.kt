@@ -106,8 +106,11 @@ fun StatusComposer(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
+            // Emoji-only status: render an empty filler so the expiry label
+            // still sits on the right via weight(1f) without leaking the
+            // "twój status" placeholder copy alongside the emoji.
             Text(
-                text = currentStatus?.takeIf { it.isNotBlank() } ?: "twój status",
+                text = currentStatus?.takeIf { it.isNotBlank() }.orEmpty(),
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,

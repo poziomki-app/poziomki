@@ -236,10 +236,15 @@ pub(super) fn build_update_changeset(
         // (POST /profiles/me/status) which also sets status_emoji.
         status_text: payload.status.as_deref().map(non_empty_or_null),
         status_emoji: None,
-        status_expires_at: payload
-            .status
-            .as_deref()
-            .map(|_| Some(chrono::Utc::now() + chrono::Duration::hours(24))),
+        // Only stamp the 24h TTL when the caller actually sets a non-blank
+        // status. A `{"status": ""}` or whitespace-only payload clears
+        // status_text via non_empty_or_null; pairing that with an expiry
+        // would leave a future status_expires_at on a null status. Mirrors
+        // the dedicated /me/status endpoint, which only sets expiry when
+        // either text or emoji has content.
+        status_expires_at: payload.status.as_deref().map(|s| {
+            non_empty_or_null(s).map(|_| chrono::Utc::now() + chrono::Duration::hours(24))
+        }),
         program: payload.program.as_ref().map(|p| Some(p.clone())),
         profile_picture,
         images: payload.images.as_ref().map(|imgs| build_images_json(imgs)),
