@@ -63,14 +63,14 @@ class MainActivity : ComponentActivity() {
             handleIntent(intent)
         }
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
         )
         setContent {
             // Remove when https://issuetracker.google.com/issues/364713509 is fixed
             LaunchedEffect(Unit) {
                 enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+                    statusBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
                     navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
                 )
             }
