@@ -88,13 +88,22 @@ class WsJoinedRoom(
         liveTimeline.onReadReceipt(msg)
     }
 
+    internal fun onDelivered(msg: WsServerMessage.Delivered) {
+        liveTimeline.onDelivered(msg)
+    }
+
     internal fun onTyping(msg: WsServerMessage.Typing) {
         val userId = msg.userId.toString()
         if (msg.isTyping) {
             typingTimeoutJobs[userId]?.cancel()
+            // Trust the server's authoritative TTL when present so a
+            // typing-true that was emitted with a longer or shorter
+            // window stays consistent across clients. Fall back to 6s
+            // to match the server-side TYPING_TTL constant.
+            val ttlMs = msg.expiresInMs?.coerceIn(2_000L, 30_000L) ?: 6_000L
             typingTimeoutJobs[userId] =
                 scope.launch {
-                    delay(5_000L)
+                    delay(ttlMs)
                     _typingUserIds.update { current -> current - userId }
                     typingTimeoutJobs.remove(userId)
                 }

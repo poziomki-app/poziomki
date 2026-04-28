@@ -66,6 +66,13 @@ sealed interface WsClientMessage {
     ) : WsClientMessage
 
     @Serializable
+    @SerialName("mute")
+    data class Mute(
+        val conversationId: String,
+        val mutedUntil: String? = null,
+    ) : WsClientMessage
+
+    @Serializable
     @SerialName("history")
     data class History(
         val conversationId: String,
@@ -153,6 +160,24 @@ sealed interface WsServerMessage {
         val conversationId: String,
         val userId: Int,
         val messageId: String,
+        val readAt: String? = null,
+    ) : WsServerMessage
+
+    @Serializable
+    @SerialName("delivered")
+    data class Delivered(
+        val conversationId: String,
+        val messageId: String,
+        val userId: Int,
+        val deliveredAt: String,
+    ) : WsServerMessage
+
+    @Serializable
+    @SerialName("unreadUpdate")
+    data class UnreadUpdate(
+        val conversationId: String,
+        val unreadCount: Long,
+        val totalUnread: Long,
     ) : WsServerMessage
 
     @Serializable
@@ -161,6 +186,7 @@ sealed interface WsServerMessage {
         val conversationId: String,
         val userId: Int,
         val isTyping: Boolean,
+        val expiresInMs: Long? = null,
     ) : WsServerMessage
 
     @Serializable
@@ -169,6 +195,8 @@ sealed interface WsServerMessage {
         val conversationId: String,
         val messages: List<WsMessagePayload>,
         val hasMore: Boolean,
+        val readReceipts: List<WsReadReceiptPayload> = emptyList(),
+        val deliveries: List<WsDeliveryPayload> = emptyList(),
     ) : WsServerMessage
 
     @Serializable
@@ -209,6 +237,20 @@ data class WsMessagePayload(
 )
 
 @Serializable
+data class WsReadReceiptPayload(
+    val messageId: String,
+    val userId: Int,
+    val readAt: String,
+)
+
+@Serializable
+data class WsDeliveryPayload(
+    val messageId: String,
+    val userId: Int,
+    val deliveredAt: String,
+)
+
+@Serializable
 data class WsReplyPayload(
     val messageId: String,
     val senderName: String? = null,
@@ -236,10 +278,12 @@ data class WsConversationPayload(
     val directUserAvatar: String? = null,
     val unreadCount: Long = 0,
     val latestMessage: String? = null,
+    val latestMessageId: String? = null,
     val latestTimestamp: String? = null,
     val latestMessageIsMine: Boolean = false,
     val latestSenderName: String? = null,
     val isBlocked: Boolean = false,
+    val mutedUntil: String? = null,
     val latestModerationVerdict: String? = null,
     val latestModerationCategories: List<String> = emptyList(),
 )

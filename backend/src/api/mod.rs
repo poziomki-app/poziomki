@@ -205,6 +205,11 @@ fn chat_routes() -> Router<AppContext> {
         )
         .route("/push/register", post(chat::push_register))
         .route("/push/unregister", post(chat::push_unregister))
+        .route(
+            "/conversations/{id}/mute",
+            axum::routing::patch(chat::mute_conversation),
+        )
+        .route("/unread", get(chat::unread_summary))
         .layer(cache_layer("no-store"))
 }
 

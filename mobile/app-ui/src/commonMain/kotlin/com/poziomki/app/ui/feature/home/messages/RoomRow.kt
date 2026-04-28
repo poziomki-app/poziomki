@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.BellSlash
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
@@ -87,6 +88,13 @@ fun RoomRow(
                 } else {
                     null
                 }
+            val isMuted =
+                room.mutedUntilMillis?.let {
+                    it >
+                        kotlinx.datetime.Clock.System
+                            .now()
+                            .toEpochMilliseconds()
+                } ?: false
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
@@ -97,6 +105,15 @@ fun RoomRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (isMuted) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.BellSlash,
+                        contentDescription = "Wyciszone",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
                 if (room.latestTimestampMillis != null || room.unreadCount > 0) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.End) {
@@ -110,7 +127,11 @@ fun RoomRow(
                         if (room.unreadCount > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Surface(
-                                color = Primary,
+                                // Muted rooms still get a count, but rendered
+                                // in a low-emphasis tone — they don't pull
+                                // the eye and don't roll into the platform
+                                // launcher badge either.
+                                color = if (isMuted) TextSecondary.copy(alpha = 0.6f) else Primary,
                                 contentColor = Background,
                                 shape = CircleShape,
                                 modifier = Modifier,
@@ -224,25 +245,39 @@ private data class RoomStatusIconSpec(
 private fun latestRoomStatusIconSpec(
     sendStatus: EventSendStatus?,
     readByCount: Int,
-): RoomStatusIconSpec? =
-    when {
-        sendStatus == EventSendStatus.Failed -> {
+): RoomStatusIconSpec? {
+    // Defence-in-depth for the cold-start path: the conversation list
+    // payload from the server doesn't (yet) carry an explicit Read
+    // status, only the per-message `readByCount` counter restored from
+    // cache. Live ReadReceipt events flip [sendStatus] to Read at the
+    // data layer; until that fires after a fresh launch, fall back on
+    // the counter so the blue tick still renders.
+    if (readByCount > 0 && sendStatus != EventSendStatus.Failed && sendStatus != EventSendStatus.Sending) {
+        return RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = Primary)
+    }
+    return when (sendStatus) {
+        EventSendStatus.Failed -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
         }
 
-        sendStatus == EventSendStatus.Sending -> {
+        EventSendStatus.Sending -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
         }
 
-        readByCount > 0 -> {
+        EventSendStatus.Read -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = Primary)
         }
 
-        sendStatus == EventSendStatus.Sent -> {
+        EventSendStatus.Delivered -> {
+            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = TextSecondary)
+        }
+
+        EventSendStatus.Sent -> {
             RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
         }
 
-        else -> {
+        null -> {
             null
         }
     }
+}

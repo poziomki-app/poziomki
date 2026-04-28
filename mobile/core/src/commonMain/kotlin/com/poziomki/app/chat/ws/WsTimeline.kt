@@ -222,26 +222,96 @@ class WsTimeline(
     }
 
     internal fun onReadReceipt(msg: WsServerMessage.ReadReceipt) {
-        val receiptUserId = msg.userId.toString()
-        if (receiptUserId == wsConnection.userId.value) return
+        if (msg.userId.toString() == wsConnection.userId.value) return
+        scope.launch {
+            applyReadReceipt(msg.messageId, msg.userId, msg.readAt)
+        }
+    }
+
+    private suspend fun applyReadReceipt(
+        messageId: String,
+        userId: Int,
+        readAtIso: String?,
+    ) {
+        itemsMutex.withLock {
+            val readAt = readAtIso?.let { parseTimestamp(it) } ?: Clock.System.now().toEpochMilliseconds()
+            val seenUsers = readReceiptUsers.getOrPut(messageId) { mutableSetOf() }
+            seenUsers.add(userId.toString())
+
+            val current = _items.value.toMutableList()
+            val idx =
+                current.indexOfFirst {
+                    it is TimelineItem.Event && it.eventId == messageId
+                }
+            if (idx >= 0) {
+                val event = current[idx] as TimelineItem.Event
+                if (event.readBy[userId] == readAt) return@withLock
+                val newReadBy = event.readBy + (userId to readAt)
+                // A read implies delivery; flip ✓ → ✓✓ → ✓✓ blue.
+                val newStatus =
+                    if (event.isMine) EventSendStatus.Read else event.sendStatus
+                current[idx] =
+                    event.copy(
+                        readBy = newReadBy,
+                        sendStatus = newStatus,
+                    )
+                emitAndPersist(current)
+            }
+        }
+    }
+
+    internal fun onDelivered(msg: WsServerMessage.Delivered) {
+        if (msg.userId.toString() == wsConnection.userId.value) return
         scope.launch {
             itemsMutex.withLock {
-                val messageId = msg.messageId
-                val seenUsers = readReceiptUsers.getOrPut(messageId) { mutableSetOf() }
-                if (!seenUsers.add(receiptUserId)) return@withLock // duplicate
-
+                val deliveredAt = parseTimestamp(msg.deliveredAt)
                 val current = _items.value.toMutableList()
                 val idx =
                     current.indexOfFirst {
-                        it is TimelineItem.Event && it.eventId == messageId
+                        it is TimelineItem.Event && it.eventId == msg.messageId
                     }
-                if (idx >= 0) {
-                    val event = current[idx] as TimelineItem.Event
-                    current[idx] = event.copy(readByCount = seenUsers.size)
-                    emitAndPersist(current)
-                }
+                if (idx < 0) return@withLock
+                val event = current[idx] as TimelineItem.Event
+                if (event.deliveredTo[msg.userId] == deliveredAt) return@withLock
+                val newDeliveredTo = event.deliveredTo + (msg.userId to deliveredAt)
+                // Don't downgrade Read → Delivered.
+                val newStatus =
+                    if (event.isMine && event.sendStatus != EventSendStatus.Read) {
+                        EventSendStatus.Delivered
+                    } else {
+                        event.sendStatus
+                    }
+                current[idx] =
+                    event.copy(
+                        deliveredTo = newDeliveredTo,
+                        sendStatus = newStatus,
+                    )
+                emitAndPersist(current)
             }
         }
+    }
+
+    private fun hydrateHistoryItem(
+        payload: WsMessagePayload,
+        uid: String?,
+        readsByMessage: Map<String, Map<Int, Long>>,
+        deliveriesByMessage: Map<String, Map<Int, Long>>,
+    ): TimelineItem.Event {
+        val event = payload.toTimelineItem(uid)
+        val rb = readsByMessage[payload.id].orEmpty()
+        val dt = deliveriesByMessage[payload.id].orEmpty()
+        if (rb.isNotEmpty()) {
+            val seen = readReceiptUsers.getOrPut(payload.id) { mutableSetOf() }
+            rb.keys.forEach { seen.add(it.toString()) }
+        }
+        val status =
+            when {
+                !event.isMine -> event.sendStatus
+                rb.any { it.key.toString() != uid } -> EventSendStatus.Read
+                dt.any { it.key.toString() != uid } -> EventSendStatus.Delivered
+                else -> event.sendStatus
+            }
+        return event.copy(readBy = rb, deliveredTo = dt, sendStatus = status)
     }
 
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {
@@ -249,7 +319,22 @@ class WsTimeline(
         scope.launch {
             itemsMutex.withLock {
                 val uid = wsConnection.userId.value
-                val historyItems = msg.messages.map { it.toTimelineItem(uid) }
+                val readsByMessage: Map<String, Map<Int, Long>> =
+                    msg.readReceipts
+                        .groupBy { it.messageId }
+                        .mapValues { (_, list) ->
+                            list.associate { it.userId to parseTimestamp(it.readAt) }
+                        }
+                val deliveriesByMessage: Map<String, Map<Int, Long>> =
+                    msg.deliveries
+                        .groupBy { it.messageId }
+                        .mapValues { (_, list) ->
+                            list.associate { it.userId to parseTimestamp(it.deliveredAt) }
+                        }
+                val historyItems =
+                    msg.messages.map { payload ->
+                        hydrateHistoryItem(payload, uid, readsByMessage, deliveriesByMessage)
+                    }
                 val current = _items.value.toMutableList()
 
                 // Filter duplicates
@@ -505,7 +590,6 @@ class WsTimeline(
                     reactions = emptyList(),
                     isEditable = true,
                     sendStatus = EventSendStatus.Sending,
-                    readByCount = 0,
                     canReply = true,
                 ),
             )
@@ -562,7 +646,6 @@ private fun toTimelineEvent(
         reactions = reactions.map { it.toReaction() },
         isEditable = isMine,
         sendStatus = EventSendStatus.Sent,
-        readByCount = 0,
         canReply = true,
         moderationVerdict = moderationVerdict,
         moderationCategories = moderationCategories,
