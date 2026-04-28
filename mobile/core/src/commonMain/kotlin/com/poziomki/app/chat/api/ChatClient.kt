@@ -32,17 +32,10 @@ data class RoomSummary(
     val unreadCount: Int,
     val latestMessage: String?,
     val latestTimestampMillis: Long?,
-    val latestMessageId: String? = null,
     val latestMessageIsMine: Boolean = false,
     val latestMessageSendStatus: EventSendStatus? = null,
     val latestMessageReadByCount: Int = 0,
     val isBlocked: Boolean = false,
-    /**
-     * Epoch-millis until which this conversation is muted, or `null`
-     * if not muted. A far-future value encodes "muted forever".
-     * Renderer fades the unread badge and shows a muted-bell icon.
-     */
-    val mutedUntilMillis: Long? = null,
     /** Bielik-Guard verdict for the latest message body, or null when unscanned / mine. */
     val latestModerationVerdict: String? = null,
     /** Categories that exceeded the flag threshold for the latest message. */
@@ -60,18 +53,6 @@ data class RoomTimelineCacheSnapshot(
 interface ChatClient {
     val state: StateFlow<ChatClientState>
     val rooms: StateFlow<List<RoomSummary>>
-
-    /**
-     * Total unread across all *non-muted* conversations. Drives the
-     * platform launcher badge. Pushed by the server after every read,
-     * mute, or new message; persisted across app restarts.
-     */
-    val totalUnread: StateFlow<Int>
-
-    suspend fun setMute(
-        roomId: String,
-        mutedUntilMillis: Long?,
-    ): Result<Unit>
 
     suspend fun ensureStarted(): Result<Unit>
 

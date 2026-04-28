@@ -3,15 +3,10 @@ use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
-use super::protocol::{
-    DeliveryPayload, MessagePayload, ReactionPayload, ReadReceiptPayload, ReplyPayload,
-};
+use super::protocol::{MessagePayload, ReactionPayload, ReplyPayload};
 use crate::db::models::message_reactions::NewMessageReaction;
-use crate::db::models::message_reads::NewMessageRead;
 use crate::db::models::messages::{Message, NewMessage};
-use crate::db::schema::{
-    conversation_members, message_deliveries, message_reactions, message_reads, messages, profiles,
-};
+use crate::db::schema::{message_reactions, messages, profiles};
 
 /// Convert a single message to a payload via the batch path.
 async fn single_message_payload(
@@ -263,15 +258,13 @@ pub async fn toggle_reaction(
     Ok((true, msg))
 }
 
-/// Update read watermark for a user in a conversation, and record
-/// per-message read receipts for everything in the gap. Returns the
-/// `read_at` timestamp written. Caller broadcasts the receipt.
+/// Update read watermark for a user in a conversation.
 pub async fn mark_read(
     conn: &mut AsyncPgConnection,
     conversation_id: Uuid,
     user_id: i32,
     message_id: Uuid,
-) -> Result<chrono::DateTime<Utc>, crate::error::AppError> {
+) -> Result<(), crate::error::AppError> {
     // Verify message belongs to this conversation
     let belongs = messages::table
         .filter(messages::id.eq(message_id))
@@ -286,17 +279,6 @@ pub async fn mark_read(
             "message does not belong to this conversation",
         ));
     }
-
-    // Capture the previous watermark so we can mark every message in
-    // (prev, message_id] as read in one batch insert.
-    let prev_watermark: Option<Uuid> = conversation_members::table
-        .filter(conversation_members::conversation_id.eq(conversation_id))
-        .filter(conversation_members::user_id.eq(user_id))
-        .select(conversation_members::last_read_message_id)
-        .first(conn)
-        .await
-        .optional()?
-        .flatten();
 
     // Only advance watermark forward (never move backwards).
     // Uses (created_at, id) compound comparison to match unread count query.
@@ -316,190 +298,7 @@ pub async fn mark_read(
     .execute(conn)
     .await?;
 
-    let read_at = Utc::now();
-
-    // Record per-message reads for the (prev, message_id] gap so the
-    // sender's UI gets ✓✓ ticks on every message the user just caught up
-    // on, not only the watermark tip. Skip the user's own messages.
-    let target_ts: Option<chrono::DateTime<Utc>> = messages::table
-        .filter(messages::id.eq(message_id))
-        .select(messages::created_at)
-        .first(conn)
-        .await
-        .optional()?;
-    let Some(target_ts) = target_ts else {
-        return Ok(read_at);
-    };
-
-    let gap_msg_ids: Vec<Uuid> = if let Some(prev_id) = prev_watermark {
-        let prev_ts: Option<chrono::DateTime<Utc>> = messages::table
-            .filter(messages::id.eq(prev_id))
-            .select(messages::created_at)
-            .first(conn)
-            .await
-            .optional()?;
-        match prev_ts {
-            Some(prev_ts) => {
-                messages::table
-                    .filter(messages::conversation_id.eq(conversation_id))
-                    .filter(messages::sender_id.ne(user_id))
-                    .filter(messages::deleted_at.is_null())
-                    .filter(
-                        messages::created_at.gt(prev_ts).or(messages::created_at
-                            .eq(prev_ts)
-                            .and(messages::id.gt(prev_id))),
-                    )
-                    .filter(
-                        messages::created_at.lt(target_ts).or(messages::created_at
-                            .eq(target_ts)
-                            .and(messages::id.le(message_id))),
-                    )
-                    .select(messages::id)
-                    .load(conn)
-                    .await?
-            }
-            // Watermark pointed at a now-deleted message; fall through
-            // and insert just the target.
-            None => vec![message_id],
-        }
-    } else {
-        // First read in this conversation: mark every message up through
-        // the target as read. This matches the unread-count math (which
-        // counts everything when watermark is NULL).
-        messages::table
-            .filter(messages::conversation_id.eq(conversation_id))
-            .filter(messages::sender_id.ne(user_id))
-            .filter(messages::deleted_at.is_null())
-            .filter(
-                messages::created_at.lt(target_ts).or(messages::created_at
-                    .eq(target_ts)
-                    .and(messages::id.le(message_id))),
-            )
-            .select(messages::id)
-            .load(conn)
-            .await?
-    };
-
-    if !gap_msg_ids.is_empty() {
-        let rows: Vec<NewMessageRead> = gap_msg_ids
-            .into_iter()
-            .map(|mid| NewMessageRead {
-                message_id: mid,
-                user_id,
-                read_at,
-            })
-            .collect();
-        diesel::insert_into(message_reads::table)
-            .values(&rows)
-            .on_conflict_do_nothing()
-            .execute(conn)
-            .await?;
-    }
-
-    Ok(read_at)
-}
-
-/// Set or clear per-conversation mute for a user. `muted_until = None`
-/// unmutes. The caller is responsible for verifying membership.
-pub async fn set_mute(
-    conn: &mut AsyncPgConnection,
-    conversation_id: Uuid,
-    user_id: i32,
-    muted_until: Option<chrono::DateTime<Utc>>,
-) -> Result<(), crate::error::AppError> {
-    diesel::update(
-        conversation_members::table
-            .filter(conversation_members::conversation_id.eq(conversation_id))
-            .filter(conversation_members::user_id.eq(user_id)),
-    )
-    .set(conversation_members::muted_until.eq(muted_until))
-    .execute(conn)
-    .await?;
     Ok(())
-}
-
-#[derive(diesel::QueryableByName)]
-struct DeliveryRow {
-    #[diesel(sql_type = diesel::sql_types::Integer)]
-    user_id: i32,
-    #[diesel(sql_type = diesel::sql_types::Timestamptz)]
-    delivered_at: chrono::DateTime<Utc>,
-}
-
-/// Bulk delivery insert via the SECURITY DEFINER helper. Inserts a row
-/// for every (`message_id`, recipient) pair in `user_ids` in one round
-/// trip and returns only the rows that were actually inserted, so the
-/// caller can emit a `Delivered` broadcast per success and stay
-/// idempotent across reconnects. Membership is verified in the same
-/// SQL statement against `conversation_members`. Replaces the
-/// per-recipient transaction loop that used to fan out N round trips
-/// per send.
-pub async fn record_deliveries(
-    conn: &mut AsyncPgConnection,
-    message_id: Uuid,
-    user_ids: &[i32],
-) -> Result<Vec<(i32, chrono::DateTime<Utc>)>, crate::error::AppError> {
-    if user_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rows: Vec<DeliveryRow> =
-        diesel::sql_query("SELECT user_id, delivered_at FROM app.record_deliveries($1, $2)")
-            .bind::<diesel::sql_types::Uuid, _>(message_id)
-            .bind::<diesel::sql_types::Array<diesel::sql_types::Integer>, _>(user_ids)
-            .get_results(conn)
-            .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| (r.user_id, r.delivered_at))
-        .collect())
-}
-
-/// Load all read receipts and delivery confirmations for the given
-/// message IDs. Used to hydrate `HistoryResponse` so a client that
-/// reconnects sees the up-to-date tick state on every message.
-pub async fn load_receipts_for_messages(
-    conn: &mut AsyncPgConnection,
-    msg_ids: &[Uuid],
-) -> Result<(Vec<ReadReceiptPayload>, Vec<DeliveryPayload>), crate::error::AppError> {
-    if msg_ids.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
-    }
-    let reads: Vec<(Uuid, i32, chrono::DateTime<Utc>)> = message_reads::table
-        .filter(message_reads::message_id.eq_any(msg_ids))
-        .select((
-            message_reads::message_id,
-            message_reads::user_id,
-            message_reads::read_at,
-        ))
-        .load(conn)
-        .await?;
-    let deliveries: Vec<(Uuid, i32, chrono::DateTime<Utc>)> = message_deliveries::table
-        .filter(message_deliveries::message_id.eq_any(msg_ids))
-        .select((
-            message_deliveries::message_id,
-            message_deliveries::user_id,
-            message_deliveries::delivered_at,
-        ))
-        .load(conn)
-        .await?;
-    Ok((
-        reads
-            .into_iter()
-            .map(|(mid, uid, at)| ReadReceiptPayload {
-                message_id: mid,
-                user_id: uid,
-                read_at: at.to_rfc3339(),
-            })
-            .collect(),
-        deliveries
-            .into_iter()
-            .map(|(mid, uid, at)| DeliveryPayload {
-                message_id: mid,
-                user_id: uid,
-                delivered_at: at.to_rfc3339(),
-            })
-            .collect(),
-    ))
 }
 
 /// Look up the `conversation_id` for a given message.

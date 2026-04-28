@@ -20,23 +20,6 @@ diesel::table! {
         user_id -> Int4,
         joined_at -> Timestamptz,
         last_read_message_id -> Nullable<Uuid>,
-        muted_until -> Nullable<Timestamptz>,
-    }
-}
-
-diesel::table! {
-    message_reads (message_id, user_id) {
-        message_id -> Uuid,
-        user_id -> Int4,
-        read_at -> Timestamptz,
-    }
-}
-
-diesel::table! {
-    message_deliveries (message_id, user_id) {
-        message_id -> Uuid,
-        user_id -> Int4,
-        delivered_at -> Timestamptz,
     }
 }
 
@@ -368,10 +351,6 @@ diesel::joinable!(conversations -> events (event_id));
 diesel::joinable!(messages -> conversations (conversation_id));
 diesel::joinable!(messages -> uploads (attachment_upload_id));
 diesel::joinable!(message_reactions -> messages (message_id));
-diesel::joinable!(message_reads -> messages (message_id));
-diesel::joinable!(message_reads -> users (user_id));
-diesel::joinable!(message_deliveries -> messages (message_id));
-diesel::joinable!(message_deliveries -> users (user_id));
 diesel::joinable!(chat_message_reveals -> messages (message_id));
 diesel::joinable!(chat_message_reveals -> users (viewer_user_id));
 diesel::joinable!(chat_message_reports -> messages (message_id));
@@ -407,8 +386,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     events,
     job_outbox,
     message_reactions,
-    message_reads,
-    message_deliveries,
     messages,
     otp_codes,
     profile_blocks,
