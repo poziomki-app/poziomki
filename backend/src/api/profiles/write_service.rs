@@ -151,15 +151,20 @@ pub(super) async fn verify_uploads_ownership(
     if filenames.is_empty() {
         return Ok(());
     }
-    let owned: Vec<String> = uploads::table
+    let owned: std::collections::HashSet<String> = uploads::table
         .filter(uploads::owner_id.eq(Some(profile_id)))
         .filter(uploads::filename.eq_any(filenames))
         .filter(uploads::deleted.eq(false))
         .select(uploads::filename)
         .load::<String>(conn)
         .await
-        .map_err(|_| uploads_unavailable(headers))?;
-    if owned.len() != filenames.len() {
+        .map_err(|_| uploads_unavailable(headers))?
+        .into_iter()
+        .collect();
+    // Compare set membership, not lengths: `eq_any` -> SQL IN dedupes,
+    // so `["a.jpg", "a.jpg"]` would yield owned.len() = 1 even when
+    // a.jpg is owned, and a length comparison would falsely reject.
+    if filenames.iter().any(|f| !owned.contains(f)) {
         return Err(Box::new(validation_error(
             headers,
             "Profile images must reference your uploaded files",
