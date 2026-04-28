@@ -39,6 +39,10 @@ const SEARCH_MAX_PER_MIN: u32 = 20;
 const XP_ACTION_MAX_PER_MIN: u32 = 30;
 const XP_TOKEN_GEN_MAX_PER_MIN: u32 = 10;
 const UPLOAD_WRITE_MAX_PER_MIN: u32 = 30;
+// Profile status writes call Bielik moderation on every request; cap
+// hard so a logged-in client can't spin a tight loop and burn inference
+// CPU. 6/min is plenty for the composer (one set, occasional clears).
+const PROFILE_STATUS_MAX_PER_MIN: u32 = 6;
 // Admin + ops endpoints are gated by a shared token — rate limit
 // caps online brute-force of the token. Tight budget because both
 // surfaces are single-operator, low-frequency by design.
@@ -58,6 +62,7 @@ pub enum IpRateLimitAction {
     XpAction,
     XpTokenGen,
     UploadWrite,
+    ProfileStatus,
     AdminAuth,
     OpsAuth,
 }
@@ -71,6 +76,7 @@ impl IpRateLimitAction {
             Self::XpAction => XP_ACTION_MAX_PER_MIN,
             Self::XpTokenGen => XP_TOKEN_GEN_MAX_PER_MIN,
             Self::UploadWrite => UPLOAD_WRITE_MAX_PER_MIN,
+            Self::ProfileStatus => PROFILE_STATUS_MAX_PER_MIN,
             Self::AdminAuth => ADMIN_AUTH_MAX_PER_MIN,
             Self::OpsAuth => OPS_AUTH_MAX_PER_MIN,
         }
@@ -84,6 +90,7 @@ impl IpRateLimitAction {
             Self::XpAction => "ip_xp_action",
             Self::XpTokenGen => "ip_xp_token_gen",
             Self::UploadWrite => "ip_upload_write",
+            Self::ProfileStatus => "ip_profile_status",
             Self::AdminAuth => "ip_admin_auth",
             Self::OpsAuth => "ip_ops_auth",
         }
