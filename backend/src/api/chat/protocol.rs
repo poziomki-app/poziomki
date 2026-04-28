@@ -259,6 +259,7 @@ pub struct ConversationPayload {
     pub direct_user_avatar: Option<String>,
     pub unread_count: i64,
     pub latest_message: Option<String>,
+    pub latest_message_id: Option<Uuid>,
     pub latest_timestamp: Option<String>,
     pub latest_message_is_mine: bool,
     pub latest_sender_name: Option<String>,

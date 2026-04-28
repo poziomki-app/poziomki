@@ -147,10 +147,12 @@ class WsChatClient(
         openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onDelivered(msg)
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == msg.conversationId }
-        if (idx >= 0 && current[idx].latestMessageIsMine &&
-            current[idx].latestMessageSendStatus != EventSendStatus.Read
-        ) {
-            current[idx] = current[idx].copy(latestMessageSendStatus = EventSendStatus.Delivered)
+        if (idx < 0) return
+        val room = current[idx]
+        val matchesLatest = room.latestMessageIsMine && room.latestMessageId == msg.messageId
+        val notYetRead = room.latestMessageSendStatus != EventSendStatus.Read
+        if (matchesLatest && notYetRead) {
+            current[idx] = room.copy(latestMessageSendStatus = EventSendStatus.Delivered)
             _rooms.value = current
         }
     }
@@ -174,6 +176,7 @@ class WsChatClient(
                 current[idx].copy(
                     latestMessage = msg.body,
                     latestTimestampMillis = parseTimestamp(msg.createdAt),
+                    latestMessageId = msg.id,
                     latestMessageIsMine = isMine,
                     latestMessageSendStatus = EventSendStatus.Sent,
                     unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
@@ -412,6 +415,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         unreadCount = unreadCount.toInt(),
         latestMessage = latestMessage,
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },
+        latestMessageId = latestMessageId,
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
         isBlocked = isBlocked,

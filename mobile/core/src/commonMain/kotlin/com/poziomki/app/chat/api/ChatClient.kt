@@ -32,6 +32,7 @@ data class RoomSummary(
     val unreadCount: Int,
     val latestMessage: String?,
     val latestTimestampMillis: Long?,
+    val latestMessageId: String? = null,
     val latestMessageIsMine: Boolean = false,
     val latestMessageSendStatus: EventSendStatus? = null,
     val latestMessageReadByCount: Int = 0,

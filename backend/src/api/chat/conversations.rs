@@ -489,6 +489,7 @@ pub async fn list_for_user(
             direct_user_avatar,
             unread_count,
             latest_message: latest.map(|m| m.body.clone()),
+            latest_message_id: latest.map(|m| m.id),
             latest_timestamp: latest.map(|m| m.created_at.to_rfc3339()),
             latest_message_is_mine: latest_is_mine,
             latest_sender_name,

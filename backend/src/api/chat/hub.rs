@@ -158,28 +158,26 @@ impl ChatHub {
     }
 
     /// Note that `user_id` is currently typing in `conversation_id`.
-    /// Resets the TTL on every call. The WS handler is responsible for
-    /// providing the conversation member list once at typing-true; the
-    /// janitor keeps reusing it without re-querying.
-    pub fn note_typing(&self, user_id: i32, conversation_id: Uuid) {
+    /// Resets the TTL on every call. `members` is the conversation
+    /// member list — initialised atomically with the entry so the
+    /// disconnect-flush and janitor paths always have someone to
+    /// broadcast `Typing(false)` to, even if the user disconnects
+    /// the instant after typing-true.
+    pub fn note_typing(&self, user_id: i32, conversation_id: Uuid, members: Vec<i32>) {
         let now = std::time::Instant::now();
         let key = (user_id, conversation_id);
         self.typing
             .entry(key)
-            .and_modify(|s| s.expires_at = now + TYPING_TTL)
+            .and_modify(|s| {
+                s.expires_at = now + TYPING_TTL;
+                if !members.is_empty() {
+                    s.members.clone_from(&members);
+                }
+            })
             .or_insert_with(|| TypingState {
                 expires_at: now + TYPING_TTL,
-                members: Vec::new(),
+                members,
             });
-    }
-
-    /// Cache the conversation members for a typing entry so the janitor
-    /// can broadcast the eventual Typing(false) without DB access.
-    pub fn note_typing_members(&self, user_id: i32, conversation_id: Uuid, members: Vec<i32>) {
-        let key = (user_id, conversation_id);
-        if let Some(mut entry) = self.typing.get_mut(&key) {
-            entry.members = members;
-        }
     }
 
     /// Drop the typing entry for `(user, conv)`. Caller still
