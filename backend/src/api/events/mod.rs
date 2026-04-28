@@ -265,7 +265,7 @@ pub(super) async fn event_attendees(
             else {
                 return Ok(AttendeesOutcome::NotFound);
             };
-            let list = events_view::attendee_info(conn, event_uuid, event.creator_id)
+            let list = events_view::attendee_info(conn, event_uuid, event.creator_id, user.id)
                 .await
                 .map_err(into_diesel)?;
             Ok(AttendeesOutcome::Listed(list))

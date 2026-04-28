@@ -141,6 +141,12 @@ async fn search_profiles(
         LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
+            AND NOT EXISTS (
+                SELECT 1 FROM profile_blocks pb
+                JOIN profiles vp ON vp.user_id = $4
+                WHERE (pb.blocker_id = vp.id AND pb.blocked_id = p.id)
+                   OR (pb.blocked_id = vp.id AND pb.blocker_id = p.id)
+            )
             AND (
                 p.public_search_vector @@ websearch_to_tsquery('simple', $1)
                 OR (
