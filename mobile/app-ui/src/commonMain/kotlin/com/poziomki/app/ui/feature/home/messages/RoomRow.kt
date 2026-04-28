@@ -74,36 +74,45 @@ fun RoomRow(
                     text = displayName,
                     style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
-                    fontWeight = if (room.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                    // Keep the name weight constant across read/unread so its
+                    // characters never reflow horizontally. Unread state is
+                    // signalled by the preview color + timestamp tint + the
+                    // count badge in the fixed-width slot below — none of
+                    // which shift the name's left/right edges.
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (room.latestTimestampMillis != null || room.unreadCount > 0) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        room.latestTimestampMillis?.let {
+                // Right-hand meta column. Width is reserved (not wrapContent)
+                // so adding/removing the unread badge does not change the
+                // column width — that was what made the name + preview jiggle
+                // a few pixels left when a new message arrived.
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.width(48.dp),
+                ) {
+                    room.latestTimestampMillis?.let {
+                        Text(
+                            text = formatRoomTimestamp(it),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (room.unreadCount > 0) Primary else TextSecondary,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (room.unreadCount > 0) {
+                        Surface(
+                            color = Primary,
+                            contentColor = Background,
+                            shape = CircleShape,
+                        ) {
                             Text(
-                                text = formatRoomTimestamp(it),
+                                text = if (room.unreadCount > 99) "99+" else room.unreadCount.toString(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (room.unreadCount > 0) Primary else TextSecondary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             )
-                        }
-                        if (room.unreadCount > 0) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Surface(
-                                color = Primary,
-                                contentColor = Background,
-                                shape = CircleShape,
-                                modifier = Modifier,
-                            ) {
-                                Text(
-                                    text = if (room.unreadCount > 99) "99+" else room.unreadCount.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                )
-                            }
                         }
                     }
                 }
