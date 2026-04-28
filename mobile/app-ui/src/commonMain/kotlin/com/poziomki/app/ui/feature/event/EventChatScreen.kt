@@ -102,6 +102,14 @@ fun EventChatScreen(
                     )
                 }
 
+                eventState.chatOpenError != null && !eventState.isOpeningChat -> {
+                    EventChatErrorView(
+                        message = eventState.chatOpenError ?: "",
+                        onRetry = eventDetailViewModel::retryOpenEventChat,
+                        onBack = onBack,
+                    )
+                }
+
                 eventState.isOpeningChat || eventState.event?.conversationId?.isNullOrBlank() ?: true -> {
                     var showSpinner by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
