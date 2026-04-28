@@ -418,28 +418,40 @@ pub async fn set_mute(
     Ok(())
 }
 
-/// Record server-confirmed delivery for a single (message, user)
-/// pair via the SECURITY DEFINER helper. Idempotent — returns the
-/// stored `delivered_at` on first insert, `None` on a duplicate so
-/// the caller can suppress the Delivered broadcast. The function
-/// also verifies membership server-side, so an API bug that fans
-/// out a delivery to the wrong user can't silently insert a row.
-pub async fn record_delivery(
+#[derive(diesel::QueryableByName)]
+struct DeliveryRow {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    user_id: i32,
+    #[diesel(sql_type = diesel::sql_types::Timestamptz)]
+    delivered_at: chrono::DateTime<Utc>,
+}
+
+/// Bulk delivery insert via the SECURITY DEFINER helper. Inserts a row
+/// for every (`message_id`, recipient) pair in `user_ids` in one round
+/// trip and returns only the rows that were actually inserted, so the
+/// caller can emit a `Delivered` broadcast per success and stay
+/// idempotent across reconnects. Membership is verified in the same
+/// SQL statement against `conversation_members`. Replaces the
+/// per-recipient transaction loop that used to fan out N round trips
+/// per send.
+pub async fn record_deliveries(
     conn: &mut AsyncPgConnection,
     message_id: Uuid,
-    user_id: i32,
-) -> Result<Option<chrono::DateTime<Utc>>, crate::error::AppError> {
-    #[derive(diesel::QueryableByName)]
-    struct DeliveryAt {
-        #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
-        delivered_at: Option<chrono::DateTime<Utc>>,
+    user_ids: &[i32],
+) -> Result<Vec<(i32, chrono::DateTime<Utc>)>, crate::error::AppError> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
     }
-    let row: DeliveryAt = diesel::sql_query("SELECT app.record_delivery($1, $2) AS delivered_at")
-        .bind::<diesel::sql_types::Uuid, _>(message_id)
-        .bind::<diesel::sql_types::Integer, _>(user_id)
-        .get_result(conn)
-        .await?;
-    Ok(row.delivered_at)
+    let rows: Vec<DeliveryRow> =
+        diesel::sql_query("SELECT user_id, delivered_at FROM app.record_deliveries($1, $2)")
+            .bind::<diesel::sql_types::Uuid, _>(message_id)
+            .bind::<diesel::sql_types::Array<diesel::sql_types::Integer>, _>(user_ids)
+            .get_results(conn)
+            .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.user_id, r.delivered_at))
+        .collect())
 }
 
 /// Load all read receipts and delivery confirmations for the given

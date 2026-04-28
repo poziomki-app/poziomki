@@ -148,6 +148,49 @@ BEGIN
 END
 $$;
 
+-- Bulk variant. The WS hub fans out to N online recipients per send;
+-- looping `record_delivery` once per recipient meant N round trips per
+-- broadcast (one short tx each). For groups this becomes the dominant
+-- cost. This variant inserts every (message_id, user_id) row in a
+-- single statement and returns the (user_id, delivered_at) pairs that
+-- were actually inserted, so the caller still knows which sender
+-- broadcasts to emit. Membership is verified in the same statement.
+CREATE OR REPLACE FUNCTION app.record_deliveries(p_message_id uuid, p_user_ids int[])
+RETURNS TABLE (user_id int, delivered_at timestamptz)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_conv_id uuid;
+BEGIN
+    SELECT conversation_id INTO v_conv_id
+    FROM public.messages
+    WHERE id = p_message_id;
+    IF v_conv_id IS NULL OR p_user_ids IS NULL OR array_length(p_user_ids, 1) IS NULL THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    INSERT INTO public.message_deliveries (message_id, user_id, delivered_at)
+    SELECT p_message_id, cm.user_id, now()
+    FROM public.conversation_members cm
+    WHERE cm.conversation_id = v_conv_id
+      AND cm.user_id = ANY (p_user_ids)
+    ON CONFLICT (message_id, user_id) DO NOTHING
+    RETURNING message_deliveries.user_id, message_deliveries.delivered_at;
+END
+$$;
+
+REVOKE EXECUTE ON FUNCTION app.record_deliveries(uuid, int[]) FROM PUBLIC;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'poziomki_api') THEN
+        EXECUTE 'GRANT EXECUTE ON FUNCTION app.record_deliveries(uuid, int[]) TO poziomki_api';
+    END IF;
+END
+$$;
+
 -- Backfill: synthesize read receipts from the existing watermarks so
 -- old conversations don't render with blank ticks after the upgrade.
 -- For each (member, conversation) pair, mark every non-self message

@@ -889,12 +889,13 @@ async fn handle_react(
     }
 }
 
-/// Insert `message_deliveries` rows for every online recipient and
-/// emit `Delivered` to the sender's sessions for each successful
-/// (idempotent) insert. Runs after the broadcast so a slow DB never
-/// stalls the fanout. Each delivery is recorded under the recipient's
-/// own viewer context so RLS policies stay consistent — but the
-/// SECURITY DEFINER helper does the real gating.
+/// Insert `message_deliveries` rows for every online recipient in one
+/// batched round trip and emit `Delivered` to the sender's sessions
+/// for each successful (idempotent) insert. Runs after the broadcast
+/// so a slow DB never stalls the fanout. Membership gating happens
+/// inside the SECURITY DEFINER helper, so we run the bulk call under
+/// the sender's viewer rather than spinning up a tx per recipient —
+/// for a group of N online members this collapses N short txs into one.
 async fn record_deliveries_and_notify(
     hub: ChatHub,
     conversation_id: uuid::Uuid,
@@ -902,35 +903,37 @@ async fn record_deliveries_and_notify(
     sender_user_id: i32,
     recipients: Vec<i32>,
 ) {
-    if message_id.is_nil() {
+    if message_id.is_nil() || recipients.is_empty() {
         return;
     }
-    for uid in recipients {
-        let viewer = db::DbViewer {
-            user_id: uid,
-            is_review_stub: false,
-        };
-        let res: Result<Option<chrono::DateTime<chrono::Utc>>, diesel::result::Error> =
-            db::with_viewer_tx(viewer, move |conn| {
-                async move {
-                    chat_messages::record_delivery(conn, message_id, uid)
-                        .await
-                        .map_err(into_diesel)
-                }
-                .scope_boxed()
-            })
-            .await;
-        if let Ok(Some(at)) = res {
-            hub.broadcast(
-                &[sender_user_id],
-                &ServerMessage::Delivered {
-                    conversation_id,
-                    message_id,
-                    user_id: uid,
-                    delivered_at: at.to_rfc3339(),
-                },
-            );
-        }
+    let viewer = db::DbViewer {
+        user_id: sender_user_id,
+        is_review_stub: false,
+    };
+    let recipients_for_tx = recipients.clone();
+    let res: Result<Vec<(i32, chrono::DateTime<chrono::Utc>)>, diesel::result::Error> =
+        db::with_viewer_tx(viewer, move |conn| {
+            async move {
+                chat_messages::record_deliveries(conn, message_id, &recipients_for_tx)
+                    .await
+                    .map_err(into_diesel)
+            }
+            .scope_boxed()
+        })
+        .await;
+    let Ok(rows) = res else {
+        return;
+    };
+    for (uid, at) in rows {
+        hub.broadcast(
+            &[sender_user_id],
+            &ServerMessage::Delivered {
+                conversation_id,
+                message_id,
+                user_id: uid,
+                delivered_at: at.to_rfc3339(),
+            },
+        );
     }
 }
 
