@@ -34,9 +34,24 @@ data class ReplyDetails(
     val body: String?,
 )
 
+/**
+ * Send-status ladder for the local viewer's own messages.
+ *
+ *   `Sending` — POSTed but no server confirmation.
+ *   `Sent` — server has accepted and persisted the message.
+ *   `Delivered` — at least one recipient's WS session has received it
+ *                 (server-confirmed via `Delivered` event).
+ *   `Read` — at least one recipient has read it (server `ReadReceipt`).
+ *   `Failed` — terminal error during send.
+ *
+ * Mirrors WhatsApp/iMessage tick semantics; the renderer chooses
+ * single/double/double-blue ticks from this enum.
+ */
 enum class EventSendStatus {
     Sending,
     Sent,
+    Delivered,
+    Read,
     Failed,
 }
 
@@ -55,7 +70,18 @@ sealed interface TimelineItem {
         val reactions: List<Reaction>,
         val isEditable: Boolean,
         val sendStatus: EventSendStatus?,
-        val readByCount: Int,
+        /**
+         * Per-user receipts captured server-side. Empty until at
+         * least one peer reads. Powers double-blue ticks and the
+         * "read by" sheet for groups.
+         */
+        val readBy: Map<Int, Long> = emptyMap(),
+        /**
+         * Per-user delivery confirmations (server-confirmed when the
+         * recipient's WS session received the message). Empty until
+         * a recipient is actually online or reconnects.
+         */
+        val deliveredTo: Map<Int, Long> = emptyMap(),
         val canReply: Boolean,
         /**
          * Bielik-Guard verdict for this message body. `null` until the

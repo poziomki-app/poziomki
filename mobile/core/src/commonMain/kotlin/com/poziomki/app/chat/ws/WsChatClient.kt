@@ -39,6 +39,9 @@ class WsChatClient(
     private val _rooms = MutableStateFlow<List<RoomSummary>>(emptyList())
     override val rooms: StateFlow<List<RoomSummary>> = _rooms
 
+    private val _totalUnread = MutableStateFlow(0)
+    override val totalUnread: StateFlow<Int> = _totalUnread
+
     private val openedRoomsMutex = Mutex()
     private val openedRooms = mutableMapOf<String, WsJoinedRoom>()
 
@@ -89,6 +92,7 @@ class WsChatClient(
             is WsServerMessage.Conversations -> {
                 latestConversations = msg.conversations
                 _rooms.value = msg.conversations.map { it.toRoomSummary() }
+                recomputeTotalUnread()
             }
 
             is WsServerMessage.Message -> {
@@ -119,6 +123,14 @@ class WsChatClient(
                 }
             }
 
+            is WsServerMessage.Delivered -> {
+                handleDelivered(msg)
+            }
+
+            is WsServerMessage.UnreadUpdate -> {
+                handleUnreadUpdate(msg)
+            }
+
             is WsServerMessage.Typing -> {
                 openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onTyping(msg)
             }
@@ -128,6 +140,28 @@ class WsChatClient(
             }
 
             else -> {}
+        }
+    }
+
+    private suspend fun handleDelivered(msg: WsServerMessage.Delivered) {
+        openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onDelivered(msg)
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == msg.conversationId }
+        if (idx >= 0 && current[idx].latestMessageIsMine &&
+            current[idx].latestMessageSendStatus != EventSendStatus.Read
+        ) {
+            current[idx] = current[idx].copy(latestMessageSendStatus = EventSendStatus.Delivered)
+            _rooms.value = current
+        }
+    }
+
+    private fun handleUnreadUpdate(msg: WsServerMessage.UnreadUpdate) {
+        _totalUnread.value = msg.totalUnread.toInt()
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == msg.conversationId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(unreadCount = msg.unreadCount.toInt())
+            _rooms.value = current
         }
     }
 
@@ -154,6 +188,7 @@ class WsChatClient(
                 )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
+            recomputeTotalUnread()
         } else {
             // Unknown room — debounce a conversation list refresh
             refreshJob?.cancel()
@@ -171,7 +206,20 @@ class WsChatClient(
         if (idx >= 0) {
             current[idx] = current[idx].copy(unreadCount = 0)
             _rooms.value = current
+            recomputeTotalUnread()
         }
+    }
+
+    /** Sum unread across non-muted rooms. UnreadUpdate events overwrite this. */
+    private fun recomputeTotalUnread() {
+        val now =
+            kotlinx.datetime.Clock.System
+                .now()
+                .toEpochMilliseconds()
+        _totalUnread.value =
+            _rooms.value
+                .filter { (it.mutedUntilMillis ?: 0L) <= now }
+                .sumOf { it.unreadCount }
     }
 
     private fun updateRoomReadByCount(roomId: String) {
@@ -184,6 +232,29 @@ class WsChatClient(
                 )
             _rooms.value = current
         }
+    }
+
+    override suspend fun setMute(
+        roomId: String,
+        mutedUntilMillis: Long?,
+    ): Result<Unit> {
+        val iso =
+            mutedUntilMillis?.let {
+                kotlinx.datetime.Instant
+                    .fromEpochMilliseconds(it)
+                    .toString()
+            }
+        val sent = wsConnection.send(WsClientMessage.Mute(conversationId = roomId, mutedUntil = iso))
+        if (!sent) return Result.failure(IllegalStateException("Not connected"))
+        // Optimistic local update; UnreadUpdate from server reconciles.
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == roomId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(mutedUntilMillis = mutedUntilMillis)
+            _rooms.value = current
+            recomputeTotalUnread()
+        }
+        return Result.success(Unit)
     }
 
     override suspend fun ensureStarted(): Result<Unit> {
@@ -344,6 +415,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
         isBlocked = isBlocked,
+        mutedUntilMillis = mutedUntil?.let { parseTimestamp(it) },
         latestModerationVerdict = latestModerationVerdict,
         latestModerationCategories = latestModerationCategories,
     )

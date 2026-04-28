@@ -10,6 +10,13 @@ class NoopChatClient : ChatClient {
 
     override val rooms: StateFlow<List<RoomSummary>> = MutableStateFlow(emptyList())
 
+    override val totalUnread: StateFlow<Int> = MutableStateFlow(0)
+
+    override suspend fun setMute(
+        roomId: String,
+        mutedUntilMillis: Long?,
+    ): Result<Unit> = Result.success(Unit)
+
     override suspend fun ensureStarted(): Result<Unit> = Result.success(Unit)
 
     override suspend fun refreshRooms(): Result<Unit> = Result.success(Unit)

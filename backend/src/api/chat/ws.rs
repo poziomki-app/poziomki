@@ -336,6 +336,12 @@ async fn handle_client_message(
         } => {
             handle_typing(viewer, conversation_id, is_typing, hub).await;
         }
+        ClientMessage::Mute {
+            conversation_id,
+            muted_until,
+        } => {
+            handle_mute(viewer, conversation_id, muted_until.as_deref(), hub).await;
+        }
         ClientMessage::History {
             conversation_id,
             before,
@@ -497,7 +503,36 @@ async fn handle_send(
                     sender_id = user_id,
                     "message_sent"
                 );
+                let msg_id = match &server_msg {
+                    ServerMessage::Message { msg } => msg.id,
+                    _ => uuid::Uuid::nil(),
+                };
                 hub.broadcast(&outcome.members, &server_msg);
+
+                // Server-confirmed delivery: anyone with an active WS
+                // session in `members` (other than the sender) just
+                // received the broadcast. Record those deliveries and
+                // emit `Delivered` back to the sender so their UI can
+                // flip ✓ → ✓✓ before any read happens.
+                let online_recipients: Vec<i32> = outcome
+                    .members
+                    .iter()
+                    .copied()
+                    .filter(|&id| id != user_id && hub.is_online(id))
+                    .collect();
+                if !online_recipients.is_empty() {
+                    let hub_clone = hub.clone();
+                    tokio::spawn(async move {
+                        record_deliveries_and_notify(
+                            hub_clone,
+                            conversation_id,
+                            msg_id,
+                            user_id,
+                            online_recipients,
+                        )
+                        .await;
+                    });
+                }
 
                 let push_targets: Vec<i32> = outcome
                     .members
@@ -854,6 +889,51 @@ async fn handle_react(
     }
 }
 
+/// Insert `message_deliveries` rows for every online recipient and
+/// emit `Delivered` to the sender's sessions for each successful
+/// (idempotent) insert. Runs after the broadcast so a slow DB never
+/// stalls the fanout. Each delivery is recorded under the recipient's
+/// own viewer context so RLS policies stay consistent — but the
+/// SECURITY DEFINER helper does the real gating.
+async fn record_deliveries_and_notify(
+    hub: ChatHub,
+    conversation_id: uuid::Uuid,
+    message_id: uuid::Uuid,
+    sender_user_id: i32,
+    recipients: Vec<i32>,
+) {
+    if message_id.is_nil() {
+        return;
+    }
+    for uid in recipients {
+        let viewer = db::DbViewer {
+            user_id: uid,
+            is_review_stub: false,
+        };
+        let res: Result<Option<chrono::DateTime<chrono::Utc>>, diesel::result::Error> =
+            db::with_viewer_tx(viewer, move |conn| {
+                async move {
+                    chat_messages::record_delivery(conn, message_id, uid)
+                        .await
+                        .map_err(into_diesel)
+                }
+                .scope_boxed()
+            })
+            .await;
+        if let Ok(Some(at)) = res {
+            hub.broadcast(
+                &[sender_user_id],
+                &ServerMessage::Delivered {
+                    conversation_id,
+                    message_id,
+                    user_id: uid,
+                    delivered_at: at.to_rfc3339(),
+                },
+            );
+        }
+    }
+}
+
 async fn resolve_sender_for_reaction(
     conn: &mut AsyncPgConnection,
     user_id: i32,
@@ -875,6 +955,8 @@ async fn resolve_sender_for_reaction(
     (name, avatar_url)
 }
 
+type ReadOutcome = Option<(Vec<i32>, chrono::DateTime<chrono::Utc>, i64, i64)>;
+
 async fn handle_read(
     viewer: SocketViewer,
     conversation_id: uuid::Uuid,
@@ -883,34 +965,101 @@ async fn handle_read(
 ) {
     let user_id = viewer.user_id;
 
-    let members: std::result::Result<Option<Vec<i32>>, diesel::result::Error> =
+    let members: std::result::Result<ReadOutcome, diesel::result::Error> =
         db::with_viewer_tx(viewer.into(), move |conn| {
             async move {
                 if !conversations::is_member(conn, conversation_id, user_id)
                     .await
                     .map_err(into_diesel)?
                 {
-                    return Ok::<Option<Vec<i32>>, diesel::result::Error>(None);
+                    return Ok::<ReadOutcome, diesel::result::Error>(None);
                 }
-                chat_messages::mark_read(conn, conversation_id, user_id, message_id)
+                let read_at = chat_messages::mark_read(conn, conversation_id, user_id, message_id)
                     .await
                     .map_err(into_diesel)?;
                 let m = conversations::member_user_ids(conn, conversation_id)
                     .await
                     .map_err(into_diesel)?;
-                Ok(Some(m))
+                let (per_conv, total) = conversations::unread_summary_for_user(conn, user_id)
+                    .await
+                    .map_err(into_diesel)?;
+                let per_this = per_conv.get(&conversation_id).copied().unwrap_or(0);
+                Ok(Some((m, read_at, per_this, total)))
             }
             .scope_boxed()
         })
         .await;
 
-    if let Ok(Some(members)) = members {
+    if let Ok(Some((members, read_at, per_conv_unread, total_unread))) = members {
         let server_msg = ServerMessage::ReadReceipt {
             conversation_id,
             user_id,
             message_id,
+            read_at: read_at.to_rfc3339(),
         };
         hub.broadcast(&members, &server_msg);
+        // Also push the user's own multi-device sessions an UnreadUpdate
+        // so e.g. the tablet badge clears the moment the phone reads.
+        // (broadcast() will fan out to every active session of `user_id`.)
+        hub.broadcast(
+            &[user_id],
+            &ServerMessage::UnreadUpdate {
+                conversation_id,
+                unread_count: per_conv_unread,
+                total_unread,
+            },
+        );
+    }
+}
+
+async fn handle_mute(
+    viewer: SocketViewer,
+    conversation_id: uuid::Uuid,
+    muted_until: Option<&str>,
+    hub: &ChatHub,
+) {
+    let user_id = viewer.user_id;
+    let parsed: Option<chrono::DateTime<chrono::Utc>> = match muted_until {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(t) => Some(t.with_timezone(&chrono::Utc)),
+            Err(_) => return,
+        },
+        None => None,
+    };
+
+    let result: std::result::Result<Option<(i64, i64)>, diesel::result::Error> =
+        db::with_viewer_tx(viewer.into(), move |conn| {
+            async move {
+                if !conversations::is_member(conn, conversation_id, user_id)
+                    .await
+                    .map_err(into_diesel)?
+                {
+                    return Ok::<Option<(i64, i64)>, diesel::result::Error>(None);
+                }
+                chat_messages::set_mute(conn, conversation_id, user_id, parsed)
+                    .await
+                    .map_err(into_diesel)?;
+                let (per, total) = conversations::unread_summary_for_user(conn, user_id)
+                    .await
+                    .map_err(into_diesel)?;
+                let per_this = per.get(&conversation_id).copied().unwrap_or(0);
+                Ok(Some((per_this, total)))
+            }
+            .scope_boxed()
+        })
+        .await;
+
+    if let Ok(Some((per_this, total))) = result {
+        // Mute affects which conversations contribute to total_unread,
+        // so refresh the user's other sessions.
+        hub.broadcast(
+            &[user_id],
+            &ServerMessage::UnreadUpdate {
+                conversation_id,
+                unread_count: per_this,
+                total_unread: total,
+            },
+        );
     }
 }
 
@@ -941,10 +1090,26 @@ async fn handle_typing(
         .await;
 
     if let Ok(Some(members)) = members {
+        if is_typing {
+            // Note typing TTL on the hub so the janitor can emit a
+            // stop-typing fanout if the user goes silent or
+            // disconnects without explicitly clearing it.
+            hub.note_typing(user_id, conversation_id);
+            hub.note_typing_members(user_id, conversation_id, members.clone());
+        } else {
+            hub.clear_typing(user_id, conversation_id);
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let expires_in_ms = if is_typing {
+            Some(super::hub::TYPING_TTL.as_millis() as u64)
+        } else {
+            None
+        };
         let server_msg = ServerMessage::Typing {
             conversation_id,
             user_id,
             is_typing,
+            expires_in_ms,
         };
         let others: Vec<i32> = members.into_iter().filter(|id| *id != user_id).collect();
         hub.broadcast(&others, &server_msg);
@@ -968,6 +1133,8 @@ async fn handle_history(
         Ok {
             messages: Vec<super::protocol::MessagePayload>,
             has_more: bool,
+            read_receipts: Vec<super::protocol::ReadReceiptPayload>,
+            deliveries: Vec<super::protocol::DeliveryPayload>,
         },
         NotMember,
         Failed(String),
@@ -1000,18 +1167,35 @@ async fn handle_history(
                     ) => return Ok(Outcome::Failed(m)),
                     Err(e) => return Err(into_diesel(e)),
                 };
-                Ok(Outcome::Ok { messages, has_more })
+                let msg_ids: Vec<uuid::Uuid> = messages.iter().map(|m| m.id).collect();
+                let (read_receipts, deliveries) =
+                    chat_messages::load_receipts_for_messages(conn, &msg_ids)
+                        .await
+                        .map_err(into_diesel)?;
+                Ok(Outcome::Ok {
+                    messages,
+                    has_more,
+                    read_receipts,
+                    deliveries,
+                })
             }
             .scope_boxed()
         })
         .await;
 
     match result {
-        Ok(Outcome::Ok { messages, has_more }) => {
+        Ok(Outcome::Ok {
+            messages,
+            has_more,
+            read_receipts,
+            deliveries,
+        }) => {
             let _ = outbound_tx.send(ServerMessage::HistoryResponse {
                 conversation_id,
                 messages,
                 has_more,
+                read_receipts,
+                deliveries,
             });
         }
         Ok(Outcome::NotMember) => {
