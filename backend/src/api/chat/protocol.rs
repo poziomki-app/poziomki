@@ -46,15 +46,6 @@ pub enum ClientMessage {
         #[serde(rename = "isTyping")]
         is_typing: bool,
     },
-    /// Mute or unmute one conversation. `mutedUntil` of `None` clears
-    /// the mute; a future RFC3339 timestamp sets it; a far-future
-    /// timestamp encodes "muted forever".
-    Mute {
-        #[serde(rename = "conversationId")]
-        conversation_id: Uuid,
-        #[serde(rename = "mutedUntil")]
-        muted_until: Option<String>,
-    },
     History {
         #[serde(rename = "conversationId")]
         conversation_id: Uuid,
@@ -119,34 +110,6 @@ pub enum ServerMessage {
         user_id: i32,
         #[serde(rename = "messageId")]
         message_id: Uuid,
-        /// RFC3339 timestamp of when the read happened. Lets the
-        /// sender's UI show "Read 14:32" instead of guessing.
-        #[serde(rename = "readAt")]
-        read_at: String,
-    },
-    /// Server-confirmed delivery: a recipient's WS session has
-    /// received this message. Powers the ✓ → ✓✓ tick transition
-    /// before any read receipt arrives.
-    Delivered {
-        #[serde(rename = "conversationId")]
-        conversation_id: Uuid,
-        #[serde(rename = "messageId")]
-        message_id: Uuid,
-        #[serde(rename = "userId")]
-        user_id: i32,
-        #[serde(rename = "deliveredAt")]
-        delivered_at: String,
-    },
-    /// Pushed to a user's own sessions after their `Read` advances
-    /// the watermark, so multi-device clients don't have to refetch
-    /// the conversation list to clear a badge.
-    UnreadUpdate {
-        #[serde(rename = "conversationId")]
-        conversation_id: Uuid,
-        #[serde(rename = "unreadCount")]
-        unread_count: i64,
-        #[serde(rename = "totalUnread")]
-        total_unread: i64,
     },
     Typing {
         #[serde(rename = "conversationId")]
@@ -167,14 +130,6 @@ pub enum ServerMessage {
         messages: Vec<MessagePayload>,
         #[serde(rename = "hasMore")]
         has_more: bool,
-        /// All read receipts for messages in this page. Lets clients
-        /// rehydrate ✓✓ ticks after reconnect without keeping a
-        /// running journal of receipts they may have missed offline.
-        #[serde(rename = "readReceipts", default)]
-        read_receipts: Vec<ReadReceiptPayload>,
-        /// All delivery confirmations for messages in this page.
-        #[serde(default)]
-        deliveries: Vec<DeliveryPayload>,
     },
     Conversations {
         conversations: Vec<ConversationPayload>,
@@ -232,22 +187,6 @@ pub struct ReactionPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadReceiptPayload {
-    pub message_id: Uuid,
-    pub user_id: i32,
-    pub read_at: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeliveryPayload {
-    pub message_id: Uuid,
-    pub user_id: i32,
-    pub delivered_at: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConversationPayload {
     pub id: Uuid,
     pub kind: String,
@@ -259,16 +198,10 @@ pub struct ConversationPayload {
     pub direct_user_avatar: Option<String>,
     pub unread_count: i64,
     pub latest_message: Option<String>,
-    pub latest_message_id: Option<Uuid>,
     pub latest_timestamp: Option<String>,
     pub latest_message_is_mine: bool,
     pub latest_sender_name: Option<String>,
     pub is_blocked: bool,
-    /// RFC3339 timestamp; `None` means not muted. A far-future value
-    /// encodes "muted until I unmute". Clients render a muted-bell
-    /// icon and fade the unread badge when this is `Some`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub muted_until: Option<String>,
     /// Bielik-Guard verdict for the latest message body — `None` until
     /// scanned, `"allow"`/`"flag"`/`"block"` after. Clients render the
     /// blur overlay in the chat list using this field; the body is
