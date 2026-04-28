@@ -83,9 +83,7 @@ import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
@@ -102,6 +100,8 @@ import org.maplibre.compose.map.OrnamentOptions
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
+import kotlin.time.Clock
+import kotlin.time.Instant
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -189,8 +189,8 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.dayOfMonth.toString().padStart(2, '0')}.${
-                        dt.monthNumber.toString().padStart(2, '0')
+                    "${dt.day.toString().padStart(2, '0')}.${
+                        dt.month.toString().padStart(2, '0')
                     }.${dt.year}"
                 }.getOrDefault("")
             } else {

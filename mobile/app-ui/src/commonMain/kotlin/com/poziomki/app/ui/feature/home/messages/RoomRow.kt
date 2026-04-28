@@ -36,11 +36,11 @@ import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
@@ -182,8 +182,8 @@ private fun formatRoomTimestamp(timestampMillis: Long): String {
 
     return when {
         daysDiff in 1..6 -> weekdayShort(date.dayOfWeek)
-        nowDate.year == date.year -> "${date.dayOfMonth} ${monthShort(date.monthNumber)}"
-        else -> "${date.dayOfMonth} ${monthShort(date.monthNumber)} ${date.year}"
+        nowDate.year == date.year -> "${date.day} ${monthShort(date.month.ordinal + 1)}"
+        else -> "${date.day} ${monthShort(date.month.ordinal + 1)} ${date.year}"
     }
 }
 

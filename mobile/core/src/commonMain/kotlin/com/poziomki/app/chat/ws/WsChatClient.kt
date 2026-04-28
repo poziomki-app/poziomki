@@ -350,7 +350,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
 
 internal fun parseTimestamp(iso8601: String): Long =
     try {
-        kotlinx.datetime.Instant
+        kotlin.time.Instant
             .parse(iso8601)
             .toEpochMilliseconds()
     } catch (_: Exception) {

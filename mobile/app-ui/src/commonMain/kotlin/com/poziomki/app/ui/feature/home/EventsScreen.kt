@@ -568,7 +568,7 @@ private fun WeekEventsContent(
                 .groupBy { eventDateKey(it.startsAt) }
                 .toSortedMap()
         }
-    val collapsedDays = remember { mutableStateMapOf<Int, Boolean>() }
+    val collapsedDays = remember { mutableStateMapOf<Long, Boolean>() }
 
     LazyColumn(
         modifier =

@@ -1,6 +1,6 @@
 package com.poziomki.app.data.repository
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 object CachePolicy {
     private const val DEFAULT_STALE_MS = 5L * 60L * 1000L // 5 minutes
