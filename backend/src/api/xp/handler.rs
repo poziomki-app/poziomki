@@ -230,9 +230,12 @@ pub(in crate::api) async fn scan_token(
         ));
     };
 
-    // Load scanner profile + insert scan record atomically. The scan row
-    // is owned by the scanner (scanner_id = viewer's profile), so
-    // Tier-A policy on xp_scans can enforce write-on-own-row.
+    // Load scanner profile, record the scan, AND award XP to both parties
+    // atomically — all in one tx. The scan row is owned by the scanner
+    // (scanner_id = viewer's profile), and `app.award_profile_xp` is
+    // SECURITY DEFINER so it can credit the scanned profile across the RLS
+    // boundary. If either award fails the whole tx rolls back so we never
+    // record a scan without paying out both sides.
     let headers_tx = headers.clone();
     let tx_result = db::with_viewer_tx(viewer, move |conn| {
         async move {
@@ -251,30 +254,33 @@ pub(in crate::api) async fn scan_token(
                     },
                 ))));
             }
-            match service::try_record_scan(conn, scanner.id, scanned_id).await {
-                Ok(awarded) => Ok::<_, diesel::result::Error>(Ok((scanner.id, awarded))),
-                Err(_) => Err(diesel::result::Error::RollbackTransaction),
+            let Ok(awarded) = service::try_record_scan(conn, scanner.id, scanned_id).await else {
+                return Err(diesel::result::Error::RollbackTransaction);
+            };
+            if awarded {
+                if db::award_profile_xp(conn, scanner.id, SCAN_XP_REWARD)
+                    .await
+                    .is_err()
+                {
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+                if db::award_profile_xp(conn, scanned_id, SCAN_XP_REWARD)
+                    .await
+                    .is_err()
+                {
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
             }
+            Ok::<_, diesel::result::Error>(Ok((scanner.id, awarded)))
         }
         .scope_boxed()
     })
     .await;
 
-    let (my_profile_id, awarded) = match unwrap_viewer_tx(tx_result, &headers) {
+    let (_my_profile_id, awarded) = match unwrap_viewer_tx(tx_result, &headers) {
         Ok(v) => v,
         Err(resp) => return Ok(*resp),
     };
-
-    if awarded {
-        tokio::spawn(async move {
-            if let Err(e) = service::award_xp(my_profile_id, SCAN_XP_REWARD).await {
-                tracing::warn!(error = %e, profile_id = %my_profile_id, "failed to award XP to scanner");
-            }
-            if let Err(e) = service::award_xp(scanned_id, SCAN_XP_REWARD).await {
-                tracing::warn!(error = %e, profile_id = %scanned_id, "failed to award XP to scanned");
-            }
-        });
-    }
 
     Ok(Json(DataResponse {
         data: ScanResponse {
