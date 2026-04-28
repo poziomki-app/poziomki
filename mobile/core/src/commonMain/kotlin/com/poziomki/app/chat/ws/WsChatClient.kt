@@ -119,7 +119,7 @@ class WsChatClient(
                 if (msg.userId.toString() == wsConnection.userId.value) {
                     clearRoomUnreadCount(msg.conversationId)
                 } else {
-                    updateRoomReadByCount(msg.conversationId)
+                    updateRoomReadByCount(msg.conversationId, msg.messageId)
                 }
             }
 
@@ -225,17 +225,26 @@ class WsChatClient(
                 .sumOf { it.unreadCount }
     }
 
-    private fun updateRoomReadByCount(roomId: String) {
+    private fun updateRoomReadByCount(
+        roomId: String,
+        messageId: String,
+    ) {
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == roomId }
-        if (idx >= 0 && current[idx].latestMessageIsMine) {
-            current[idx] =
-                current[idx].copy(
-                    latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
-                    latestMessageSendStatus = EventSendStatus.Read,
-                )
-            _rooms.value = current
-        }
+        if (idx < 0) return
+        val room = current[idx]
+        if (!room.latestMessageIsMine) return
+        // Only promote the room-list status to Read when the receipt is for
+        // the actual latest message; an older receipt arriving late must
+        // not paint a newer unread message as read.
+        val isLatest = room.latestMessageId == messageId
+        val newStatus = if (isLatest) EventSendStatus.Read else room.latestMessageSendStatus
+        current[idx] =
+            room.copy(
+                latestMessageReadByCount = room.latestMessageReadByCount + 1,
+                latestMessageSendStatus = newStatus,
+            )
+        _rooms.value = current
     }
 
     override suspend fun setMute(
