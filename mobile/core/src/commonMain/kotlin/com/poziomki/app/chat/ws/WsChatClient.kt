@@ -1,5 +1,6 @@
 package com.poziomki.app.chat.ws
 
+import com.poziomki.app.chat.api.BadgeUpdater
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.api.ChatClientState
 import com.poziomki.app.chat.api.EventSendStatus
@@ -29,6 +30,7 @@ class WsChatClient(
     private val sessionManager: SessionManager,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
+    private val badgeUpdater: BadgeUpdater,
 ) : ChatClient {
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
@@ -39,11 +41,25 @@ class WsChatClient(
     private val _rooms = MutableStateFlow<List<RoomSummary>>(emptyList())
     override val rooms: StateFlow<List<RoomSummary>> = _rooms
 
+    private val _totalUnread = MutableStateFlow(0)
+    override val totalUnread: StateFlow<Int> = _totalUnread
+
     private val openedRoomsMutex = Mutex()
     private val openedRooms = mutableMapOf<String, WsJoinedRoom>()
 
     /** Cache conversation metadata for populating member caches on room open */
     private var latestConversations: List<WsConversationPayload> = emptyList()
+
+    /**
+     * Per-room set of userIds we've already counted toward the latest
+     * message's `latestMessageReadByCount`. Without this, every
+     * `ReadReceipt` from the same peer increments the counter — once
+     * for message A, again on a separate `Read` for the same A across
+     * reconnects, and again whenever history hydration replays old
+     * receipts. The set is reset to empty whenever the room's
+     * `latestMessageId` changes (a new message resets the readers list).
+     */
+    private val readersByLatestMessage = mutableMapOf<String, MutableSet<Int>>()
 
     /** Debounce job for refreshing conversation list when an unknown room appears */
     private var refreshJob: Job? = null
@@ -81,6 +97,16 @@ class WsChatClient(
                 handleServerMessage(msg)
             }
         }
+
+        // Drive the platform badge from the live unread total. We
+        // collect on the client's own scope (cancelled when the
+        // ChatClient is torn down) so a logged-out user doesn't keep
+        // a stale badge — totalUnread resets to 0 on disconnect.
+        scope.launch {
+            totalUnread.collect { count ->
+                badgeUpdater.setBadgeCount(count)
+            }
+        }
     }
 
     private suspend fun handleServerMessage(msg: WsServerMessage) {
@@ -89,6 +115,7 @@ class WsChatClient(
             is WsServerMessage.Conversations -> {
                 latestConversations = msg.conversations
                 _rooms.value = msg.conversations.map { it.toRoomSummary() }
+                recomputeTotalUnread()
             }
 
             is WsServerMessage.Message -> {
@@ -115,8 +142,16 @@ class WsChatClient(
                 if (msg.userId.toString() == wsConnection.userId.value) {
                     clearRoomUnreadCount(msg.conversationId)
                 } else {
-                    updateRoomReadByCount(msg.conversationId)
+                    updateRoomReadByCount(msg.conversationId, msg.messageId, msg.userId)
                 }
+            }
+
+            is WsServerMessage.Delivered -> {
+                handleDelivered(msg)
+            }
+
+            is WsServerMessage.UnreadUpdate -> {
+                handleUnreadUpdate(msg)
             }
 
             is WsServerMessage.Typing -> {
@@ -131,15 +166,43 @@ class WsChatClient(
         }
     }
 
+    private suspend fun handleDelivered(msg: WsServerMessage.Delivered) {
+        openedRoomsMutex.withLock { openedRooms[msg.conversationId] }?.onDelivered(msg)
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == msg.conversationId }
+        if (idx < 0) return
+        val room = current[idx]
+        val matchesLatest = room.latestMessageIsMine && room.latestMessageId == msg.messageId
+        val notYetRead = room.latestMessageSendStatus != EventSendStatus.Read
+        if (matchesLatest && notYetRead) {
+            current[idx] = room.copy(latestMessageSendStatus = EventSendStatus.Delivered)
+            _rooms.value = current
+        }
+    }
+
+    private fun handleUnreadUpdate(msg: WsServerMessage.UnreadUpdate) {
+        _totalUnread.value = msg.totalUnread.toInt()
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == msg.conversationId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(unreadCount = msg.unreadCount.toInt())
+            _rooms.value = current
+        }
+    }
+
     private fun updateRoomLatestMessage(msg: WsServerMessage.Message) {
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == msg.conversationId }
         if (idx >= 0) {
             val isMine = msg.senderId.toString() == wsConnection.userId.value
+            // New latest message → reset the readers tracking so
+            // updateRoomReadByCount counts each peer once for THIS message.
+            readersByLatestMessage.remove(msg.conversationId)
             current[idx] =
                 current[idx].copy(
                     latestMessage = msg.body,
                     latestTimestampMillis = parseTimestamp(msg.createdAt),
+                    latestMessageId = msg.id,
                     latestMessageIsMine = isMine,
                     latestMessageSendStatus = EventSendStatus.Sent,
                     unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
@@ -154,6 +217,7 @@ class WsChatClient(
                 )
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
+            recomputeTotalUnread()
         } else {
             // Unknown room — debounce a conversation list refresh
             refreshJob?.cancel()
@@ -171,19 +235,70 @@ class WsChatClient(
         if (idx >= 0) {
             current[idx] = current[idx].copy(unreadCount = 0)
             _rooms.value = current
+            recomputeTotalUnread()
         }
     }
 
-    private fun updateRoomReadByCount(roomId: String) {
+    /** Sum unread across non-muted rooms. UnreadUpdate events overwrite this. */
+    private fun recomputeTotalUnread() {
+        val now =
+            kotlinx.datetime.Clock.System
+                .now()
+                .toEpochMilliseconds()
+        _totalUnread.value =
+            _rooms.value
+                .filter { (it.mutedUntilMillis ?: 0L) <= now }
+                .sumOf { it.unreadCount }
+    }
+
+    private fun updateRoomReadByCount(
+        roomId: String,
+        messageId: String,
+        userId: Int,
+    ) {
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == roomId }
-        if (idx >= 0 && current[idx].latestMessageIsMine) {
-            current[idx] =
-                current[idx].copy(
-                    latestMessageReadByCount = current[idx].latestMessageReadByCount + 1,
-                )
+        if (idx < 0) return
+        val room = current[idx]
+        if (!room.latestMessageIsMine) return
+        // Receipts for older messages must not promote the room status to
+        // Read — a peer reading message A while there's an unread message
+        // B should keep B's status at Sent/Delivered.
+        if (room.latestMessageId != messageId) return
+        // Dedup readers for the current latest message. Without this, the
+        // same peer reading once, then re-firing on reconnect / history
+        // hydration, would inflate the counter past the true reader set.
+        val readers = readersByLatestMessage.getOrPut(roomId) { mutableSetOf() }
+        if (!readers.add(userId)) return
+        current[idx] =
+            room.copy(
+                latestMessageReadByCount = readers.size,
+                latestMessageSendStatus = EventSendStatus.Read,
+            )
+        _rooms.value = current
+    }
+
+    override suspend fun setMute(
+        roomId: String,
+        mutedUntilMillis: Long?,
+    ): Result<Unit> {
+        val iso =
+            mutedUntilMillis?.let {
+                kotlinx.datetime.Instant
+                    .fromEpochMilliseconds(it)
+                    .toString()
+            }
+        val sent = wsConnection.send(WsClientMessage.Mute(conversationId = roomId, mutedUntil = iso))
+        if (!sent) return Result.failure(IllegalStateException("Not connected"))
+        // Optimistic local update; UnreadUpdate from server reconciles.
+        val current = _rooms.value.toMutableList()
+        val idx = current.indexOfFirst { it.roomId == roomId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(mutedUntilMillis = mutedUntilMillis)
             _rooms.value = current
+            recomputeTotalUnread()
         }
+        return Result.success(Unit)
     }
 
     override suspend fun ensureStarted(): Result<Unit> {
@@ -341,9 +456,11 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         unreadCount = unreadCount.toInt(),
         latestMessage = latestMessage,
         latestTimestampMillis = latestTimestamp?.let { parseTimestamp(it) },
+        latestMessageId = latestMessageId,
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
         isBlocked = isBlocked,
+        mutedUntilMillis = mutedUntil?.let { parseTimestamp(it) },
         latestModerationVerdict = latestModerationVerdict,
         latestModerationCategories = latestModerationCategories,
     )

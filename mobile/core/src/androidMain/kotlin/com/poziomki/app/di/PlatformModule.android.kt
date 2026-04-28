@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import com.poziomki.app.chat.api.BadgeUpdater
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationHelper
 import com.poziomki.app.chat.push.PushManager
@@ -85,7 +86,8 @@ actual fun platformModule(): Module =
         }
         single { createDataStore(get<Context>()) }
         single<SessionTokenStore> { AndroidSecureSessionTokenStore(get<Context>()) }
-        single<ChatClient> { WsChatClient(get(), get(), get(), get()) }
+        single { BadgeUpdater() }
+        single<ChatClient> { WsChatClient(get(), get(), get(), get(), get()) }
         single<SqlDriver> {
             val context = get<Context>()
             val dbName = "poziomki.db"
