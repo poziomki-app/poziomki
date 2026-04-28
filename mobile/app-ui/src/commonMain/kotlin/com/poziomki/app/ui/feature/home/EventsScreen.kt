@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -322,25 +323,39 @@ private fun SwipeableEventCard(
     onCreatorClick: (() -> Unit)?,
     onSwipeFeedback: (String) -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState()
+    // Capture the latest callback so SwipeToDismissBoxState — which we
+    // remember once per card — can call it without being recreated when
+    // the lambda identity changes on recomposition.
+    val currentFeedback by rememberUpdatedState(onSwipeFeedback)
 
-    LaunchedEffect(dismissState.currentValue) {
-        when (dismissState.currentValue) {
-            SwipeToDismissBoxValue.StartToEnd -> {
-                onSwipeFeedback("more")
-                dismissState.reset()
-            }
+    // confirmValueChange is deprecated upstream but still the cleanest way
+    // to short-circuit a SwipeToDismiss into "feedback only, no commit":
+    // we reject the new value and Material3 animates the card back to
+    // Settled itself — proper bounce-off, no reset() race against the
+    // dismissal animation. The deprecation suggests rewriting with dynamic
+    // anchors, which would be a much bigger change for a UI signal we
+    // never actually want to commit to.
+    @Suppress("DEPRECATION")
+    val dismissState =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                when (value) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        currentFeedback("more")
+                        false
+                    }
 
-            SwipeToDismissBoxValue.EndToStart -> {
-                onSwipeFeedback("less")
-                dismissState.reset()
-            }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        currentFeedback("less")
+                        false
+                    }
 
-            SwipeToDismissBoxValue.Settled -> {
-                Unit
-            }
-        }
-    }
+                    SwipeToDismissBoxValue.Settled -> {
+                        true
+                    }
+                }
+            },
+        )
 
     SwipeToDismissBox(
         state = dismissState,
