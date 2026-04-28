@@ -38,7 +38,6 @@ type Result<T> = crate::error::AppResult<T>;
 const ALLOWED_WS_ORIGINS: &[&str] = &[
     "https://poziomki.app",
     "https://www.poziomki.app",
-    "https://mobile.poziomki.app",
     "https://api.poziomki.app",
     "http://localhost",
     "http://127.0.0.1",
@@ -92,7 +91,6 @@ mod origin_tests {
     #[test]
     fn accepts_allowlisted() {
         assert!(is_allowed_ws_origin("https://poziomki.app"));
-        assert!(is_allowed_ws_origin("https://mobile.poziomki.app"));
         assert!(is_allowed_ws_origin("https://api.poziomki.app"));
         assert!(is_allowed_ws_origin("http://localhost:5173"));
         assert!(is_allowed_ws_origin("http://127.0.0.1:3000"));

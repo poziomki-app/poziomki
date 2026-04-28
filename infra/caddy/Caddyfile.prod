@@ -60,6 +60,17 @@ poziomki.app, www.poziomki.app {
 		file_server
 	}
 
+	# APK mirror — populated by the Publish APKs to VPS workflow which rsyncs
+	# release artefacts into /var/www/download/ (universal + per-arch + a
+	# canonical poziomki-vX.Y.Z.apk alias). file_server browse exposes a
+	# directory listing; Content-Disposition: attachment forces download
+	# instead of in-browser open for direct .apk links.
+	handle_path /download/* {
+		header Content-Disposition "attachment"
+		root * /var/www/download
+		file_server browse
+	}
+
 	# Umami public tracker. Served under neutral paths to dodge ad-blocker
 	# heuristics; dashboard stays bound to Tailscale/localhost on :3090.
 	@umami_script path /berry.js
@@ -90,29 +101,6 @@ poziomki.app, www.poziomki.app {
 		root * /home/ubuntu/landing-static
 		try_files {path} {path}/index.html =404
 		file_server
-	}
-}
-
-mobile.poziomki.app {
-	import secure_headers
-	header Referrer-Policy "strict-origin-when-cross-origin"
-
-	handle_path /download/* {
-		header Content-Disposition "attachment"
-		root * /var/www/download
-		file_server browse
-	}
-
-	handle {
-		reverse_proxy localhost:5150 {
-			# Set an authoritative client-IP header the backend rate
-			# limiter can trust. We also replace X-Forwarded-For
-			# (Caddy would otherwise append, letting a client forge
-			# the first hop).
-			header_up X-Real-IP {client_ip}
-			header_up X-Forwarded-For {client_ip}
-			header_down -X-Powered-By
-		}
 	}
 }
 
@@ -181,8 +169,9 @@ api.poziomki.app {
 
 	handle {
 		reverse_proxy localhost:5150 {
-			# See comment on mobile.poziomki.app for rationale —
-			# authoritative client IP for the backend limiter.
+			# Authoritative client-IP for the backend rate limiter.
+			# Replace X-Forwarded-For (Caddy would otherwise append,
+			# letting a client forge the first hop).
 			header_up X-Real-IP {client_ip}
 			header_up X-Forwarded-For {client_ip}
 			header_down -X-Powered-By
