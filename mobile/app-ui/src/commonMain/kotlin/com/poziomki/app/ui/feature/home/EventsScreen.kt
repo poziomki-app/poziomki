@@ -114,6 +114,16 @@ fun EventsScreen(
         rememberLocationPermissionLauncher { granted ->
             if (granted) viewModel.retryNearby()
         }
+    var hasAutoRequestedLocation by remember { mutableStateOf(false) }
+    LaunchedEffect(state.activeFilter, state.isLocationPermissionDenied) {
+        if (state.activeFilter == TimeFilter.NEARBY &&
+            state.isLocationPermissionDenied &&
+            !hasAutoRequestedLocation
+        ) {
+            hasAutoRequestedLocation = true
+            requestLocationPermission()
+        }
+    }
 
     val timeFilterTabs =
         listOf(
