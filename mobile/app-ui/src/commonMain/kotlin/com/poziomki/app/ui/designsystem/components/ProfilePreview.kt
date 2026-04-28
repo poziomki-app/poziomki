@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -82,7 +83,7 @@ fun ProfilePreview(
     emojiAvatar: String? = null,
     gradientStart: String? = null,
     gradientEnd: String? = null,
-    onClose: () -> Unit,
+    onClose: (() -> Unit)? = null,
     bottomContent: @Composable (() -> Unit)? = null,
     headerAction: @Composable (() -> Unit)? = null,
 ) {
@@ -231,24 +232,29 @@ fun ProfilePreview(
                 }
             }
 
-            // Close button — respects status bar safe area
-            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            IconButton(
-                onClick = onClose,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = statusBarTop + 8.dp, end = 20.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Black.copy(alpha = 0.45f)),
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Bold.X,
-                    contentDescription = "Zamknij",
-                    tint = White,
-                    modifier = Modifier.size(24.dp),
-                )
+            // Close button — when ProfilePreview is hosted inside a dialog
+            // (ProfilePreviewDialog), the dialog gives us no chrome to overlay
+            // X on, so we render it here. ProfileViewScreen passes onClose=null
+            // and renders its own sticky X outside the scrolling content.
+            if (onClose != null) {
+                val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                IconButton(
+                    onClick = onClose,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = statusBarTop + 8.dp, end = 20.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Black.copy(alpha = 0.45f)),
+                ) {
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.X,
+                        contentDescription = "Zamknij",
+                        tint = White,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
 
@@ -333,6 +339,13 @@ fun ProfilePreview(
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
                 bottomContent()
             }
+
+            // Headroom for a sticky bottom-end overlay button (e.g. "Wiadomość"
+            // FAB on ProfileViewScreen) plus the system navigation bar inset,
+            // so the last bit of content can always be scrolled clear of the
+            // overlay. Harmless when no overlay is rendered.
+            val navBars = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            Spacer(modifier = Modifier.height(navBars + 96.dp))
         }
     }
 }
