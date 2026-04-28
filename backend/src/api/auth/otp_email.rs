@@ -6,7 +6,11 @@ use lettre::{
         },
         header, Mailbox, MultiPart,
     },
-    transport::smtp::{client::TlsParameters, extension::ClientId},
+    transport::smtp::{
+        authentication::Credentials,
+        client::{Tls, TlsParameters},
+        extension::ClientId,
+    },
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use std::sync::OnceLock;
@@ -175,6 +179,79 @@ fn build_otp_email(from_mbox: Mailbox, to_mbox: Mailbox, code: &str) -> Option<M
     }
 }
 
+fn env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
+}
+
+async fn send_via_relay(
+    envelope: &lettre::address::Envelope,
+    body: &[u8],
+    relay_host: &str,
+) -> Result<(), String> {
+    let port: u16 = env_nonempty("SMTP_PORT")
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(587);
+    let tls_name = env_nonempty("SMTP_TLS_NAME").unwrap_or_else(|| relay_host.to_string());
+    let ehlo = env_nonempty("SMTP_EHLO").unwrap_or_else(|| "mail.poziomki.app".to_string());
+
+    let tls_params =
+        TlsParameters::new(tls_name.clone()).map_err(|e| format!("TLS params {tls_name}: {e}"))?;
+
+    // 465 = implicit TLS, 587 = STARTTLS required, 25 = opportunistic.
+    let tls = match port {
+        465 => Tls::Wrapper(tls_params),
+        25 => Tls::Opportunistic(tls_params),
+        _ => Tls::Required(tls_params),
+    };
+
+    let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(relay_host)
+        .port(port)
+        .hello_name(ClientId::Domain(ehlo))
+        .timeout(Some(Duration::from_secs(30)))
+        .tls(tls);
+
+    if let (Some(user), Some(pass)) = (env_nonempty("SMTP_USER"), env_nonempty("SMTP_PASSWORD")) {
+        builder = builder.credentials(Credentials::new(user, pass));
+    }
+
+    let mailer = builder.build();
+    mailer
+        .send_raw(envelope, body)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("relay {relay_host}:{port}: {e}"))
+}
+
+async fn send_via_mx(
+    envelope: &lettre::address::Envelope,
+    body: &[u8],
+    domain: &str,
+) -> Result<String, String> {
+    let mx_hosts = resolve_mx(domain).await?;
+    let ehlo = env_nonempty("SMTP_EHLO").unwrap_or_else(|| "mail.poziomki.app".to_string());
+    let mut last_err = String::new();
+    for mx_host in &mx_hosts {
+        let tls_params = match TlsParameters::new(mx_host.clone()) {
+            Ok(p) => p,
+            Err(e) => {
+                last_err = format!("TLS {mx_host}: {e}");
+                continue;
+            }
+        };
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(mx_host)
+            .port(25)
+            .hello_name(ClientId::Domain(ehlo.clone()))
+            .timeout(Some(Duration::from_secs(30)))
+            .tls(Tls::Opportunistic(tls_params))
+            .build();
+        match mailer.send_raw(envelope, body).await {
+            Ok(_) => return Ok(mx_host.clone()),
+            Err(e) => last_err = format!("{mx_host}: {e}"),
+        }
+    }
+    Err(format!("All MX hosts failed: {last_err}"))
+}
+
 pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), String> {
     if !super::env_truthy("SMTP_ENABLE") {
         tracing::debug!(
@@ -195,42 +272,34 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
 
     let envelope = email.envelope().clone();
     let body = email.formatted();
+    let redacted = crate::api::redact_email(to);
+
+    // PRIMARY: relay (lettre) — SMTP_HOST + SMTP_USER/SMTP_PASSWORD configured.
+    // Most cloud/hosting providers block outbound :25, so direct-to-MX rarely works in prod.
+    if let Some(relay_host) = env_nonempty("SMTP_HOST") {
+        match send_via_relay(&envelope, &body, &relay_host).await {
+            Ok(()) => {
+                tracing::info!("OTP email delivered to {redacted} via relay {relay_host}");
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::warn!("OTP relay failed ({e}); falling back to direct MX for {redacted}");
+            }
+        }
+    }
+
+    // FALLBACK: direct-to-MX (dev / when relay not configured or failing).
     let domain = to
         .rsplit_once('@')
         .map(|(_, d)| d)
-        .ok_or_else(|| format!("No domain in {to}"))?;
-    let mx_hosts = resolve_mx(domain).await?;
-
-    let ehlo = std::env::var("SMTP_EHLO").unwrap_or_else(|_| "mail.poziomki.app".into());
-    let mut last_err = String::new();
-    for mx_host in &mx_hosts {
-        let tls_params = match TlsParameters::new(mx_host.clone()) {
-            Ok(p) => p,
-            Err(e) => {
-                last_err = format!("TLS {mx_host}: {e}");
-                continue;
-            }
-        };
-        let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(mx_host)
-            .port(25)
-            .hello_name(ClientId::Domain(ehlo.clone()))
-            .timeout(Some(Duration::from_secs(30)))
-            .tls(lettre::transport::smtp::client::Tls::Opportunistic(
-                tls_params,
-            ))
-            .build();
-        match mailer.send_raw(&envelope, &body).await {
-            Ok(_) => {
-                tracing::info!(
-                    "OTP email delivered to {} via {mx_host}",
-                    crate::api::redact_email(to)
-                );
-                return Ok(());
-            }
-            Err(e) => last_err = format!("{mx_host}: {e}"),
+        .ok_or_else(|| format!("No domain in {redacted}"))?;
+    match send_via_mx(&envelope, &body, domain).await {
+        Ok(mx_host) => {
+            tracing::info!("OTP email delivered to {redacted} via MX {mx_host}");
+            Ok(())
         }
+        Err(e) => Err(format!("OTP delivery failed for {redacted}: {e}")),
     }
-    Err(format!("All MX hosts failed for {to}: {last_err}"))
 }
 
 #[cfg(test)]
