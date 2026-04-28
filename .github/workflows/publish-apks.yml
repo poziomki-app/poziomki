@@ -85,10 +85,13 @@ jobs:
             --dir .
           ls -la
           test -n "$(ls *.apk 2>/dev/null)" || { echo "no APKs downloaded"; exit 1; }
-          # Canonical short alias `poziomki-X.Y.Z.apk` → universal APK. Lets
-          # the rest of the team share a single stable URL without committing
-          # to any specific architecture suffix.
-          cp "poziomki-${VERSION}-universal.apk" "poziomki-${VERSION}.apk"
+          # Canonical short alias `poziomki-vX.Y.Z.apk` → arm64-v8a APK
+          # (~8 MB; covers virtually every Android device shipped since
+          # ~2017). The universal APK bundles every ABI and is roughly 3×
+          # the size, which we don't want for the default share link. The
+          # `v` prefix matches the release tag scheme (vX.Y.Z) used
+          # everywhere else.
+          cp "poziomki-${VERSION}-arm64-v8a.apk" "poziomki-v${VERSION}.apk"
 
       - name: Tailscale up
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4.1.2
@@ -108,18 +111,47 @@ jobs:
             "ubuntu@${VPS_HOST}:/var/www/download/"
 
       - name: Verify HTTP availability
+        id: verify
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           # Spot-check the canonical short alias; Caddy serves /download/
           # with file_server browse + Content-Disposition: attachment.
-          url="https://mobile.poziomki.app/download/poziomki-${VERSION}.apk"
+          url="https://poziomki.app/download/poziomki-v${VERSION}.apk"
           for i in $(seq 1 10); do
             if curl -fsSI "$url" >/dev/null; then
               echo "OK: $url"
+              echo "url=$url" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 3
           done
           echo "FAIL: $url did not become available" >&2
+          echo "url=$url" >> "$GITHUB_OUTPUT"
           exit 1
+
+      - name: Notify ntfy on success
+        if: success()
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          URL: ${{ steps.verify.outputs.url }}
+        run: |
+          curl -fsS \
+            -H "Title: poziomki ${TAG} APK published" \
+            -H "Priority: default" \
+            -H "Tags: rocket,android" \
+            -d "Live at ${URL}" \
+            https://ntfy.poziomki.app/server-alerts
+
+      - name: Notify ntfy on failure
+        if: failure()
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          curl -fsS \
+            -H "Title: poziomki ${TAG} APK publish FAILED" \
+            -H "Priority: high" \
+            -H "Tags: warning,android" \
+            -d "See https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}" \
+            https://ntfy.poziomki.app/server-alerts || true
