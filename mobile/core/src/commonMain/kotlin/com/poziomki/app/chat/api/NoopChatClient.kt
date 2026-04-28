@@ -45,6 +45,10 @@ class NoopChatClient : ChatClient {
 
     override suspend fun hideConversation(roomId: String) = Unit
 
+    override suspend fun markRoomReadLocally(roomId: String) = Unit
+
+    override suspend fun setActiveRoom(roomId: String?) = Unit
+
     override suspend fun stop() {
         _state.value = ChatClientState.Idle
     }

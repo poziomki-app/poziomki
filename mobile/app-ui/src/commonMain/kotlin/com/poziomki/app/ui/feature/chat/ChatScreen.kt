@@ -90,7 +90,11 @@ fun ChatScreen(
 
     DisposableEffect(chatId) {
         ActiveChat.roomId = chatId
-        onDispose { ActiveChat.roomId = null }
+        viewModel.setActiveRoom(chatId)
+        onDispose {
+            ActiveChat.roomId = null
+            viewModel.setActiveRoom(null)
+        }
     }
 
     // Scroll to current search match
