@@ -1,0 +1,120 @@
+name: Publish APKs to VPS
+
+# Mirrors the APKs from a GitHub Release to /var/www/download/ on the prod
+# VPS, served by Caddy at https://mobile.poziomki.app/download/. Caddy is
+# configured for `handle_path /download/*` with `file_server browse`, so the
+# files become directly downloadable as soon as they land.
+#
+# The GitHub Release is the source of truth (cosign-able + checksummed by
+# softprops/action-gh-release in android-release.yml). This job just rsyncs
+# them onto the VPS so phones can fetch them from a memorable, stable URL
+# without going through GitHub UI.
+#
+# Triggers:
+#   - workflow_dispatch:    one-off republish for an existing tag
+#   - workflow_run on
+#     "Android Release" success → automatic mirror after every tagged build
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to mirror (e.g. v0.19.0)"
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Android Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-apks
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Skip the workflow_run trigger when the upstream Android Release didn't
+    # succeed — we only mirror builds that were actually published.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: production
+    timeout-minutes: 10
+
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+      RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      VPS_HOST: ${{ secrets.VPS_HOSTNAME }}
+
+    steps:
+      - name: Resolve release tag
+        id: tag
+        # workflow_dispatch passes inputs.tag; workflow_run passes the tag
+        # in head_branch (the upstream release fired on `push: tags v*`).
+        # Both flow through env: so they cannot be interpreted as shell
+        # syntax.
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="${RUN_HEAD_BRANCH}"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "tag '$tag' does not look like a vX.Y.Z release tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Stripped form ("0.19.0") is what release assets are named with.
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download APKs from GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir -p apks
+          cd apks
+          # Per-arch + universal — names emitted by scripts/prepare_android_release.sh.
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern '*.apk' \
+            --dir .
+          ls -la
+          test -n "$(ls *.apk 2>/dev/null)" || { echo "no APKs downloaded"; exit 1; }
+
+      - name: Tailscale up
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4.1.2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-deployer
+
+      - name: Rsync APKs to /var/www/download/
+        # StrictHostKeyChecking=accept-new is TOFU on first connection; safe
+        # over a tailnet that restricts `tag:ci-deployer` to SSH only
+        # `tag:poziomki-vps`. Same model as deploy-prod.yml.
+        run: |
+          rsync -av \
+            -e 'ssh -o StrictHostKeyChecking=accept-new' \
+            apks/*.apk \
+            "ubuntu@${VPS_HOST}:/var/www/download/"
+
+      - name: Verify HTTP availability
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          # Spot-check the universal APK; Caddy serves /download/ with
+          # file_server browse + Content-Disposition: attachment.
+          url="https://mobile.poziomki.app/download/poziomki-${VERSION}-universal.apk"
+          for i in $(seq 1 10); do
+            if curl -fsSI "$url" >/dev/null; then
+              echo "OK: $url"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "FAIL: $url did not become available" >&2
+          exit 1
