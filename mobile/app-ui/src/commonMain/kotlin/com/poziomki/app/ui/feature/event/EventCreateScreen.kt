@@ -81,6 +81,7 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.shared.decodeImageBytes
+import com.poziomki.app.ui.shared.formatPolishDateFromMillis
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.datetime.DateTimeUnit
@@ -691,7 +692,24 @@ fun EventCreateScreen(
                 }
             },
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(
+                state = datePickerState,
+                title = {
+                    Text(
+                        text = "Wybierz datę",
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                    )
+                },
+                headline = {
+                    val headlineText =
+                        datePickerState.selectedDateMillis?.let { formatPolishDateFromMillis(it) }
+                            ?: "Brak daty"
+                    Text(
+                        text = headlineText,
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
+                    )
+                },
+            )
         }
     }
 

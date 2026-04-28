@@ -69,6 +69,15 @@ fun formatEventDateFull(isoString: String): String {
     return "$weekday, $day $month · $hour:$minute"
 }
 
+fun formatPolishDateFromMillis(millis: Long): String {
+    val tz = TimeZone.currentSystemDefault()
+    val dt = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz)
+    val weekday = POLISH_WEEKDAYS_FULL[dt.dayOfWeek.ordinal]
+    val day = dt.day
+    val month = POLISH_MONTHS_GENITIVE[dt.month.ordinal]
+    return "$weekday, $day $month ${dt.year}"
+}
+
 fun formatEventDateCompact(isoString: String): String {
     val tz = TimeZone.currentSystemDefault()
     val instant = Instant.parse(isoString)

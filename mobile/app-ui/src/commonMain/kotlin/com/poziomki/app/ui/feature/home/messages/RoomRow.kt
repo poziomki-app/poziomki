@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,13 +21,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.Check
-import com.adamglin.phosphoricons.bold.CheckCircle
-import com.adamglin.phosphoricons.bold.Clock
-import com.adamglin.phosphoricons.bold.WarningCircle
-import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -58,7 +49,7 @@ fun RoomRow(
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Box(
             modifier =
@@ -78,15 +69,6 @@ fun RoomRow(
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            val statusIcon =
-                if (room.unreadCount == 0 && room.latestMessageIsMine) {
-                    latestRoomStatusIconSpec(
-                        sendStatus = room.latestMessageSendStatus,
-                        readByCount = room.latestMessageReadByCount,
-                    )
-                } else {
-                    null
-                }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
@@ -128,15 +110,6 @@ fun RoomRow(
             }
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (statusIcon != null) {
-                    Icon(
-                        imageVector = statusIcon.icon,
-                        contentDescription = null,
-                        tint = statusIcon.tint,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
                 val flagged =
                     !room.latestMessageIsMine &&
                         room.latestModerationVerdict in setOf("flag", "block")
@@ -213,36 +186,4 @@ private fun monthShort(monthNumber: Int): String =
         11 -> "lis."
         12 -> "gru."
         else -> "?"
-    }
-
-private data class RoomStatusIconSpec(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val tint: androidx.compose.ui.graphics.Color,
-)
-
-@Composable
-private fun latestRoomStatusIconSpec(
-    sendStatus: EventSendStatus?,
-    readByCount: Int,
-): RoomStatusIconSpec? =
-    when {
-        sendStatus == EventSendStatus.Failed -> {
-            RoomStatusIconSpec(icon = PhosphorIcons.Bold.WarningCircle, tint = MaterialTheme.colorScheme.error)
-        }
-
-        sendStatus == EventSendStatus.Sending -> {
-            RoomStatusIconSpec(icon = PhosphorIcons.Bold.Clock, tint = TextSecondary)
-        }
-
-        readByCount > 0 -> {
-            RoomStatusIconSpec(icon = PhosphorIcons.Bold.CheckCircle, tint = Primary)
-        }
-
-        sendStatus == EventSendStatus.Sent -> {
-            RoomStatusIconSpec(icon = PhosphorIcons.Bold.Check, tint = TextSecondary)
-        }
-
-        else -> {
-            null
-        }
     }
