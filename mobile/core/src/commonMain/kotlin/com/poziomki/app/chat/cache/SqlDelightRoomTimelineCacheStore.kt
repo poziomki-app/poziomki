@@ -130,7 +130,14 @@ private sealed interface CachedTimelineItem {
         val reactions: List<CachedReaction>,
         val isEditable: Boolean,
         val sendStatus: CachedEventSendStatus?,
-        val readByCount: Int,
+        // Receipts are persisted as `userId → epochMillis` maps so the
+        // cache can rehydrate ✓✓ ticks across cold starts. `readByCount`
+        // is kept (default 0) only for backward compatibility with rows
+        // written by older builds; new rows write 0 and rely on
+        // `readBy.size`.
+        val readByCount: Int = 0,
+        val readBy: Map<Int, Long> = emptyMap(),
+        val deliveredTo: Map<Int, Long> = emptyMap(),
         val canReply: Boolean,
         val moderationVerdict: String? = null,
         val moderationCategories: List<String> = emptyList(),
@@ -152,7 +159,8 @@ private sealed interface CachedTimelineItem {
                 reactions = reactions.map(CachedReaction::toDomain),
                 isEditable = isEditable,
                 sendStatus = sendStatus?.toDomain(),
-                readByCount = readByCount,
+                readBy = readBy,
+                deliveredTo = deliveredTo,
                 canReply = canReply,
                 moderationVerdict = moderationVerdict,
                 moderationCategories = moderationCategories,
@@ -196,7 +204,9 @@ private sealed interface CachedTimelineItem {
                         reactions = item.reactions.map(Reaction::toCached),
                         isEditable = item.isEditable,
                         sendStatus = item.sendStatus?.toCached(),
-                        readByCount = item.readByCount,
+                        readByCount = 0,
+                        readBy = item.readBy,
+                        deliveredTo = item.deliveredTo,
                         canReply = item.canReply,
                         moderationVerdict = item.moderationVerdict,
                         moderationCategories = item.moderationCategories,
@@ -287,6 +297,8 @@ private fun ReplyDetails.toCached(): CachedReplyDetails =
 private enum class CachedEventSendStatus {
     Sending,
     Sent,
+    Delivered,
+    Read,
     Failed,
 }
 
@@ -294,6 +306,8 @@ private fun CachedEventSendStatus.toDomain(): EventSendStatus =
     when (this) {
         CachedEventSendStatus.Sending -> EventSendStatus.Sending
         CachedEventSendStatus.Sent -> EventSendStatus.Sent
+        CachedEventSendStatus.Delivered -> EventSendStatus.Delivered
+        CachedEventSendStatus.Read -> EventSendStatus.Read
         CachedEventSendStatus.Failed -> EventSendStatus.Failed
     }
 
@@ -301,5 +315,7 @@ private fun EventSendStatus.toCached(): CachedEventSendStatus =
     when (this) {
         EventSendStatus.Sending -> CachedEventSendStatus.Sending
         EventSendStatus.Sent -> CachedEventSendStatus.Sent
+        EventSendStatus.Delivered -> CachedEventSendStatus.Delivered
+        EventSendStatus.Read -> CachedEventSendStatus.Read
         EventSendStatus.Failed -> CachedEventSendStatus.Failed
     }

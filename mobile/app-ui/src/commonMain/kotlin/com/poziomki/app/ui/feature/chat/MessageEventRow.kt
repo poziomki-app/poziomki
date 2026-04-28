@@ -524,8 +524,20 @@ private fun translateCategory(category: String): String =
 
 @Composable
 private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
-    when {
-        event.sendStatus == EventSendStatus.Failed -> {
+    // Renders the WhatsApp/iMessage status ladder. We bias to the
+    // explicit `sendStatus` ladder when present (server-confirmed) and
+    // fall back to the maps for clients that didn't set it (e.g.
+    // pre-update cache rows).
+    val effective =
+        when {
+            event.sendStatus == EventSendStatus.Failed -> EventSendStatus.Failed
+            event.sendStatus == EventSendStatus.Sending -> EventSendStatus.Sending
+            event.readBy.isNotEmpty() -> EventSendStatus.Read
+            event.deliveredTo.isNotEmpty() -> EventSendStatus.Delivered
+            else -> event.sendStatus ?: EventSendStatus.Sent
+        }
+    when (effective) {
+        EventSendStatus.Failed -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.WarningCircle,
                 contentDescription = null,
@@ -534,7 +546,7 @@ private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
             )
         }
 
-        event.sendStatus == EventSendStatus.Sending -> {
+        EventSendStatus.Sending -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.Clock,
                 contentDescription = null,
@@ -543,7 +555,19 @@ private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
             )
         }
 
-        event.readByCount > 0 -> {
+        EventSendStatus.Read -> {
+            Icon(
+                imageVector = PhosphorIcons.Bold.CheckCircle,
+                contentDescription = null,
+                // Read ticks are tinted blue (iMessage-ish) so the
+                // user can distinguish "they got it" from "they read it"
+                // at a glance.
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+
+        EventSendStatus.Delivered -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.CheckCircle,
                 contentDescription = null,
@@ -552,7 +576,7 @@ private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
             )
         }
 
-        else -> {
+        EventSendStatus.Sent -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.Check,
                 contentDescription = null,

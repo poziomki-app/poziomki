@@ -485,6 +485,137 @@ pub async fn push_unregister(
 }
 
 // ---------------------------------------------------------------------------
+// REST: Mute / unmute a conversation
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct MuteRequest {
+    /// RFC3339 timestamp; `null` clears the mute. A far-future
+    /// value encodes "muted forever" — the server stores it as-is.
+    #[serde(rename = "mutedUntil")]
+    muted_until: Option<String>,
+}
+
+pub async fn mute_conversation(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(conversation_id): Path<String>,
+    Json(body): Json<MuteRequest>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+
+    let conversation_id = match parse_uuid_response(&conversation_id, "conversation", &headers) {
+        Ok(id) => id,
+        Err(response) => return Ok(*response),
+    };
+
+    let parsed: Option<chrono::DateTime<chrono::Utc>> = match body.muted_until.as_deref() {
+        Some(s) => match chrono::DateTime::parse_from_rfc3339(s) {
+            Ok(t) => Some(t.with_timezone(&chrono::Utc)),
+            Err(_) => {
+                return Ok(error_response(
+                    StatusCode::BAD_REQUEST,
+                    &headers,
+                    ErrorSpec {
+                        error: "invalid mutedUntil; expected RFC3339".to_string(),
+                        code: "BAD_REQUEST",
+                        details: None,
+                    },
+                ));
+            }
+        },
+        None => None,
+    };
+
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+
+    let outcome: bool = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            if !conversations::is_member(conn, conversation_id, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            {
+                return Ok::<bool, diesel::result::Error>(false);
+            }
+            messages::set_mute(conn, conversation_id, user_id, parsed)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok(true)
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    if !outcome {
+        return Ok(error_response(
+            StatusCode::FORBIDDEN,
+            &headers,
+            ErrorSpec {
+                error: "not a member of this conversation".to_string(),
+                code: "FORBIDDEN",
+                details: None,
+            },
+        ));
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "data": {
+                "conversationId": conversation_id.to_string(),
+                "mutedUntil": body.muted_until,
+            }
+        })),
+    )
+        .into_response())
+}
+
+// ---------------------------------------------------------------------------
+// REST: Lightweight unread summary
+// ---------------------------------------------------------------------------
+
+pub async fn unread_summary(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+
+    let (per_conv, total) = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            conversations::unread_summary_for_user(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)
+        }
+        .scope_boxed()
+    })
+    .await?;
+    let per_conv_json: serde_json::Map<String, serde_json::Value> = per_conv
+        .into_iter()
+        .map(|(id, n)| (id.to_string(), serde_json::Value::from(n)))
+        .collect();
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "data": {
+                "total": total,
+                "perConversation": per_conv_json,
+            }
+        })),
+    )
+        .into_response())
+}
+
+// ---------------------------------------------------------------------------
 // REST: Chat config
 // ---------------------------------------------------------------------------
 

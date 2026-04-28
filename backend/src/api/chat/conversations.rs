@@ -215,15 +215,25 @@ pub async fn list_for_user(
     use super::protocol::ConversationPayload;
     use std::collections::HashMap;
 
-    let conv_ids: Vec<Uuid> = conversation_members::table
-        .filter(conversation_members::user_id.eq(user_id))
-        .select(conversation_members::conversation_id)
-        .load(conn)
-        .await?;
+    let my_memberships: Vec<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> =
+        conversation_members::table
+            .filter(conversation_members::user_id.eq(user_id))
+            .select((
+                conversation_members::conversation_id,
+                conversation_members::muted_until,
+            ))
+            .load(conn)
+            .await?;
 
-    if conv_ids.is_empty() {
+    if my_memberships.is_empty() {
         return Ok(Vec::new());
     }
+
+    let conv_ids: Vec<Uuid> = my_memberships.iter().map(|(id, _)| *id).collect();
+    let muted_map: HashMap<Uuid, chrono::DateTime<chrono::Utc>> = my_memberships
+        .iter()
+        .filter_map(|(id, m)| m.map(|m| (*id, m)))
+        .collect();
 
     let all_convs: Vec<Conversation> = conversations::table
         .filter(conversations::id.eq_any(&conv_ids))
@@ -483,6 +493,7 @@ pub async fn list_for_user(
             latest_message_is_mine: latest_is_mine,
             latest_sender_name,
             is_blocked,
+            muted_until: muted_map.get(&conv.id).map(chrono::DateTime::to_rfc3339),
             latest_moderation_verdict: latest_verdict,
             latest_moderation_categories: latest_categories,
         });
@@ -501,6 +512,69 @@ struct UnreadCountRow {
     conversation_id: Uuid,
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     cnt: i64,
+}
+
+/// Quick `(per_conv, total)` unread snapshot for a user. Used by
+/// `UnreadUpdate` pushes after a Read advances the watermark and by
+/// the lightweight `GET /api/v1/chat/unread` endpoint. `total`
+/// excludes conversations the user has muted, since the platform
+/// badge should reflect "things you actually want to see."
+pub async fn unread_summary_for_user(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> Result<(std::collections::HashMap<Uuid, i64>, i64), crate::error::AppError> {
+    use std::collections::HashMap;
+
+    let memberships: Vec<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> =
+        conversation_members::table
+            .filter(conversation_members::user_id.eq(user_id))
+            .select((
+                conversation_members::conversation_id,
+                conversation_members::muted_until,
+            ))
+            .load(conn)
+            .await?;
+
+    if memberships.is_empty() {
+        return Ok((HashMap::new(), 0));
+    }
+
+    let conv_ids: Vec<Uuid> = memberships.iter().map(|(id, _)| *id).collect();
+    let now = Utc::now();
+    let muted_set: std::collections::HashSet<Uuid> = memberships
+        .iter()
+        .filter_map(|(id, mu)| mu.filter(|t| *t > now).map(|_| *id))
+        .collect();
+
+    let rows: Vec<UnreadCountRow> = diesel::sql_query(
+        "SELECT m.conversation_id, COUNT(*) as cnt \
+             FROM messages m \
+             INNER JOIN conversation_members cm \
+                 ON cm.conversation_id = m.conversation_id AND cm.user_id = $1 \
+             LEFT JOIN messages rm ON rm.id = cm.last_read_message_id \
+             WHERE m.conversation_id = ANY($2) \
+               AND m.deleted_at IS NULL \
+               AND m.sender_id != $1 \
+               AND (rm.id IS NULL OR m.created_at > rm.created_at \
+                    OR (m.created_at = rm.created_at AND m.id > rm.id)) \
+               AND (rm.id IS NULL OR m.id != cm.last_read_message_id) \
+             GROUP BY m.conversation_id",
+    )
+    .bind::<Integer, _>(user_id)
+    .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&conv_ids)
+    .load::<UnreadCountRow>(conn)
+    .await?;
+
+    let per_conv: HashMap<Uuid, i64> = rows
+        .into_iter()
+        .map(|r| (r.conversation_id, r.cnt))
+        .collect();
+    let total: i64 = per_conv
+        .iter()
+        .filter(|(id, _)| !muted_set.contains(id))
+        .map(|(_, n)| *n)
+        .sum();
+    Ok((per_conv, total))
 }
 
 /// Sync event membership: add or remove a user from the event conversation.
