@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -574,7 +575,7 @@ fun MainScreen(
                             Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .background(Color.Black),
+                                .background(MaterialTheme.colorScheme.surface),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         Row(
@@ -593,7 +594,12 @@ fun MainScreen(
                             val haptic = LocalHapticFeedback.current
                             bottomNavItems.forEach { item ->
                                 val selected = currentDestination?.hasRoute(item.route::class) == true
-                                val tint = if (selected) Color.White else Color(0xFFB3B3B3)
+                                val tint =
+                                    if (selected) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 Column(
                                     modifier =
                                         Modifier
