@@ -50,7 +50,11 @@ fun EventChatScreen(
 
     DisposableEffect(conversationId) {
         ActiveChat.roomId = conversationId
-        onDispose { ActiveChat.roomId = null }
+        chatViewModel.setActiveRoom(conversationId)
+        onDispose {
+            ActiveChat.roomId = null
+            chatViewModel.setActiveRoom(null)
+        }
     }
 
     LaunchedEffect(eventState.event?.id, eventState.event?.isAttending, eventState.event?.conversationId) {

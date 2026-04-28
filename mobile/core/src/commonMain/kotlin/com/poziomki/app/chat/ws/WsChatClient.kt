@@ -42,6 +42,9 @@ class WsChatClient(
     private val openedRoomsMutex = Mutex()
     private val openedRooms = mutableMapOf<String, WsJoinedRoom>()
 
+    /** RoomId currently focused on the chat screen — incoming messages skip the unread bump. */
+    private var activeRoomId: String? = null
+
     /** Cache conversation metadata for populating member caches on room open */
     private var latestConversations: List<WsConversationPayload> = emptyList()
 
@@ -139,13 +142,20 @@ class WsChatClient(
         val idx = current.indexOfFirst { it.roomId == msg.conversationId }
         if (idx >= 0) {
             val isMine = msg.senderId.toString() == wsConnection.userId.value
+            val isFocusedRoom = msg.conversationId == activeRoomId
+            val nextUnread =
+                if (isMine || isFocusedRoom) {
+                    current[idx].unreadCount
+                } else {
+                    current[idx].unreadCount + 1
+                }
             current[idx] =
                 current[idx].copy(
                     latestMessage = msg.body,
                     latestTimestampMillis = parseTimestamp(msg.createdAt),
                     latestMessageIsMine = isMine,
                     latestMessageSendStatus = EventSendStatus.Sent,
-                    unreadCount = if (isMine) current[idx].unreadCount else current[idx].unreadCount + 1,
+                    unreadCount = nextUnread,
                     latestMessageReadByCount = 0,
                     // Live broadcasts pre-date the worker scan (verdict
                     // is null at this point). Carry whatever the WS
@@ -289,6 +299,15 @@ class WsChatClient(
             is ApiResult.Success -> Result.success(Unit)
             is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
         }
+    }
+
+    override suspend fun markRoomReadLocally(roomId: String) {
+        clearRoomUnreadCount(roomId)
+    }
+
+    override suspend fun setActiveRoom(roomId: String?) {
+        activeRoomId = roomId
+        if (roomId != null) clearRoomUnreadCount(roomId)
     }
 
     override suspend fun hideConversation(roomId: String) {
