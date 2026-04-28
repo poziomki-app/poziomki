@@ -805,6 +805,18 @@ class ChatViewModel(
         runCatching { room.markAsRead() }
     }
 
+    /**
+     * Track the focused room from the UI layer (DisposableEffect in ChatScreen
+     * and EventChatScreen). Doing this here, instead of from bindRoom +
+     * onCleared, means the focus flag is cleared the moment the screen leaves
+     * composition — not whenever Android decides to clear the ViewModel,
+     * which is unreliable (the VM may outlive the screen, or onCleared may
+     * run inside a launch that is canceled before the call lands).
+     */
+    fun setActiveRoom(roomId: String?) {
+        viewModelScope.launch { runCatching { chatClient.setActiveRoom(roomId) } }
+    }
+
     private fun scheduleTypingStart() {
         typingStartJob?.cancel()
         typingStartJob =

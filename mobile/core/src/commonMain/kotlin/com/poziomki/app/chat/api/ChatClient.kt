@@ -83,5 +83,21 @@ interface ChatClient {
 
     suspend fun hideConversation(roomId: String)
 
+    /**
+     * Optimistically clears `unreadCount` for [roomId] in the local rooms
+     * StateFlow so the UI un-bolds the row immediately. Server confirmation
+     * (via Read → ReadReceipt round-trip) still happens, but the user sees
+     * the room as "read" the moment they open it, not after the network
+     * round-trip completes.
+     */
+    suspend fun markRoomReadLocally(roomId: String)
+
+    /**
+     * Marks [roomId] as the currently focused room. Inbound messages for
+     * this room won't bump `unreadCount` while it's focused — the user is
+     * actively reading. Pass `null` when the user leaves the chat screen.
+     */
+    suspend fun setActiveRoom(roomId: String?)
+
     suspend fun stop()
 }
