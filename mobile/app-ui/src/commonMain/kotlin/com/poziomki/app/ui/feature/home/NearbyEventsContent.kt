@@ -72,7 +72,6 @@ private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
 private const val DEFAULT_ZOOM = 12.0
 private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
-private const val MAP_HEIGHT_DP = 280
 private const val TAP_THRESHOLD_DEG = 0.005
 
 @Composable
@@ -151,13 +150,13 @@ internal fun NearbyEventsContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Map container
+        // Map container — fill the available height (weight=1f) instead of a fixed 280dp.
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .height(MAP_HEIGHT_DP.dp)
+                    .weight(1f)
                     .clip(RoundedCornerShape(20.dp)),
         ) {
             val cameraState =
