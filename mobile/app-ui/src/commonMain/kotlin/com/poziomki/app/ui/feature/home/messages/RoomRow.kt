@@ -172,9 +172,7 @@ private fun formatRoomTimestamp(timestampMillis: Long): String {
     if (diffMillis < 60L * 60_000L) return "${diffMillis / 60_000L} min"
     if (diffMillis < 24L * 60L * 60_000L) {
         val hours = (diffMillis / (60L * 60_000L)).coerceAtLeast(1L)
-        val nowDate = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val tsDate = Instant.fromEpochMilliseconds(timestampMillis).toLocalDateTime(TimeZone.currentSystemDefault()).date
-        if (nowDate == tsDate) return "${hours}g"
+        return "${hours}g"
     }
 
     val zone = TimeZone.currentSystemDefault()
