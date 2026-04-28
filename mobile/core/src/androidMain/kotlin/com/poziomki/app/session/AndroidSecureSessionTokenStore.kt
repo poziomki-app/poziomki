@@ -5,6 +5,8 @@ package com.poziomki.app.session
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AndroidSecureSessionTokenStore(
     context: Context,
@@ -21,20 +23,33 @@ class AndroidSecureSessionTokenStore(
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
 
-    override suspend fun getToken(): String? = sharedPreferences.getString(KEY_TOKEN, null)
+    override suspend fun getToken(): String? =
+        withContext(Dispatchers.IO) {
+            sharedPreferences.getString(KEY_TOKEN, null)
+        }
 
+    // Use commit() (synchronous) rather than apply() so the caller's
+    // suspend boundary is the disk-flush boundary. With apply(), the
+    // SessionManager.saveSession sequence "saveToken → dataStore.edit"
+    // would let the DataStore commit beat the token to disk; a crash
+    // between the two leaves USER_ID set with no token, and the app
+    // boots into a logged-in-no-token state with no recovery path.
     override suspend fun saveToken(token: String) {
-        sharedPreferences
-            .edit()
-            .putString(KEY_TOKEN, token)
-            .apply()
+        withContext(Dispatchers.IO) {
+            sharedPreferences
+                .edit()
+                .putString(KEY_TOKEN, token)
+                .commit()
+        }
     }
 
     override suspend fun clearToken() {
-        sharedPreferences
-            .edit()
-            .remove(KEY_TOKEN)
-            .apply()
+        withContext(Dispatchers.IO) {
+            sharedPreferences
+                .edit()
+                .remove(KEY_TOKEN)
+                .commit()
+        }
     }
 
     private companion object {
