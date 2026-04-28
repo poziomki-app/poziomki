@@ -21,9 +21,9 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlin.concurrent.Volatile
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 private fun Event.hasFinished(now: Instant): Boolean {
     val end = endsAt ?: startsAt

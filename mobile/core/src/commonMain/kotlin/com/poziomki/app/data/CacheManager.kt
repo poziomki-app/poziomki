@@ -4,7 +4,7 @@ import com.poziomki.app.db.PoziomkiDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class CacheManager(
     private val db: PoziomkiDatabase,

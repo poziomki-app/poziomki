@@ -69,11 +69,11 @@ import com.poziomki.app.ui.designsystem.theme.ChatNameColors
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.time.Instant
 import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 private val AvatarSize = 28.dp
