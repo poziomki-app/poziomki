@@ -74,6 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
           mkdir -p apks
           cd apks
@@ -84,6 +85,10 @@ jobs:
             --dir .
           ls -la
           test -n "$(ls *.apk 2>/dev/null)" || { echo "no APKs downloaded"; exit 1; }
+          # Canonical short alias `poziomki-X.Y.Z.apk` → universal APK. Lets
+          # the rest of the team share a single stable URL without committing
+          # to any specific architecture suffix.
+          cp "poziomki-${VERSION}-universal.apk" "poziomki-${VERSION}.apk"
 
       - name: Tailscale up
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4.1.2
@@ -106,9 +111,9 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          # Spot-check the universal APK; Caddy serves /download/ with
-          # file_server browse + Content-Disposition: attachment.
-          url="https://mobile.poziomki.app/download/poziomki-${VERSION}-universal.apk"
+          # Spot-check the canonical short alias; Caddy serves /download/
+          # with file_server browse + Content-Disposition: attachment.
+          url="https://mobile.poziomki.app/download/poziomki-${VERSION}.apk"
           for i in $(seq 1 10); do
             if curl -fsSI "$url" >/dev/null; then
               echo "OK: $url"
