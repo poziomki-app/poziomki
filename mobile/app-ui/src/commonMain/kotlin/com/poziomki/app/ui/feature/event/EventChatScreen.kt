@@ -146,6 +146,7 @@ fun EventChatScreen(
                         onRevealModeration = chatViewModel::revealModeration,
                         onReportFlagged = chatViewModel::reportFlaggedMessage,
                         onClearError = chatViewModel::clearError,
+                        onClearTransientNotice = chatViewModel::clearTransientNotice,
                         onNavigateToProfile = onNavigateToProfile,
                         resolveDisplayNames = chatViewModel::resolveDisplayNames,
                         resolveAvatarUrls = chatViewModel::resolveAvatarUrls,

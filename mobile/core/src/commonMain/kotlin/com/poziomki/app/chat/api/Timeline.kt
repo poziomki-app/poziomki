@@ -72,6 +72,14 @@ sealed interface TimelineItem {
          * later carries the reveal state.
          */
         val locallyRevealed: Boolean = false,
+        /**
+         * `true` after the local viewer has filed a moderation
+         * report against this message. Hides the floating flag so
+         * a single message can only be reported once per device.
+         * Persisted via the timeline cache so reinstall-style
+         * resets don't allow stacking reports on the same row.
+         */
+        val locallyReported: Boolean = false,
     ) : TimelineItem
 
     data class DateDivider(
@@ -141,6 +149,12 @@ interface Timeline : AutoCloseable {
      * blocking the UI from updating. Idempotent.
      */
     suspend fun markModerationRevealed(eventId: String): Result<Unit>
+
+    /**
+     * Mark this message as reported locally so the floating flag
+     * is hidden. Idempotent.
+     */
+    suspend fun markModerationReported(eventId: String): Result<Unit>
 
     override fun close()
 }
