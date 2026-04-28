@@ -5,10 +5,6 @@
 -- add the emoji prefix and an expiry timestamp. Reads must filter
 -- on `status_expires_at > now()`; rows past expiry are still in the
 -- table until the daily sweep clears them.
---
--- We also strip `status_text` from the FTS regen path. There's no
--- point indexing 24h ephemera, and search hits on stale text would
--- be confusing.
 
 ALTER TABLE public.profiles
     ADD COLUMN IF NOT EXISTS status_emoji TEXT,
@@ -24,34 +20,22 @@ ALTER TABLE public.profiles
     ADD CONSTRAINT profiles_status_emoji_length
     CHECK (status_emoji IS NULL OR octet_length(status_emoji) <= 32);
 
--- Refresh generated search vectors to drop status_text — it's ephemeral
--- and shouldn't be indexed.
-DROP INDEX IF EXISTS idx_profiles_fts;
-DROP INDEX IF EXISTS idx_profiles_public_fts;
-
-ALTER TABLE public.profiles
-    DROP COLUMN IF EXISTS search_vector,
-    DROP COLUMN IF EXISTS public_search_vector;
-
-ALTER TABLE public.profiles ADD COLUMN search_vector tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('simple', COALESCE(name, '')), 'A') ||
-    setweight(to_tsvector('simple', COALESCE(program, '')), 'B') ||
-    setweight(to_tsvector('simple', COALESCE(bio, '')), 'C')
-  ) STORED;
-
-ALTER TABLE public.profiles ADD COLUMN public_search_vector tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('simple', COALESCE(name, '')), 'A') ||
-    setweight(to_tsvector('simple', COALESCE(bio, '')), 'B')
-  ) STORED;
-
-CREATE INDEX IF NOT EXISTS idx_profiles_fts ON public.profiles USING GIN (search_vector);
-CREATE INDEX IF NOT EXISTS idx_profiles_public_fts ON public.profiles USING GIN (public_search_vector);
-
 -- Index supporting the daily sweep job (and any read-time filter
 -- that scans for live status). Partial — only rows with a status
 -- carry an expiry; the rest don't need indexing.
 CREATE INDEX IF NOT EXISTS idx_profiles_status_expires_at
     ON public.profiles (status_expires_at)
     WHERE status_expires_at IS NOT NULL;
+
+-- NOTE: `status_text` is still part of `search_vector` /
+-- `public_search_vector` from migration 190000. Now that status is
+-- ephemeral, we'd ideally drop it from the FTS columns — but that
+-- requires DROP/ADD on a STORED generated column, which rewrites
+-- the table and rebuilds two GIN indexes non-CONCURRENTLY inside a
+-- single Diesel transaction. Skipped here to keep this deploy
+-- non-blocking; expired status_text matches are masked at read
+-- time by the `status_expires_at > now()` filter on every read
+-- path, so the worst case is a profile surfacing in search whose
+-- status pill is no longer rendered. Follow-up: swap FTS columns
+-- in a dedicated non-transactional migration using
+-- CREATE INDEX CONCURRENTLY.
