@@ -65,7 +65,6 @@ fun MessagesScreen(
     val state by viewModel.state.collectAsState()
     var selectedFilter by remember { mutableStateOf(MessagesRoomFilter.All) }
 
-    val unreadTotal = state.rooms.sumOf { it.unreadCount }
     val filteredRooms =
         state.rooms.filterMessagesRooms(
             selectedFilter,
@@ -83,25 +82,6 @@ fun MessagesScreen(
                     .background(Background),
         ) {
             ScreenHeader(title = "wiadomości") {
-                if (unreadTotal > 0) {
-                    Box {
-                        Icon(
-                            imageVector = PhosphorIcons.Bold.Bell,
-                            contentDescription = "Powiadomienia",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Badge(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = TextPrimary,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(10.dp),
-                        ) {}
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
                 profileAvatarAction()
             }
             PoziomkiSearchBar(
