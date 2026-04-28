@@ -62,7 +62,7 @@ val sharedModule =
         single { ProfileRepository(get(), get(), get(), get()) }
         single { TagRepository(get(), get()) }
         single { DegreeRepository(get(), get()) }
-        single { MatchProfileRepository(get(), get()) }
+        single { MatchProfileRepository(get(), get(), get()) }
         single { SettingsRepository(get(), get(), get()) }
         single { XpRepository(get(), get()) }
         single {
