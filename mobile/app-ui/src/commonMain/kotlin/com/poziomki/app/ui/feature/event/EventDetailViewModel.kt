@@ -12,23 +12,27 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.ui.designsystem.components.SnackbarType
 import com.poziomki.app.ui.navigation.Route
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 data class EventDetailState(
     val event: Event? = null,
     val attendees: List<EventAttendee> = emptyList(),
     val isLoading: Boolean = true,
     val isOpeningChat: Boolean = false,
+    val chatOpenError: String? = null,
     val isUpdatingAttendance: Boolean = false,
     val isCreator: Boolean = false,
     val snackbarMessage: String? = null,
     val snackbarType: SnackbarType = SnackbarType.ERROR,
 )
 
+@Suppress("TooManyFunctions")
 class EventDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val eventRepository: EventRepository,
@@ -194,19 +198,47 @@ class EventDetailViewModel(
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(isOpeningChat = true)
+            _state.value = _state.value.copy(isOpeningChat = true, chatOpenError = null)
 
-            eventRepository
-                .ensureEventRoom(eventId = eventId)
-                .onFailure { throwable ->
-                    _state.value =
-                        _state.value.copy(
-                            snackbarMessage = throwable.message ?: "Nie udało się otworzyć czatu wydarzenia",
-                            snackbarType = SnackbarType.ERROR,
-                        )
+            val result =
+                runCatching {
+                    withTimeout(EVENT_CHAT_OPEN_TIMEOUT_MS) {
+                        eventRepository.ensureEventRoom(eventId = eventId)
+                    }
                 }
 
-            _state.value = _state.value.copy(isOpeningChat = false)
+            val errorMessage: String? =
+                result.fold(
+                    onSuccess = { roomResult ->
+                        roomResult.exceptionOrNull()?.let { throwable ->
+                            throwable.message ?: "Nie udało się otworzyć czatu wydarzenia"
+                        }
+                    },
+                    onFailure = { throwable ->
+                        if (throwable is TimeoutCancellationException) {
+                            "Nie udało się otworzyć czatu, spróbuj ponownie"
+                        } else {
+                            throwable.message ?: "Nie udało się otworzyć czatu wydarzenia"
+                        }
+                    },
+                )
+
+            _state.value =
+                _state.value.copy(
+                    isOpeningChat = false,
+                    chatOpenError = errorMessage,
+                    snackbarMessage = errorMessage ?: _state.value.snackbarMessage,
+                    snackbarType = if (errorMessage != null) SnackbarType.ERROR else _state.value.snackbarType,
+                )
         }
+    }
+
+    fun retryOpenEventChat() {
+        _state.value = _state.value.copy(chatOpenError = null)
+        openEventChat()
+    }
+
+    companion object {
+        private const val EVENT_CHAT_OPEN_TIMEOUT_MS = 8_000L
     }
 }
