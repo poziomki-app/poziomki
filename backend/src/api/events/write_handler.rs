@@ -37,7 +37,7 @@ use super::events_tags_service::{
 };
 use super::events_view::{build_event_response_raw, created_event_response, resolve_event_images};
 use super::events_write_repo::{self, is_serialization_failure};
-use super::events_write_service::prepare_update_changeset;
+use super::events_write_service::{prepare_update_changeset, verify_event_cover_ownership};
 
 /// Run Bielik-Guard against the supplied event text. Returns
 /// `Ok(None)` when moderation passes (allow / flag) or is disabled,
@@ -206,6 +206,7 @@ fn build_new_event(
 
 enum CreateOutcome {
     NoProfile,
+    CoverInvalid(Box<Response>),
     Created { event: Box<Event>, profile_id: Uuid },
 }
 
@@ -238,8 +239,13 @@ pub(in crate::api) async fn event_create(
 
     let tag_names = payload.tags.clone();
     let user_id = viewer.user_id;
+    let headers_for_tx = headers.clone();
 
-    let outcome = db::with_viewer_tx(viewer, |conn| {
+    let outcome = db::with_viewer_tx(viewer, move |conn| {
+        let headers = headers_for_tx;
+        let mut payload = payload;
+        let validated = validated;
+        let tag_names = tag_names;
         async move {
             let Some(profile) = load_profile_for_user(conn, user_id)
                 .await
@@ -247,6 +253,18 @@ pub(in crate::api) async fn event_create(
             else {
                 return Ok::<CreateOutcome, diesel::result::Error>(CreateOutcome::NoProfile);
             };
+
+            // Validate cover image ownership before INSERT so a creator
+            // can't republish another user's upload as their event
+            // cover. Skipped when no cover is supplied.
+            if let Some(raw) = payload.cover_image.as_deref() {
+                match verify_event_cover_ownership(conn, &headers, profile.id, raw).await {
+                    Ok(filename) => payload.cover_image = Some(filename),
+                    Err(response) => {
+                        return Ok(CreateOutcome::CoverInvalid(response));
+                    }
+                }
+            }
 
             let (new_event, event_id) = build_new_event(profile.id, &validated, &payload);
             let inserted = events_write_repo::insert_event_with_conn(conn, &new_event)
@@ -297,6 +315,7 @@ pub(in crate::api) async fn event_create(
 
     match outcome {
         CreateOutcome::NoProfile => Ok(profile_not_found(&headers)),
+        CreateOutcome::CoverInvalid(response) => Ok(*response),
         CreateOutcome::Created { event, profile_id } => {
             let mut response = build_response_after_tx(viewer, &event, profile_id).await?;
             resolve_single(&mut response).await;
@@ -417,8 +436,24 @@ pub(in crate::api) async fn event_update(
                         return Ok(UpdateOutcome::Forbidden);
                     }
 
+                    // Verify cover image ownership (if being set) before
+                    // prepare_update_changeset, so a creator can't swap
+                    // their event's cover to another user's upload. Clone
+                    // payload locally so the verified filename can replace
+                    // the raw one (extract_filename strips path noise).
+                    let mut payload_local = payload.clone();
+                    if let Some(Some(raw)) = payload_local.cover_image.as_ref() {
+                        match verify_event_cover_ownership(conn, headers, profile.id, raw).await {
+                            Ok(filename) => {
+                                payload_local.cover_image = Some(Some(filename));
+                            }
+                            Err(response) => return Ok(UpdateOutcome::Invalid(response)),
+                        }
+                    }
+
                     let changeset: EventChangeset =
-                        match prepare_update_changeset(headers, &event, profile.id, payload) {
+                        match prepare_update_changeset(headers, &event, profile.id, &payload_local)
+                        {
                             Ok(c) => c,
                             Err(response) => return Ok(UpdateOutcome::Invalid(response)),
                         };
