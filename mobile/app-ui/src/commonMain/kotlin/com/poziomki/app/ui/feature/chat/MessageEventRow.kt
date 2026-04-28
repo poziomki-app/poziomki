@@ -52,8 +52,6 @@ import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowBendUpLeft
-import com.adamglin.phosphoricons.bold.Check
-import com.adamglin.phosphoricons.bold.CheckCircle
 import com.adamglin.phosphoricons.bold.Clock
 import com.adamglin.phosphoricons.bold.EyeSlash
 import com.adamglin.phosphoricons.bold.Flag
@@ -426,7 +424,7 @@ private fun BubbleContent(
                     },
                 color = TextSecondary,
             )
-            if (event.isMine) {
+            if (event.isMine && event.sendStatus in setOf(EventSendStatus.Sending, EventSendStatus.Failed)) {
                 Spacer(modifier = Modifier.width(4.dp))
                 OutgoingMessageStatusIcon(event = event)
             }
@@ -524,19 +522,12 @@ private fun translateCategory(category: String): String =
 
 @Composable
 private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
-    // Renders the WhatsApp/iMessage status ladder. We bias to the
-    // explicit `sendStatus` ladder when present (server-confirmed) and
-    // fall back to the maps for clients that didn't set it (e.g.
-    // pre-update cache rows).
-    val effective =
-        when {
-            event.sendStatus == EventSendStatus.Failed -> EventSendStatus.Failed
-            event.sendStatus == EventSendStatus.Sending -> EventSendStatus.Sending
-            event.readBy.isNotEmpty() -> EventSendStatus.Read
-            event.deliveredTo.isNotEmpty() -> EventSendStatus.Delivered
-            else -> event.sendStatus ?: EventSendStatus.Sent
-        }
-    when (effective) {
+    // Only in-flight (Sending) and terminal failure states render an icon
+    // here. The plain "sent" / "read" ticks have been removed — the user
+    // already gets a "new message" cue from the bold preview in the room
+    // list, so per-bubble read confirmations are noise and they were the
+    // most fragile part of the indicator pipeline.
+    when (event.sendStatus) {
         EventSendStatus.Failed -> {
             Icon(
                 imageVector = PhosphorIcons.Bold.WarningCircle,
@@ -555,34 +546,8 @@ private fun OutgoingMessageStatusIcon(event: TimelineItem.Event) {
             )
         }
 
-        EventSendStatus.Read -> {
-            Icon(
-                imageVector = PhosphorIcons.Bold.CheckCircle,
-                contentDescription = null,
-                // Read ticks are tinted blue (iMessage-ish) so the
-                // user can distinguish "they got it" from "they read it"
-                // at a glance.
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(14.dp),
-            )
-        }
-
-        EventSendStatus.Delivered -> {
-            Icon(
-                imageVector = PhosphorIcons.Bold.CheckCircle,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(14.dp),
-            )
-        }
-
-        EventSendStatus.Sent -> {
-            Icon(
-                imageVector = PhosphorIcons.Bold.Check,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(14.dp),
-            )
+        else -> {
+            Unit
         }
     }
 }
