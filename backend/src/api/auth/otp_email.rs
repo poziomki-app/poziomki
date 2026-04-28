@@ -68,7 +68,7 @@ static DNS: OnceLock<Result<hickory_resolver::TokioResolver, String>> = OnceLock
 fn resolver() -> Result<&'static hickory_resolver::TokioResolver, String> {
     DNS.get_or_init(|| {
         hickory_resolver::Resolver::builder_tokio()
-            .map(hickory_resolver::ResolverBuilder::build)
+            .and_then(hickory_resolver::ResolverBuilder::build)
             .map_err(|e| format!("DNS resolver: {e}"))
     })
     .as_ref()
@@ -101,8 +101,14 @@ async fn resolve_mx(domain: &str) -> Result<Vec<String>, String> {
     match r.mx_lookup(domain).await {
         Ok(response) => {
             let records = response
+                .answers()
                 .iter()
-                .map(|mx| (mx.preference(), mx.exchange().to_ascii()))
+                .filter_map(|record| match &record.data {
+                    hickory_resolver::proto::rr::RData::MX(mx) => {
+                        Some((mx.preference, mx.exchange.to_ascii()))
+                    }
+                    _ => None,
+                })
                 .collect();
             select_mx_hosts(domain, records)
         }
