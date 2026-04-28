@@ -84,6 +84,7 @@ fun ProfilePreview(
     gradientEnd: String? = null,
     onClose: () -> Unit,
     bottomContent: @Composable (() -> Unit)? = null,
+    headerAction: @Composable (() -> Unit)? = null,
 ) {
     val nunito = NunitoFamily
     val montserrat = MontserratFamily
@@ -259,24 +260,27 @@ fun ProfilePreview(
                     .padding(horizontal = PoziomkiTheme.spacing.lg)
                     .padding(top = PoziomkiTheme.spacing.lg, bottom = PoziomkiTheme.spacing.xl),
         ) {
-            // Name
-            Text(
-                text = name.ifBlank { "imi\u0119" },
-                fontFamily = montserrat,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 28.sp,
-                color = TextPrimary,
-            )
-
-            // Program
-            if (!program.isNullOrBlank()) {
-                Text(
-                    text = program,
-                    fontFamily = nunito,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 16.sp,
-                    color = TextSecondary,
-                )
+            // Name + optional header action (bookmark) on the right.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = name.ifBlank { "imi\u0119" },
+                        fontFamily = montserrat,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 28.sp,
+                        color = TextPrimary,
+                    )
+                    if (!program.isNullOrBlank()) {
+                        Text(
+                            text = program,
+                            fontFamily = nunito,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16.sp,
+                            color = TextSecondary,
+                        )
+                    }
+                }
+                headerAction?.invoke()
             }
 
             // Bio
