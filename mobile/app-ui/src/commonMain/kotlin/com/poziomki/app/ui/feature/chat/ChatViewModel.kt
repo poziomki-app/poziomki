@@ -25,6 +25,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -802,6 +806,21 @@ class ChatViewModel(
             }
 
         timelineController.enterLive()
+        // markAsRead reads the latest event id off the in-memory timeline,
+        // so calling it here is a no-op until history is actually loaded
+        // (a freshly bound room starts empty). Re-fire it the first time
+        // _uiState.timelineItems contains at least one event — that's when
+        // we have a concrete latest message id to advance the watermark to.
+        // The job lives in roomJobs so it cancels with the room.
+        roomJobs +=
+            viewModelScope.launch {
+                _uiState
+                    .map { it.timelineItems.isNotEmpty() }
+                    .distinctUntilChanged()
+                    .filter { it }
+                    .first()
+                runCatching { room.markAsRead() }
+            }
         runCatching { room.markAsRead() }
     }
 
