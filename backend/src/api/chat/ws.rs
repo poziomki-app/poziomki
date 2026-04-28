@@ -522,12 +522,13 @@ async fn handle_send(
                     .collect();
                 if !online_recipients.is_empty() {
                     let hub_clone = hub.clone();
+                    let sender_viewer: db::DbViewer = viewer.into();
                     tokio::spawn(async move {
                         record_deliveries_and_notify(
                             hub_clone,
                             conversation_id,
                             msg_id,
-                            user_id,
+                            sender_viewer,
                             online_recipients,
                         )
                         .await;
@@ -900,19 +901,16 @@ async fn record_deliveries_and_notify(
     hub: ChatHub,
     conversation_id: uuid::Uuid,
     message_id: uuid::Uuid,
-    sender_user_id: i32,
+    sender: db::DbViewer,
     recipients: Vec<i32>,
 ) {
     if message_id.is_nil() || recipients.is_empty() {
         return;
     }
-    let viewer = db::DbViewer {
-        user_id: sender_user_id,
-        is_review_stub: false,
-    };
+    let sender_user_id = sender.user_id;
     let recipients_for_tx = recipients.clone();
     let res: Result<Vec<(i32, chrono::DateTime<chrono::Utc>)>, diesel::result::Error> =
-        db::with_viewer_tx(viewer, move |conn| {
+        db::with_viewer_tx(sender, move |conn| {
             async move {
                 chat_messages::record_deliveries(conn, message_id, &recipients_for_tx)
                     .await

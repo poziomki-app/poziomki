@@ -497,7 +497,7 @@ pub struct MuteRequest {
 }
 
 pub async fn mute_conversation(
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     headers: HeaderMap,
     Path(conversation_id): Path<String>,
     Json(body): Json<MuteRequest>,
@@ -533,24 +533,33 @@ pub async fn mute_conversation(
     };
     let user_id = user.id;
 
-    let outcome: bool = db::with_viewer_tx(viewer, move |conn| {
+    // Mirror the WS handler: refresh unread totals in the same tx so we
+    // can fan an UnreadUpdate to the user's other live sessions. Without
+    // this, the device that called REST silences the badge but every
+    // other logged-in device keeps showing the stale count until the
+    // next listConversations.
+    let outcome: Option<(i64, i64)> = db::with_viewer_tx(viewer, move |conn| {
         async move {
             if !conversations::is_member(conn, conversation_id, user_id)
                 .await
                 .map_err(|_| diesel::result::Error::RollbackTransaction)?
             {
-                return Ok::<bool, diesel::result::Error>(false);
+                return Ok::<Option<(i64, i64)>, diesel::result::Error>(None);
             }
             messages::set_mute(conn, conversation_id, user_id, parsed)
                 .await
                 .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-            Ok(true)
+            let (per, total) = conversations::unread_summary_for_user(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let per_this = per.get(&conversation_id).copied().unwrap_or(0);
+            Ok(Some((per_this, total)))
         }
         .scope_boxed()
     })
     .await?;
 
-    if !outcome {
+    let Some((per_this, total)) = outcome else {
         return Ok(error_response(
             StatusCode::FORBIDDEN,
             &headers,
@@ -560,7 +569,16 @@ pub async fn mute_conversation(
                 details: None,
             },
         ));
-    }
+    };
+
+    ctx.chat_hub.broadcast(
+        &[user_id],
+        &protocol::ServerMessage::UnreadUpdate {
+            conversation_id,
+            unread_count: per_this,
+            total_unread: total,
+        },
+    );
 
     Ok((
         StatusCode::OK,
