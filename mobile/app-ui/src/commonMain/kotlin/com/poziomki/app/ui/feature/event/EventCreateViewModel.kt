@@ -203,6 +203,11 @@ class EventCreateViewModel(
 
     fun saveEvent(onSaved: () -> Unit) {
         val s = _state.value
+        // Reject re-entry while a create/update is in flight. Without
+        // this guard, isLoading is only set inside the launch block —
+        // two synchronous taps both pass the validation prelude and
+        // fire two POSTs, producing duplicate events on the server.
+        if (s.isLoading) return
         if (s.title.isBlank() || s.startsAt.isBlank()) return
         if (s.attendeeLimit.isNotBlank() && s.attendeeLimit.toIntOrNull().let { it == null || it <= 0 }) {
             parseAttendeeLimit(s)
@@ -210,8 +215,11 @@ class EventCreateViewModel(
         }
         val maxAttendees = if (s.attendeeLimit.isBlank()) null else s.attendeeLimit.toInt()
 
+        // Flip isLoading synchronously so a follow-up tap that lands
+        // before viewModelScope.launch is dispatched still sees the
+        // guard above.
+        _state.value = s.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            _state.value = s.copy(isLoading = true, error = null)
             val eventId = s.eventId
             if (eventId != null) {
                 submitUpdate(s, eventId, maxAttendees, onSaved)
