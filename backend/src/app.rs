@@ -252,6 +252,8 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Api)?;
     crate::moderation::init_from_env()
         .map_err(|e| crate::error::AppError::Message(format!("moderation init: {e}")))?;
+    crate::moderation::init_image_from_env()
+        .map_err(|e| crate::error::AppError::Message(format!("image moderation init: {e}")))?;
     let cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Api)?;
     assert_pool_role(PoolRole::Api).await?;
@@ -280,6 +282,8 @@ pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     crate::moderation::init_from_env()
         .map_err(|e| crate::error::AppError::Message(format!("moderation init: {e}")))?;
+    crate::moderation::init_image_from_env()
+        .map_err(|e| crate::error::AppError::Message(format!("image moderation init: {e}")))?;
     let _cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Worker)?;
     assert_pool_role(PoolRole::Worker).await?;

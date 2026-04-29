@@ -145,7 +145,18 @@ async fn sanitize_direct_upload(
         }
     };
 
-    // 4. Overwrite with sanitized bytes so downstream readers +
+    // 4. NSFW gate on the sanitized payload. Runs before the storage
+    //    overwrite so a rejected image never lands in the canonical
+    //    bucket, only the presigner's raw upload does — and that gets
+    //    purged below.
+    if let Err(rejection) =
+        super::uploads_image_moderation::moderate_upload_image_or_reject(headers, &sanitized).await
+    {
+        purge_rejected_upload(upload.id, filename).await;
+        return Err(rejection);
+    }
+
+    // 5. Overwrite with sanitized bytes so downstream readers +
     //    variant generation see metadata-stripped content.
     if let Err(err) = uploads_storage::upload(filename, &sanitized, &upload.mime_type).await {
         tracing::warn!(filename, ?err.kind, "failed to overwrite sanitized direct upload");

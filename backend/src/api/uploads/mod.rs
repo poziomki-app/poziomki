@@ -2,6 +2,8 @@
 mod uploads_auth_service;
 #[path = "http.rs"]
 mod uploads_http;
+#[path = "image_moderation.rs"]
+mod uploads_image_moderation;
 #[path = "multipart.rs"]
 mod uploads_multipart;
 #[path = "read_handler.rs"]
