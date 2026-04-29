@@ -78,8 +78,7 @@ class ChatViewModel(
 
     init {
         observeAvatarOverrides()
-        observeEventCovers()
-        observeEventRoomIds()
+        observeEventRooms()
     }
 
     fun loadRoom(
@@ -566,22 +565,19 @@ class ChatViewModel(
         val inferredIsDirect = knownSummary?.isDirect ?: (inferredDirectUserId != null)
         activeDirectUserId = inferredDirectUserId
 
-        // If this room is an event, prefer the cover from the local event DB
-        // so we never paint the creator's avatar that the server may send as
-        // directUserAvatar. Read synchronously before the first frame so the
-        // cover is in eventCoverByRoomId by the time resolveRoomAvatar runs.
-        val knownEvent =
-            runCatching { eventRepository.findByConversationId(roomId) }.getOrNull()
+        // Seed eventRoomIds + eventCoverByRoomId synchronously before
+        // resolveRoomAvatar runs, so an event-room first-frame can't fall
+        // back to the creator's avatar in the gap between bind and the
+        // observeEventRooms emission. For non-direct rooms not yet in the
+        // local event DB, kick off /events/mine so the cover lands ASAP;
+        // observers rebind the avatar when the row arrives.
+        val knownEvent = runCatching { eventRepository.findByConversationId(roomId) }.getOrNull()
         if (knownEvent != null) {
             eventRoomIds = eventRoomIds + roomId
             knownEvent.coverImage?.let { cover ->
                 eventCoverByRoomId = eventCoverByRoomId + (roomId to cover)
             }
         } else if (knownSummary?.isDirect == false) {
-            // Non-direct room not yet in local event DB — pull /events/mine
-            // (the dataset that maps conversations to events) so the cover
-            // lands as soon as possible. Don't await; the observers rebind
-            // the avatar when the row arrives.
             viewModelScope.launch {
                 runCatching { eventRepository.refreshMyEvents(forceRefresh = true) }
             }
@@ -594,20 +590,13 @@ class ChatViewModel(
                 ?.takeIf { it.isNotBlank() }
                 ?: knownSummary?.displayName.orEmpty()
         val seedAvatar =
-            if (knownEvent != null) {
-                // Event room: only the cover is acceptable. Never fall back
-                // to seedAvatarUrl or summary avatar — those can hold
-                // the creator's face.
-                knownEvent.coverImage
-            } else {
-                resolveRoomAvatar(
-                    summary = knownSummary,
-                    overrides = avatarOverrides,
-                    roomDisplayName = seededDisplayName,
-                    currentAvatar = seedAvatarUrl,
-                    directUserIdFallback = inferredDirectUserId,
-                ) ?: seedAvatarUrl
-            }
+            resolveRoomAvatar(
+                summary = knownSummary,
+                overrides = avatarOverrides,
+                roomDisplayName = seededDisplayName,
+                currentAvatar = seedAvatarUrl,
+                directUserIdFallback = inferredDirectUserId,
+            ) ?: seedAvatarUrl.takeUnless { roomId in eventRoomIds }
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
@@ -1113,42 +1102,28 @@ class ChatViewModel(
         }
     }
 
-    private fun observeEventRoomIds() {
+    private fun observeEventRooms() {
+        // observeEventsWithConversation includes events fetched via
+        // /events/mine that aren't in the public feed (in_list_feed=0),
+        // so chat headers can find their covers regardless of how the
+        // event row was hydrated. Both eventRoomIds (used by the resolver
+        // to short-circuit fallback) and eventCoverByRoomId (the cover
+        // value itself) are derived from the same emission so they can't
+        // disagree.
         viewModelScope.launch {
-            eventRepository.observeEventConversationIds().collect { ids ->
-                eventRoomIds = ids
-                _uiState.update { current ->
-                    val rid = current.roomId
-                    if (rid in ids) {
-                        // Force the event-room avatar resolution for the
-                        // currently bound room so a stale creator avatar
-                        // can't survive in roomAvatarUrl.
-                        current.copy(roomAvatarUrl = eventCoverByRoomId[rid])
-                    } else {
-                        current
-                    }
-                }
-            }
-        }
-    }
-
-    private fun observeEventCovers() {
-        viewModelScope.launch {
-            // observeEventsWithConversation includes events fetched via
-            // /events/mine that aren't in the public feed (in_list_feed=0),
-            // so chat headers can find their covers regardless of how the
-            // event row was hydrated.
             eventRepository.observeEventsWithConversation().collect { events ->
-                val covers =
-                    events
-                        .filter { it.conversationId != null && it.coverImage != null }
+                val withConversation =
+                    events.filter { !it.conversationId.isNullOrBlank() }
+                eventRoomIds = withConversation.mapNotNull { it.conversationId }.toSet()
+                eventCoverByRoomId =
+                    withConversation
+                        .filter { it.coverImage != null }
                         .associate { it.conversationId!! to it.coverImage!! }
-                eventCoverByRoomId = covers
                 _uiState.update { current ->
                     val rid = current.roomId
-                    val eventCover = covers[rid]
-                    if (eventCover != null && current.roomAvatarUrl != eventCover) {
-                        current.copy(roomAvatarUrl = eventCover)
+                    if (rid in eventRoomIds) {
+                        val cover = eventCoverByRoomId[rid]
+                        if (current.roomAvatarUrl != cover) current.copy(roomAvatarUrl = cover) else current
                     } else {
                         current
                     }
