@@ -24,6 +24,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.Clock
 
+private const val CACHE_FRESH_WINDOW_MS = 30_000L
+
 @Suppress("TooManyFunctions")
 class WsTimeline(
     private val conversationId: String,
@@ -51,20 +53,13 @@ class WsTimeline(
     private var pendingHistoryDeferred: CompletableDeferred<Boolean>? = null
     private var persistJob: Job? = null
 
-    /**
-     * Tracks how many init/backfill history requests are in flight that don't
-     * own pendingHistoryDeferred. The server processes History requests in
-     * send order and responds in order, so onHistoryResponse can drain this
-     * counter for the next n responses and route them away from any paginate
-     * deferred that may have been set in the meantime.
-     */
+    // Counter of init/backfill history requests we've sent but haven't yet
+    // matched to a HistoryResponse. Read and mutated only while holding
+    // itemsMutex so onHistoryResponse can safely route a response away from
+    // any paginate deferred set in the meantime.
     private var initHistoryRequestsInFlight = 0
 
     init {
-        // Load cached items immediately so the UI paints, then always request
-        // a fresh history page so any messages that arrived while the room
-        // was closed (and therefore only updated the room preview) are
-        // backfilled into the timeline. onMessage() dedupes by eventId.
         scope.launch {
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
@@ -84,16 +79,24 @@ class WsTimeline(
                 _items.value = corrected
                 _hasMoreBackwards.value = !cached.isHydrated
             }
-            wsConnection.isConnected.first { it }
-            sendInitHistoryRequest()
+            // Skip the server fetch only when the cache is fresh enough that
+            // the user couldn't have plausibly missed messages between close
+            // and reopen. Empty or stale cache always fetches — that's the
+            // backfill the unconditional version was solving for.
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val cacheIsFresh =
+                cached.items.isNotEmpty() &&
+                    nowMs - cached.updatedAtMillis < CACHE_FRESH_WINDOW_MS
+            if (!cacheIsFresh) {
+                wsConnection.isConnected.first { it }
+                sendInitHistoryRequest()
+            }
         }
     }
 
     private suspend fun sendInitHistoryRequest() {
         if (!wsConnection.isConnected.value) return
-        // Mark before sending: response ordering is FIFO, so the next n
-        // history responses are ours, not any concurrent paginate's.
-        initHistoryRequestsInFlight += 1
+        itemsMutex.withLock { initHistoryRequestsInFlight += 1 }
         val sent =
             wsConnection.send(
                 WsClientMessage.History(
@@ -103,7 +106,9 @@ class WsTimeline(
                 ),
             )
         if (!sent) {
-            initHistoryRequestsInFlight = (initHistoryRequestsInFlight - 1).coerceAtLeast(0)
+            itemsMutex.withLock {
+                initHistoryRequestsInFlight = (initHistoryRequestsInFlight - 1).coerceAtLeast(0)
+            }
         }
     }
 
@@ -265,13 +270,11 @@ class WsTimeline(
 
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {
         cacheHistoryMembers(msg.messages)
-        // Decide ownership before launching: if there's an outstanding
-        // init/backfill request, this response belongs to it (FIFO from
-        // the server) and must not complete a paginate's deferred.
-        val isInitResponse = initHistoryRequestsInFlight > 0
-        if (isInitResponse) initHistoryRequestsInFlight -= 1
         scope.launch {
+            val isInitResponse: Boolean
             itemsMutex.withLock {
+                isInitResponse = initHistoryRequestsInFlight > 0
+                if (isInitResponse) initHistoryRequestsInFlight -= 1
                 val uid = wsConnection.userId.value
                 val historyItems = msg.messages.map { it.toTimelineItem(uid) }
                 val current = _items.value.toMutableList()
