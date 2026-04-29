@@ -117,6 +117,12 @@ class WsTimeline(
             itemsMutex.withLock {
                 _items.value = emptyList()
                 _hasMoreBackwards.value = true
+                // Any prior init/backfill requests are stranded once the
+                // socket dropped — the server won't deliver responses for
+                // them. Reset the counter so the new request we're about
+                // to send is the only one we wait on; otherwise stale
+                // counter values misroute the next paginate response.
+                initHistoryRequestsInFlight = 0
             }
             sendInitHistoryRequest()
         }
