@@ -16,12 +16,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.Clock
+
+private const val CACHE_FRESH_WINDOW_MS = 30_000L
 
 @Suppress("TooManyFunctions")
 class WsTimeline(
@@ -50,8 +53,13 @@ class WsTimeline(
     private var pendingHistoryDeferred: CompletableDeferred<Boolean>? = null
     private var persistJob: Job? = null
 
+    // Counter of init/backfill history requests we've sent but haven't yet
+    // matched to a HistoryResponse. Read and mutated only while holding
+    // itemsMutex so onHistoryResponse can safely route a response away from
+    // any paginate deferred set in the meantime.
+    private var initHistoryRequestsInFlight = 0
+
     init {
-        // Load cached items on start, request history if empty
         scope.launch {
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
@@ -70,22 +78,41 @@ class WsTimeline(
                     }
                 _items.value = corrected
                 _hasMoreBackwards.value = !cached.isHydrated
-            } else {
-                // No cache — request initial history from server
-                requestInitialHistory()
+            }
+            // Skip the server fetch only when the cache is fresh enough that
+            // the user couldn't have plausibly missed messages between close
+            // and reopen. Empty or stale cache always fetches — that's the
+            // backfill the unconditional version was solving for.
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            val cacheIsFresh =
+                cached.items.isNotEmpty() &&
+                    nowMs - cached.updatedAtMillis < CACHE_FRESH_WINDOW_MS
+            if (!cacheIsFresh) {
+                // Bound the wait so an offline open doesn't leave this
+                // coroutine suspended forever. backfillOnReconnect() will
+                // fire the request when the socket actually comes up.
+                val gotConnection = withTimeoutOrNull(10_000L) { wsConnection.isConnected.first { it } }
+                if (gotConnection != null) sendInitHistoryRequest()
             }
         }
     }
 
-    private suspend fun requestInitialHistory() {
+    private suspend fun sendInitHistoryRequest() {
         if (!wsConnection.isConnected.value) return
-        wsConnection.send(
-            WsClientMessage.History(
-                conversationId = conversationId,
-                before = null,
-                limit = 50,
-            ),
-        )
+        itemsMutex.withLock { initHistoryRequestsInFlight += 1 }
+        val sent =
+            wsConnection.send(
+                WsClientMessage.History(
+                    conversationId = conversationId,
+                    before = null,
+                    limit = 50,
+                ),
+            )
+        if (!sent) {
+            itemsMutex.withLock {
+                initHistoryRequestsInFlight = (initHistoryRequestsInFlight - 1).coerceAtLeast(0)
+            }
+        }
     }
 
     internal fun backfillOnReconnect() {
@@ -93,8 +120,14 @@ class WsTimeline(
             itemsMutex.withLock {
                 _items.value = emptyList()
                 _hasMoreBackwards.value = true
+                // Any prior init/backfill requests are stranded once the
+                // socket dropped — the server won't deliver responses for
+                // them. Reset the counter so the new request we're about
+                // to send is the only one we wait on; otherwise stale
+                // counter values misroute the next paginate response.
+                initHistoryRequestsInFlight = 0
             }
-            requestInitialHistory()
+            sendInitHistoryRequest()
         }
     }
 
@@ -247,7 +280,10 @@ class WsTimeline(
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {
         cacheHistoryMembers(msg.messages)
         scope.launch {
+            val isInitResponse: Boolean
             itemsMutex.withLock {
+                isInitResponse = initHistoryRequestsInFlight > 0
+                if (isInitResponse) initHistoryRequestsInFlight -= 1
                 val uid = wsConnection.userId.value
                 val historyItems = msg.messages.map { it.toTimelineItem(uid) }
                 val current = _items.value.toMutableList()
@@ -270,11 +306,15 @@ class WsTimeline(
                 }
 
                 _hasMoreBackwards.value = msg.hasMore
-                _isPaginatingBackwards.value = false
+                if (!isInitResponse) {
+                    _isPaginatingBackwards.value = false
+                }
                 emitAndPersist(current)
             }
-            pendingHistoryDeferred?.complete(msg.hasMore)
-            pendingHistoryDeferred = null
+            if (!isInitResponse) {
+                pendingHistoryDeferred?.complete(msg.hasMore)
+                pendingHistoryDeferred = null
+            }
         }
     }
 
