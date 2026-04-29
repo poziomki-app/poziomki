@@ -19,6 +19,7 @@ import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
+import com.poziomki.app.ui.cache.AppUpdateMigrator
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
@@ -27,6 +28,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import okio.Path.Companion.toOkioPath
 import org.koin.compose.koinInject
+import org.koin.mp.KoinPlatform
 
 private const val COIL_MEMORY_CACHE_MAX_SIZE_PERCENT = 0.18
 private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
@@ -43,6 +45,7 @@ fun App() {
 
     val sessionManager = koinInject<SessionManager>()
     val syncEngine = koinInject<SyncEngine>()
+    val migrator = koinInject<AppUpdateMigrator>()
     val bootstrapState by
         produceState<SessionBootstrapState?>(initialValue = null, sessionManager) {
             value = sessionManager.getBootstrapState()
@@ -62,17 +65,35 @@ fun App() {
             }
         }
 
-    DisposableEffect(Unit) {
+    // Run the per-version cache migration as the very first thing on the
+    // composition coroutine so consumers gated on migrator.ready unblock as
+    // soon as it finishes. APP_VERSION_CODE is a Koin property set by each
+    // platform entry point (PoziomkiApp on Android, initKoin on iOS).
+    LaunchedEffect(Unit) {
+        val versionCode = KoinPlatform.getKoin().getProperty("APP_VERSION_CODE", 0)
+        runCatching { migrator.runIfVersionChanged(versionCode) }
+    }
+
+    // Sync engine starts collecting flows that read from DB; gate it on the
+    // migrator so an upgrade-time wipe can't race with active reads.
+    LaunchedEffect(Unit) {
+        migrator.ready.await()
         syncEngine.start()
+    }
+    DisposableEffect(Unit) {
         onDispose {
             syncEngine.stop()
             imageHttpClient.close()
         }
     }
 
-    // Warm up chat client in background so first chat open is fast.
+    // Warm up chat client in background so first chat open is fast. Wait
+    // for the migration first — chatClient.ensureStarted opens the WS,
+    // which immediately starts populating room/timeline caches that the
+    // migrator might otherwise wipe out from underneath it.
     LaunchedEffect(startDestination) {
         if (startDestination == Route.MainGraph) {
+            migrator.ready.await()
             chatClient.ensureStarted()
         }
     }
@@ -82,6 +103,7 @@ fun App() {
     val xpRepository = koinInject<XpRepository>()
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
+            migrator.ready.await()
             runCatching { xpRepository.claimTask("daily_login") }
         }
     }
