@@ -88,8 +88,11 @@ class WsTimeline(
                 cached.items.isNotEmpty() &&
                     nowMs - cached.updatedAtMillis < CACHE_FRESH_WINDOW_MS
             if (!cacheIsFresh) {
-                wsConnection.isConnected.first { it }
-                sendInitHistoryRequest()
+                // Bound the wait so an offline open doesn't leave this
+                // coroutine suspended forever. backfillOnReconnect() will
+                // fire the request when the socket actually comes up.
+                val gotConnection = withTimeoutOrNull(10_000L) { wsConnection.isConnected.first { it } }
+                if (gotConnection != null) sendInitHistoryRequest()
             }
         }
     }
