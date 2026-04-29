@@ -14,7 +14,9 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import coil3.request.crossfade
 import com.poziomki.app.chat.api.ChatClient
+import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
@@ -99,14 +101,17 @@ fun App() {
         }
     }
 
-    // Warm up chat client in background so first chat open is fast. Wait
-    // for the migration first — chatClient.ensureStarted opens the WS,
-    // which immediately starts populating room/timeline caches that the
-    // migrator might otherwise wipe out from underneath it.
+    // Warm up chat client + event metadata in background so room previews
+    // and chat headers have correct event covers from first paint. Wait for
+    // the migration first — chatClient.ensureStarted opens the WS, which
+    // immediately starts populating room/timeline caches that the migrator
+    // might otherwise wipe out from underneath it.
+    val eventRepository = koinInject<EventRepository>()
     LaunchedEffect(startDestination) {
         if (startDestination == Route.MainGraph) {
             migrator.ready.await()
             chatClient.ensureStarted()
+            runCatching { eventRepository.refreshMyEvents() }
         }
     }
 
@@ -131,6 +136,7 @@ private fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformConte
     { context: PlatformContext ->
         ImageLoader
             .Builder(context)
+            .crossfade(150)
             .memoryCache {
                 MemoryCache
                     .Builder()

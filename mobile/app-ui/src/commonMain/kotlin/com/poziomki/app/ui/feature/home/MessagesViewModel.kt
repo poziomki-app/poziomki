@@ -88,6 +88,13 @@ class MessagesViewModel(
                 return@launch
             }
 
+            // Pull events the user is involved in so event-room covers are
+            // available in the room list and chat header without the user
+            // first having to visit Wydarzenia. /events/mine returns the
+            // events with conversations the user actually has — this is the
+            // dataset that backs eventRoomAvatars.
+            launch { runCatching { eventRepository.refreshMyEvents() } }
+
             pendingConnectivityRetry = false
             _state.update { current ->
                 if (current.rooms.isNotEmpty()) {
@@ -186,6 +193,7 @@ class MessagesViewModel(
             chatClient.rooms.collect { rooms ->
                 val deduplicatedRooms = deduplicateAndSortRooms(rooms)
                 warmupMissingRoomPreviews(deduplicatedRooms)
+                ensureEventCoversFor(deduplicatedRooms)
                 _state.update { current ->
                     if (current.rooms == deduplicatedRooms && (!current.isLoading || deduplicatedRooms.isEmpty())) {
                         return@update current
@@ -197,6 +205,25 @@ class MessagesViewModel(
                 }
             }
         }
+    }
+
+    private var eventCoverSyncJob: Job? = null
+
+    private fun ensureEventCoversFor(rooms: List<RoomSummary>) {
+        // Whenever non-direct rooms show up without a known event cover,
+        // pull /events/mine. The repo's stale-check keeps this cheap on
+        // subsequent emissions.
+        val needsSync =
+            rooms.any { room ->
+                !room.isDirect &&
+                    _state.value.eventRoomAvatars[room.roomId] == null
+            }
+        if (!needsSync) return
+        if (eventCoverSyncJob?.isActive == true) return
+        eventCoverSyncJob =
+            viewModelScope.launch {
+                runCatching { eventRepository.refreshMyEvents() }
+            }
     }
 
     private fun warmupMissingRoomPreviews(rooms: List<RoomSummary>) {
@@ -252,10 +279,13 @@ class MessagesViewModel(
 
     private fun observeEventRoomAvatars() {
         viewModelScope.launch {
-            eventRepository.observeEvents().collect { events ->
+            // observeEventsWithConversation skips the in_list_feed filter so
+            // events fetched via /events/mine (which we don't put in the feed)
+            // still surface their covers here.
+            eventRepository.observeEventsWithConversation().collect { events ->
                 val avatars =
                     events
-                        .filter { it.isAttending && it.conversationId != null && it.coverImage != null }
+                        .filter { it.conversationId != null && it.coverImage != null }
                         .associate { it.conversationId!! to it.coverImage!! }
                 _state.update { it.copy(eventRoomAvatars = avatars) }
             }

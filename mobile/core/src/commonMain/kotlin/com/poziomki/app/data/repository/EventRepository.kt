@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 import kotlin.time.Clock
 import kotlin.time.Instant
+import com.poziomki.app.db.Event as DbEvent
 
 private fun Event.hasFinished(now: Instant): Boolean {
     val end = endsAt ?: startsAt
@@ -48,6 +49,7 @@ class EventRepository(
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
         private const val RECOMMENDED_CACHE_KEY = "recommended_events"
         private const val SAVED_CACHE_KEY = "saved_events"
+        private const val MY_EVENTS_CACHE_KEY = "my_events"
 
         @Volatile
         private var lastLat: Double? = null
@@ -117,10 +119,24 @@ class EventRepository(
             .mapToList(Dispatchers.IO)
             .map { rows -> rows.map { it.toApiModel() } }
 
+    fun observeEventsWithConversation(): Flow<List<Event>> =
+        db.eventQueries
+            .selectAllWithConversation(::DbEvent)
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { it.toApiModel() } }
+
+    suspend fun findByConversationId(conversationId: String): Event? =
+        withContext(Dispatchers.IO) {
+            db.eventQueries
+                .selectByConversationId(conversationId)
+                .executeAsOneOrNull()
+                ?.toApiModel()
+        }
+
     fun observeEventConversationIds(): Flow<Set<String>> =
-        observeEvents().map { events ->
+        observeEventsWithConversation().map { events ->
             events
-                .filter { it.isAttending }
                 .mapNotNull(Event::conversationId)
                 .filter { it.isNotBlank() }
                 .toSet()
@@ -233,6 +249,34 @@ class EventRepository(
                             )
                         }
                         db.cacheStateQueries.upsert(SAVED_CACHE_KEY, now)
+                    }
+                    true
+                }
+
+                is ApiResult.Error -> {
+                    false
+                }
+            }
+        }
+
+    suspend fun refreshMyEvents(forceRefresh: Boolean = false): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!forceRefresh) {
+                val cachedAt =
+                    db.cacheStateQueries
+                        .selectByKey(MY_EVENTS_CACHE_KEY)
+                        .executeAsOneOrNull()
+                        ?.cached_at
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
+            }
+            when (val result = api.getMyEvents()) {
+                is ApiResult.Success -> {
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    db.transaction {
+                        result.data.forEach { event ->
+                            eventMutationManager.upsertEvent(event, now, inListFeed = false)
+                        }
+                        db.cacheStateQueries.upsert(MY_EVENTS_CACHE_KEY, now)
                     }
                     true
                 }
