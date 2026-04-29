@@ -282,8 +282,9 @@ pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     crate::moderation::init_from_env()
         .map_err(|e| crate::error::AppError::Message(format!("moderation init: {e}")))?;
-    crate::moderation::init_image_from_env()
-        .map_err(|e| crate::error::AppError::Message(format!("image moderation init: {e}")))?;
+    // Image moderation is upload-path only — the worker has no upload
+    // handlers, so loading the ~22 MB ONNX session here would waste RSS.
+    // If the outbox ever grows an image-scan job, re-add the init.
     let _cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Worker)?;
     assert_pool_role(PoolRole::Worker).await?;
