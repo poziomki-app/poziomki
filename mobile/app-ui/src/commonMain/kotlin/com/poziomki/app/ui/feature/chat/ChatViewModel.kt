@@ -1170,7 +1170,10 @@ class ChatViewModel(
         // through to summary.avatarUrl, currentAvatar, or by-name lookups —
         // those can carry the creator's face or another person's profile pic
         // that happens to match the event title.
-        if (rid != null && (rid in eventRoomIds || summary?.isDirect == false)) {
+        // Scope this strictly to known event rooms; non-direct group rooms
+        // that aren't events should still resolve through the normal fallback
+        // chain so their avatars don't disappear.
+        if (rid != null && rid in eventRoomIds) {
             return eventCoverByRoomId[rid]
         }
         val eventCover = rid?.let { eventCoverByRoomId[it] }
