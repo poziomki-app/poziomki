@@ -40,6 +40,7 @@ private fun isEmoji(value: String): Boolean =
 private const val AVATAR_NULL_FALLBACK_DELAY_MS = 250L
 
 @Composable
+@Suppress("LongMethod", "LongParameterList")
 fun UserAvatar(
     picture: String?,
     fallbackPicture: String? = null,
@@ -48,6 +49,7 @@ fun UserAvatar(
     size: Dp = 52.dp,
     backgroundColor: Color = Border,
     iconTint: Color = TextMuted,
+    showFallbackIcon: Boolean = true,
 ) {
     val emojiSize: TextUnit = (size.value * 0.45f).sp
     val iconSize: Dp = size * 0.5f
@@ -108,7 +110,9 @@ fun UserAvatar(
             }
 
             else -> {
-                FallbackUserIcon(iconSize, iconTint)
+                if (showFallbackIcon) {
+                    FallbackUserIcon(iconSize, iconTint)
+                }
             }
         }
     }

@@ -171,7 +171,7 @@ fun AppNavigation(
         NotificationChatTarget.consume(roomId)
     }
 
-    val navigateToChat: (String) -> Unit = navigateToChat@{ chatTargetId ->
+    val navigateToChat: (String, String?) -> Unit = navigateToChat@{ chatTargetId, avatarHint ->
         if (chatTargetId.isBlank()) return@navigateToChat
         navigationScope.launch {
             val roomId =
@@ -190,7 +190,7 @@ fun AppNavigation(
                     }
                 }
 
-            navController.navigate(Route.Chat(roomId))
+            navController.navigate(Route.Chat(id = roomId, seedAvatarUrl = avatarHint))
         }
     }
 
@@ -446,6 +446,7 @@ fun AppNavigation(
                 initialTitle = chat.title,
                 initialDirectUserId = chat.directUserId,
                 initialDirectProfileId = chat.directProfileId,
+                initialAvatarUrl = chat.seedAvatarUrl,
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
@@ -476,7 +477,7 @@ fun MainScreen(
     onNavigateToProfileEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
     onNavigateToSaved: () -> Unit,
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (String, String?) -> Unit,
     onNavigateToNewChat: () -> Unit,
     onNavigateToGamification: () -> Unit,
     onSignOut: () -> Unit,
