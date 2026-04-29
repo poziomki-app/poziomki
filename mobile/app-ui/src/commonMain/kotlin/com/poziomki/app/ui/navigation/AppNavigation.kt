@@ -1,7 +1,5 @@
 package com.poziomki.app.ui.navigation
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -78,6 +76,12 @@ import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.designsystem.theme.backSlide
+import com.poziomki.app.ui.designsystem.theme.backSlideExit
+import com.poziomki.app.ui.designsystem.theme.forwardSlide
+import com.poziomki.app.ui.designsystem.theme.forwardSlideExit
+import com.poziomki.app.ui.designsystem.theme.tabFadeIn
+import com.poziomki.app.ui.designsystem.theme.tabFadeOut
 import com.poziomki.app.ui.feature.auth.AuthViewModel
 import com.poziomki.app.ui.feature.auth.ForgotPasswordScreen
 import com.poziomki.app.ui.feature.auth.LoginScreen
@@ -225,10 +229,10 @@ fun AppNavigation(
         navController = navController,
         startDestination = startDestination,
         modifier = Modifier.fillMaxSize(),
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-        popEnterTransition = { EnterTransition.None },
-        popExitTransition = { ExitTransition.None },
+        enterTransition = { forwardSlide() },
+        exitTransition = { forwardSlideExit() },
+        popEnterTransition = { backSlide() },
+        popExitTransition = { backSlideExit() },
     ) {
         // Auth graph
         navigation<Route.AuthGraph>(startDestination = Route.Login()) {
@@ -530,10 +534,10 @@ fun MainScreen(
                     NavHost(
                         navController = tabNavController,
                         startDestination = Route.Explore,
-                        enterTransition = { EnterTransition.None },
-                        exitTransition = { ExitTransition.None },
-                        popEnterTransition = { EnterTransition.None },
-                        popExitTransition = { ExitTransition.None },
+                        enterTransition = { tabFadeIn() },
+                        exitTransition = { tabFadeOut() },
+                        popEnterTransition = { tabFadeIn() },
+                        popExitTransition = { tabFadeOut() },
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         composable<Route.Explore> {
