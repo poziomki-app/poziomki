@@ -74,26 +74,25 @@ pub async fn resolve_or_create_dm(
         updated_at: now,
     };
 
-    let inserted = diesel::insert_into(conversations::table)
+    // Insert without RETURNING: the conversations_viewer SELECT policy
+    // would filter the new row (the viewer isn't a member yet, members
+    // get inserted below), and PG raises "new row violates RLS" on the
+    // RETURNING projection. Re-fetch via the SD helper instead — that
+    // also doubles as the race-fallback if a concurrent request won
+    // the insert.
+    diesel::insert_into(conversations::table)
         .values(&new_conv)
         .on_conflict_do_nothing()
-        .get_result::<Conversation>(conn)
-        .await
-        .optional()?;
+        .execute(conn)
+        .await?;
 
-    // Handle race condition: another request may have created it. The
-    // fallback uses the SD helper so RLS doesn't filter the row out
-    // when the viewer's membership hasn't been inserted yet.
-    let created = match inserted {
-        Some(c) => c,
-        None => find_dm_conversation(conn, low, high)
-            .await?
-            .ok_or_else(|| {
-                crate::error::AppError::message(format!(
-                    "DM conversation race-fallback lookup returned None for pair ({low}, {high})"
-                ))
-            })?,
-    };
+    let created = find_dm_conversation(conn, low, high)
+        .await?
+        .ok_or_else(|| {
+            crate::error::AppError::message(format!(
+                "DM conversation lookup returned None after insert for pair ({low}, {high})"
+            ))
+        })?;
 
     // Ensure both users are members
     let members = vec![
@@ -143,23 +142,22 @@ pub async fn resolve_or_create_event_conversation(
         updated_at: now,
     };
 
-    let inserted = diesel::insert_into(conversations::table)
+    // See DM path for why we skip RETURNING and re-fetch via the SD
+    // helper: conversations_viewer would filter the new row before the
+    // creator's membership row exists.
+    diesel::insert_into(conversations::table)
         .values(&new_conv)
         .on_conflict_do_nothing()
-        .get_result::<Conversation>(conn)
-        .await
-        .optional()?;
+        .execute(conn)
+        .await?;
 
-    let created = match inserted {
-        Some(c) => c,
-        None => find_event_conversation(conn, event_id)
-            .await?
-            .ok_or_else(|| {
-                crate::error::AppError::message(format!(
-                    "event conversation race-fallback lookup returned None for event {event_id}"
-                ))
-            })?,
-    };
+    let created = find_event_conversation(conn, event_id)
+        .await?
+        .ok_or_else(|| {
+            crate::error::AppError::message(format!(
+                "event conversation lookup returned None after insert for event {event_id}"
+            ))
+        })?;
 
     // Add creator as first member
     diesel::insert_into(conversation_members::table)
