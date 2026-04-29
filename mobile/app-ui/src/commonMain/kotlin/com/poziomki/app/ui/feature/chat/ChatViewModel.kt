@@ -85,6 +85,7 @@ class ChatViewModel(
         fallbackDisplayName: String? = null,
         fallbackDirectUserId: String? = null,
         fallbackProfileId: String? = null,
+        fallbackAvatarUrl: String? = null,
     ) {
         if (roomId.isBlank()) return
         if (roomId.length < 2) {
@@ -110,6 +111,7 @@ class ChatViewModel(
                             roomId = roomId,
                             fallbackDisplayName = fallbackDisplayName,
                             fallbackDirectUserId = fallbackDirectUserId,
+                            fallbackAvatarUrl = fallbackAvatarUrl,
                         )
                     } finally {
                         if (bindingRoomId == roomId) {
@@ -530,10 +532,12 @@ class ChatViewModel(
         super.onCleared()
     }
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     private suspend fun bindRoom(
         roomId: String,
         fallbackDisplayName: String?,
         fallbackDirectUserId: String?,
+        fallbackAvatarUrl: String? = null,
     ) {
         focusedTimeline?.close()
         focusedTimeline = null
@@ -566,13 +570,19 @@ class ChatViewModel(
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }
                 ?: knownSummary?.displayName.orEmpty()
+        val seedAvatar =
+            resolveRoomAvatar(
+                summary = knownSummary,
+                overrides = avatarOverrides,
+                roomDisplayName = seededDisplayName,
+                currentAvatar = fallbackAvatarUrl,
+                directUserIdFallback = inferredDirectUserId,
+            ) ?: fallbackAvatarUrl
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
                 roomDisplayName = seededDisplayName,
-                roomAvatarUrl =
-                    knownSummary?.avatarUrl
-                        ?: inferredDirectUserId?.let { resolveAvatarOverride(it, avatarOverrides) },
+                roomAvatarUrl = seedAvatar,
                 isDirectRoom = inferredIsDirect,
                 directProfileId = activeDirectProfileId ?: activeDirectUserId,
                 avatarOverrides = avatarOverrides,

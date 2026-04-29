@@ -345,7 +345,11 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
     RoomSummary(
         roomId = id,
         displayName = if (isDirect) directUserName ?: title ?: "" else title ?: "",
-        avatarUrl = directUserAvatar,
+        // Only direct (1:1) rooms get an avatar from the server payload.
+        // For event/group rooms the cover comes from EventRepository — using
+        // directUserAvatar here would leak the event creator's face as the
+        // room avatar in previews and chat header.
+        avatarUrl = if (isDirect) directUserAvatar else null,
         isDirect = isDirect,
         directUserId = directUserPid ?: directUserId,
         unreadCount = unreadCount.toInt(),

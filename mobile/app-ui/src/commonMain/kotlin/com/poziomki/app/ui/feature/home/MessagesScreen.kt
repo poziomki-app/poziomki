@@ -55,8 +55,9 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod")
 fun MessagesScreen(
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (String, String?) -> Unit,
     onNavigateToNewChat: () -> Unit,
     onNavigateToProfile: (String) -> Unit = {},
     profileAvatarAction: @Composable () -> Unit = {},
@@ -129,7 +130,7 @@ fun MessagesScreen(
                                     RoomRow(
                                         room = room,
                                         profilePictureUrl = profilePicture,
-                                        onClick = { onNavigateToChat(room.roomId) },
+                                        onClick = { onNavigateToChat(room.roomId, profilePicture) },
                                         onAvatarClick =
                                             room.directUserId?.let { userId ->
                                                 { onNavigateToProfile(userId) }
