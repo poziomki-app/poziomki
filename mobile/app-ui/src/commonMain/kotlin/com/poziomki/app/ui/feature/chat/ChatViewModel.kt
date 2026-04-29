@@ -74,10 +74,11 @@ class ChatViewModel(
     private var activeDirectProfileId: String? = null
     private var latestAvatarByName: Map<String, String> = emptyMap()
     private var eventCoverByRoomId: Map<String, String> = emptyMap()
+    private var eventRoomIds: Set<String> = emptySet()
 
     init {
         observeAvatarOverrides()
-        observeEventCovers()
+        observeEventRooms()
     }
 
     fun loadRoom(
@@ -564,6 +565,27 @@ class ChatViewModel(
         val inferredIsDirect = knownSummary?.isDirect ?: (inferredDirectUserId != null)
         activeDirectUserId = inferredDirectUserId
 
+        // Seed eventRoomIds + eventCoverByRoomId synchronously before
+        // resolveRoomAvatar runs, so an event-room first-frame can't fall
+        // back to the creator's avatar in the gap between bind and the
+        // observeEventRooms emission. For non-direct rooms not yet in the
+        // local event DB, kick off /events/mine so the cover lands ASAP;
+        // observers rebind the avatar when the row arrives.
+        val knownEvent = runCatching { eventRepository.findByConversationId(roomId) }.getOrNull()
+        if (knownEvent != null) {
+            eventRoomIds = eventRoomIds + roomId
+            knownEvent.coverImage?.let { cover ->
+                eventCoverByRoomId = eventCoverByRoomId + (roomId to cover)
+            }
+        } else if (knownSummary?.isDirect == false) {
+            // Don't force-refresh: rely on CachePolicy so /events/mine fires at
+            // most once per stale window, regardless of how many plain group
+            // chats the user opens.
+            viewModelScope.launch {
+                runCatching { eventRepository.refreshMyEvents() }
+            }
+        }
+
         val avatarOverrides = _uiState.value.avatarOverrides
         val seededDisplayName =
             fallbackDisplayName
@@ -577,7 +599,7 @@ class ChatViewModel(
                 roomDisplayName = seededDisplayName,
                 currentAvatar = seedAvatarUrl,
                 directUserIdFallback = inferredDirectUserId,
-            ) ?: seedAvatarUrl
+            ) ?: seedAvatarUrl.takeUnless { roomId in eventRoomIds }
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
@@ -1083,19 +1105,32 @@ class ChatViewModel(
         }
     }
 
-    private fun observeEventCovers() {
+    private fun observeEventRooms() {
+        // observeEventsWithConversation includes events fetched via
+        // /events/mine that aren't in the public feed (in_list_feed=0),
+        // so chat headers can find their covers regardless of how the
+        // event row was hydrated. Both eventRoomIds (used by the resolver
+        // to short-circuit fallback) and eventCoverByRoomId (the cover
+        // value itself) are derived from the same emission so they can't
+        // disagree.
         viewModelScope.launch {
-            eventRepository.observeEvents().collect { events ->
-                val covers =
-                    events
-                        .filter { it.isAttending && it.conversationId != null && it.coverImage != null }
+            eventRepository.observeEventsWithConversation().collect { events ->
+                val withConversation =
+                    events.filter { !it.conversationId.isNullOrBlank() }
+                // Union rather than reassign so a synchronously seeded id
+                // (see bindRoom) survives until the local DB row appears in
+                // the next emission.
+                eventRoomIds = eventRoomIds + withConversation.mapNotNull { it.conversationId }
+                val newCovers =
+                    withConversation
+                        .filter { it.coverImage != null }
                         .associate { it.conversationId!! to it.coverImage!! }
-                eventCoverByRoomId = covers
+                eventCoverByRoomId = eventCoverByRoomId + newCovers
                 _uiState.update { current ->
                     val rid = current.roomId
-                    val eventCover = covers[rid]
-                    if (eventCover != null && current.roomAvatarUrl != eventCover) {
-                        current.copy(roomAvatarUrl = eventCover)
+                    if (rid in eventRoomIds) {
+                        val cover = eventCoverByRoomId[rid]
+                        if (current.roomAvatarUrl != cover) current.copy(roomAvatarUrl = cover) else current
                     } else {
                         current
                     }
@@ -1112,7 +1147,18 @@ class ChatViewModel(
         timelineAvatar: String? = null,
         directUserIdFallback: String? = null,
     ): String? {
-        val eventCover = summary?.roomId?.let { eventCoverByRoomId[it] }
+        val rid = (summary?.roomId ?: _uiState.value.roomId).takeIf { it.isNotBlank() }
+        // Event rooms must resolve only to the event cover. Never fall
+        // through to summary.avatarUrl, currentAvatar, or by-name lookups —
+        // those can carry the creator's face or another person's profile pic
+        // that happens to match the event title.
+        // Scope this strictly to known event rooms; non-direct group rooms
+        // that aren't events should still resolve through the normal fallback
+        // chain so their avatars don't disappear.
+        if (rid != null && rid in eventRoomIds) {
+            return eventCoverByRoomId[rid]
+        }
+        val eventCover = rid?.let { eventCoverByRoomId[it] }
         if (eventCover != null) return eventCover
         val directUserId = summary?.directUserId ?: directUserIdFallback
         val summaryAvatar =

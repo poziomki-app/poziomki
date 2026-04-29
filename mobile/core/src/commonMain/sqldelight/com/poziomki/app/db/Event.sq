@@ -51,6 +51,17 @@ SELECT *
 FROM event
 WHERE id = ?;
 
+selectByConversationId:
+SELECT *
+FROM event
+WHERE conversation_id = ?
+LIMIT 1;
+
+selectAllWithConversation:
+SELECT *
+FROM event
+WHERE conversation_id IS NOT NULL AND conversation_id != '';
+
 upsert:
 INSERT OR REPLACE INTO event(
     id, title, description, cover_image, location,
