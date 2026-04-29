@@ -3,6 +3,7 @@ package com.poziomki.app.session
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -13,6 +14,7 @@ data class SessionBootstrapState(
     val hasProfile: Boolean,
 )
 
+@Suppress("TooManyFunctions")
 class SessionManager(
     private val dataStore: DataStore<Preferences>,
     private val tokenStore: SessionTokenStore,
@@ -24,6 +26,15 @@ class SessionManager(
         val PROFILE_ID = stringPreferencesKey("profile_id")
         val ONBOARDING_DRAFT = stringPreferencesKey("onboarding_draft")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
+    }
+
+    suspend fun getLastSeenVersionCode(): Int? = dataStore.data.first()[LAST_SEEN_VERSION_CODE]
+
+    suspend fun setLastSeenVersionCode(versionCode: Int) {
+        dataStore.edit { prefs ->
+            prefs[LAST_SEEN_VERSION_CODE] = versionCode
+        }
     }
 
     val isLoggedIn: Flow<Boolean> =

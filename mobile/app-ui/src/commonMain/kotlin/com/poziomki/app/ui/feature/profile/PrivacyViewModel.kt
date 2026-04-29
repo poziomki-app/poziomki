@@ -8,6 +8,7 @@ import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.session.AppPreferences
 import com.poziomki.app.session.SessionManager
+import com.poziomki.app.ui.cache.ImageCacheCleaner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ class PrivacyViewModel(
     private val cacheManager: CacheManager,
     private val settingsRepository: SettingsRepository,
     private val appPreferences: AppPreferences,
+    private val imageCacheCleaner: ImageCacheCleaner,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PrivacyState())
     val state: StateFlow<PrivacyState> = _state.asStateFlow()
@@ -166,6 +168,7 @@ class PrivacyViewModel(
             when (apiService.changePassword(currentPassword, newPassword)) {
                 is ApiResult.Success -> {
                     cacheManager.clearAll()
+                    runCatching { imageCacheCleaner.clear() }
                     sessionManager.clearSession()
                     _state.value =
                         _state.value.copy(
@@ -196,6 +199,7 @@ class PrivacyViewModel(
             when (apiService.deleteAccount(password)) {
                 is ApiResult.Success -> {
                     cacheManager.clearAll()
+                    runCatching { imageCacheCleaner.clear() }
                     sessionManager.clearSession()
                     _state.value = _state.value.copy(isDeleting = false)
                     onDeleted()
