@@ -76,7 +76,13 @@ class WsTimeline(
                 _hasMoreBackwards.value = !cached.isHydrated
             }
             wsConnection.isConnected.first { it }
-            requestInitialHistory()
+            // Don't fire if a paginate is already in flight — onHistoryResponse
+            // routes every response to a single pendingHistoryDeferred, so an
+            // overlapping init request would complete the paginate's deferred
+            // with the wrong hasMore.
+            if (pendingHistoryDeferred == null && !_isPaginatingBackwards.value) {
+                requestInitialHistory()
+            }
         }
     }
 
