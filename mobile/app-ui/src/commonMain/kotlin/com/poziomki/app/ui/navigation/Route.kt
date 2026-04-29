@@ -75,6 +75,7 @@ sealed interface Route {
         val title: String? = null,
         val directUserId: String? = null,
         val directProfileId: String? = null,
+        val seedAvatarUrl: String? = null,
     ) : Route
 
     @Serializable data object NewChat : Route

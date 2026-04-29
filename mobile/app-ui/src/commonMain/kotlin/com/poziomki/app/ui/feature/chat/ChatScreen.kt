@@ -71,6 +71,7 @@ fun ChatScreen(
     initialTitle: String? = null,
     initialDirectUserId: String? = null,
     initialDirectProfileId: String? = null,
+    initialAvatarUrl: String? = null,
     onBack: () -> Unit,
     onNavigateToProfile: (String) -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
@@ -85,6 +86,7 @@ fun ChatScreen(
             fallbackDisplayName = initialTitle,
             fallbackDirectUserId = initialDirectUserId,
             fallbackProfileId = initialDirectProfileId,
+            seedAvatarUrl = initialAvatarUrl,
         )
     }
 
@@ -257,6 +259,7 @@ private fun ChatTopBar(
                     size = 34.dp,
                     backgroundColor = Primary.copy(alpha = 0.2f),
                     iconTint = Primary,
+                    showFallbackIcon = false,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
