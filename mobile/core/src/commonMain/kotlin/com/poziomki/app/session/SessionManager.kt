@@ -125,11 +125,18 @@ class SessionManager(
         // token but no USER_ID — the app shows the login screen, the
         // next sign-in overwrites the token, and there's no stuck
         // logged-in-without-token state.
-        // Preserve device_id across logouts.
-        val deviceId = dataStore.data.first()[DEVICE_ID]
+        // Preserve device_id and last_seen_version_code across logouts:
+        // the former so push-notification routing keeps working, the
+        // latter so AppUpdateMigrator still triggers a cache wipe on
+        // a post-logout app upgrade (without it, the migrator would
+        // see previous=null and treat the upgrade as a first install).
+        val snapshot = dataStore.data.first()
+        val deviceId = snapshot[DEVICE_ID]
+        val lastSeenVersion = snapshot[LAST_SEEN_VERSION_CODE]
         dataStore.edit {
             it.clear()
             if (deviceId != null) it[DEVICE_ID] = deviceId
+            if (lastSeenVersion != null) it[LAST_SEEN_VERSION_CODE] = lastSeenVersion
         }
         tokenStore.clearToken()
         runCatching { imageCacheCleaner.clear() }
