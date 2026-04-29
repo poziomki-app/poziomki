@@ -7,7 +7,7 @@ use crate::db::models::event_interactions::EventInteraction;
 use crate::db::schema::event_interactions;
 
 pub(in crate::api) const EVENT_INTERACTION_SAVED: &str = "saved";
-pub(super) const EVENT_INTERACTION_JOINED: &str = "joined";
+pub(in crate::api) const EVENT_INTERACTION_JOINED: &str = "joined";
 
 pub(super) async fn upsert_event_interaction_with_conn(
     conn: &mut AsyncPgConnection,
