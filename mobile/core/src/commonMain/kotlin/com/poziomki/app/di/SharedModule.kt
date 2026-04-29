@@ -30,7 +30,7 @@ import org.koin.dsl.module
 
 val sharedModule =
     module {
-        single { SessionManager(get(), get()) }
+        single { SessionManager(get(), get(), get()) }
         single { AppPreferences(get()) }
         single<RoomComposerDraftStore> { SqlDelightRoomComposerDraftStore(get()) }
         single<RoomTimelineCacheStore> { SqlDelightRoomTimelineCacheStore(get()) }
