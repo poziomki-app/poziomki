@@ -16,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -51,7 +52,10 @@ class WsTimeline(
     private var persistJob: Job? = null
 
     init {
-        // Load cached items on start, request history if empty
+        // Load cached items immediately so the UI paints, then always request
+        // a fresh history page so any messages that arrived while the room
+        // was closed (and therefore only updated the room preview) are
+        // backfilled into the timeline. onMessage() dedupes by eventId.
         scope.launch {
             val cached = roomTimelineCacheStore.loadSnapshot(conversationId)
             if (cached.items.isNotEmpty()) {
@@ -70,10 +74,9 @@ class WsTimeline(
                     }
                 _items.value = corrected
                 _hasMoreBackwards.value = !cached.isHydrated
-            } else {
-                // No cache — request initial history from server
-                requestInitialHistory()
             }
+            wsConnection.isConnected.first { it }
+            requestInitialHistory()
         }
     }
 
