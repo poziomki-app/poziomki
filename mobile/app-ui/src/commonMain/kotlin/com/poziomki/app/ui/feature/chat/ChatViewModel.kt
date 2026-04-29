@@ -98,6 +98,27 @@ class ChatViewModel(
         val hasPendingBindForSameRoom = boundRoomId == roomId && bindJob?.isActive == true
         if (isAlreadyBound || isBindingSameRoom || hasPendingBindForSameRoom) return
 
+        // Seed the UI synchronously with whatever the navigation arguments
+        // gave us so the chat header (avatar + title) renders correctly on
+        // the very first frame instead of flashing the generic fallback for
+        // a tick while bindRoom finishes acquiring the mutex and resolving.
+        // bindRoom will overwrite _uiState with the canonical resolution
+        // shortly after — these values are just to avoid the empty-state
+        // frame in between.
+        if (_uiState.value.roomId != roomId) {
+            val seededDirectUserId = fallbackDirectUserId?.takeIf { it.isNotBlank() }
+            _uiState.value =
+                ChatUiState(
+                    roomId = roomId,
+                    roomDisplayName = fallbackDisplayName?.trim().orEmpty(),
+                    roomAvatarUrl = seedAvatarUrl,
+                    isDirectRoom = seededDirectUserId != null,
+                    directProfileId = fallbackProfileId ?: seededDirectUserId,
+                    avatarOverrides = _uiState.value.avatarOverrides,
+                    isLoading = true,
+                )
+        }
+
         boundRoomId = roomId
         bindJob?.cancel()
         pendingRoomRetryJob?.cancel()
@@ -1148,17 +1169,22 @@ class ChatViewModel(
         directUserIdFallback: String? = null,
     ): String? {
         val rid = (summary?.roomId ?: _uiState.value.roomId).takeIf { it.isNotBlank() }
-        // Event rooms must resolve only to the event cover. Never fall
-        // through to summary.avatarUrl, currentAvatar, or by-name lookups —
-        // those can carry the creator's face or another person's profile pic
-        // that happens to match the event title.
-        // Scope this strictly to known event rooms; non-direct group rooms
-        // that aren't events should still resolve through the normal fallback
-        // chain so their avatars don't disappear.
-        if (rid != null && rid in eventRoomIds) {
-            return eventCoverByRoomId[rid]
-        }
         val eventCover = rid?.let { eventCoverByRoomId[it] }
+        // Non-direct rooms must never resolve to a participant-derived
+        // avatar. timelineAvatar is "first non-mine sender's avatar",
+        // by-name lookup matches user profile pictures by display name,
+        // and currentAvatar may already be a leaked sender pic from a
+        // prior resolve. Even summary.directUserId can hold the creator
+        // for an event room before /events/mine has landed. The only
+        // acceptable sources are the event cover (from local DB) and the
+        // explicit Matrix room avatar that the server set when creating
+        // the room — both are room-scoped, not participant-scoped.
+        // Showing nothing is better than leaking someone's face into a
+        // room title.
+        val isDirect = summary?.isDirect ?: (directUserIdFallback != null && rid !in eventRoomIds)
+        if (!isDirect) {
+            return eventCover ?: summary?.avatarUrl
+        }
         if (eventCover != null) return eventCover
         val directUserId = summary?.directUserId ?: directUserIdFallback
         val summaryAvatar =
