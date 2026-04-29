@@ -131,7 +131,13 @@ fun ChatScreen(
                         state.roomDisplayName.ifBlank {
                             initialTitle?.trim()?.takeIf { it.isNotBlank() } ?: ""
                         },
-                    avatarUrl = state.roomAvatarUrl,
+                    // Fall back to the navigation seed until the viewmodel
+                    // resolves. LaunchedEffect runs after first composition,
+                    // so without this fallback the very first frame would
+                    // paint a generic-icon avatar before bindRoom emits —
+                    // visible as a brief flicker on chat reopen even when
+                    // the image is in Coil's memory cache.
+                    avatarUrl = state.roomAvatarUrl ?: initialAvatarUrl,
                     isBlocked = state.isBlocked,
                     onBack = onBack,
                     onSearchClick = viewModel::toggleSearch,

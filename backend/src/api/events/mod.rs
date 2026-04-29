@@ -37,7 +37,7 @@ use uuid::Uuid;
 use super::state::{DataResponse, EventsQuery};
 use events_service::{not_found_event, profile_not_found};
 
-pub(super) use events_interactions_repo::EVENT_INTERACTION_SAVED;
+pub(super) use events_interactions_repo::{EVENT_INTERACTION_JOINED, EVENT_INTERACTION_SAVED};
 pub(super) use events_view::{
     build_event_response_raw, build_event_responses_raw,
     resolve_event_images as resolve_event_images_for_responses,
@@ -143,7 +143,7 @@ pub(super) async fn events_mine(
     headers: HeaderMap,
 ) -> Result<Response> {
     list_events_with_viewer(&headers, |conn, profile_id| {
-        Box::pin(async move { events_repo::list_events_by_creator(conn, profile_id).await })
+        Box::pin(async move { events_repo::list_my_events(conn, profile_id).await })
     })
     .await
 }
