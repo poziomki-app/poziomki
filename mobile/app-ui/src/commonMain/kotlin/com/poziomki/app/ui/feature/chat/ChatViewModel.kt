@@ -626,7 +626,8 @@ class ChatViewModel(
                             roomId = roomId,
                             roomDisplayName = seededDisplayName,
                             roomAvatarUrl =
-                                fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) },
+                                fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) }
+                                    ?: fallbackAvatarUrl,
                             directProfileId = activeDirectProfileId ?: activeDirectUserId,
                             avatarOverrides = currentOverrides,
                             isLoading = false,
