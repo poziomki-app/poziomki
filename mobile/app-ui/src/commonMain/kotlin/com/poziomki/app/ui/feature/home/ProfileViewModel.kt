@@ -9,7 +9,6 @@ import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.Profile
 import com.poziomki.app.network.Tag
 import com.poziomki.app.session.SessionManager
-import com.poziomki.app.ui.cache.ImageCacheCleaner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +29,6 @@ class ProfileViewModel(
     private val sessionManager: SessionManager,
     private val cacheManager: CacheManager,
     private val chatClient: ChatClient,
-    private val imageCacheCleaner: ImageCacheCleaner,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
@@ -102,7 +100,6 @@ class ProfileViewModel(
             runCatching { chatClient.stop() }
             runCatching { apiService.signOut() }
             cacheManager.clearAll()
-            runCatching { imageCacheCleaner.clear() }
             sessionManager.clearSession()
         }
     }

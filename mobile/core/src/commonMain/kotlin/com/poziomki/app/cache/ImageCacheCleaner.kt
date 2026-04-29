@@ -1,4 +1,4 @@
-package com.poziomki.app.ui.cache
+package com.poziomki.app.cache
 
 interface ImageCacheCleaner {
     fun clear()

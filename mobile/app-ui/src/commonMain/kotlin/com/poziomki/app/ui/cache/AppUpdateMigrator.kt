@@ -1,5 +1,6 @@
 package com.poziomki.app.ui.cache
 
+import com.poziomki.app.cache.ImageCacheCleaner
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.data.CacheManager
 import com.poziomki.app.session.SessionManager

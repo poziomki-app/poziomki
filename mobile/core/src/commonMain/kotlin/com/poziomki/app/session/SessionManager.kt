@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.poziomki.app.cache.ImageCacheCleaner
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,7 @@ data class SessionBootstrapState(
 class SessionManager(
     private val dataStore: DataStore<Preferences>,
     private val tokenStore: SessionTokenStore,
+    private val imageCacheCleaner: ImageCacheCleaner,
 ) {
     private companion object {
         val USER_ID = stringPreferencesKey("user_id")
@@ -130,5 +132,6 @@ class SessionManager(
             if (deviceId != null) it[DEVICE_ID] = deviceId
         }
         tokenStore.clearToken()
+        runCatching { imageCacheCleaner.clear() }
     }
 }

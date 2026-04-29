@@ -3,13 +3,13 @@ package com.poziomki.app
 import android.app.Application
 import android.content.ComponentCallbacks2
 import coil3.imageLoader
+import com.poziomki.app.cache.ImageCacheCleaner
 import com.poziomki.app.chat.push.NotificationHelper
 import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.di.appModule
 import com.poziomki.app.di.platformModule
 import com.poziomki.app.di.sharedModule
 import com.poziomki.app.ui.cache.AndroidImageCacheCleaner
-import com.poziomki.app.ui.cache.ImageCacheCleaner
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
