@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use fast_image_resize::images::Image as FirImage;
-use fast_image_resize::{PixelType, ResizeOptions, Resizer};
+use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 use image::ImageReader;
 use ndarray::Array4;
 use ort::{
@@ -23,10 +23,13 @@ use thiserror::Error;
 const MODEL_FILE: &str = "model.onnx";
 const INPUT_DIM: u32 = 384;
 
-// ImageNet statistics — Marqo's timm checkpoint uses the standard
-// preprocessing (mean/std applied per channel after /255.0).
-const MEAN: [f32; 3] = [0.485, 0.456, 0.406];
-const STD: [f32; 3] = [0.229, 0.224, 0.225];
+// ViT preprocessing per Marqo's pretrained_cfg
+// (https://huggingface.co/Marqo/nsfw-image-detection-384/blob/main/config.json):
+// mean/std are [0.5, 0.5, 0.5] — NOT ImageNet stats. Using ImageNet
+// here silently shifts the input distribution and miscalibrates the
+// NSFW probability.
+const MEAN: [f32; 3] = [0.5, 0.5, 0.5];
+const STD: [f32; 3] = [0.5, 0.5, 0.5];
 
 #[derive(Debug, Error)]
 pub enum ImageModerationError {
@@ -186,8 +189,14 @@ fn resize_to_input(src: &image::RgbImage) -> Result<Vec<u8>, ImageModerationErro
         .map_err(|_| ImageModerationError::Resize)?;
     let mut dst = FirImage::new(INPUT_DIM, INPUT_DIM, PixelType::U8x3);
     let mut resizer = Resizer::new();
+    // HF pretrained_cfg specifies bicubic resampling. CatmullRom is the
+    // canonical bicubic kernel (Keys cubic, a=-0.5) — the same one PIL
+    // uses for `Image.BICUBIC`, which is the de-facto reference for timm
+    // preprocessing. fast_image_resize defaults to Lanczos3, which would
+    // bias the input distribution relative to training.
+    let opts = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::CatmullRom));
     resizer
-        .resize(&src_image, &mut dst, &ResizeOptions::default())
+        .resize(&src_image, &mut dst, &opts)
         .map_err(|_| ImageModerationError::Resize)?;
     Ok(dst.into_vec())
 }
