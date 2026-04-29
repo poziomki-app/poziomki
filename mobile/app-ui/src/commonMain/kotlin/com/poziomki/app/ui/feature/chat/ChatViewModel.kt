@@ -85,7 +85,7 @@ class ChatViewModel(
         fallbackDisplayName: String? = null,
         fallbackDirectUserId: String? = null,
         fallbackProfileId: String? = null,
-        fallbackAvatarUrl: String? = null,
+        seedAvatarUrl: String? = null,
     ) {
         if (roomId.isBlank()) return
         if (roomId.length < 2) {
@@ -111,7 +111,7 @@ class ChatViewModel(
                             roomId = roomId,
                             fallbackDisplayName = fallbackDisplayName,
                             fallbackDirectUserId = fallbackDirectUserId,
-                            fallbackAvatarUrl = fallbackAvatarUrl,
+                            seedAvatarUrl = seedAvatarUrl,
                         )
                     } finally {
                         if (bindingRoomId == roomId) {
@@ -537,7 +537,7 @@ class ChatViewModel(
         roomId: String,
         fallbackDisplayName: String?,
         fallbackDirectUserId: String?,
-        fallbackAvatarUrl: String? = null,
+        seedAvatarUrl: String? = null,
     ) {
         focusedTimeline?.close()
         focusedTimeline = null
@@ -575,9 +575,9 @@ class ChatViewModel(
                 summary = knownSummary,
                 overrides = avatarOverrides,
                 roomDisplayName = seededDisplayName,
-                currentAvatar = fallbackAvatarUrl,
+                currentAvatar = seedAvatarUrl,
                 directUserIdFallback = inferredDirectUserId,
-            ) ?: fallbackAvatarUrl
+            ) ?: seedAvatarUrl
         _uiState.value =
             ChatUiState(
                 roomId = roomId,
@@ -627,7 +627,7 @@ class ChatViewModel(
                             roomDisplayName = seededDisplayName,
                             roomAvatarUrl =
                                 fallbackDirectUserId?.let { resolveAvatarOverride(it, currentOverrides) }
-                                    ?: fallbackAvatarUrl,
+                                    ?: seedAvatarUrl,
                             directProfileId = activeDirectProfileId ?: activeDirectUserId,
                             avatarOverrides = currentOverrides,
                             isLoading = false,

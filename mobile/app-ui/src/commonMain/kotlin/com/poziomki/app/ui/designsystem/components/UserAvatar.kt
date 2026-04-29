@@ -49,7 +49,7 @@ fun UserAvatar(
     size: Dp = 52.dp,
     backgroundColor: Color = Border,
     iconTint: Color = TextMuted,
-    hideFallbackIcon: Boolean = false,
+    showFallbackIcon: Boolean = true,
 ) {
     val emojiSize: TextUnit = (size.value * 0.45f).sp
     val iconSize: Dp = size * 0.5f
@@ -110,7 +110,7 @@ fun UserAvatar(
             }
 
             else -> {
-                if (!hideFallbackIcon) {
+                if (showFallbackIcon) {
                     FallbackUserIcon(iconSize, iconTint)
                 }
             }

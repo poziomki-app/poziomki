@@ -86,7 +86,7 @@ fun ChatScreen(
             fallbackDisplayName = initialTitle,
             fallbackDirectUserId = initialDirectUserId,
             fallbackProfileId = initialDirectProfileId,
-            fallbackAvatarUrl = initialAvatarUrl,
+            seedAvatarUrl = initialAvatarUrl,
         )
     }
 
@@ -259,7 +259,7 @@ private fun ChatTopBar(
                     size = 34.dp,
                     backgroundColor = Primary.copy(alpha = 0.2f),
                     iconTint = Primary,
-                    hideFallbackIcon = true,
+                    showFallbackIcon = false,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(

@@ -190,7 +190,7 @@ fun AppNavigation(
                     }
                 }
 
-            navController.navigate(Route.Chat(id = roomId, avatarUrl = avatarHint))
+            navController.navigate(Route.Chat(id = roomId, seedAvatarUrl = avatarHint))
         }
     }
 
@@ -446,7 +446,7 @@ fun AppNavigation(
                 initialTitle = chat.title,
                 initialDirectUserId = chat.directUserId,
                 initialDirectProfileId = chat.directProfileId,
-                initialAvatarUrl = chat.avatarUrl,
+                initialAvatarUrl = chat.seedAvatarUrl,
                 onBack = { navController.popBackStack() },
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
