@@ -51,6 +51,15 @@ class WsTimeline(
     private var pendingHistoryDeferred: CompletableDeferred<Boolean>? = null
     private var persistJob: Job? = null
 
+    /**
+     * Tracks how many init/backfill history requests are in flight that don't
+     * own pendingHistoryDeferred. The server processes History requests in
+     * send order and responds in order, so onHistoryResponse can drain this
+     * counter for the next n responses and route them away from any paginate
+     * deferred that may have been set in the meantime.
+     */
+    private var initHistoryRequestsInFlight = 0
+
     init {
         // Load cached items immediately so the UI paints, then always request
         // a fresh history page so any messages that arrived while the room
@@ -76,25 +85,26 @@ class WsTimeline(
                 _hasMoreBackwards.value = !cached.isHydrated
             }
             wsConnection.isConnected.first { it }
-            // Don't fire if a paginate is already in flight — onHistoryResponse
-            // routes every response to a single pendingHistoryDeferred, so an
-            // overlapping init request would complete the paginate's deferred
-            // with the wrong hasMore.
-            if (pendingHistoryDeferred == null && !_isPaginatingBackwards.value) {
-                requestInitialHistory()
-            }
+            sendInitHistoryRequest()
         }
     }
 
-    private suspend fun requestInitialHistory() {
+    private suspend fun sendInitHistoryRequest() {
         if (!wsConnection.isConnected.value) return
-        wsConnection.send(
-            WsClientMessage.History(
-                conversationId = conversationId,
-                before = null,
-                limit = 50,
-            ),
-        )
+        // Mark before sending: response ordering is FIFO, so the next n
+        // history responses are ours, not any concurrent paginate's.
+        initHistoryRequestsInFlight += 1
+        val sent =
+            wsConnection.send(
+                WsClientMessage.History(
+                    conversationId = conversationId,
+                    before = null,
+                    limit = 50,
+                ),
+            )
+        if (!sent) {
+            initHistoryRequestsInFlight = (initHistoryRequestsInFlight - 1).coerceAtLeast(0)
+        }
     }
 
     internal fun backfillOnReconnect() {
@@ -103,7 +113,7 @@ class WsTimeline(
                 _items.value = emptyList()
                 _hasMoreBackwards.value = true
             }
-            requestInitialHistory()
+            sendInitHistoryRequest()
         }
     }
 
@@ -255,6 +265,11 @@ class WsTimeline(
 
     internal fun onHistoryResponse(msg: WsServerMessage.HistoryResponse) {
         cacheHistoryMembers(msg.messages)
+        // Decide ownership before launching: if there's an outstanding
+        // init/backfill request, this response belongs to it (FIFO from
+        // the server) and must not complete a paginate's deferred.
+        val isInitResponse = initHistoryRequestsInFlight > 0
+        if (isInitResponse) initHistoryRequestsInFlight -= 1
         scope.launch {
             itemsMutex.withLock {
                 val uid = wsConnection.userId.value
@@ -279,11 +294,15 @@ class WsTimeline(
                 }
 
                 _hasMoreBackwards.value = msg.hasMore
-                _isPaginatingBackwards.value = false
+                if (!isInitResponse) {
+                    _isPaginatingBackwards.value = false
+                }
                 emitAndPersist(current)
             }
-            pendingHistoryDeferred?.complete(msg.hasMore)
-            pendingHistoryDeferred = null
+            if (!isInitResponse) {
+                pendingHistoryDeferred?.complete(msg.hasMore)
+                pendingHistoryDeferred = null
+            }
         }
     }
 
