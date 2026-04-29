@@ -34,6 +34,7 @@ private const val COIL_MEMORY_CACHE_MAX_SIZE_PERCENT = 0.18
 private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
 
 @Composable
+@Suppress("LongMethod")
 fun App() {
     val engine = koinInject<HttpClientEngine>()
     val chatClient = koinInject<ChatClient>()
@@ -51,6 +52,17 @@ fun App() {
             value = sessionManager.getBootstrapState()
         }
     val isLoggedIn by sessionManager.isLoggedIn.collectAsState(initial = bootstrapState?.isLoggedIn ?: false)
+
+    // Block the entire navigation graph until the migration finishes —
+    // ViewModels are instantiated on first render of their screens and
+    // many of them (ExploreViewModel, EventsViewModel, MessagesViewModel)
+    // immediately fetch from the same caches the migrator might wipe.
+    // Gating just App.kt's LaunchedEffects isn't enough; we have to gate
+    // AppNavigation itself.
+    val migrationReady by produceState(initialValue = false, migrator) {
+        migrator.ready.await()
+        value = true
+    }
 
     // Compute start destination once from initial session state.
     // Not reactive — sign-up saving a session mid-flow must NOT change startDestination.
@@ -109,7 +121,7 @@ fun App() {
     }
 
     PoziomkiTheme {
-        if (startDestination != null) {
+        if (startDestination != null && migrationReady) {
             AppNavigation(startDestination = startDestination, isLoggedIn = isLoggedIn)
         }
     }
