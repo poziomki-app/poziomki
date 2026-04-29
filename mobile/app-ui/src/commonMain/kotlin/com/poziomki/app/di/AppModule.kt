@@ -1,5 +1,6 @@
 package com.poziomki.app.di
 
+import com.poziomki.app.ui.cache.AppUpdateMigrator
 import com.poziomki.app.ui.feature.auth.AuthViewModel
 import com.poziomki.app.ui.feature.chat.ChatViewModel
 import com.poziomki.app.ui.feature.chat.NewChatViewModel
@@ -20,6 +21,7 @@ import org.koin.dsl.module
 
 val appModule =
     module {
+        single { AppUpdateMigrator(get(), get(), get(), get()) }
         viewModelOf(::AuthViewModel)
         viewModelOf(::OnboardingViewModel)
         viewModelOf(::ExploreViewModel)
