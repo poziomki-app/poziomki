@@ -290,5 +290,11 @@ pub(in crate::api) async fn read_multipart(
         apply_field(headers, &mut draft, field).await?;
     }
 
-    build_parsed_upload(headers, draft)
+    let parsed = build_parsed_upload(headers, draft)?;
+    // NSFW gate runs last — after the cheap rejections and after
+    // metadata stripping, so the engine sees the same canonical bytes
+    // that downstream consumers will.
+    super::uploads_image_moderation::moderate_upload_image_or_reject(headers, &parsed.bytes)
+        .await?;
+    Ok(parsed)
 }
