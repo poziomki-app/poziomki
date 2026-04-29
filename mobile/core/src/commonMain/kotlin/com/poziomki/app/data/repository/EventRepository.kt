@@ -16,9 +16,11 @@ import com.poziomki.app.network.CreateEventRequest
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.network.UpdateEventRequest
+import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
@@ -37,6 +39,7 @@ private fun List<Event>.dropFinished(): List<Event> {
     return filterNot { it.hasFinished(now) }
 }
 
+@Suppress("LongParameterList")
 class EventRepository(
     private val db: PoziomkiDatabase,
     private val api: ApiService,
@@ -44,12 +47,13 @@ class EventRepository(
     private val pendingOps: PendingOperationsManager,
     private val chatClient: ChatClient,
     syncEngine: SyncEngine,
+    private val sessionManager: SessionManager,
 ) {
     companion object {
         private const val EVENTS_LIST_CACHE_KEY = "events_list"
         private const val RECOMMENDED_CACHE_KEY = "recommended_events"
         private const val SAVED_CACHE_KEY = "saved_events"
-        private const val MY_EVENTS_CACHE_KEY = "my_events"
+        private const val MY_EVENTS_CACHE_KEY_PREFIX = "my_events:"
 
         @Volatile
         private var lastLat: Double? = null
@@ -261,10 +265,15 @@ class EventRepository(
 
     suspend fun refreshMyEvents(forceRefresh: Boolean = false): Boolean =
         withContext(Dispatchers.IO) {
+            // Scope the cache-freshness state to the signed-in user so a
+            // logout/login as a different account never reads from the prior
+            // user's freshness window.
+            val userId = sessionManager.userId.first() ?: return@withContext false
+            val cacheKey = MY_EVENTS_CACHE_KEY_PREFIX + userId
             if (!forceRefresh) {
                 val cachedAt =
                     db.cacheStateQueries
-                        .selectByKey(MY_EVENTS_CACHE_KEY)
+                        .selectByKey(cacheKey)
                         .executeAsOneOrNull()
                         ?.cached_at
                 if (cachedAt != null && !CachePolicy.isStale(cachedAt)) return@withContext true
@@ -276,7 +285,7 @@ class EventRepository(
                         result.data.forEach { event ->
                             eventMutationManager.upsertEvent(event, now, inListFeed = false)
                         }
-                        db.cacheStateQueries.upsert(MY_EVENTS_CACHE_KEY, now)
+                        db.cacheStateQueries.upsert(cacheKey, now)
                     }
                     true
                 }

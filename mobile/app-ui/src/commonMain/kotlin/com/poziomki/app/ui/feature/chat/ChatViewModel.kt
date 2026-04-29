@@ -578,8 +578,11 @@ class ChatViewModel(
                 eventCoverByRoomId = eventCoverByRoomId + (roomId to cover)
             }
         } else if (knownSummary?.isDirect == false) {
+            // Don't force-refresh: rely on CachePolicy so /events/mine fires at
+            // most once per stale window, regardless of how many plain group
+            // chats the user opens.
             viewModelScope.launch {
-                runCatching { eventRepository.refreshMyEvents(forceRefresh = true) }
+                runCatching { eventRepository.refreshMyEvents() }
             }
         }
 
@@ -1114,11 +1117,15 @@ class ChatViewModel(
             eventRepository.observeEventsWithConversation().collect { events ->
                 val withConversation =
                     events.filter { !it.conversationId.isNullOrBlank() }
-                eventRoomIds = withConversation.mapNotNull { it.conversationId }.toSet()
-                eventCoverByRoomId =
+                // Union rather than reassign so a synchronously seeded id
+                // (see bindRoom) survives until the local DB row appears in
+                // the next emission.
+                eventRoomIds = eventRoomIds + withConversation.mapNotNull { it.conversationId }
+                val newCovers =
                     withConversation
                         .filter { it.coverImage != null }
                         .associate { it.conversationId!! to it.coverImage!! }
+                eventCoverByRoomId = eventCoverByRoomId + newCovers
                 _uiState.update { current ->
                     val rid = current.roomId
                     if (rid in eventRoomIds) {
