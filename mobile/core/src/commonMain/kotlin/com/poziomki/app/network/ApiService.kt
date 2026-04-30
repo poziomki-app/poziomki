@@ -245,13 +245,32 @@ class ApiService(
     suspend fun getChatEventConversation(eventId: String): ApiResult<ChatConversationResolveData> =
         client.get("/api/v1/chat/events/$eventId/conversation")
 
-    suspend fun registerChatPush(
+    /** Register an Android device for chat push (ntfy). */
+    suspend fun registerChatPushAndroid(
         deviceId: String,
         ntfyTopic: String,
     ): ApiResult<SuccessResponse> =
         client.post(
             "/api/v1/chat/push/register",
-            ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic),
+            ChatPushRequest(
+                deviceId = deviceId,
+                platform = "android",
+                ntfyTopic = ntfyTopic,
+            ),
+        )
+
+    /** Register an iOS device for chat push (APNs). */
+    suspend fun registerChatPushIos(
+        deviceId: String,
+        apnsToken: String,
+    ): ApiResult<SuccessResponse> =
+        client.post(
+            "/api/v1/chat/push/register",
+            ChatPushRequest(
+                deviceId = deviceId,
+                platform = "ios",
+                apnsToken = apnsToken,
+            ),
         )
 
     suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =

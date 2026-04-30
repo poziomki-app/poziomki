@@ -41,6 +41,8 @@ import platform.UIKit.UIImagePickerControllerSourceType
 import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.UIKit.UIViewController
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 import platform.posix.memcpy
 import org.jetbrains.skia.Image as SkiaImage
 
@@ -216,6 +218,10 @@ private class GalleryDelegate(
                 retained = null
                 return@dismissViewControllerAnimated
             }
+            // PHPicker's loadDataRepresentation completion is invoked on a
+            // private background queue with no ordering guarantees, so we
+            // must hop back to main before mutating shared state or calling
+            // back into Compose.
             val collected = mutableListOf<ByteArray>()
             var pending = results.size
             val finish: () -> Unit = {
@@ -233,9 +239,11 @@ private class GalleryDelegate(
                         data?.toByteArray()?.let { raw ->
                             UIImage.imageWithData(raw.toNSData())?.let { compressUIImage(it) }
                         }
-                    if (bytes != null) collected.add(bytes)
-                    pending -= 1
-                    if (pending == 0) finish()
+                    dispatch_async(dispatch_get_main_queue()) {
+                        if (bytes != null) collected.add(bytes)
+                        pending -= 1
+                        if (pending == 0) finish()
+                    }
                 }
             }
         }
