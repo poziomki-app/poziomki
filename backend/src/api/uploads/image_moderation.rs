@@ -2,11 +2,11 @@
 //! validation chain (mime/size/magic/dimensions/strip) so we never spend
 //! inference cycles on already-rejected input.
 //!
-//! Behaviour mirrors the bio moderation gate in
-//! `api/profiles/write_handler.rs`: returns `Ok(None)` when the engine is
-//! disabled, the image is allowed, or moderation is unreachable for an
-//! infrastructural reason (we fail open on infra errors but log loudly —
-//! the alternative is dropping every upload during an ORT hiccup).
+//! When the engine is disabled (env unset, dev/CI), uploads are allowed
+//! through unmoderated — that's intentional. When the engine is supposed
+//! to run (`IMAGE_MODERATION_REQUIRED=true`) but the inference call errors,
+//! the upload is rejected with 503 so a transient model outage cannot be
+//! used to slip NSFW content past the gate.
 
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
@@ -14,16 +14,31 @@ use axum::response::Response;
 use super::uploads_multipart::HandlerError;
 use crate::api::error_response;
 use crate::api::ErrorSpec;
-use crate::moderation::{shared_image, ImageVerdict};
+use crate::moderation::{image_moderation_required, shared_image, ImageVerdict};
+
+fn moderation_unavailable_response(headers: &HeaderMap) -> Response {
+    error_response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        headers,
+        ErrorSpec {
+            error: "Moderacja zdjęć jest tymczasowo niedostępna. Spróbuj ponownie za chwilę."
+                .to_string(),
+            code: "IMAGE_MODERATION_UNAVAILABLE",
+            details: None,
+        },
+    )
+}
 
 /// Run NSFW moderation against `bytes`. Bytes should already be the
 /// sanitized, re-encoded payload (smaller, predictable format) — both
 /// upload paths call this after `strip_image_metadata`.
 ///
-/// Returns `Ok(None)` when the upload may proceed, or `Ok(Some(resp))`
-/// with a 422 the caller must surface verbatim. Inference errors are
-/// logged and treated as "allow"; we don't want a model hiccup to cause
-/// a global upload outage.
+/// Returns `Ok(None)` when the upload may proceed, `Ok(Some(resp))` with
+/// a 422 (rejected content) or 503 (engine unavailable in strict mode).
+/// In strict mode (`IMAGE_MODERATION_REQUIRED=true`), inference errors
+/// fail closed — a model hiccup must not become a way to bypass NSFW
+/// checks. Outside strict mode, errors are logged and the upload is let
+/// through (dev/CI behaviour).
 pub(super) async fn moderate_upload_image(
     headers: &HeaderMap,
     bytes: &[u8],
@@ -38,17 +53,26 @@ pub(super) async fn moderate_upload_image(
     let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
     metrics::histogram!("image_moderation_inference_latency_ms").record(elapsed_ms);
 
+    let strict = image_moderation_required();
     let score = match result {
         Ok(Ok(s)) => s,
         Ok(Err(err)) => {
-            tracing::error!(%err, elapsed_ms, "image moderation inference failed; allowing upload");
+            tracing::error!(%err, elapsed_ms, strict, "image moderation inference failed");
             metrics::counter!("image_moderation_errors_total", "kind" => "inference").increment(1);
-            return Ok(None);
+            return if strict {
+                Ok(Some(moderation_unavailable_response(headers)))
+            } else {
+                Ok(None)
+            };
         }
         Err(err) => {
-            tracing::error!(%err, elapsed_ms, "image moderation task join failed; allowing upload");
+            tracing::error!(%err, elapsed_ms, strict, "image moderation task join failed");
             metrics::counter!("image_moderation_errors_total", "kind" => "join").increment(1);
-            return Ok(None);
+            return if strict {
+                Ok(Some(moderation_unavailable_response(headers)))
+            } else {
+                Ok(None)
+            };
         }
     };
 
