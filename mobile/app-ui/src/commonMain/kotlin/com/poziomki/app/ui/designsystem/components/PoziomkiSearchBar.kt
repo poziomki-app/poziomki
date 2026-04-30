@@ -1,7 +1,6 @@
 package com.poziomki.app.ui.designsystem.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -98,19 +98,29 @@ fun PoziomkiSearchBar(
                 thickness = 1.dp,
                 color = Border,
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            val filterModifier =
-                if (onFilterClick != null) {
-                    Modifier.size(22.dp).clickable(onClick = onFilterClick)
-                } else {
-                    Modifier.size(22.dp)
+            // 48dp clickable wrapper around the 22dp glyph — Material a11y
+            // touch-target minimum that Play pre-launch reports flag.
+            if (onFilterClick != null) {
+                IconButton(
+                    onClick = onFilterClick,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        PhosphorIcons.Bold.SlidersHorizontal,
+                        contentDescription = "Filtruj",
+                        modifier = Modifier.size(22.dp),
+                        tint = if (filterActive) Primary else TextMuted,
+                    )
                 }
-            Icon(
-                PhosphorIcons.Bold.SlidersHorizontal,
-                contentDescription = "Filtruj",
-                modifier = filterModifier,
-                tint = if (filterActive) Primary else TextMuted,
-            )
+            } else {
+                Spacer(modifier = Modifier.width(12.dp))
+                Icon(
+                    PhosphorIcons.Bold.SlidersHorizontal,
+                    contentDescription = "Filtruj",
+                    modifier = Modifier.size(22.dp),
+                    tint = if (filterActive) Primary else TextMuted,
+                )
+            }
         }
     }
 }
