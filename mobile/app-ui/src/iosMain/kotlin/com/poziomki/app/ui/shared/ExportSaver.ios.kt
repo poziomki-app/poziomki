@@ -2,6 +2,8 @@ package com.poziomki.app.ui.shared
 
 import androidx.compose.runtime.Composable
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import platform.Foundation.NSData
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
@@ -50,7 +52,7 @@ private fun ByteArray.toNSData(): NSData =
     if (isEmpty()) {
         NSData()
     } else {
-        kotlinx.cinterop.usePinned { pinned ->
+        usePinned { pinned ->
             NSData.create(
                 bytes = pinned.addressOf(0),
                 length = size.toULong(),
