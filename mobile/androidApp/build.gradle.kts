@@ -57,7 +57,11 @@ android {
 
     splits {
         abi {
-            isEnable = true
+            // AGP 9 refuses APK splits + AAB in the same gradle invocation
+            // (issuetracker.google.com/402800800). Release CI calls
+            // assembleRelease (splits on) and then bundleRelease with
+            // -PnoAbiSplits=true so each task produces a clean output.
+            isEnable = !project.hasProperty("noAbiSplits")
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = true
