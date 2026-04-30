@@ -81,6 +81,10 @@ android {
         abortOnError = true
         checkDependencies = true
         warningsAsErrors = true
+        // Snapshots pre-existing cosmetic issues (adaptive-icon shape,
+        // monochrome layer, locked screen orientation, transitive
+        // LogNotTimber). New violations still fail the build.
+        baseline = file("lint-baseline.xml")
     }
 }
 
