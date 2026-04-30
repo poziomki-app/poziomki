@@ -6,7 +6,7 @@ BUILD_FILE="$ROOT_DIR/mobile/androidApp/build.gradle.kts"
 OUTPUT_DIR="${1:-$ROOT_DIR/dist/android-release}"
 
 mkdir -p "$OUTPUT_DIR"
-rm -f "$OUTPUT_DIR"/*.apk "$OUTPUT_DIR"/*.txt "$OUTPUT_DIR"/*.tar.gz
+rm -f "$OUTPUT_DIR"/*.apk "$OUTPUT_DIR"/*.aab "$OUTPUT_DIR"/*.txt "$OUTPUT_DIR"/*.tar.gz
 
 # Read appVersionName (source of truth, bumped by release-please) and derive
 # versionCode from it using the same formula as build.gradle.kts.
@@ -56,9 +56,18 @@ for apk in "${apks[@]}"; do
   fi
 done
 
+# Google Play upload format. AAB is mandatory for new app submissions.
+aab_src="$ROOT_DIR/mobile/androidApp/build/outputs/bundle/release/androidApp-release.aab"
+if [[ -f "$aab_src" ]]; then
+  cp "$aab_src" "$OUTPUT_DIR/poziomki-${version_name}.aab"
+else
+  echo "No release AAB found at $aab_src" >&2
+  exit 1
+fi
+
 (
   cd "$OUTPUT_DIR"
-  sha256sum ./*.apk > "poziomki-${version_name}-sha256.txt"
+  sha256sum ./*.apk ./*.aab > "poziomki-${version_name}-sha256.txt"
 )
 
 # Bundle any distribution metadata that still lives in the repo (historical
