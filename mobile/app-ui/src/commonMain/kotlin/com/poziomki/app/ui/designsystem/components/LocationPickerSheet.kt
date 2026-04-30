@@ -145,7 +145,7 @@ fun LocationPickerSheet(
                     results = emptyList()
                     scope.launch {
                         val name = geocoding.reverse(position.latitude, position.longitude)
-                        selectedName = name ?: "%.4f, %.4f".format(position.latitude, position.longitude)
+                        selectedName = name ?: formatLatLng(position.latitude, position.longitude)
                         query = selectedName
                     }
                     ClickResult.Consume
@@ -284,4 +284,17 @@ fun LocationPickerSheet(
             }
         }
     }
+}
+
+private fun formatLatLng(
+    lat: Double,
+    lng: Double,
+): String = "${formatFixed4(lat)}, ${formatFixed4(lng)}"
+
+private fun formatFixed4(value: Double): String {
+    val rounded = kotlin.math.round(value * 10_000.0) / 10_000.0
+    val whole = kotlin.math.truncate(rounded).toLong()
+    val fraction = kotlin.math.abs(kotlin.math.round((rounded - whole) * 10_000.0)).toLong()
+    val sign = if (rounded < 0 && whole == 0L) "-" else ""
+    return "$sign$whole.${fraction.toString().padStart(4, '0')}"
 }
