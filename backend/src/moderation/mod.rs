@@ -14,5 +14,7 @@ mod scores;
 pub use engine::{ModerationEngine, ModerationError};
 pub use global::{init_from_env, shared};
 pub use image_engine::{ImageModerationEngine, ImageModerationError, ImageScore, ImageVerdict};
-pub use image_global::{init_image_from_env, shared_image};
+pub use image_global::{
+    init_image_from_env, is_required as image_moderation_required, shared_image,
+};
 pub use scores::{Category, Scores, Thresholds, Verdict};
