@@ -287,7 +287,7 @@ class WsChatClient(
     override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> {
         val deviceId = deviceId()
         val ntfyTopic = "poz_$deviceId"
-        return when (val result = apiService.registerChatPush(deviceId, ntfyTopic)) {
+        return when (val result = apiService.registerChatPushAndroid(deviceId, ntfyTopic)) {
             is ApiResult.Success -> Result.success(Unit)
             is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
         }

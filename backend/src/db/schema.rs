@@ -78,8 +78,10 @@ diesel::table! {
         id -> Uuid,
         user_id -> Int4,
         device_id -> Varchar,
-        ntfy_topic -> Varchar,
+        ntfy_topic -> Nullable<Varchar>,
         created_at -> Timestamptz,
+        platform -> Varchar,
+        apns_token -> Nullable<Varchar>,
     }
 }
 

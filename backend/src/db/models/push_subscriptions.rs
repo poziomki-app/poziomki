@@ -10,8 +10,10 @@ pub struct PushSubscription {
     pub id: Uuid,
     pub user_id: i32,
     pub device_id: String,
-    pub ntfy_topic: String,
+    pub ntfy_topic: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub platform: String,
+    pub apns_token: Option<String>,
 }
 
 #[derive(Debug, Insertable)]
@@ -20,6 +22,8 @@ pub struct NewPushSubscription {
     pub id: Uuid,
     pub user_id: i32,
     pub device_id: String,
-    pub ntfy_topic: String,
+    pub ntfy_topic: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub platform: String,
+    pub apns_token: Option<String>,
 }
