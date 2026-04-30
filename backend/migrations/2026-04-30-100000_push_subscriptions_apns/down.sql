@@ -22,8 +22,11 @@ $$;
 
 ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_platform_token;
 
--- Restore ntfy_topic NOT NULL — backfill with empty string for any iOS rows.
-UPDATE push_subscriptions SET ntfy_topic = '' WHERE ntfy_topic IS NULL;
+-- Restore ntfy_topic NOT NULL. iOS rows have no ntfy topic and would
+-- break notify_push (POST {ntfy_server}/<empty>) if backfilled with an
+-- empty string, so drop them — the pre-migration schema cannot represent
+-- iOS subscriptions anyway.
+DELETE FROM push_subscriptions WHERE ntfy_topic IS NULL;
 ALTER TABLE push_subscriptions ALTER COLUMN ntfy_topic SET NOT NULL;
 
 ALTER TABLE push_subscriptions DROP COLUMN apns_token;
