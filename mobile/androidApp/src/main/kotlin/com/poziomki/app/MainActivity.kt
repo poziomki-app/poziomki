@@ -3,6 +3,7 @@ package com.poziomki.app
 import android.app.ActivityManager
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -29,13 +30,20 @@ class MainActivity : ComponentActivity() {
         // on by default, Android renders this placeholder in place of the
         // live snapshot, and without an explicit TaskDescription backgroundColor
         // it defaults to a system-themed white card on light-mode devices.
-        setTaskDescription(
-            ActivityManager.TaskDescription
-                .Builder()
-                .setBackgroundColor(Color.BLACK)
-                .setPrimaryColor(Color.BLACK)
-                .build(),
-        )
+        // Builder + setBackgroundColor require API 33+; the legacy 3-arg
+        // constructor (API 21+) covers older devices with primary colour only.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            setTaskDescription(
+                ActivityManager.TaskDescription
+                    .Builder()
+                    .setBackgroundColor(Color.BLACK)
+                    .setPrimaryColor(Color.BLACK)
+                    .build(),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            setTaskDescription(ActivityManager.TaskDescription(null, null, Color.BLACK))
+        }
         // Block screenshots + recent-apps previews by default. Chat
         // messages, profile edit, and password-reset flows all surface
         // PII that shouldn't leak to a device's recents carousel,
