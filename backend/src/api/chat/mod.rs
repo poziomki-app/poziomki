@@ -4,6 +4,7 @@ pub mod message_report_handler;
 pub mod messages;
 pub mod protocol;
 pub mod push;
+pub mod push_apns;
 pub mod report_handler;
 pub mod report_repo;
 pub mod reveal_handler;
@@ -360,8 +361,26 @@ pub async fn resolve_event_conversation(
 pub struct PushRegisterRequest {
     #[serde(rename = "deviceId")]
     device_id: String,
-    #[serde(rename = "ntfyTopic")]
-    ntfy_topic: String,
+    /// "android" | "ios". Defaults to "android" so older Android clients that
+    /// predate iOS push keep working without a version bump.
+    #[serde(default)]
+    platform: Option<String>,
+    #[serde(rename = "ntfyTopic", default)]
+    ntfy_topic: Option<String>,
+    #[serde(rename = "apnsToken", default)]
+    apns_token: Option<String>,
+}
+
+fn bad_request(headers: &HeaderMap, msg: &str) -> Response {
+    error_response(
+        StatusCode::BAD_REQUEST,
+        headers,
+        ErrorSpec {
+            error: msg.to_string(),
+            code: "BAD_REQUEST",
+            details: None,
+        },
+    )
 }
 
 pub async fn push_register(
@@ -376,34 +395,45 @@ pub async fn push_register(
     let (_session, user) = auth_or_respond!(headers);
 
     if body.device_id.is_empty() || body.device_id.len() > 64 {
-        return Ok(error_response(
-            StatusCode::BAD_REQUEST,
-            &headers,
-            ErrorSpec {
-                error: "invalid device_id".to_string(),
-                code: "BAD_REQUEST",
-                details: None,
-            },
-        ));
+        return Ok(bad_request(&headers, "invalid device_id"));
     }
 
-    if body.ntfy_topic.is_empty()
-        || body.ntfy_topic.len() > 128
-        || !body
-            .ntfy_topic
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-    {
-        return Ok(error_response(
-            StatusCode::BAD_REQUEST,
-            &headers,
-            ErrorSpec {
-                error: "invalid ntfy_topic".to_string(),
-                code: "BAD_REQUEST",
-                details: None,
-            },
-        ));
-    }
+    let platform = body
+        .platform
+        .as_deref()
+        .map_or_else(|| "android".to_string(), str::to_ascii_lowercase);
+
+    let (ntfy_topic, apns_token) = match platform.as_str() {
+        "android" => {
+            let Some(topic) = body.ntfy_topic.as_deref() else {
+                return Ok(bad_request(&headers, "missing ntfy_topic"));
+            };
+            if topic.is_empty()
+                || topic.len() > 128
+                || !topic
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
+                return Ok(bad_request(&headers, "invalid ntfy_topic"));
+            }
+            (Some(topic.to_string()), None)
+        }
+        "ios" => {
+            let Some(token) = body.apns_token.as_deref() else {
+                return Ok(bad_request(&headers, "missing apns_token"));
+            };
+            // APNs device tokens are hex strings, typically 64 chars (32 bytes).
+            // Modern devices may emit longer tokens, so allow up to 200.
+            if token.is_empty()
+                || token.len() > 200
+                || !token.chars().all(|c| c.is_ascii_hexdigit())
+            {
+                return Ok(bad_request(&headers, "invalid apns_token"));
+            }
+            (None, Some(token.to_string()))
+        }
+        _ => return Ok(bad_request(&headers, "invalid platform")),
+    };
 
     let viewer = db::DbViewer {
         user_id: user.id,
@@ -411,7 +441,9 @@ pub async fn push_register(
     };
     let user_id = user.id;
     let device_id = body.device_id.clone();
-    let ntfy_topic = body.ntfy_topic.clone();
+    let ntfy_topic_owned = ntfy_topic.clone();
+    let apns_token_owned = apns_token.clone();
+    let platform_owned = platform.clone();
 
     db::with_viewer_tx(viewer, move |conn| {
         async move {
@@ -422,13 +454,19 @@ pub async fn push_register(
                         id: uuid::Uuid::new_v4(),
                         user_id,
                         device_id: device_id.clone(),
-                        ntfy_topic: ntfy_topic.clone(),
+                        ntfy_topic: ntfy_topic_owned.clone(),
                         created_at: now,
+                        platform: platform_owned.clone(),
+                        apns_token: apns_token_owned.clone(),
                     },
                 )
                 .on_conflict((push_subscriptions::user_id, push_subscriptions::device_id))
                 .do_update()
-                .set(push_subscriptions::ntfy_topic.eq(&ntfy_topic))
+                .set((
+                    push_subscriptions::platform.eq(&platform_owned),
+                    push_subscriptions::ntfy_topic.eq(&ntfy_topic_owned),
+                    push_subscriptions::apns_token.eq(&apns_token_owned),
+                ))
                 .execute(conn)
                 .await?;
             Ok::<(), diesel::result::Error>(())
