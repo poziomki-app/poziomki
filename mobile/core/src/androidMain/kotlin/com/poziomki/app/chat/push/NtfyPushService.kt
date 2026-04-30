@@ -37,7 +37,11 @@ class NtfyPushService :
         HttpClient(OkHttp) {
             engine {
                 config {
-                    readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    // Bounded read timeout so a silently-dropped connection
+                    // (NAT rebind, router asleep) is detected and reconnected
+                    // instead of holding a wakelock-equivalent indefinitely.
+                    // ntfy sends keepalives every ~45s, so 5 min is safe.
+                    readTimeout(SSE_READ_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
                 }
             }
         }
@@ -139,5 +143,6 @@ class NtfyPushService :
         const val EXTRA_SSE_URL = "sse_url"
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 60_000L
+        private const val SSE_READ_TIMEOUT_MS = 5L * 60_000L
     }
 }
