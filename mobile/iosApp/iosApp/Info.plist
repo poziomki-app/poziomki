@@ -15,11 +15,20 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>0.19.15</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>pl</string>
+		<string>en</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Poziomki używa aparatu, aby zrobić zdjęcie profilowe lub okładkę wydarzenia oraz aby skanować kody QR.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Poziomki potrzebuje dostępu do zdjęć, aby ustawić zdjęcie profilowe lub okładkę wydarzenia.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Poziomki używa Twojej lokalizacji, aby pokazać wydarzenia w pobliżu na mapie.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
@@ -36,7 +45,7 @@
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

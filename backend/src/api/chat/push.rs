@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+use crate::api::chat::push_apns;
 use crate::db;
 
 const ALLOWED_NTFY_HOSTS: &[&str] = &["ntfy.poziomki.app"];
@@ -46,74 +47,101 @@ fn push_client() -> &'static reqwest::Client {
 
 /// Send push notifications to conversation members for a new message.
 ///
-/// Only the conversation ID is sent through ntfy — no message content, sender
-/// names, or avatar URLs. The client uses this as a wake-up signal and fetches
-/// actual message data through the authenticated WebSocket/API.
+/// Only the conversation ID is sent — no message content, sender names, or
+/// avatar URLs. The client uses this as a wake-up signal and fetches actual
+/// message data through the authenticated WebSocket/API. Android subscribers
+/// are notified via ntfy; iOS subscribers via APNs.
 pub async fn notify_push(user_ids: Vec<i32>, conversation_id: Uuid, _sender_id: i32, _body: &str) {
-    // Resolve ntfy topics for target users
-    let topics = match resolve_ntfy_topics(&user_ids).await {
-        Ok(t) => t,
+    let subs = match resolve_subscriptions(&user_ids).await {
+        Ok(s) => s,
         Err(e) => {
-            tracing::warn!(error = %e, "failed to resolve push topics");
+            tracing::warn!(error = %e, "failed to resolve push subscriptions");
             return;
         }
     };
 
+    let ntfy_server = resolved_ntfy_server();
     let client = push_client();
     let ntfy_token = crate::api::common::env_non_empty("NTFY_TOKEN");
-
     let push_data = serde_json::json!({
         "room_id": conversation_id.to_string(),
     });
 
-    for (ntfy_topic, ntfy_server) in &topics {
-        let topic_prefix: String = ntfy_topic.chars().take(8).collect();
-        let url = format!("{ntfy_server}/{ntfy_topic}");
-        let mut req = client
-            .post(&url)
-            .header("Title", "new_message")
-            .json(&push_data);
-        if let Some(ref token) = ntfy_token {
-            req = req.header("Authorization", format!("Bearer {token}"));
-        }
-        let result = req.send().await;
-
-        match result {
-            Ok(resp) => match resp.error_for_status() {
-                Ok(_) => {
-                    tracing::info!(topic = topic_prefix, "push_delivered");
+    for sub in subs {
+        match sub.platform.as_str() {
+            "android" => {
+                let Some(ntfy_topic) = sub.ntfy_topic else {
+                    continue;
+                };
+                send_ntfy(
+                    client,
+                    &ntfy_server,
+                    &ntfy_topic,
+                    ntfy_token.as_deref(),
+                    &push_data,
+                )
+                .await;
+            }
+            "ios" => {
+                let Some(apns_token) = sub.apns_token else {
+                    continue;
+                };
+                if let Err(e) = push_apns::send_apns(
+                    &apns_token,
+                    conversation_id,
+                    "Nowa wiadomość",
+                    "Masz nową wiadomość w Poziomki",
+                )
+                .await
+                {
+                    tracing::warn!(error = %e, "apns send failed");
                 }
-                Err(e) => {
-                    tracing::warn!(topic = topic_prefix, error = %e, "push notification rejected");
-                }
-            },
-            Err(e) => {
-                tracing::warn!(topic = topic_prefix, error = %e, "push notification failed");
+            }
+            other => {
+                tracing::warn!(platform = %other, "unknown push platform; skipping");
             }
         }
     }
 }
 
-async fn resolve_ntfy_topics(
+async fn send_ntfy(
+    client: &reqwest::Client,
+    ntfy_server: &str,
+    ntfy_topic: &str,
+    ntfy_token: Option<&str>,
+    payload: &serde_json::Value,
+) {
+    let topic_prefix: String = ntfy_topic.chars().take(8).collect();
+    let url = format!("{ntfy_server}/{ntfy_topic}");
+    let mut req = client
+        .post(&url)
+        .header("Title", "new_message")
+        .json(payload);
+    if let Some(token) = ntfy_token {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
+    match req.send().await {
+        Ok(resp) => match resp.error_for_status() {
+            Ok(_) => tracing::info!(topic = topic_prefix, "push_delivered"),
+            Err(e) => {
+                tracing::warn!(topic = topic_prefix, error = %e, "push notification rejected");
+            }
+        },
+        Err(e) => tracing::warn!(topic = topic_prefix, error = %e, "push notification failed"),
+    }
+}
+
+async fn resolve_subscriptions(
     user_ids: &[i32],
-) -> Result<Vec<(String, String)>, crate::error::AppError> {
+) -> Result<Vec<db::PushSubscriptionRow>, crate::error::AppError> {
     if user_ids.is_empty() {
         return Ok(Vec::new());
     }
-
-    let ntfy_server = resolved_ntfy_server();
-
-    // Narrow SECURITY DEFINER helper: returns only `ntfy_topic` rows for
-    // the given user ids. Server-side delivery only — the API role does
-    // not hold broad SELECT on push_subscriptions, and an anon policy
-    // isn't needed to enumerate topics for arbitrary users.
+    // Narrow SECURITY DEFINER helper: returns only platform + tokens for the
+    // given user ids. Server-side delivery only.
     let mut conn = crate::db::conn().await?;
-    let topics = db::push_topics_for_users(&mut conn, user_ids).await?;
-
-    Ok(topics
-        .into_iter()
-        .map(|topic| (topic, ntfy_server.clone()))
-        .collect())
+    let subs = db::push_subscriptions_for_users(&mut conn, user_ids).await?;
+    Ok(subs)
 }
 
 #[cfg(test)]
