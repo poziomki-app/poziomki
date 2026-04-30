@@ -430,25 +430,29 @@ pub async fn user_review_stubs(
 }
 
 #[derive(Debug, Clone, QueryableByName)]
-struct NtfyTopicRow {
+pub struct PushSubscriptionRow {
     #[diesel(sql_type = VarChar)]
-    ntfy_topic: String,
+    pub platform: String,
+    #[diesel(sql_type = Nullable<VarChar>)]
+    pub ntfy_topic: Option<String>,
+    #[diesel(sql_type = Nullable<VarChar>)]
+    pub apns_token: Option<String>,
 }
 
-/// Return the ntfy push topics registered for a set of users. Server-side
-/// delivery only; bypasses RLS via SECURITY DEFINER.
-pub async fn push_topics_for_users(
+/// Return the push subscriptions (platform + token) registered for a set of
+/// users. Server-side delivery only; bypasses RLS via SECURITY DEFINER.
+pub async fn push_subscriptions_for_users(
     conn: &mut AsyncPgConnection,
     user_ids: &[i32],
-) -> Result<Vec<String>, diesel::result::Error> {
+) -> Result<Vec<PushSubscriptionRow>, diesel::result::Error> {
     if user_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let rows = diesel::sql_query("SELECT * FROM app.push_topics_for_users($1)")
+    let rows = diesel::sql_query("SELECT * FROM app.push_subscriptions_for_users($1)")
         .bind::<diesel::sql_types::Array<Integer>, _>(user_ids)
-        .load::<NtfyTopicRow>(conn)
+        .load::<PushSubscriptionRow>(conn)
         .await?;
-    Ok(rows.into_iter().map(|r| r.ntfy_topic).collect())
+    Ok(rows)
 }
 
 // ---------------------------------------------------------------------------
