@@ -50,8 +50,14 @@ pub struct ReportMessageBody {
 
 enum ReportOutcome {
     NotFound,
+    RateLimited,
     Inserted,
 }
+
+/// Cap on new reports per reporter per rolling 24h. Idempotent re-reports
+/// of the same message don't count (they're absorbed by the PK conflict),
+/// so this only bites someone trying to flood the moderation queue.
+const REPORTS_PER_DAY: i64 = 30;
 
 pub(in crate::api) async fn message_report(
     State(_ctx): State<AppContext>,
@@ -120,6 +126,17 @@ pub(in crate::api) async fn message_report(
                 return Ok::<_, diesel::result::Error>(ReportOutcome::NotFound);
             };
 
+            let day_ago = chrono::Utc::now() - chrono::Duration::hours(24);
+            let recent: i64 = r::chat_message_reports
+                .filter(r::reporter_user_id.eq(reporter_user_id))
+                .filter(r::created_at.gt(day_ago))
+                .count()
+                .get_result(conn)
+                .await?;
+            if recent >= REPORTS_PER_DAY {
+                return Ok(ReportOutcome::RateLimited);
+            }
+
             diesel::insert_into(r::chat_message_reports)
                 .values((
                     r::message_id.eq(message_id),
@@ -149,6 +166,16 @@ pub(in crate::api) async fn message_report(
             ErrorSpec {
                 error: "Message not found".to_string(),
                 code: "NOT_FOUND",
+                details: None,
+            },
+        )),
+        ReportOutcome::RateLimited => Ok(error_response(
+            StatusCode::TOO_MANY_REQUESTS,
+            &headers,
+            ErrorSpec {
+                error: "Osiągnięto dzienny limit zgłoszeń. Spróbuj ponownie za 24 godziny."
+                    .to_string(),
+                code: "RATE_LIMITED",
                 details: None,
             },
         )),
