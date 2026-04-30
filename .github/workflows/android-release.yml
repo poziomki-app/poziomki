@@ -81,7 +81,9 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           ./gradlew \
+            :androidApp:lintRelease \
             :androidApp:assembleRelease \
+            :androidApp:bundleRelease \
             -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks" \
             -PreleaseStorePassword="$RELEASE_STORE_PASSWORD" \
             -PreleaseKeyAlias="$RELEASE_KEY_ALIAS" \
@@ -97,5 +99,6 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
             dist/android-release/*.apk
+            dist/android-release/*.aab
             dist/android-release/*.txt
             dist/android-release/*.tar.gz
