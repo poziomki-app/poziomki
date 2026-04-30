@@ -80,14 +80,17 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
-          ./gradlew \
-            :androidApp:lintRelease \
-            :androidApp:assembleRelease \
-            :androidApp:bundleRelease \
-            -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks" \
-            -PreleaseStorePassword="$RELEASE_STORE_PASSWORD" \
-            -PreleaseKeyAlias="$RELEASE_KEY_ALIAS" \
+          common_args=(
+            -PreleaseStoreFile="$RUNNER_TEMP/android-release.jks"
+            -PreleaseStorePassword="$RELEASE_STORE_PASSWORD"
+            -PreleaseKeyAlias="$RELEASE_KEY_ALIAS"
             -PreleaseKeyPassword="$RELEASE_KEY_PASSWORD"
+          )
+          # APKs (with ABI splits) for sideload + GitHub release.
+          ./gradlew :androidApp:lintRelease :androidApp:assembleRelease "${common_args[@]}"
+          # Play AAB — splits must be off for the same invocation
+          # (issuetracker.google.com/402800800).
+          ./gradlew :androidApp:bundleRelease -PnoAbiSplits=true "${common_args[@]}"
 
       - name: Prepare release assets
         run: bash scripts/prepare_android_release.sh
