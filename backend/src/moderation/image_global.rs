@@ -18,7 +18,8 @@ const ENV_MODEL_PATH: &str = "IMAGE_MODERATION_MODEL_PATH";
 const ENV_THREADS: &str = "IMAGE_MODERATION_THREADS";
 const ENV_REQUIRED: &str = "IMAGE_MODERATION_REQUIRED";
 
-fn required_mode() -> bool {
+#[must_use]
+pub fn is_required() -> bool {
     std::env::var(ENV_REQUIRED).is_ok_and(|v| {
         matches!(
             v.trim().to_ascii_lowercase().as_str(),
@@ -41,7 +42,7 @@ pub fn init_image_from_env() -> Result<(), ImageModerationError> {
         .ok()
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty());
-    let strict = required_mode();
+    let strict = is_required();
 
     let Some(path) = path else {
         if strict {
