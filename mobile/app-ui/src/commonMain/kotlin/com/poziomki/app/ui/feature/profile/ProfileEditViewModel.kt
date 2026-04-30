@@ -17,8 +17,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
 
 data class ProfileEditState(
     val isLoading: Boolean = false,
@@ -287,11 +285,17 @@ class ProfileEditViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
             val s = _state.value
+            // Avatar is owned by a separate upload flow — leave it
+            // untouched on bio/tag/gradient edits. Sending JsonNull here
+            // would clear it on the backend (Option<Option<String>> with
+            // explicit null = "clear") and gallery's first image is NOT
+            // a sensible avatar fallback for users whose avatar lives
+            // outside the gallery.
             val request =
                 UpdateProfileRequest(
                     bio = s.bio.ifBlank { null },
                     program = s.program.ifBlank { null },
-                    profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
+                    profilePicture = null,
                     images = s.images,
                     tagIds = s.selectedTags.map { it.id },
                     gradientStart = s.gradientStart ?: "",
