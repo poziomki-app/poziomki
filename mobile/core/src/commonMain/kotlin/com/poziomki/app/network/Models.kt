@@ -360,7 +360,10 @@ data class ChatDmRequest(
 @Serializable
 data class ChatPushRequest(
     val deviceId: String,
-    val ntfyTopic: String,
+    /** "android" | "ios". Backend defaults to "android" when omitted. */
+    val platform: String? = null,
+    val ntfyTopic: String? = null,
+    val apnsToken: String? = null,
 )
 
 @Serializable

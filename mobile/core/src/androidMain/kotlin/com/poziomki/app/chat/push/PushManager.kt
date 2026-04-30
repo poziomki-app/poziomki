@@ -49,7 +49,7 @@ class PushManager(
         val ntfyTopic = "poz_$deviceId"
 
         // Register push subscription with backend
-        apiService.registerChatPush(deviceId, ntfyTopic)
+        apiService.registerChatPushAndroid(deviceId, ntfyTopic)
 
         val sseUrl = "$ntfyServer/$ntfyTopic/sse"
         val intent =
