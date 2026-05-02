@@ -1,5 +1,5 @@
 [versions]
-agp = "9.0.1"
+agp = "9.2.0"
 androidx-activityCompose = "1.13.0"
 androidx-core = "1.18.0"
 androidx-ui-tooling = "1.11.0"
