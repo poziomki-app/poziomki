@@ -22,7 +22,7 @@ pub(super) async fn fallback_variant_urls(
     if crate::api::imgproxy_signing::is_configured() {
         // Upload response's thumbnail_url + standard_url. thumbnail stays
         // at 200px for avatar-sized renders; standard is the full 2000px
-        // WebP so swipe cards / detail views look sharp.
+        // WebP so list cards / detail views look sharp.
         let thumb = crate::api::imgproxy_signing::signed_avatar_url(original_filename);
         let full = crate::api::imgproxy_signing::signed_url(original_filename, "full", "webp");
         return (thumb, full);
