@@ -11,12 +11,10 @@ use crate::db::models::event_tags::EventTag;
 use crate::db::models::events::Event;
 use crate::db::models::profile_tags::ProfileTag;
 use crate::db::models::profiles::Profile;
-use crate::db::models::recommendation_feedback::RecommendationFeedback;
 use crate::db::models::tags::Tag;
 use crate::db::models::users::User;
 use crate::db::schema::{
-    event_interactions, event_tags, events, profile_tags, profiles, recommendation_feedback, tags,
-    user_settings, users,
+    event_interactions, event_tags, events, profile_tags, profiles, tags, user_settings, users,
 };
 
 pub(super) struct MatchingRepository;
@@ -32,8 +30,6 @@ pub(super) struct MatchingUserContext {
     pub(super) interest_categories: HashSet<String>,
     pub(super) saved_event_ids: HashSet<Uuid>,
     pub(super) joined_event_ids: HashSet<Uuid>,
-    pub(super) more_event_ids: HashSet<Uuid>,
-    pub(super) less_event_ids: HashSet<Uuid>,
 }
 
 impl MatchingRepository {
@@ -80,31 +76,6 @@ impl MatchingRepository {
         Ok(interactions.into_iter().map(|row| row.event_id).collect())
     }
 
-    async fn load_feedback_event_ids(
-        &self,
-        profile_id: Uuid,
-        conn: &mut diesel_async::AsyncPgConnection,
-    ) -> std::result::Result<(HashSet<Uuid>, HashSet<Uuid>), crate::error::AppError> {
-        let rows = recommendation_feedback::table
-            .filter(recommendation_feedback::profile_id.eq(profile_id))
-            .load::<RecommendationFeedback>(conn)
-            .await?;
-        let mut more = HashSet::new();
-        let mut less = HashSet::new();
-        for row in rows {
-            match row.feedback.as_str() {
-                "more" => {
-                    more.insert(row.event_id);
-                }
-                "less" => {
-                    less.insert(row.event_id);
-                }
-                _ => {}
-            }
-        }
-        Ok((more, less))
-    }
-
     /// Lean context for profile-only recommendations (no event interactions).
     pub(super) async fn load_profile_context(
         &self,
@@ -136,17 +107,9 @@ impl MatchingRepository {
             .first::<Profile>(conn)
             .await
             .optional()?;
-        let (
-            profile_tag_ids,
-            interest_categories,
-            saved_event_ids,
-            joined_event_ids,
-            more_event_ids,
-            less_event_ids,
-        ) = match &profile {
-            Some(profile) => {
-                let (more, less) = self.load_feedback_event_ids(profile.id, conn).await?;
-                (
+        let (profile_tag_ids, interest_categories, saved_event_ids, joined_event_ids) =
+            match &profile {
+                Some(profile) => (
                     self.load_profile_tag_ids(profile.id, conn).await?,
                     self.load_profile_interest_categories(profile.id, conn)
                         .await?,
@@ -154,27 +117,20 @@ impl MatchingRepository {
                         .await?,
                     self.load_interaction_event_ids(profile.id, "joined", conn)
                         .await?,
-                    more,
-                    less,
-                )
-            }
-            None => (
-                HashSet::new(),
-                HashSet::new(),
-                HashSet::new(),
-                HashSet::new(),
-                HashSet::new(),
-                HashSet::new(),
-            ),
-        };
+                ),
+                None => (
+                    HashSet::new(),
+                    HashSet::new(),
+                    HashSet::new(),
+                    HashSet::new(),
+                ),
+            };
         Ok(MatchingUserContext {
             profile,
             profile_tag_ids,
             interest_categories,
             saved_event_ids,
             joined_event_ids,
-            more_event_ids,
-            less_event_ids,
         })
     }
 
@@ -197,7 +153,7 @@ impl MatchingRepository {
         // Resolve every profile id on either side of a block with the
         // viewer. Chat already filters DMs against this set
         // (chat/conversations.rs:376); matching must do the same or
-        // blocked users re-appear in swipes. Batch-load once and
+        // blocked users re-appear in recommendations. Batch-load once and
         // pass as a NOT IN to the main query so the DB plan stays a
         // single pass instead of an N+1 subquery.
         let viewer_profile_ids: Vec<uuid::Uuid> = profiles::table

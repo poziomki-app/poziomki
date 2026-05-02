@@ -240,20 +240,6 @@ class EventsViewModel(
         return dLat * dLat + dLng * dLng
     }
 
-    fun onSwipeFeedback(
-        eventId: String,
-        feedback: String,
-    ) {
-        // The card stays on the list — swipe is feedback only, not a dismiss.
-        // Send POST best-effort; the recommendation engine learns for future
-        // fetches but the current view never changes.
-        val isRecommended = _state.value.recommendedEvents.any { it.id == eventId }
-        if (!isRecommended) return
-        viewModelScope.launch {
-            apiService.postEventFeedback(eventId, feedback)
-        }
-    }
-
     fun toggleSave(eventId: String) {
         viewModelScope.launch {
             val event = _state.value.events.find { it.id == eventId } ?: return@launch

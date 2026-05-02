@@ -33,7 +33,6 @@ const EXPECTED_TIER_A_TABLES: &[&str] = &[
     "task_completions",
     "profile_bookmarks",
     "profile_blocks",
-    "recommendation_feedback",
     "event_interactions",
     "reports",
 ];

@@ -38,7 +38,6 @@ struct ProfileExport {
     attended: Vec<serde_json::Value>,
     interactions: Vec<serde_json::Value>,
     uploads_list: Vec<serde_json::Value>,
-    rec: Vec<serde_json::Value>,
     filenames: Vec<String>,
 }
 
@@ -50,7 +49,6 @@ impl ProfileExport {
             attended: Vec::new(),
             interactions: Vec::new(),
             uploads_list: Vec::new(),
-            rec: Vec::new(),
             filenames: Vec::new(),
         }
     }
@@ -82,9 +80,6 @@ async fn load_profile_scoped_export(
     let uploads_list = auth_export_queries::load_user_uploads(conn, pid)
         .await
         .map_err(rollback)?;
-    let rec = auth_export_queries::load_recommendation_feedback(conn, pid)
-        .await
-        .map_err(rollback)?;
     let filenames = auth_export_queries::load_upload_filenames(conn, pid)
         .await
         .map_err(rollback)?;
@@ -94,7 +89,6 @@ async fn load_profile_scoped_export(
         attended,
         interactions,
         uploads_list,
-        rec,
         filenames,
     })
 }
@@ -210,7 +204,7 @@ async fn delete_user_data(viewer: DbViewer) -> std::result::Result<(), crate::er
                     .execute(conn)
                     .await?;
 
-                // Delete profile (cascades → event_interactions, recommendation_feedback, reports)
+                // Delete profile (cascades → event_interactions, reports)
                 diesel::delete(profiles::table.filter(profiles::user_id.eq(user_id)))
                     .execute(conn)
                     .await?;
@@ -379,7 +373,6 @@ pub(in crate::api) async fn export_data(
         attended_events,
         event_interactions,
         user_uploads,
-        rec_feedback,
         user_sessions,
         settings,
         upload_filenames,
@@ -398,7 +391,6 @@ pub(in crate::api) async fn export_data(
                 attended,
                 interactions,
                 uploads_list,
-                rec,
                 filenames,
             } = load_profile_scoped_export(conn, profile_id).await?;
 
@@ -415,7 +407,6 @@ pub(in crate::api) async fn export_data(
                 attended,
                 interactions,
                 uploads_list,
-                rec,
                 us,
                 set,
                 filenames,
@@ -452,7 +443,6 @@ pub(in crate::api) async fn export_data(
         "events": created_events,
         "eventsAttended": attended_events,
         "eventInteractions": event_interactions,
-        "recommendationFeedback": rec_feedback,
         "uploads": user_uploads,
         "sessions": user_sessions,
         "settings": settings,
