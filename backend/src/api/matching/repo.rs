@@ -153,7 +153,7 @@ impl MatchingRepository {
         // Resolve every profile id on either side of a block with the
         // viewer. Chat already filters DMs against this set
         // (chat/conversations.rs:376); matching must do the same or
-        // blocked users re-appear in swipes. Batch-load once and
+        // blocked users re-appear in recommendations. Batch-load once and
         // pass as a NOT IN to the main query so the DB plan stays a
         // single pass instead of an N+1 subquery.
         let viewer_profile_ids: Vec<uuid::Uuid> = profiles::table
