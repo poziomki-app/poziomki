@@ -82,7 +82,7 @@ jobs:
         with:
           workspaces: backend
 
-      - uses: taiki-e/install-action@787505cde8a44ea468a00478fe52baf23b15bccd # v2
+      - uses: taiki-e/install-action@b5fddbb5361bce8a06fb168c9d403a6cc552b084 # v2
         with:
           tool: cargo-nextest
 
