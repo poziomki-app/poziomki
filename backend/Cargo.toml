@@ -53,8 +53,8 @@ metrics-exporter-prometheus = { version = "0.16", default-features = false, feat
 chrono = { version = "=0.4.44", default-features = false, features = ["clock", "serde"] }
 validator = { version = "=0.20.0", features = ["derive"] }
 uuid = { version = "=1.23.1", features = ["v4", "serde"] }
-hmac = { version = "0.12" }
-sha2 = { version = "0.10" }
+hmac = { version = "0.13" }
+sha2 = { version = "0.11" }
 reqwest = { version = "=0.13.3", default-features = false, features = ["json", "rustls"] }
 rust-s3 = { version = "=0.37.1", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 url = { version = "=2.5.8" }
