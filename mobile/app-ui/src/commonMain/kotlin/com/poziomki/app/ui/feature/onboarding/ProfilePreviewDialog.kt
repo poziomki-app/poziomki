@@ -24,7 +24,6 @@ fun ProfilePreviewDialog(
         properties =
             DialogProperties(
                 usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
             ),
     ) {
         ProfilePreview(
