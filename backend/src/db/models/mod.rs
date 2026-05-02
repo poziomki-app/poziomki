@@ -16,7 +16,6 @@ pub mod profile_bookmarks;
 pub mod profile_tags;
 pub mod profiles;
 pub mod push_subscriptions;
-pub mod recommendation_feedback;
 pub mod reports;
 pub mod sessions;
 pub mod tags;

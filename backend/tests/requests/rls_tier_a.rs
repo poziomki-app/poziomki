@@ -21,8 +21,8 @@ use poziomki_backend::db::models::profiles::NewProfile;
 use poziomki_backend::db::models::users::{NewUser, User};
 use poziomki_backend::db::schema::{
     event_interactions, events, profile_blocks, profile_bookmarks, profile_tags, profiles,
-    push_subscriptions, recommendation_feedback, reports, sessions, tags, task_completions,
-    user_audit_log, user_settings, users, xp_scans,
+    push_subscriptions, reports, sessions, tags, task_completions, user_audit_log, user_settings,
+    users, xp_scans,
 };
 use serial_test::serial;
 use uuid::Uuid;
@@ -429,54 +429,6 @@ async fn profile_blocks_viewer_sees_both_directions() {
         "profile_blocks policy lets the viewer see both directions \
          (own blocks AND blocks targeting them) — chat needs both"
     );
-}
-
-// ---------------------------------------------------------------------------
-// recommendation_feedback
-// ---------------------------------------------------------------------------
-#[tokio::test]
-#[serial]
-async fn recommendation_feedback_viewer_sees_only_own_row() {
-    let (alice, bob) = setup_two_parties().await;
-
-    // Seed a fake event we can reference — recommendation_feedback FKs it.
-    let event_id = Uuid::new_v4();
-    {
-        let mut conn = db::conn().await.expect("pool");
-        let now = Utc::now();
-        diesel::insert_into(events::table)
-            .values((
-                events::id.eq(event_id),
-                events::title.eq("Test Event"),
-                events::starts_at.eq(now + Duration::days(1)),
-                events::creator_id.eq(alice.profile_id),
-                events::created_at.eq(now),
-                events::updated_at.eq(now),
-                events::requires_approval.eq(false),
-            ))
-            .execute(&mut conn)
-            .await
-            .expect("seed event");
-
-        for p in [alice.profile_id, bob.profile_id] {
-            diesel::insert_into(recommendation_feedback::table)
-                .values((
-                    recommendation_feedback::profile_id.eq(p),
-                    recommendation_feedback::event_id.eq(event_id),
-                    recommendation_feedback::feedback.eq("more"),
-                ))
-                .execute(&mut conn)
-                .await
-                .expect("seed feedback");
-        }
-    }
-
-    let alice_count = rls_harness::with_api_viewer_tx(alice.user.id, false, |conn| {
-        async move { Ok(count_rows(conn, "recommendation_feedback").await) }.scope_boxed()
-    })
-    .await
-    .expect("alice tx");
-    assert_eq!(alice_count, 1);
 }
 
 // ---------------------------------------------------------------------------

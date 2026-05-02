@@ -253,11 +253,6 @@ data class AttendEventRequest(
 )
 
 @Serializable
-data class EventFeedbackRequest(
-    val feedback: String,
-)
-
-@Serializable
 data class EventAttendee(
     val profileId: String,
     val userId: String? = null,
