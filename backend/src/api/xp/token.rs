@@ -3,7 +3,7 @@
 /// We also accept the previous bucket to handle clock skew at rotation boundaries.
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
