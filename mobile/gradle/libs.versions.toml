@@ -21,7 +21,7 @@ lifecycleCompose = "2.10.0"
 securityCrypto = "1.1.0"
 playServicesLocation = "21.3.0"
 qrose = "1.1.2"
-cameraX = "1.5.0"
+cameraX = "1.6.0"
 zxingCore = "3.5.4"
 sqldelight = "2.3.2"
 
