@@ -2829,7 +2829,6 @@ dependencies = [
  "metrics-exporter-prometheus",
  "ndarray",
  "ort",
- "rand_core 0.6.4",
  "reqwest 0.13.3",
  "rust-s3",
  "serde",
