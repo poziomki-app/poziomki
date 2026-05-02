@@ -49,7 +49,7 @@ axum = { version = "=0.8.9", features = ["multipart", "ws"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 metrics = "0.24"
-metrics-exporter-prometheus = { version = "0.16", default-features = false, features = ["http-listener"] }
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
 chrono = { version = "=0.4.44", default-features = false, features = ["clock", "serde"] }
 validator = { version = "=0.20.0", features = ["derive"] }
 uuid = { version = "=1.23.1", features = ["v4", "serde"] }
