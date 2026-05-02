@@ -81,7 +81,7 @@ deadpool = { version = "=0.13.0", features = ["rt_tokio_1"] }
 thiserror = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 ort = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "download-binaries", "tls-rustls", "ndarray"] }
-tokenizers = { version = "=0.22.2", default-features = false, features = ["onig"] }
+tokenizers = { version = "=0.23.1", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 
 [[bin]]
