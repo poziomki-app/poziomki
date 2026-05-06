@@ -50,6 +50,7 @@ fun ProfileCard(
     gradientStart: String? = null,
     gradientEnd: String? = null,
     matchingTags: List<Tag> = emptyList(),
+    program: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -126,6 +127,17 @@ fun ProfileCard(
                     fontSize = 19.sp,
                     color = TextPrimary,
                 )
+
+                if (!program.isNullOrBlank()) {
+                    Text(
+                        text = program,
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        color = TextSecondary,
+                    )
+                }
 
                 if (matchingTags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))

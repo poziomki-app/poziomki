@@ -146,6 +146,7 @@ fun ExploreScreen(
                                             name = profile.name,
                                             profilePicture = profile.profilePicture,
                                             matchingTags = state.ownTags.filter { it.id in profile.tags },
+                                            program = profile.program,
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
                                     }
