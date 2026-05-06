@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
@@ -48,6 +49,7 @@ import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.adamglin.phosphoricons.bold.Prohibit
 import com.adamglin.phosphoricons.bold.X
+import com.adamglin.phosphoricons.fill.CalendarDots
 import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.chat.api.TimelineItem
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
@@ -57,7 +59,6 @@ import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -132,6 +133,7 @@ fun ChatScreen(
                             initialTitle?.trim()?.takeIf { it.isNotBlank() } ?: ""
                         },
                     avatarUrl = state.roomAvatarUrl,
+                    isEvent = !state.isDirectRoom,
                     isBlocked = state.isBlocked,
                     onBack = onBack,
                     onSearchClick = viewModel::toggleSearch,
@@ -220,6 +222,7 @@ private fun ChatTopBar(
     title: String,
     avatarUrl: String?,
     isBlocked: Boolean,
+    isEvent: Boolean = false,
     onBack: () -> Unit,
     onSearchClick: () -> Unit,
     onProfileClick: (() -> Unit)? = null,
@@ -257,9 +260,8 @@ private fun ChatTopBar(
                     picture = avatarUrl,
                     displayName = title,
                     size = 34.dp,
-                    backgroundColor = Primary.copy(alpha = 0.2f),
-                    iconTint = Primary,
-                    showFallbackIcon = false,
+                    showFallbackIcon = isEvent,
+                    fallbackIcon = PhosphorIcons.Fill.CalendarDots,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(

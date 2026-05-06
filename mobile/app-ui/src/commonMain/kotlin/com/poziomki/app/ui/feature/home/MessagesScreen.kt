@@ -106,6 +106,7 @@ fun MessagesScreen(
                                 RoomRow(
                                     room = room,
                                     profilePictureUrl = profilePicture,
+                                    isEvent = room.roomId in state.eventRoomIds,
                                     onClick = { onNavigateToChat(room.roomId, profilePicture) },
                                     onAvatarClick =
                                         room.directUserId?.let { userId ->

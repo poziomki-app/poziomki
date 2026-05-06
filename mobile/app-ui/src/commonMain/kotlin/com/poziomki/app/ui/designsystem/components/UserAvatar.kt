@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -50,6 +51,7 @@ fun UserAvatar(
     backgroundColor: Color = Border,
     iconTint: Color = TextMuted,
     showFallbackIcon: Boolean = true,
+    fallbackIcon: ImageVector = PhosphorIcons.Regular.User,
 ) {
     val emojiSize: TextUnit = (size.value * 0.45f).sp
     val iconSize: Dp = size * 0.5f
@@ -111,7 +113,7 @@ fun UserAvatar(
 
             else -> {
                 if (showFallbackIcon) {
-                    FallbackUserIcon(iconSize, iconTint)
+                    FallbackUserIcon(iconSize, iconTint, fallbackIcon)
                 }
             }
         }
@@ -122,12 +124,13 @@ fun UserAvatar(
 private fun FallbackUserIcon(
     iconSize: Dp,
     iconTint: Color,
+    icon: ImageVector,
 ) {
     Box(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            PhosphorIcons.Regular.User,
+            icon,
             contentDescription = null,
             modifier = Modifier.size(iconSize),
             tint = iconTint,
