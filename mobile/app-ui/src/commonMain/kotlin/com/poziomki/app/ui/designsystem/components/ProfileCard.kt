@@ -145,12 +145,13 @@ fun ProfileCard(
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp,
+                                lineHeight = 12.sp,
                                 color = PrimaryMuted,
                                 modifier =
                                     Modifier
                                         .clip(RoundedCornerShape(50))
                                         .background(Primary.copy(alpha = 0.14f))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                        .padding(horizontal = 7.dp, vertical = 1.dp),
                             )
                         }
                     }
