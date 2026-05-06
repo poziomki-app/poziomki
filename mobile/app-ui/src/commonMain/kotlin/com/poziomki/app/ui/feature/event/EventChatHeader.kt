@@ -106,21 +106,6 @@ fun EventCoverImage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-        } else {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(Background),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    PhosphorIcons.Fill.CalendarDots,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = TextMuted,
-                )
-            }
         }
 
         Box(
