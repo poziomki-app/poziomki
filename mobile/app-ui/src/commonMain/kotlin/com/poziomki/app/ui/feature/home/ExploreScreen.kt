@@ -144,8 +144,9 @@ fun ExploreScreen(
                                     items(results.profiles, key = { "p-${it.id}" }) { profile ->
                                         ProfileCard(
                                             name = profile.name,
-                                            program = profile.program,
+                                            program = null,
                                             profilePicture = profile.profilePicture,
+                                            matchingTags = state.ownTags.filter { it.id in profile.tags },
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
                                     }
@@ -231,12 +232,14 @@ fun ExploreScreen(
                                 }
                                 val cardProfiles = if (state.profiles.size >= 7) state.remainingProfiles else state.profiles
                                 items(cardProfiles, key = { it.id }) { profile ->
+                                    val ownIds = state.ownTags.mapTo(mutableSetOf()) { it.id }
                                     ProfileCard(
                                         name = profile.name,
-                                        program = profile.program,
+                                        program = null,
                                         profilePicture = profile.profilePicture,
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,
+                                        matchingTags = profile.tags.filter { it.id in ownIds },
                                         onClick = { onNavigateToProfile(profile.id) },
                                         modifier = Modifier.padding(horizontal = PoziomkiTheme.spacing.md),
                                     )

@@ -3,10 +3,12 @@ package com.poziomki.app.ui.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.repository.MatchProfileRepository
+import com.poziomki.app.data.repository.ProfileRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.MatchProfile
 import com.poziomki.app.network.SearchResults
+import com.poziomki.app.network.Tag
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ data class ExploreState(
     val query: String = "",
     val searchResults: SearchResults? = null,
     val isSearching: Boolean = false,
+    val ownTags: List<Tag> = emptyList(),
 ) {
     companion object {
         const val RECOMMENDED_COUNT = 4
@@ -34,6 +37,7 @@ data class ExploreState(
 
 class ExploreViewModel(
     private val matchProfileRepository: MatchProfileRepository,
+    private val profileRepository: ProfileRepository,
     private val apiService: ApiService,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ExploreState())
@@ -42,7 +46,16 @@ class ExploreViewModel(
 
     init {
         observeProfiles()
+        observeOwnTags()
         refreshProfiles()
+    }
+
+    private fun observeOwnTags() {
+        viewModelScope.launch {
+            profileRepository.observeOwnProfileWithTags().collect { own ->
+                _state.value = _state.value.copy(ownTags = own?.tags ?: emptyList())
+            }
+        }
     }
 
     private fun observeProfiles() {
