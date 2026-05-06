@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -563,28 +564,40 @@ internal fun EventRow(
                 .background(SurfaceElevated)
                 .clickable(onClick = onClick),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (coverImage != null) {
+        if (coverImage != null) {
+            // Cover variant: fixed card height so the photo can flush
+            // to the edges. 116dp fits title + date + location +
+            // creator row comfortably without clipping.
+            Row(
+                modifier = Modifier.height(116.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AsyncImage(
                     model = resolveImageUrl(coverImage),
                     contentDescription = event.title,
                     modifier =
                         Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .fillMaxHeight()
+                            .aspectRatio(1f),
                     contentScale = ContentScale.Crop,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
+                EventRowContent(
+                    event,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(end = 16.dp, top = 10.dp, bottom = 10.dp),
+                )
             }
+        } else {
+            // Compact variant: no left column, content drives height.
             EventRowContent(
                 event,
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
     }
