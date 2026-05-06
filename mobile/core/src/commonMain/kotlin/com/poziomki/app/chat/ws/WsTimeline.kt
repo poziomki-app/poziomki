@@ -301,7 +301,7 @@ class WsTimeline(
 
                 // Prepend history
                 current.addAll(0, newItems)
-                if (!msg.hasMore) {
+                if (!msg.hasMore && current.none { it is TimelineItem.TimelineStart }) {
                     current.add(0, TimelineItem.TimelineStart)
                 }
 
