@@ -14,10 +14,7 @@ CREATE TABLE profile (
     created_at TEXT,
     updated_at TEXT,
     cached_at INTEGER NOT NULL DEFAULT 0,
-    is_dirty INTEGER NOT NULL DEFAULT 0,
-    xp INTEGER NOT NULL DEFAULT 0,
-    streak_current INTEGER NOT NULL DEFAULT 0,
-    streak_longest INTEGER NOT NULL DEFAULT 0
+    is_dirty INTEGER NOT NULL DEFAULT 0
 );
 
 selectOwn:
@@ -45,9 +42,8 @@ INSERT OR REPLACE INTO profile(
     id, user_id, name, bio, profile_picture, thumbhash,
     images_json, program, gradient_start, gradient_end,
     is_own, is_bookmarked, created_at, updated_at,
-    cached_at, is_dirty,
-    xp, streak_current, streak_longest
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    cached_at, is_dirty
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM profile

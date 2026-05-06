@@ -36,8 +36,6 @@ const IP_RATE_LIMIT_WINDOW_SECS: i64 = 60;
 const MATCHING_PROFILES_MAX_PER_MIN: u32 = 30;
 const CHAT_WS_UPGRADE_MAX_PER_MIN: u32 = 60;
 const SEARCH_MAX_PER_MIN: u32 = 20;
-const XP_ACTION_MAX_PER_MIN: u32 = 30;
-const XP_TOKEN_GEN_MAX_PER_MIN: u32 = 10;
 const UPLOAD_WRITE_MAX_PER_MIN: u32 = 30;
 // Admin + ops endpoints are gated by a shared token — rate limit
 // caps online brute-force of the token. Tight budget because both
@@ -55,8 +53,6 @@ pub enum IpRateLimitAction {
     MatchingProfiles,
     ChatWsUpgrade,
     Search,
-    XpAction,
-    XpTokenGen,
     UploadWrite,
     AdminAuth,
     OpsAuth,
@@ -68,8 +64,6 @@ impl IpRateLimitAction {
             Self::MatchingProfiles => MATCHING_PROFILES_MAX_PER_MIN,
             Self::ChatWsUpgrade => CHAT_WS_UPGRADE_MAX_PER_MIN,
             Self::Search => SEARCH_MAX_PER_MIN,
-            Self::XpAction => XP_ACTION_MAX_PER_MIN,
-            Self::XpTokenGen => XP_TOKEN_GEN_MAX_PER_MIN,
             Self::UploadWrite => UPLOAD_WRITE_MAX_PER_MIN,
             Self::AdminAuth => ADMIN_AUTH_MAX_PER_MIN,
             Self::OpsAuth => OPS_AUTH_MAX_PER_MIN,
@@ -81,8 +75,6 @@ impl IpRateLimitAction {
             Self::MatchingProfiles => "ip_matching_profiles",
             Self::ChatWsUpgrade => "ip_chat_ws_upgrade",
             Self::Search => "ip_search",
-            Self::XpAction => "ip_xp_action",
-            Self::XpTokenGen => "ip_xp_token_gen",
             Self::UploadWrite => "ip_upload_write",
             Self::AdminAuth => "ip_admin_auth",
             Self::OpsAuth => "ip_ops_auth",
@@ -395,20 +387,6 @@ mod tests {
         let h = headers_with("x-real-ip", "198.51.100.7");
         let key = rate_key_for(IpRateLimitAction::Search, &h);
         assert_eq!(key, "ip_search:198.51.100.7");
-    }
-
-    #[test]
-    fn rate_key_scopes_xp_action_per_action() {
-        let h = headers_with("x-real-ip", "198.51.100.7");
-        let key = rate_key_for(IpRateLimitAction::XpAction, &h);
-        assert_eq!(key, "ip_xp_action:198.51.100.7");
-    }
-
-    #[test]
-    fn rate_key_scopes_xp_token_gen_per_action() {
-        let h = headers_with("x-real-ip", "198.51.100.7");
-        let key = rate_key_for(IpRateLimitAction::XpTokenGen, &h);
-        assert_eq!(key, "ip_xp_token_gen:198.51.100.7");
     }
 
     #[test]
