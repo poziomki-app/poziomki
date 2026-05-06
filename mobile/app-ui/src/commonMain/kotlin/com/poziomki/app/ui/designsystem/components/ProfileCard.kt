@@ -141,20 +141,6 @@ fun ProfileCard(
                     )
                 }
 
-                if (!bio.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = bio.trim(),
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = TextSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
                 if (matchingTags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     // Activities first (stronger signal: shared IRL action),
@@ -188,6 +174,20 @@ fun ProfileCard(
                             )
                         }
                     }
+                }
+
+                if (!bio.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = bio.trim(),
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 13.sp,
+                        lineHeight = 15.sp,
+                        color = TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
