@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,6 +40,8 @@ import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -55,7 +60,7 @@ fun ProfileCard(
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val photoSize = 90.dp
+    val cardHeight = 88.dp
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -82,20 +87,22 @@ fun ProfileCard(
         modifier =
             modifier
                 .fillMaxWidth()
+                .height(cardHeight)
                 .clip(cardShape)
                 .border(1.dp, Border, cardShape)
                 .background(backgroundBrush)
                 .clickable(onClick = onClick),
     ) {
         Row(
+            modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Photo — fixed square, ContentScale.Crop fills it
+            // Photo — square that fills the full card height
             if (profilePicture != null) {
                 AsyncImage(
                     model = resolveImageUrl(profilePicture),
                     contentDescription = null,
-                    modifier = Modifier.size(photoSize),
+                    modifier = Modifier.fillMaxHeight().aspectRatio(1f),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -103,7 +110,7 @@ fun ProfileCard(
                     UserAvatar(
                         picture = null,
                         displayName = name,
-                        size = photoSize - 32.dp,
+                        size = cardHeight - 32.dp,
                     )
                 }
             }
@@ -115,33 +122,35 @@ fun ProfileCard(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(vertical = 16.dp),
+                        .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
                 Text(
                     text = name,
                     fontFamily = MontserratFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
+                    fontSize = 19.sp,
                     color = TextPrimary,
                 )
 
                 if (matchingTags.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         matchingTags.forEach { tag ->
                             Text(
                                 text = tag.name.lowercase(),
                                 fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                color = TextSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                color = PrimaryMuted,
                                 modifier =
                                     Modifier
-                                        .border(1.dp, Border, RoundedCornerShape(50))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                        .clip(RoundedCornerShape(50))
+                                        .background(Primary.copy(alpha = 0.14f))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
                             )
                         }
                     }
@@ -151,7 +160,7 @@ fun ProfileCard(
                         text = program,
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         color = TextSecondary,
                     )
                 }
