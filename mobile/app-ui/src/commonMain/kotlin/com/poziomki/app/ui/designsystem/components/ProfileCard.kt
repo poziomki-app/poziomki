@@ -178,8 +178,10 @@ fun ProfileCard(
 
                 if (!bio.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
+                    // Collapse all whitespace (incl. newlines) so multi-line
+                    // bios render as a single paragraph in the card preview.
                     Text(
-                        text = bio.trim(),
+                        text = bio.replace(Regex("\\s+"), " ").trim(),
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 13.sp,
