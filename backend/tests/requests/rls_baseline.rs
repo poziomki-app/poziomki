@@ -29,8 +29,6 @@ const EXPECTED_TIER_A_TABLES: &[&str] = &[
     "user_settings",
     "user_audit_log",
     "push_subscriptions",
-    "xp_scans",
-    "task_completions",
     "profile_bookmarks",
     "profile_blocks",
     "event_interactions",
@@ -60,7 +58,6 @@ const EXPECTED_RLS_DISABLED_TABLES: &[&str] = &[];
 /// entry must carry `search_path=pg_catalog, pg_temp` so the `pg_temp`
 /// hijack mitigation from migration 060000 stays in effect.
 const EXPECTED_SD_HELPERS: &[&str] = &[
-    "award_profile_xp",
     "complete_password_reset",
     "create_session_for_user",
     "create_user_for_signup",

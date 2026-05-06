@@ -218,14 +218,6 @@ class ApiService(
         return client.get(sb.toString())
     }
 
-    // XP / Gamification
-
-    suspend fun getXpToken(): ApiResult<XpTokenResponse> = client.get("/api/v1/xp/token")
-
-    suspend fun scanXpToken(token: String): ApiResult<XpScanResponse> = client.post("/api/v1/xp/scan", XpScanRequest(token))
-
-    suspend fun claimTask(taskId: String): ApiResult<ClaimTaskResponse> = client.post("/api/v1/xp/task", ClaimTaskRequest(taskId))
-
     // Settings
 
     suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> = client.patch("/api/v1/settings", request)

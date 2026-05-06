@@ -21,8 +21,7 @@ use poziomki_backend::db::models::profiles::NewProfile;
 use poziomki_backend::db::models::users::{NewUser, User};
 use poziomki_backend::db::schema::{
     event_interactions, events, profile_blocks, profile_bookmarks, profile_tags, profiles,
-    push_subscriptions, reports, sessions, tags, task_completions, user_audit_log, user_settings,
-    users, xp_scans,
+    push_subscriptions, reports, sessions, tags, user_audit_log, user_settings, users,
 };
 use serial_test::serial;
 use uuid::Uuid;
@@ -276,78 +275,6 @@ async fn push_subscriptions_viewer_sees_only_own_row() {
 
     let alice_count = rls_harness::with_api_viewer_tx(alice.user.id, false, |conn| {
         async move { Ok(count_rows(conn, "push_subscriptions").await) }.scope_boxed()
-    })
-    .await
-    .expect("alice tx");
-    assert_eq!(alice_count, 1);
-}
-
-// ---------------------------------------------------------------------------
-// xp_scans
-// ---------------------------------------------------------------------------
-#[tokio::test]
-#[serial]
-async fn xp_scans_viewer_sees_only_own_scans() {
-    let (alice, bob) = setup_two_parties().await;
-
-    {
-        let mut conn = db::conn().await.expect("pool");
-        diesel::insert_into(xp_scans::table)
-            .values((
-                xp_scans::scanner_id.eq(alice.profile_id),
-                xp_scans::scanned_id.eq(bob.profile_id),
-                xp_scans::day.eq(Utc::now().date_naive()),
-            ))
-            .execute(&mut conn)
-            .await
-            .expect("seed alice->bob scan");
-        diesel::insert_into(xp_scans::table)
-            .values((
-                xp_scans::scanner_id.eq(bob.profile_id),
-                xp_scans::scanned_id.eq(alice.profile_id),
-                xp_scans::day.eq(Utc::now().date_naive()),
-            ))
-            .execute(&mut conn)
-            .await
-            .expect("seed bob->alice scan");
-    }
-
-    let alice_count = rls_harness::with_api_viewer_tx(alice.user.id, false, |conn| {
-        async move { Ok(count_rows(conn, "xp_scans").await) }.scope_boxed()
-    })
-    .await
-    .expect("alice tx");
-    assert_eq!(
-        alice_count, 1,
-        "Alice only sees the scan she issued, not Bob's scan of her"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// task_completions
-// ---------------------------------------------------------------------------
-#[tokio::test]
-#[serial]
-async fn task_completions_viewer_sees_only_own_row() {
-    let (alice, bob) = setup_two_parties().await;
-
-    {
-        let mut conn = db::conn().await.expect("pool");
-        for p in [alice.profile_id, bob.profile_id] {
-            diesel::insert_into(task_completions::table)
-                .values((
-                    task_completions::profile_id.eq(p),
-                    task_completions::task_id.eq("daily"),
-                    task_completions::day.eq(Utc::now().date_naive()),
-                ))
-                .execute(&mut conn)
-                .await
-                .expect("seed task_completion");
-        }
-    }
-
-    let alice_count = rls_harness::with_api_viewer_tx(alice.user.id, false, |conn| {
-        async move { Ok(count_rows(conn, "task_completions").await) }.scope_boxed()
     })
     .await
     .expect("alice tx");

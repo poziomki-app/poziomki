@@ -17,7 +17,6 @@ import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.data.repository.EventRepository
-import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
@@ -112,16 +111,6 @@ fun App() {
             migrator.ready.await()
             chatClient.ensureStarted()
             runCatching { eventRepository.refreshMyEvents() }
-        }
-    }
-
-    // Auto-award daily_login XP when user opens the app already logged in.
-    // Backend is idempotent per (profile_id, task_id, day) so re-fires are no-ops.
-    val xpRepository = koinInject<XpRepository>()
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) {
-            migrator.ready.await()
-            runCatching { xpRepository.claimTask("daily_login") }
         }
     }
 
