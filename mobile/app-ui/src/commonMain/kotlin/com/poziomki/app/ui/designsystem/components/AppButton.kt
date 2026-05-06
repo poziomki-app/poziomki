@@ -80,13 +80,20 @@ fun AppButton(
 
     val borderModifier = animatedBorder(variant, isEnabled)
 
+    val isIconOnly = text.isEmpty() && icon != null
     val rowModifier =
         modifier
             .then(borderModifier)
             .clip(ButtonShape)
             .background(backgroundFor(variant))
             .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .then(
+                if (isIconOnly) {
+                    Modifier.padding(14.dp)
+                } else {
+                    Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                },
+            )
 
     Row(
         modifier = rowModifier,
