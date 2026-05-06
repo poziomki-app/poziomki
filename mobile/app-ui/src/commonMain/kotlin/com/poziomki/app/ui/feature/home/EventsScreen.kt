@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +52,6 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.bold.ArrowSquareOut
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
@@ -69,6 +69,7 @@ import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
+import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -316,10 +317,11 @@ private fun EventCard(
         border = BorderStroke(1.dp, Border),
     ) {
         Column {
-            // Cover image area with bookmark overlay
-            Box {
-                val coverImage = event.coverImage
-                if (coverImage != null) {
+            // Cover image area (only when present) — empty placeholder
+            // wastes space, so drop it entirely for cover-less events.
+            val coverImage = event.coverImage
+            if (coverImage != null) {
+                Box {
                     AsyncImage(
                         model = resolveImageUrl(coverImage),
                         contentDescription = event.title,
@@ -329,127 +331,137 @@ private fun EventCard(
                                 .aspectRatio(COVER_ASPECT_W / COVER_ASPECT_H),
                         contentScale = ContentScale.Crop,
                     )
-                } else {
-                    Box(
+
+                    BookmarkOverlay(
+                        isSaved = event.isSaved,
+                        onClick = onSaveClick,
                         modifier =
                             Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(COVER_ASPECT_W / COVER_ASPECT_H)
-                                .background(Background),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            PhosphorIcons.Fill.CalendarDots,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = TextMuted,
-                        )
-                    }
-                }
-
-                // Bookmark overlay
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(PoziomkiTheme.spacing.sm)
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Overlay)
-                            .clickable(onClick = onSaveClick),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        if (event.isSaved) {
-                            PhosphorIcons.Fill.BookmarkSimple
-                        } else {
-                            PhosphorIcons.Bold.BookmarkSimple
-                        },
-                        contentDescription = if (event.isSaved) "Usuń z zapisanych" else "Zapisz",
-                        modifier = Modifier.size(22.dp),
-                        tint = if (event.isSaved) Primary else TextPrimary,
+                                .align(Alignment.TopEnd)
+                                .padding(PoziomkiTheme.spacing.sm),
                     )
                 }
             }
 
-            // Metadata below the image
-            Column(
-                modifier =
-                    Modifier.padding(
-                        horizontal = PoziomkiTheme.spacing.md,
-                        vertical = PoziomkiTheme.spacing.sm,
-                    ),
-            ) {
-                // Title
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Date/time + location
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            // Metadata
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = PoziomkiTheme.spacing.md,
+                                end = if (coverImage == null) 56.dp else PoziomkiTheme.spacing.md,
+                                top = PoziomkiTheme.spacing.sm,
+                                bottom = PoziomkiTheme.spacing.sm,
+                            ),
+                ) {
+                    // Title
                     Text(
-                        text = formatEventDate(event.startsAt),
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 15.sp,
-                        color = TextSecondary,
+                        text = event.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
                     )
-                    event.location?.let { location ->
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // Date/time + location
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = " · ",
-                            fontFamily = NunitoFamily,
-                            fontSize = 15.sp,
-                            color = TextMuted,
-                        )
-                        Icon(
-                            PhosphorIcons.Fill.MapPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = TextMuted,
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = location,
+                            text = formatEventDate(event.startsAt),
                             fontFamily = NunitoFamily,
                             fontWeight = FontWeight.Normal,
-                            fontSize = 14.sp,
-                            color = TextMuted,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f, fill = false),
+                            fontSize = 15.sp,
+                            color = TextSecondary,
                         )
+                        event.location?.let { location ->
+                            Text(
+                                text = " · ",
+                                fontFamily = NunitoFamily,
+                                fontSize = 15.sp,
+                                color = TextMuted,
+                            )
+                            Icon(
+                                PhosphorIcons.Fill.MapPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = TextMuted,
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = location,
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 14.sp,
+                                color = TextMuted,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Attendees row
+                    if (event.attendeesCount > 0 || event.maxAttendees != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (event.attendeesPreview.isNotEmpty()) {
+                                StackedAvatars(
+                                    imageUrls = event.attendeesPreview.map { it.profilePicture },
+                                    avatarSize = 36.dp,
+                                    modifier = onCreatorClick?.let { Modifier.clickable(onClick = it) } ?: Modifier,
+                                )
+                                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
+                            }
+                            Text(
+                                text = event.attendeeUsageLabel(),
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = TextPrimary,
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Attendees row
-                if (event.attendeesCount > 0 || event.maxAttendees != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (event.attendeesPreview.isNotEmpty()) {
-                            StackedAvatars(
-                                imageUrls = event.attendeesPreview.map { it.profilePicture },
-                                avatarSize = 36.dp,
-                                modifier = onCreatorClick?.let { Modifier.clickable(onClick = it) } ?: Modifier,
-                            )
-                            Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.sm))
-                        }
-                        Text(
-                            text = event.attendeeUsageLabel(),
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = TextPrimary,
-                        )
-                    }
+                if (coverImage == null) {
+                    BookmarkOverlay(
+                        isSaved = event.isSaved,
+                        onClick = onSaveClick,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(PoziomkiTheme.spacing.sm),
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BookmarkOverlay(
+    isSaved: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Overlay)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (isSaved) PhosphorIcons.Fill.BookmarkSimple else PhosphorIcons.Bold.BookmarkSimple,
+            contentDescription = if (isSaved) "Usuń z zapisanych" else "Zapisz",
+            modifier = Modifier.size(22.dp),
+            tint = if (isSaved) Primary else TextPrimary,
+        )
     }
 }
 
@@ -540,7 +552,7 @@ internal fun EventRow(
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val photoSize = 90.dp
+    val coverImage = event.coverImage
 
     Box(
         modifier =
@@ -551,96 +563,96 @@ internal fun EventRow(
                 .background(SurfaceElevated)
                 .clickable(onClick = onClick),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val coverImage = event.coverImage
-            if (coverImage != null) {
+        if (coverImage != null) {
+            // Cover variant: fixed card height, photo fills the full
+            // square on the left flush with card edges.
+            Row(
+                modifier = Modifier.height(108.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AsyncImage(
                     model = resolveImageUrl(coverImage),
                     contentDescription = event.title,
-                    modifier = Modifier.size(photoSize),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Box(
                     modifier =
                         Modifier
-                            .size(photoSize)
-                            .background(Background),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        PhosphorIcons.Fill.CalendarDots,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = TextMuted,
-                    )
-                }
+                            .fillMaxHeight()
+                            .aspectRatio(1f),
+                    contentScale = ContentScale.Crop,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                EventRowContent(event, modifier = Modifier.weight(1f).padding(end = 16.dp))
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
+        } else {
+            // Compact variant: no left column, content drives height.
+            EventRowContent(
+                event,
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .padding(vertical = 12.dp),
-            ) {
-                Text(
-                    text = event.title,
-                    fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
-                    color = TextPrimary,
-                    maxLines = 1,
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EventRowContent(
+    event: Event,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = event.title,
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 18.sp,
+            color = TextPrimary,
+            maxLines = 1,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = formatEventDate(event.startsAt),
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp,
+            color = TextSecondary,
+        )
+        event.location?.let { location ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    PhosphorIcons.Fill.MapPin,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = TextMuted,
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = formatEventDate(event.startsAt),
+                    text = location,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
-                    fontSize = 14.sp,
-                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    color = TextMuted,
+                    maxLines = 1,
                 )
-                event.location?.let { location ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            PhosphorIcons.Fill.MapPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = TextMuted,
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = location,
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 13.sp,
-                            color = TextMuted,
-                            maxLines = 1,
-                        )
-                    }
-                }
-                event.creator?.let { creator ->
-                    Text(
-                        text = "od ${creator.name}",
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                    )
-                }
             }
-
-            Icon(
-                PhosphorIcons.Bold.ArrowSquareOut,
-                contentDescription = "Otwórz",
-                modifier =
-                    Modifier
-                        .padding(top = 12.dp, end = 12.dp)
-                        .size(20.dp)
-                        .align(Alignment.Top),
-                tint = TextMuted,
-            )
+        }
+        event.creator?.let { creator ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UserAvatar(
+                    picture = creator.profilePicture,
+                    displayName = creator.name,
+                    size = 18.dp,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "od ${creator.name}",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 13.sp,
+                    color = TextMuted,
+                )
+            }
         }
     }
 }
