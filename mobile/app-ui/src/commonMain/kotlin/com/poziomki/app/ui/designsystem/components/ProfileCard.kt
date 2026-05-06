@@ -10,13 +10,15 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,32 +32,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.TextMuted
+import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+@Suppress("LongMethod", "LongParameterList")
 fun ProfileCard(
     name: String,
-    program: String?,
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
     matchingTags: List<Tag> = emptyList(),
+    program: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val photoSize = 90.dp
+    val cardHeight = 88.dp
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -82,20 +83,22 @@ fun ProfileCard(
         modifier =
             modifier
                 .fillMaxWidth()
+                .height(cardHeight)
                 .clip(cardShape)
                 .border(1.dp, Border, cardShape)
                 .background(backgroundBrush)
                 .clickable(onClick = onClick),
     ) {
         Row(
+            modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Photo — fixed square, ContentScale.Crop fills it
+            // Photo — square that fills the full card height
             if (profilePicture != null) {
                 AsyncImage(
                     model = resolveImageUrl(profilePicture),
                     contentDescription = null,
-                    modifier = Modifier.size(photoSize),
+                    modifier = Modifier.fillMaxHeight().aspectRatio(1f),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -103,7 +106,7 @@ fun ProfileCard(
                     UserAvatar(
                         picture = null,
                         displayName = name,
-                        size = photoSize - 32.dp,
+                        size = cardHeight - 32.dp,
                     )
                 }
             }
@@ -115,59 +118,62 @@ fun ProfileCard(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(vertical = 16.dp),
+                        .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
                 Text(
                     text = name,
                     fontFamily = MontserratFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
+                    fontSize = 19.sp,
                     color = TextPrimary,
                 )
 
-                if (matchingTags.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        matchingTags.forEach { tag ->
-                            Text(
-                                text = tag.name.lowercase(),
-                                fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier =
-                                    Modifier
-                                        .border(1.dp, Border, RoundedCornerShape(50))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                    }
-                } else if (program != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                if (!program.isNullOrBlank()) {
                     Text(
                         text = program,
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         color = TextSecondary,
                     )
                 }
-            }
 
-            // Expand arrow top-right
-            Icon(
-                PhosphorIcons.Bold.ArrowUpRight,
-                contentDescription = "View profile",
-                modifier =
-                    Modifier
-                        .padding(top = 12.dp, end = 12.dp)
-                        .size(20.dp)
-                        .align(Alignment.Top),
-                tint = TextMuted,
-            )
+                if (matchingTags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // Activities first (stronger signal: shared IRL action),
+                    // then interests (talking points).
+                    val orderedTags =
+                        matchingTags.sortedByDescending { it.scope == "activity" }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        orderedTags.forEach { tag ->
+                            val isActivity = tag.scope == "activity"
+                            Text(
+                                text = tag.name.lowercase(),
+                                fontFamily = NunitoFamily,
+                                fontWeight = if (isActivity) FontWeight.SemiBold else FontWeight.Medium,
+                                fontSize = 11.sp,
+                                lineHeight = 12.sp,
+                                color = if (isActivity) PrimaryMuted else TextSecondary,
+                                modifier =
+                                    Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            if (isActivity) {
+                                                Primary.copy(alpha = 0.18f)
+                                            } else {
+                                                Color.White.copy(alpha = 0.06f)
+                                            },
+                                        ).padding(horizontal = 7.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

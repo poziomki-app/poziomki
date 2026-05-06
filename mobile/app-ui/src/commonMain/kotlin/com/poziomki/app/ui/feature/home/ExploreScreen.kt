@@ -144,9 +144,9 @@ fun ExploreScreen(
                                     items(results.profiles, key = { "p-${it.id}" }) { profile ->
                                         ProfileCard(
                                             name = profile.name,
-                                            program = null,
                                             profilePicture = profile.profilePicture,
                                             matchingTags = state.ownTags.filter { it.id in profile.tags },
+                                            program = profile.program,
                                             onClick = { onNavigateToProfile(profile.id) },
                                         )
                                     }
@@ -235,7 +235,6 @@ fun ExploreScreen(
                                     val ownIds = state.ownTags.mapTo(mutableSetOf()) { it.id }
                                     ProfileCard(
                                         name = profile.name,
-                                        program = null,
                                         profilePicture = profile.profilePicture,
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,
