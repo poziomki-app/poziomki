@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,25 +32,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
-import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
-import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileCard(
     name: String,
-    program: String?,
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
@@ -155,29 +148,8 @@ fun ProfileCard(
                             )
                         }
                     }
-                } else if (program != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = program,
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
-                        color = TextSecondary,
-                    )
                 }
             }
-
-            // Expand arrow top-right
-            Icon(
-                PhosphorIcons.Bold.ArrowUpRight,
-                contentDescription = "View profile",
-                modifier =
-                    Modifier
-                        .padding(top = 12.dp, end = 12.dp)
-                        .size(20.dp)
-                        .align(Alignment.Top),
-                tint = TextMuted,
-            )
         }
     }
 }

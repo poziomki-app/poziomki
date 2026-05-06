@@ -99,7 +99,6 @@ fun ProfileScreen(
                                 // ProfileCard
                                 ProfileCard(
                                     name = profile.name,
-                                    program = profile.program,
                                     profilePicture = profile.profilePicture,
                                     gradientStart = profile.gradientStart,
                                     gradientEnd = profile.gradientEnd,
