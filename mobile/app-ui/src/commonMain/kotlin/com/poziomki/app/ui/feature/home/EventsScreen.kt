@@ -58,7 +58,6 @@ import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.fill.BookmarkSimple
-import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.AppButton
