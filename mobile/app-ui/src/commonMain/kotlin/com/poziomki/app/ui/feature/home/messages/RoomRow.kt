@@ -21,6 +21,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Fill
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.fill.CalendarDots
+import com.adamglin.phosphoricons.regular.User
 import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -34,10 +39,12 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 @Composable
+@Suppress("LongParameterList", "LongMethod")
 fun RoomRow(
     room: RoomSummary,
     profilePictureUrl: String? = null,
     displayNameOverride: String? = null,
+    isEvent: Boolean = false,
     onClick: () -> Unit,
     onAvatarClick: (() -> Unit)? = null,
 ) {
@@ -62,6 +69,7 @@ fun RoomRow(
                 picture = profilePictureUrl,
                 fallbackPicture = room.avatarUrl,
                 displayName = displayName,
+                fallbackIcon = if (isEvent) PhosphorIcons.Fill.CalendarDots else PhosphorIcons.Regular.User,
             )
         }
 
