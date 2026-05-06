@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -564,10 +566,10 @@ internal fun EventRow(
                 .clickable(onClick = onClick),
     ) {
         if (coverImage != null) {
-            // Cover variant: fixed card height, photo fills the full
-            // square on the left flush with card edges.
+            // Cover variant: card height matches content; photo fills
+            // the full square on the left flush with card edges.
             Row(
-                modifier = Modifier.height(108.dp),
+                modifier = Modifier.height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AsyncImage(
@@ -580,7 +582,13 @@ internal fun EventRow(
                     contentScale = ContentScale.Crop,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                EventRowContent(event, modifier = Modifier.weight(1f).padding(end = 16.dp))
+                EventRowContent(
+                    event,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(end = 16.dp, top = 12.dp, bottom = 12.dp),
+                )
             }
         } else {
             // Compact variant: no left column, content drives height.
@@ -633,16 +641,17 @@ private fun EventRowContent(
                     fontSize = 13.sp,
                     color = TextMuted,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         event.creator?.let { creator ->
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 UserAvatar(
                     picture = creator.profilePicture,
                     displayName = creator.name,
-                    size = 18.dp,
+                    size = 22.dp,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
