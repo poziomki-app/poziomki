@@ -48,6 +48,10 @@ class ExploreViewModel(
         observeProfiles()
         observeOwnTags()
         refreshProfiles()
+        // Pull own profile up-front so matchingTags can render on the
+        // first frame instead of waiting until the user navigates away
+        // and back (which is what previously primed the cache).
+        viewModelScope.launch { profileRepository.refreshOwnProfile() }
     }
 
     private fun observeOwnTags() {
