@@ -459,8 +459,8 @@ fun AppNavigation(
             NewChatScreen(
                 onBack = { navController.popBackStack() },
                 onUserSelected = { userId, displayName, profileId ->
-                    navigateToDm(userId, displayName, profileId)
                     navController.popBackStack(Route.NewChat, inclusive = true)
+                    navigateToDm(userId, displayName, profileId)
                 },
             )
         }
