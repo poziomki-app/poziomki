@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use uuid::Uuid;
 
@@ -18,10 +18,6 @@ pub struct Profile {
     pub gradient_end: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub xp: i32,
-    pub streak_current: i32,
-    pub streak_longest: i32,
-    pub streak_last_active: Option<NaiveDate>,
 }
 
 #[derive(Debug, Insertable)]
