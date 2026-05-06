@@ -3,7 +3,6 @@ package com.poziomki.app.di
 import com.poziomki.app.ui.cache.AppUpdateMigrator
 import com.poziomki.app.ui.feature.auth.AuthViewModel
 import com.poziomki.app.ui.feature.chat.ChatViewModel
-import com.poziomki.app.ui.feature.chat.NewChatViewModel
 import com.poziomki.app.ui.feature.event.EventCreateViewModel
 import com.poziomki.app.ui.feature.event.EventDetailViewModel
 import com.poziomki.app.ui.feature.home.EventsViewModel
@@ -27,7 +26,6 @@ val appModule =
         viewModelOf(::EventsViewModel)
         viewModelOf(::MessagesViewModel)
         viewModelOf(::ChatViewModel)
-        viewModelOf(::NewChatViewModel)
         viewModelOf(::ProfileViewModel)
         viewModelOf(::EventDetailViewModel)
         viewModelOf(::EventCreateViewModel)

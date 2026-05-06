@@ -88,7 +88,6 @@ import com.poziomki.app.ui.feature.auth.RegisterScreen
 import com.poziomki.app.ui.feature.auth.ResetPasswordScreen
 import com.poziomki.app.ui.feature.auth.VerifyScreen
 import com.poziomki.app.ui.feature.chat.ChatScreen
-import com.poziomki.app.ui.feature.chat.NewChatScreen
 import com.poziomki.app.ui.feature.event.EventChatScreen
 import com.poziomki.app.ui.feature.event.EventCreateScreen
 import com.poziomki.app.ui.feature.home.EventsScreen
@@ -377,7 +376,6 @@ fun AppNavigation(
                 onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
                 onNavigateToSaved = { navController.navigate(Route.Saved) },
                 onNavigateToChat = navigateToChat,
-                onNavigateToNewChat = { navController.navigate(Route.NewChat) },
                 onSignOut = {
                     navController.navigate(Route.AuthGraph) {
                         popUpTo(Route.MainGraph) { inclusive = true }
@@ -453,15 +451,6 @@ fun AppNavigation(
                 onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
             )
         }
-        composable<Route.NewChat> {
-            NewChatScreen(
-                onBack = { navController.popBackStack() },
-                onUserSelected = { userId, displayName, profileId ->
-                    navController.popBackStack(Route.NewChat, inclusive = true)
-                    navigateToDm(userId, displayName, profileId)
-                },
-            )
-        }
     }
 }
 
@@ -475,7 +464,6 @@ fun MainScreen(
     onNavigateToPrivacy: () -> Unit,
     onNavigateToSaved: () -> Unit,
     onNavigateToChat: (String, String?) -> Unit,
-    onNavigateToNewChat: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val tabNavController = rememberNavController()
@@ -543,7 +531,6 @@ fun MainScreen(
                         composable<Route.Messages> {
                             MessagesScreen(
                                 onNavigateToChat = onNavigateToChat,
-                                onNavigateToNewChat = onNavigateToNewChat,
                                 onNavigateToProfile = onNavigateToProfileView,
                                 profileAvatarAction = profileAvatarAction,
                             )

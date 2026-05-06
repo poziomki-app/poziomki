@@ -56,9 +56,3 @@ data class ChatUiState(
     val isBlocked: Boolean = false,
     val transientNotice: TransientNotice? = null,
 )
-
-data class NewChatUiState(
-    val profiles: List<com.poziomki.app.network.MatchProfile> = emptyList(),
-    val isLoading: Boolean = false,
-    val error: String? = null,
-)
