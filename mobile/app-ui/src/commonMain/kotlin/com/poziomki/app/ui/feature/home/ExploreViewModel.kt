@@ -47,11 +47,14 @@ class ExploreViewModel(
     init {
         observeProfiles()
         observeOwnTags()
-        refreshProfiles()
-        // Pull own profile up-front so matchingTags can render on the
-        // first frame instead of waiting until the user navigates away
-        // and back (which is what previously primed the cache).
-        viewModelScope.launch { profileRepository.refreshOwnProfile() }
+        // Refresh own profile *before* the feed so the very first
+        // emission already has ownTags hydrated. Without this the
+        // initial cards on a fresh install render with empty matching
+        // tags until the own-profile observer catches up.
+        viewModelScope.launch {
+            profileRepository.refreshOwnProfile()
+            refreshFeed()
+        }
     }
 
     private fun observeOwnTags() {
@@ -91,14 +94,12 @@ class ExploreViewModel(
         }
     }
 
-    private fun refreshProfiles() {
-        viewModelScope.launch {
-            val success = matchProfileRepository.refreshProfiles()
-            if (!success && _state.value.profiles.isNotEmpty()) {
-                _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć profili")
-            }
-            _state.value = _state.value.copy(isLoading = false)
+    private suspend fun refreshFeed() {
+        val success = matchProfileRepository.refreshProfiles()
+        if (!success && _state.value.profiles.isNotEmpty()) {
+            _state.value = _state.value.copy(refreshError = "Nie udało się odświeżyć profili")
         }
+        _state.value = _state.value.copy(isLoading = false)
     }
 
     fun pullToRefresh() {
