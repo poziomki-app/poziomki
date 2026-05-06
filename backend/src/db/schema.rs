@@ -225,26 +225,6 @@ diesel::table! {
         gradient_end -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
-        xp -> Int4,
-        streak_current -> Int4,
-        streak_longest -> Int4,
-        streak_last_active -> Nullable<Date>,
-    }
-}
-
-diesel::table! {
-    xp_scans (scanner_id, scanned_id, day) {
-        scanner_id -> Uuid,
-        scanned_id -> Uuid,
-        day -> Date,
-    }
-}
-
-diesel::table! {
-    task_completions (profile_id, task_id, day) {
-        profile_id -> Uuid,
-        task_id -> Text,
-        day -> Date,
     }
 }
 
@@ -359,8 +339,6 @@ diesel::joinable!(reports -> profiles (reporter_id));
 diesel::joinable!(profiles -> users (user_id));
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(user_settings -> users (user_id));
-diesel::joinable!(xp_scans -> profiles (scanner_id));
-diesel::joinable!(task_completions -> profiles (profile_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     auth_rate_limits,
@@ -388,7 +366,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     uploads,
     user_settings,
     users,
-    task_completions,
     user_audit_log,
-    xp_scans,
 );

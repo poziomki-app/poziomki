@@ -383,9 +383,6 @@ class SyncEngine(
                     updated_at = profile.updatedAt,
                     cached_at = now,
                     is_dirty = 0L,
-                    xp = profile.xp.toLong(),
-                    streak_current = profile.streakCurrent.toLong(),
-                    streak_longest = profile.streakLongest.toLong(),
                 )
                 pendingOps.complete(op.id)
                 true

@@ -79,6 +79,4 @@ sealed interface Route {
     ) : Route
 
     @Serializable data object NewChat : Route
-
-    @Serializable data object Gamification : Route
 }

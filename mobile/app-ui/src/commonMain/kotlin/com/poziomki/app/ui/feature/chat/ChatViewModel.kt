@@ -12,7 +12,6 @@ import com.poziomki.app.chat.draft.RoomComposerDraftStore
 import com.poziomki.app.chat.timeline.TimelineController
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.data.repository.MatchProfileRepository
-import com.poziomki.app.data.repository.XpRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.ui.designsystem.components.SnackbarType
@@ -40,7 +39,6 @@ class ChatViewModel(
     private val matchProfileRepository: MatchProfileRepository,
     private val eventRepository: EventRepository,
     private val apiService: ApiService,
-    private val xpRepository: XpRepository,
 ) : ViewModel() {
     private companion object {
         const val TYPING_START_DEBOUNCE_MS = 300L
@@ -198,10 +196,6 @@ class ChatViewModel(
                     is ComposerMode.Reply -> timeline.sendReply(composerMode.eventId, body)
                     is ComposerMode.Edit -> timeline.edit(composerMode.eventOrTransactionId, body)
                 }
-            result.onSuccess {
-                // Award say_hi XP — backend idempotent per day, safe to fire every send.
-                runCatching { xpRepository.claimTask("say_hi") }
-            }
             result.onFailure { throwable ->
                 _uiState.update {
                     it.copy(

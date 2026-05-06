@@ -199,9 +199,6 @@ class ProfileRepository(
                     updated_at = current.updated_at,
                     cached_at = current.cached_at,
                     is_dirty = 1L,
-                    xp = current.xp,
-                    streak_current = current.streak_current,
-                    streak_longest = current.streak_longest,
                 )
                 request.tagIds?.let { tagIds ->
                     db.profileTagQueries.deleteByProfileId(id)
@@ -300,9 +297,6 @@ class ProfileRepository(
                 updated_at = profile.updatedAt,
                 cached_at = cachedAt,
                 is_dirty = 0L,
-                xp = profile.xp.toLong(),
-                streak_current = profile.streakCurrent.toLong(),
-                streak_longest = profile.streakLongest.toLong(),
             )
         }
     }
