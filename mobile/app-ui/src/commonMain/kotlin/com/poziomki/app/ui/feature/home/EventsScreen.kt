@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -566,10 +565,11 @@ internal fun EventRow(
                 .clickable(onClick = onClick),
     ) {
         if (coverImage != null) {
-            // Cover variant: card height matches content; photo fills
-            // the full square on the left flush with card edges.
+            // Cover variant: fixed card height so the photo can flush
+            // to the edges. 116dp fits title + date + location +
+            // creator row comfortably without clipping.
             Row(
-                modifier = Modifier.height(IntrinsicSize.Min),
+                modifier = Modifier.height(116.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AsyncImage(
@@ -587,7 +587,7 @@ internal fun EventRow(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .padding(end = 16.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(end = 16.dp, top = 10.dp, bottom = 10.dp),
                 )
             }
         } else {
