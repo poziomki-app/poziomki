@@ -11,6 +11,10 @@ fun List<RoomSummary>.filterMessagesRooms(
     val normalizedQuery = searchQuery.trim().lowercase()
 
     return asSequence()
+        // Hide rooms that have never received a message — empty shells from
+        // resolved DMs or freshly-joined event chats only clutter the list
+        // until somebody actually says hi.
+        .filter { it.latestTimestampMillis != null }
         .filter { room ->
             when (selectedFilter) {
                 MessagesRoomFilter.All -> true
