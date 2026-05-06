@@ -3,8 +3,11 @@ package com.poziomki.app.ui.designsystem.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +33,7 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowUpRight
+import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -38,6 +42,7 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileCard(
     name: String,
@@ -45,6 +50,7 @@ fun ProfileCard(
     profilePicture: String?,
     gradientStart: String? = null,
     gradientEnd: String? = null,
+    matchingTags: List<Tag> = emptyList(),
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -119,7 +125,27 @@ fun ProfileCard(
                     color = TextPrimary,
                 )
 
-                if (program != null) {
+                if (matchingTags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        matchingTags.forEach { tag ->
+                            Text(
+                                text = tag.name.lowercase(),
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp,
+                                color = TextSecondary,
+                                modifier =
+                                    Modifier
+                                        .border(1.dp, Border, RoundedCornerShape(50))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                } else if (program != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = program,
