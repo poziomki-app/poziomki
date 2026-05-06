@@ -29,7 +29,6 @@ data class EventsState(
     val userLng: Double? = null,
     val selectedNearbyEventId: String? = null,
     val isLocationPermissionDenied: Boolean = false,
-    val isLocationUnavailable: Boolean = false,
     val selectedCategories: Set<String> = emptySet(),
     val showTagFilter: Boolean = false,
 )
@@ -191,16 +190,22 @@ class EventsViewModel(
             _state.value = _state.value.copy(isLocationPermissionDenied = true)
             return
         }
-        _state.value = _state.value.copy(isLocationPermissionDenied = false, isLocationUnavailable = false)
+        _state.value = _state.value.copy(isLocationPermissionDenied = false)
         viewModelScope.launch {
             val loc = locationProvider.getCurrentLocation()
             if (loc == null) {
-                _state.value = _state.value.copy(isLocationUnavailable = true)
+                loadNearbyEvents(FALLBACK_LAT, FALLBACK_LNG)
                 return@launch
             }
             _state.value = _state.value.copy(userLat = loc.latitude, userLng = loc.longitude)
             loadNearbyEvents(loc.latitude, loc.longitude)
         }
+    }
+
+    private companion object {
+        // Warsaw — used when device location can't be obtained despite permission.
+        const val FALLBACK_LAT = 52.2297
+        const val FALLBACK_LNG = 21.0122
     }
 
     fun loadNearbyEvents(

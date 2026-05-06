@@ -185,7 +185,6 @@ fun EventsScreen(
                             userLat = state.userLat,
                             userLng = state.userLng,
                             isPermissionDenied = state.isLocationPermissionDenied,
-                            isLocationUnavailable = state.isLocationUnavailable,
                             onEventSelected = { viewModel.selectNearbyEvent(it) },
                             onEventClick = onNavigateToEventDetail,
                             onRequestPermission = requestLocationPermission,
