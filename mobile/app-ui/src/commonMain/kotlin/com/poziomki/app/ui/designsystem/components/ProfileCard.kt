@@ -168,8 +168,7 @@ fun ProfileCard(
                                             } else {
                                                 Color.White.copy(alpha = 0.06f)
                                             },
-                                        )
-                                        .padding(horizontal = 7.dp, vertical = 1.dp),
+                                        ).padding(horizontal = 7.dp, vertical = 1.dp),
                             )
                         }
                     }
