@@ -39,6 +39,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 @Composable
+@Suppress("LongParameterList", "LongMethod")
 fun RoomRow(
     room: RoomSummary,
     profilePictureUrl: String? = null,
