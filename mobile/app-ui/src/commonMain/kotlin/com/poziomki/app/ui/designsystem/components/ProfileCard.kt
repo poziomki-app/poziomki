@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -53,20 +52,11 @@ fun ProfileCard(
     gradientEnd: String? = null,
     matchingTags: List<Tag> = emptyList(),
     program: String? = null,
-    bio: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val cleanedBio = bio?.let(::cleanBioForPreview).orEmpty()
-    // 3 tiers driven by bio length so cards stay tight when there's
-    // little to show but expand for users who actually wrote something.
-    val cardHeight =
-        when {
-            cleanedBio.isBlank() -> 88.dp
-            cleanedBio.length < 80 -> 108.dp
-            else -> 140.dp
-        }
+    val cardHeight = 88.dp
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -184,36 +174,7 @@ fun ProfileCard(
                         }
                     }
                 }
-
-                if (cleanedBio.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = cleanedBio,
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        color = TextSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
         }
     }
 }
-
-// Strip markdown image / link syntax for the card preview so a bio like
-// "kocham linuxa ![](https://api.poziomki.app/...)" doesn't leak the
-// embedded URL as raw text. Also collapses any whitespace runs to single
-// spaces so multi-line bios render as a single paragraph.
-private val MarkdownImageRegex = Regex("""!\[[^\]]*]\([^)]*\)""")
-private val MarkdownLinkRegex = Regex("""\[([^\]]+)]\([^)]*\)""")
-private val WhitespaceRunRegex = Regex("""\s+""")
-
-private fun cleanBioForPreview(raw: String): String =
-    raw
-        .replace(MarkdownImageRegex, "")
-        .replace(MarkdownLinkRegex, "$1")
-        .replace(WhitespaceRunRegex, " ")
-        .trim()

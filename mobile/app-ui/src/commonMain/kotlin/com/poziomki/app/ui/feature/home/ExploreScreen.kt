@@ -239,7 +239,6 @@ fun ExploreScreen(
                                         gradientStart = profile.gradientStart,
                                         gradientEnd = profile.gradientEnd,
                                         matchingTags = profile.tags.filter { it.id in ownIds },
-                                        bio = profile.bio,
                                         onClick = { onNavigateToProfile(profile.id) },
                                         modifier = Modifier.padding(horizontal = PoziomkiTheme.spacing.md),
                                     )

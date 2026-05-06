@@ -103,7 +103,6 @@ fun ProfileScreen(
                                     gradientStart = profile.gradientStart,
                                     gradientEnd = profile.gradientEnd,
                                     program = profile.program,
-                                    bio = profile.bio,
                                     onClick = { onNavigateToProfileView(profile.id) },
                                 )
 
