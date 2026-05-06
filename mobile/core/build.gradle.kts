@@ -48,6 +48,7 @@ kotlin {
 
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.security.crypto)
+            implementation(libs.play.services.location)
             implementation(libs.sqldelight.android.driver)
         }
         iosMain.dependencies {

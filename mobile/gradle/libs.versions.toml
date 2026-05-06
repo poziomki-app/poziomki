@@ -55,6 +55,7 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 phosphor-icons = { module = "com.adamglin:phosphor-icon", version.ref = "phosphorIcons" }
 
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 qrose = { module = "io.github.alexzhirkevich:qrose", version.ref = "qrose" }
 camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }

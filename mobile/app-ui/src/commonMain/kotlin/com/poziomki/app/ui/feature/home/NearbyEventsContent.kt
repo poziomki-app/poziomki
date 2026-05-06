@@ -40,7 +40,6 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPinLine
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
-import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -75,13 +74,13 @@ private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
 
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 internal fun NearbyEventsContent(
     events: List<Event>,
     selectedEventId: String?,
     userLat: Double?,
     userLng: Double?,
     isPermissionDenied: Boolean,
-    isLocationUnavailable: Boolean,
     onEventSelected: (String) -> Unit,
     onEventClick: (String) -> Unit,
     onRequestPermission: () -> Unit = {},
@@ -115,11 +114,6 @@ internal fun NearbyEventsContent(
                 )
             }
         }
-        return
-    }
-
-    if (isLocationUnavailable) {
-        EmptyView("nie udało się pobrać lokalizacji")
         return
     }
 
