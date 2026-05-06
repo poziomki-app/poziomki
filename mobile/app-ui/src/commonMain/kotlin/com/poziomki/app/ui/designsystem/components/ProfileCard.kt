@@ -39,6 +39,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
+import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -128,22 +129,33 @@ fun ProfileCard(
 
                 if (matchingTags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
+                    // Activities first (stronger signal: shared IRL action),
+                    // then interests (talking points).
+                    val orderedTags =
+                        matchingTags.sortedByDescending { it.scope == "activity" }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        matchingTags.forEach { tag ->
+                        orderedTags.forEach { tag ->
+                            val isActivity = tag.scope == "activity"
                             Text(
                                 text = tag.name.lowercase(),
                                 fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = if (isActivity) FontWeight.SemiBold else FontWeight.Medium,
                                 fontSize = 11.sp,
                                 lineHeight = 12.sp,
-                                color = PrimaryMuted,
+                                color = if (isActivity) PrimaryMuted else TextSecondary,
                                 modifier =
                                     Modifier
                                         .clip(RoundedCornerShape(50))
-                                        .background(Primary.copy(alpha = 0.14f))
+                                        .background(
+                                            if (isActivity) {
+                                                Primary.copy(alpha = 0.18f)
+                                            } else {
+                                                Color.White.copy(alpha = 0.06f)
+                                            },
+                                        )
                                         .padding(horizontal = 7.dp, vertical = 1.dp),
                             )
                         }
