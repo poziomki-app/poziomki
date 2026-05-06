@@ -111,9 +111,9 @@ fun AppButton(
                     modifier = Modifier.size(20.dp),
                     tint = tint,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                if (text.isNotEmpty()) Spacer(modifier = Modifier.width(8.dp))
             }
-            ButtonLabel(text, tint)
+            if (text.isNotEmpty()) ButtonLabel(text, tint)
         }
     }
 }

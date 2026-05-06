@@ -247,7 +247,7 @@ fun EventsScreen(
 
             // FAB: create event
             AppButton(
-                text = "nowe",
+                text = "",
                 onClick = onNavigateToEventCreate,
                 variant = ButtonVariant.PRIMARY,
                 icon = PhosphorIcons.Bold.Plus,
