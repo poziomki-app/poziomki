@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -51,11 +52,12 @@ fun ProfileCard(
     gradientEnd: String? = null,
     matchingTags: List<Tag> = emptyList(),
     program: String? = null,
+    bio: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val cardHeight = 88.dp
+    val cardHeight = 108.dp
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -136,6 +138,20 @@ fun ProfileCard(
                         fontSize = 12.sp,
                         lineHeight = 14.sp,
                         color = TextSecondary,
+                    )
+                }
+
+                if (!bio.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = bio.trim(),
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 13.sp,
+                        lineHeight = 15.sp,
+                        color = TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
