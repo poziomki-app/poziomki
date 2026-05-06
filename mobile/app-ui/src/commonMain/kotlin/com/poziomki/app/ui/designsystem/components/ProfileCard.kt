@@ -45,6 +45,7 @@ import com.poziomki.app.ui.shared.resolveImageUrl
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+@Suppress("LongMethod", "LongParameterList")
 fun ProfileCard(
     name: String,
     profilePicture: String?,
@@ -57,7 +58,15 @@ fun ProfileCard(
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val cardHeight = 108.dp
+    val cleanedBio = bio?.let(::cleanBioForPreview).orEmpty()
+    // 3 tiers driven by bio length so cards stay tight when there's
+    // little to show but expand for users who actually wrote something.
+    val cardHeight =
+        when {
+            cleanedBio.isBlank() -> 88.dp
+            cleanedBio.length < 80 -> 108.dp
+            else -> 140.dp
+        }
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -176,12 +185,10 @@ fun ProfileCard(
                     }
                 }
 
-                if (!bio.isNullOrBlank()) {
+                if (cleanedBio.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    // Collapse all whitespace (incl. newlines) so multi-line
-                    // bios render as a single paragraph in the card preview.
                     Text(
-                        text = bio.replace(Regex("\\s+"), " ").trim(),
+                        text = cleanedBio,
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 13.sp,
@@ -195,3 +202,18 @@ fun ProfileCard(
         }
     }
 }
+
+// Strip markdown image / link syntax for the card preview so a bio like
+// "kocham linuxa ![](https://api.poziomki.app/...)" doesn't leak the
+// embedded URL as raw text. Also collapses any whitespace runs to single
+// spaces so multi-line bios render as a single paragraph.
+private val MarkdownImageRegex = Regex("""!\[[^\]]*]\([^)]*\)""")
+private val MarkdownLinkRegex = Regex("""\[([^\]]+)]\([^)]*\)""")
+private val WhitespaceRunRegex = Regex("""\s+""")
+
+private fun cleanBioForPreview(raw: String): String =
+    raw
+        .replace(MarkdownImageRegex, "")
+        .replace(MarkdownLinkRegex, "$1")
+        .replace(WhitespaceRunRegex, " ")
+        .trim()
