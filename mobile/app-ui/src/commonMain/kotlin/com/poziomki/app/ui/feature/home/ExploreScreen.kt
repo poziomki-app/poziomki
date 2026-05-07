@@ -395,14 +395,17 @@ private fun ExploreTagFilterDialog(
                         color = TextPrimary,
                     )
                     if (selectedTags.isNotEmpty()) {
-                        Text(
-                            text = "wyczyść",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 13.sp,
-                            color = Primary,
-                            modifier = Modifier.clickable(onClick = onClear),
-                        )
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                PhosphorIcons.Bold.X,
+                                contentDescription = "Wyczyść filtry",
+                                modifier = Modifier.size(18.dp),
+                                tint = Primary,
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))

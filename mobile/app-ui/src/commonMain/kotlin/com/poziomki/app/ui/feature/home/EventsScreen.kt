@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,6 +58,7 @@ import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
@@ -692,14 +694,17 @@ private fun CategoryFilterDialog(
                         color = TextPrimary,
                     )
                     if (selectedCategories.isNotEmpty()) {
-                        Text(
-                            text = "wyczyść",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 13.sp,
-                            color = Primary,
-                            modifier = Modifier.clickable(onClick = onClear),
-                        )
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                PhosphorIcons.Bold.X,
+                                contentDescription = "Wyczyść filtry",
+                                modifier = Modifier.size(18.dp),
+                                tint = Primary,
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))

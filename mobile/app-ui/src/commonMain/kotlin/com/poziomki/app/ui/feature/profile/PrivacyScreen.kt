@@ -151,7 +151,7 @@ private fun PrivacyContent(
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
         PrivacyMessages(state.error, state.passwordSuccessMessage, nunito)
 
-        SectionLabel("WIDOCZNOŚĆ", color = TextMuted)
+        SectionLabel("widoczność", color = TextMuted)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
         PrivacyToggleRow(
             label = "widoczność w rekomendacjach",
@@ -170,7 +170,7 @@ private fun PrivacyContent(
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-        SectionLabel("ZRZUTY EKRANU", color = TextMuted)
+        SectionLabel("zrzuty ekranu", color = TextMuted)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
         PrivacyToggleRow(
             label = "zezwalaj na zrzuty ekranu",
@@ -181,7 +181,7 @@ private fun PrivacyContent(
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-        SectionLabel("HASŁO", color = TextMuted)
+        SectionLabel("hasło", color = TextMuted)
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
         AppButton(
             text = "zmień hasło",
@@ -233,7 +233,7 @@ private fun ExportDataSection(
     onExport: () -> Unit,
     nunito: androidx.compose.ui.text.font.FontFamily,
 ) {
-    SectionLabel("TWOJE DANE", color = TextMuted)
+    SectionLabel("twoje dane", color = TextMuted)
     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
     Text(
         text =
@@ -273,7 +273,7 @@ private fun DeleteAccountSection(
     onDelete: () -> Unit,
     nunito: androidx.compose.ui.text.font.FontFamily,
 ) {
-    SectionLabel("USUŃ KONTO", color = TextMuted)
+    SectionLabel("usuń konto", color = TextMuted)
     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
     Text(
         text =
