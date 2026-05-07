@@ -26,15 +26,32 @@ data class ExploreState(
     val searchResults: SearchResults? = null,
     val isSearching: Boolean = false,
     val ownTags: List<Tag> = emptyList(),
+    val selectedTags: List<Tag> = emptyList(),
+    val showTagFilter: Boolean = false,
+    val tagFilterQuery: String = "",
+    val tagFilterSearchResults: List<Tag> = emptyList(),
+    val isSearchingFilterTags: Boolean = false,
 ) {
     companion object {
         const val RECOMMENDED_COUNT = 4
     }
 
-    val recommendedProfiles get() = profiles.take(RECOMMENDED_COUNT)
-    val remainingProfiles get() = profiles.drop(RECOMMENDED_COUNT)
+    val selectedTagIds: Set<String> get() = selectedTags.mapTo(mutableSetOf()) { it.id }
+    val isFilterActive: Boolean get() = selectedTags.isNotEmpty()
+
+    val filteredProfiles: List<MatchProfile> get() =
+        if (selectedTags.isEmpty()) {
+            profiles
+        } else {
+            val ids = selectedTagIds
+            profiles.filter { p -> p.tags.any { it.id in ids } }
+        }
+
+    val recommendedProfiles get() = filteredProfiles.take(RECOMMENDED_COUNT)
+    val remainingProfiles get() = filteredProfiles.drop(RECOMMENDED_COUNT)
 }
 
+@Suppress("TooManyFunctions")
 class ExploreViewModel(
     private val matchProfileRepository: MatchProfileRepository,
     private val profileRepository: ProfileRepository,
@@ -43,6 +60,7 @@ class ExploreViewModel(
     private val _state = MutableStateFlow(ExploreState())
     val state: StateFlow<ExploreState> = _state.asStateFlow()
     private var searchJob: Job? = null
+    private var tagSearchJob: Job? = null
 
     init {
         observeProfiles()
@@ -114,6 +132,53 @@ class ExploreViewModel(
 
     fun clearRefreshError() {
         _state.value = _state.value.copy(refreshError = null)
+    }
+
+    fun toggleShowTagFilter() {
+        val nextOpen = !_state.value.showTagFilter
+        _state.value =
+            _state.value.copy(
+                showTagFilter = nextOpen,
+                tagFilterQuery = if (nextOpen) _state.value.tagFilterQuery else "",
+                tagFilterSearchResults = if (nextOpen) _state.value.tagFilterSearchResults else emptyList(),
+            )
+    }
+
+    fun toggleTagFilter(tag: Tag) {
+        val current = _state.value.selectedTags
+        val next =
+            if (current.any { it.id == tag.id }) current.filterNot { it.id == tag.id } else current + tag
+        _state.value = _state.value.copy(selectedTags = next)
+    }
+
+    fun clearTagFilters() {
+        _state.value = _state.value.copy(selectedTags = emptyList())
+    }
+
+    fun updateTagFilterQuery(query: String) {
+        _state.value = _state.value.copy(tagFilterQuery = query)
+        tagSearchJob?.cancel()
+        if (query.length < 2) {
+            _state.value = _state.value.copy(tagFilterSearchResults = emptyList(), isSearchingFilterTags = false)
+            return
+        }
+        tagSearchJob =
+            viewModelScope.launch {
+                delay(250)
+                _state.value = _state.value.copy(isSearchingFilterTags = true)
+                val interestResult = apiService.searchTags("interest", query)
+                val activityResult = apiService.searchTags("activity", query)
+                val merged =
+                    listOf(interestResult, activityResult)
+                        .mapNotNull { (it as? ApiResult.Success)?.data }
+                        .flatten()
+                        .distinctBy { it.id }
+                _state.value =
+                    _state.value.copy(
+                        tagFilterSearchResults = merged,
+                        isSearchingFilterTags = false,
+                    )
+            }
     }
 
     fun updateQuery(query: String) {

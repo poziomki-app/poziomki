@@ -35,7 +35,7 @@ fun ScreenHeader(
                 .fillMaxWidth()
                 .padding(
                     start = if (onBack != null) PoziomkiTheme.spacing.sm else PoziomkiTheme.spacing.lg,
-                    end = PoziomkiTheme.spacing.sm,
+                    end = PoziomkiTheme.spacing.md,
                     top = PoziomkiTheme.spacing.md,
                     bottom = PoziomkiTheme.spacing.md,
                 ).height(48.dp),
