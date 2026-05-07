@@ -93,14 +93,14 @@ fun PoziomkiSearchBar(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            VerticalDivider(
-                modifier = Modifier.height(20.dp),
-                thickness = 1.dp,
-                color = Border,
-            )
             // 48dp clickable wrapper around the 22dp glyph — Material a11y
             // touch-target minimum that Play pre-launch reports flag.
             if (onFilterClick != null) {
+                VerticalDivider(
+                    modifier = Modifier.height(20.dp),
+                    thickness = 1.dp,
+                    color = Border,
+                )
                 IconButton(
                     onClick = onFilterClick,
                     modifier = Modifier.size(48.dp),
@@ -112,14 +112,6 @@ fun PoziomkiSearchBar(
                         tint = if (filterActive) Primary else TextMuted,
                     )
                 }
-            } else {
-                Spacer(modifier = Modifier.width(12.dp))
-                Icon(
-                    PhosphorIcons.Bold.SlidersHorizontal,
-                    contentDescription = "Filtruj",
-                    modifier = Modifier.size(22.dp),
-                    tint = if (filterActive) Primary else TextMuted,
-                )
             }
         }
     }
