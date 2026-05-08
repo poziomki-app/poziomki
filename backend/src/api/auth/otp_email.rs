@@ -329,33 +329,37 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
         }
     }
 
-    // FALLBACK 1: direct-to-MX (works when port 25 outbound is open).
-    let domain = to
-        .rsplit_once('@')
-        .map(|(_, d)| d)
-        .ok_or_else(|| format!("No domain in {redacted}"))?;
-    let mx_err = match send_via_mx(&envelope, &body, domain).await {
-        Ok(mx_host) => {
-            tracing::info!("OTP email delivered to {redacted} via MX {mx_host}");
+    // FALLBACK 1: Resend HTTP API. Preferred over direct MX because Resend
+    // sends from warmed IPs with aligned SPF/DKIM/DMARC, so messages land in
+    // the inbox without "this message wasn't authenticated" banners. Free
+    // tier (100/day) is enough for our OTP volume; on quota exhaustion we
+    // fall through to direct MX. Skipped silently if RESEND_API_KEY is unset
+    // (local dev / staging).
+    let resend_err = match send_via_resend(to, code).await {
+        Ok(()) => {
+            tracing::info!("OTP email delivered to {redacted} via Resend");
             return Ok(());
         }
         Err(e) => {
-            tracing::warn!("OTP direct MX failed ({e}); falling back to Resend for {redacted}");
+            tracing::warn!("OTP Resend failed ({e}); falling back to direct MX for {redacted}");
             e
         }
     };
 
-    // FALLBACK 2: Resend HTTP API. Independent of SMTP/port 25, so it covers
-    // VPS network egress problems, MX greylisting, and IP reputation hits.
-    // Skipped silently if RESEND_API_KEY is unset — local dev and staging
-    // don't need Resend to test the chain.
-    match send_via_resend(to, code).await {
-        Ok(()) => {
-            tracing::info!("OTP email delivered to {redacted} via Resend");
+    // FALLBACK 2: direct-to-MX. Covers Resend outage / quota exhaustion. Will
+    // typically succeed but recipients may see Gmail's "untrusted sender"
+    // banner since our VPS IP isn't on warmed-up SES sending pools.
+    let domain = to
+        .rsplit_once('@')
+        .map(|(_, d)| d)
+        .ok_or_else(|| format!("No domain in {redacted}"))?;
+    match send_via_mx(&envelope, &body, domain).await {
+        Ok(mx_host) => {
+            tracing::info!("OTP email delivered to {redacted} via MX {mx_host}");
             Ok(())
         }
-        Err(resend_err) => Err(format!(
-            "OTP delivery failed for {redacted}: MX={mx_err}; resend={resend_err}"
+        Err(mx_err) => Err(format!(
+            "OTP delivery failed for {redacted}: resend={resend_err}; MX={mx_err}"
         )),
     }
 }
