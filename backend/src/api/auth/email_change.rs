@@ -28,6 +28,7 @@ pub(in crate::api) struct EmailChangeRequestBody {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::api) struct EmailChangeConfirmBody {
     pub(in crate::api) new_email: String,
     pub(in crate::api) code: String,
