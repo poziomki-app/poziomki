@@ -132,6 +132,9 @@ internal class EventMutationRepository(
                     is_dirty = 1L,
                     requires_approval = current.requires_approval,
                     is_pending = current.is_pending,
+                    labels_json = current.labels_json,
+                    is_online = request.isOnline?.let { if (it) 1L else 0L } ?: current.is_online,
+                    meeting_url = request.meetingUrl ?: current.meeting_url,
                 )
             }
 
@@ -389,6 +392,9 @@ internal class EventMutationRepository(
             is_dirty = if (isDirty) 1L else 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
+            labels_json = if (event.labels.isEmpty()) null else json.encodeToString(event.labels),
+            is_online = if (event.isOnline) 1L else 0L,
+            meeting_url = event.meetingUrl,
         )
     }
 
@@ -502,6 +508,9 @@ internal class EventMutationRepository(
             is_dirty = event.is_dirty,
             requires_approval = event.requires_approval,
             is_pending = event.is_pending,
+            labels_json = event.labels_json,
+            is_online = event.is_online,
+            meeting_url = event.meeting_url,
         )
     }
 }

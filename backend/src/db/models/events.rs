@@ -23,6 +23,9 @@ pub struct Event {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub requires_approval: bool,
+    pub labels: Vec<String>,
+    pub is_online: bool,
+    pub meeting_url: Option<String>,
 }
 
 #[derive(Debug, Insertable)]
@@ -44,6 +47,8 @@ pub struct NewEvent {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub requires_approval: bool,
+    pub is_online: bool,
+    pub meeting_url: Option<String>,
 }
 
 #[derive(Debug, AsChangeset, Default)]
@@ -62,4 +67,6 @@ pub struct EventChangeset {
     pub max_attendees: Option<Option<i32>>,
     pub updated_at: Option<DateTime<Utc>>,
     pub requires_approval: Option<bool>,
+    pub is_online: Option<bool>,
+    pub meeting_url: Option<Option<String>>,
 }

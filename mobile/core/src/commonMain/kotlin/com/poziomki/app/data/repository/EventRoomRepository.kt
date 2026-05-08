@@ -96,6 +96,9 @@ internal class EventRoomRepository(
             is_dirty = current.is_dirty,
             requires_approval = current.requires_approval,
             is_pending = current.is_pending,
+            labels_json = current.labels_json,
+            is_online = current.is_online,
+            meeting_url = current.meeting_url,
         )
     }
 }

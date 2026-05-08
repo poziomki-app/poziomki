@@ -30,6 +30,8 @@ data class EventCreateState(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val requiresApproval: Boolean = false,
+    val isOnline: Boolean = false,
+    val meetingUrl: String = "",
     val selectedTags: List<Tag> = emptyList(),
     val tagSearchQuery: String = "",
     val tagSearchResults: List<Tag> = emptyList(),
@@ -76,6 +78,14 @@ class EventCreateViewModel(
 
     fun updateRequiresApproval(value: Boolean) {
         _state.value = _state.value.copy(requiresApproval = value)
+    }
+
+    fun updateIsOnline(value: Boolean) {
+        _state.value = _state.value.copy(isOnline = value)
+    }
+
+    fun updateMeetingUrl(value: String) {
+        _state.value = _state.value.copy(meetingUrl = value)
     }
 
     fun updateAttendeeLimit(attendeeLimit: String) {
@@ -177,6 +187,8 @@ class EventCreateViewModel(
                         latitude = event.latitude,
                         longitude = event.longitude,
                         requiresApproval = event.requiresApproval,
+                        isOnline = event.isOnline,
+                        meetingUrl = event.meetingUrl ?: "",
                         selectedTags = event.tags,
                         isLoading = false,
                         eventId = eventId,
@@ -248,6 +260,8 @@ class EventCreateViewModel(
                 maxAttendees = UpdateEventRequest.maxAttendeesValue(maxAttendees),
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = s.requiresApproval,
+                isOnline = s.isOnline,
+                meetingUrl = s.meetingUrl.trim().ifBlank { null },
             )
         when (val result = eventRepository.updateEvent(eventId, request)) {
             is ApiResult.Success -> {
@@ -282,6 +296,8 @@ class EventCreateViewModel(
                 maxAttendees = maxAttendees,
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = if (s.requiresApproval) true else null,
+                isOnline = if (s.isOnline) true else null,
+                meetingUrl = s.meetingUrl.trim().ifBlank { null },
             )
         when (val result = eventRepository.createEvent(request)) {
             is ApiResult.Success -> {

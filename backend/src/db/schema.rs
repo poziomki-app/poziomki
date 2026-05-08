@@ -145,6 +145,9 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         requires_approval -> Bool,
+        labels -> Array<Text>,
+        is_online -> Bool,
+        meeting_url -> Nullable<Varchar>,
     }
 }
 
