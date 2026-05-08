@@ -34,9 +34,19 @@ pub async fn set_viewer_context(
     conn: &mut AsyncPgConnection,
     viewer: DbViewer,
 ) -> Result<(), diesel::result::Error> {
+    // Use set_config(..., is_local := true) instead of SET LOCAL because
+    // PostgreSQL 18 won't materialise a custom GUC set via SET LOCAL until
+    // something reads it — and RLS WITH CHECK clauses don't trigger that
+    // read in time, so app.current_user_id() returns NULL inside the policy
+    // and every INSERT/UPDATE bounces with "row violates row-level security
+    // policy". set_config materialises the GUC eagerly because the call
+    // itself returns the new value.
+    //
     // Safe interpolation: user_id is i32, is_review_stub is bool.
     let sql = format!(
-        "SET LOCAL app.user_id = '{}'; SET LOCAL app.is_stub = '{}'; SET LOCAL app.role = 'user'",
+        "SELECT set_config('app.user_id', '{}', true), \
+                set_config('app.is_stub', '{}', true), \
+                set_config('app.role', 'user', true)",
         viewer.user_id, viewer.is_review_stub
     );
     conn.batch_execute(&sql).await
@@ -44,8 +54,12 @@ pub async fn set_viewer_context(
 
 /// Anonymous / pre-auth context. `app.user_id = 0`, `app.role = 'anon'`.
 pub async fn set_anon_context(conn: &mut AsyncPgConnection) -> Result<(), diesel::result::Error> {
+    // See comment in set_viewer_context for why this uses set_config instead
+    // of SET LOCAL.
     conn.batch_execute(
-        "SET LOCAL app.user_id = '0'; SET LOCAL app.is_stub = 'false'; SET LOCAL app.role = 'anon'",
+        "SELECT set_config('app.user_id', '0', true), \
+                set_config('app.is_stub', 'false', true), \
+                set_config('app.role', 'anon', true)",
     )
     .await
 }
