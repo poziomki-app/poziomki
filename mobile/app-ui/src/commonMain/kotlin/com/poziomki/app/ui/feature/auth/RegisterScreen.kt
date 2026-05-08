@@ -56,6 +56,7 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var acceptedPolicy by remember { mutableStateOf(false) }
     var showPolicy by remember { mutableStateOf(false) }
+    var showPasswordMismatch by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -130,12 +131,13 @@ fun RegisterScreen(
             value = confirmPassword,
             onValueChange = {
                 confirmPassword = it
+                showPasswordMismatch = false
                 viewModel.clearError()
             },
             label = "potwierd\u017a has\u0142o",
             placeholder = "has\u0142o",
             error =
-                if (confirmPassword.isNotEmpty() && confirmPassword != password) {
+                if (showPasswordMismatch && confirmPassword != password) {
                     "has\u0142a nie s\u0105 takie same"
                 } else {
                     null
@@ -188,13 +190,17 @@ fun RegisterScreen(
         AppButton(
             text = "zarejestruj si\u0119",
             onClick = {
+                if (password != confirmPassword) {
+                    showPasswordMismatch = true
+                    return@AppButton
+                }
                 val placeholderName = email.substringBefore("@").ifBlank { "User" }
                 viewModel.signUp(email, password, placeholderName, onRegisterSuccess, onUserExists)
             },
             enabled =
                 email.isNotBlank() &&
                     password.length >= 8 &&
-                    password == confirmPassword &&
+                    confirmPassword.isNotBlank() &&
                     acceptedPolicy,
             loading = uiState.isLoading,
             loadingText = "tworzenie konta...",
