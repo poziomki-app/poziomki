@@ -1,15 +1,15 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
+  workflow_dispatch:
 
-# CodeQL only runs on main pushes and the weekly schedule — PRs don't
-# wait on it. Findings still surface in the Security tab within ~1 day
-# of landing on main, which is the right tradeoff for a small team:
-# cuts PR wall time by ~4 minutes without losing coverage on shipped code.
+# CodeQL only runs on the weekly schedule (Mon 06:00 UTC) and on-demand
+# via workflow_dispatch. PRs and main pushes don't wait on it — findings
+# surface in the Security tab within a week of landing on main, which is
+# the right tradeoff for a small team: keeps coverage on shipped code
+# without paying ~4 min on every push.
 
 permissions:
   contents: read
