@@ -61,7 +61,6 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
 
-private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/positron"
 private const val DEFAULT_ZOOM = 14.0
 private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
@@ -174,7 +173,7 @@ internal fun NearbyEventsContent(
 
             MaplibreMap(
                 modifier = Modifier.fillMaxSize(),
-                baseStyle = BaseStyle.Uri(MAP_STYLE),
+                baseStyle = BaseStyle.Json(POZIOMKI_MAP_STYLE_JSON),
                 cameraState = cameraState,
                 options =
                     MapOptions(
@@ -206,6 +205,20 @@ internal fun NearbyEventsContent(
                     ClickResult.Consume
                 },
             ) {
+                // Campus markers (UW, PW, etc.) — small ring + above-text label.
+                val campusSource =
+                    rememberGeoJsonSource(
+                        data = campusGeoJson(),
+                    )
+                CircleLayer(
+                    id = "campuses-ring",
+                    source = campusSource,
+                    radius = const(6.dp),
+                    color = const(White),
+                    strokeColor = const(Primary),
+                    strokeWidth = const(2.dp),
+                )
+
                 // Unselected dots
                 if (geoEvents.size > (if (selectedEventId != null) 1 else 0)) {
                     val unselectedSource = rememberGeoJsonSource(data = unselectedGeoJson)
@@ -371,6 +384,16 @@ private fun pointGeoJson(
     GeoJsonData.JsonString(
         """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[$lng,$lat]},"properties":{}}]}""",
     )
+
+private fun campusGeoJson(): GeoJsonData {
+    val features =
+        POLISH_CAMPUSES.joinToString(",") { c ->
+            """{"type":"Feature","geometry":{"type":"Point","coordinates":[${c.lng},${c.lat}]},"properties":{"name":"${c.name}"}}"""
+        }
+    return GeoJsonData.JsonString(
+        """{"type":"FeatureCollection","features":[$features]}""",
+    )
+}
 
 private fun multiPointGeoJson(events: List<Event>): GeoJsonData {
     val features =
