@@ -139,6 +139,8 @@ services:
       NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
       SMTP_ENABLE: ${SMTP_ENABLE:-true}
       SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-poziomki <noreply@send.poziomki.app>}
       OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
@@ -220,6 +222,8 @@ services:
       NTFY_SERVER: ${NTFY_SERVER:-https://ntfy.poziomki.app}
       SMTP_ENABLE: ${SMTP_ENABLE:-true}
       SMTP_FROM: ${SMTP_FROM:-noreply@poziomki.app}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-poziomki <noreply@send.poziomki.app>}
       DKIM_DOMAIN: ${DKIM_DOMAIN:-poziomki.app}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-mail}
       DKIM_PRIVATE_KEY_PATH: /etc/dkim/private.key
