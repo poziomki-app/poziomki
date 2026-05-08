@@ -13,9 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,13 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPinLine
@@ -52,7 +47,6 @@ import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.formatEventDate
 import com.poziomki.app.ui.shared.pluralizePolish
-import com.poziomki.app.ui.shared.resolveImageUrl
 import org.koin.compose.koinInject
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
@@ -67,8 +61,8 @@ import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
 
-private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
-private const val DEFAULT_ZOOM = 12.0
+private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/positron"
+private const val DEFAULT_ZOOM = 14.0
 private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
@@ -260,117 +254,87 @@ internal fun NearbyEventsContent(
             }
         }
 
-        // Event info panel
+        // Event info panel — fixed compact panel below the (much larger) map.
+        // No background image, no scroll: title + date + location + attendees,
+        // tap → full event screen.
         if (selectedEvent != null) {
-            Box(
+            Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                         .background(Background)
-                        .clickable { onEventClick(selectedEvent.id) },
+                        .clickable { onEventClick(selectedEvent.id) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(bottom = LocalNavBarPadding.current),
             ) {
-                selectedEvent.coverImage?.let { cover ->
-                    AsyncImage(
-                        model = resolveImageUrl(cover),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Box(
-                        modifier =
-                            Modifier
-                                .matchParentSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        0.0f to Background.copy(alpha = 0.97f),
-                                        1.0f to Background.copy(alpha = 0.88f),
-                                    ),
-                                ),
-                    )
-                }
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .padding(bottom = LocalNavBarPadding.current),
-                ) {
-                    Text(
-                        text = selectedEvent.title,
-                        fontFamily = MontserratFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 20.sp,
-                        color = TextPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Text(
+                    text = selectedEvent.title,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 18.sp,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = formatEventDate(selectedEvent.startsAt),
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         color = TextSecondary,
                     )
-
                     val displayLocation =
                         selectedEvent.location
                             ?.takeIf { !looksLikeCoordinates(it) }
                             ?: geocodedLocation
                     if (displayLocation != null) {
                         Text(
+                            text = " · ",
+                            fontFamily = NunitoFamily,
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                        )
+                        Text(
                             text = displayLocation,
                             fontFamily = NunitoFamily,
                             fontWeight = FontWeight.Normal,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             color = TextMuted,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                     }
+                }
 
-                    selectedEvent.description?.let { description ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = description,
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 14.sp,
-                            color = TextSecondary,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    if (selectedEvent.attendeesCount > 0 || selectedEvent.maxAttendees != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (selectedEvent.attendeesPreview.isNotEmpty()) {
-                                StackedAvatars(
-                                    imageUrls = selectedEvent.attendeesPreview.map { it.profilePicture },
-                                    avatarSize = 28.dp,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(
-                                text =
-                                    selectedEvent.maxAttendees?.let { "${selectedEvent.attendeesCount} / $it" }
-                                        ?: pluralizePolish(
-                                            selectedEvent.attendeesCount,
-                                            "osoba",
-                                            "osoby",
-                                            "osób",
-                                        ),
-                                fontFamily = NunitoFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = TextPrimary,
+                if (selectedEvent.attendeesCount > 0 || selectedEvent.maxAttendees != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (selectedEvent.attendeesPreview.isNotEmpty()) {
+                            StackedAvatars(
+                                imageUrls = selectedEvent.attendeesPreview.map { it.profilePicture },
+                                avatarSize = 24.dp,
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
                         }
+                        Text(
+                            text =
+                                selectedEvent.maxAttendees?.let { "${selectedEvent.attendeesCount} / $it" }
+                                    ?: pluralizePolish(
+                                        selectedEvent.attendeesCount,
+                                        "osoba",
+                                        "osoby",
+                                        "osób",
+                                    ),
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                        )
                     }
                 }
             }
@@ -379,7 +343,8 @@ internal fun NearbyEventsContent(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .padding(vertical = 16.dp)
+                        .padding(bottom = LocalNavBarPadding.current),
                 contentAlignment = Alignment.Center,
             ) {
                 val hint =
@@ -391,7 +356,7 @@ internal fun NearbyEventsContent(
                 Text(
                     text = hint,
                     fontFamily = NunitoFamily,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = TextMuted,
                 )
             }

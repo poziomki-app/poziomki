@@ -60,9 +60,7 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
-import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
@@ -134,6 +132,13 @@ fun EventsScreen(
                 .background(Background),
     ) {
         ScreenHeader(title = "wydarzenia") {
+            androidx.compose.material3.IconButton(onClick = onNavigateToEventCreate) {
+                Icon(
+                    PhosphorIcons.Bold.Plus,
+                    contentDescription = "Dodaj wydarzenie",
+                    tint = TextPrimary,
+                )
+            }
             profileAvatarAction()
         }
 
@@ -245,21 +250,6 @@ fun EventsScreen(
                     }
                 }
             }
-
-            // FAB: create event
-            AppButton(
-                text = "",
-                onClick = onNavigateToEventCreate,
-                variant = ButtonVariant.PRIMARY,
-                icon = PhosphorIcons.Bold.Plus,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(
-                            end = PoziomkiTheme.spacing.lg,
-                            bottom = LocalNavBarPadding.current + 24.dp,
-                        ),
-            )
 
             // Refresh error snackbar
             state.refreshError?.let { error ->
