@@ -165,6 +165,18 @@ fun ProfileEditScreen(
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+                // --- imię ---
+                SectionLabel("imię")
+
+                PoziomkiTextField(
+                    value = state.name,
+                    onValueChange = { viewModel.updateName(it) },
+                    placeholder = "imię",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
                 // --- bio ---
                 SectionLabel("bio")
 

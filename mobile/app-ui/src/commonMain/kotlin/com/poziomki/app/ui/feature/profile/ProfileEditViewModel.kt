@@ -143,6 +143,10 @@ class ProfileEditViewModel(
         }
     }
 
+    fun updateName(name: String) {
+        _state.value = _state.value.copy(name = name.take(60))
+    }
+
     fun updateBio(bio: String) {
         val visibleLength = bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
         if (visibleLength <= 1500) {
@@ -287,8 +291,19 @@ class ProfileEditViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
             val s = _state.value
+            val trimmedName = s.name.trim()
+            if (trimmedName.isBlank()) {
+                _state.value =
+                    _state.value.copy(
+                        isSaving = false,
+                        snackbarMessage = "imię nie może być puste",
+                        snackbarType = SnackbarType.ERROR,
+                    )
+                return@launch
+            }
             val request =
                 UpdateProfileRequest(
+                    name = trimmedName,
                     bio = s.bio.ifBlank { null },
                     program = s.program.ifBlank { null },
                     profilePicture = s.images.firstOrNull()?.let { JsonPrimitive(it) } ?: JsonNull,
