@@ -54,6 +54,8 @@ fn auth_routes() -> Router<AppContext> {
         .route("/sessions", get(auth::sessions))
         .route("/account", delete(auth::delete_account))
         .route("/account/password", patch(auth::change_password))
+        .route("/account/email/request", patch(auth::request_email_change))
+        .route("/account/email/confirm", patch(auth::confirm_email_change))
         .route("/export", get(auth::export_data))
         .route("/forgot-password", post(auth::forgot_password))
         .route(
