@@ -1,11 +1,5 @@
 package com.poziomki.app.ui.designsystem.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,7 +14,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +29,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
 
-enum class ButtonVariant { PRIMARY, SECONDARY, OUTLINE, DESTRUCTIVE }
+enum class ButtonVariant { PRIMARY, SECONDARY, DESTRUCTIVE }
 
 private val ButtonShape = RoundedCornerShape(28.dp)
 
@@ -51,12 +44,8 @@ private val DestructiveGradient =
 
 private fun contentColor(variant: ButtonVariant): Color =
     when (variant) {
-        // OUTLINE is kept as an alias for SECONDARY to avoid touching every
-        // call site — both render as the simple grey style.
         ButtonVariant.PRIMARY -> Primary
-
-        ButtonVariant.SECONDARY, ButtonVariant.OUTLINE -> White
-
+        ButtonVariant.SECONDARY -> White
         ButtonVariant.DESTRUCTIVE -> Error
     }
 
@@ -64,10 +53,19 @@ private fun backgroundFor(variant: ButtonVariant): Brush =
     when (variant) {
         ButtonVariant.PRIMARY -> PrimaryGradient
         ButtonVariant.DESTRUCTIVE -> DestructiveGradient
-        else -> DefaultGradient
+        ButtonVariant.SECONDARY -> DefaultGradient
     }
 
-@Suppress("LongMethod", "LongParameterList")
+private fun borderColor(
+    variant: ButtonVariant,
+    enabled: Boolean,
+): Color =
+    when (variant) {
+        ButtonVariant.DESTRUCTIVE -> if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.2f)
+        else -> if (enabled) Border else Border.copy(alpha = 0.5f)
+    }
+
+@Suppress("LongParameterList")
 @Composable
 fun AppButton(
     text: String,
@@ -81,13 +79,11 @@ fun AppButton(
 ) {
     val isEnabled = enabled && !loading
     val tint = contentColor(variant).let { if (isEnabled) it else it.copy(alpha = 0.4f) }
-
-    val borderModifier = animatedBorder(variant, isEnabled)
-
     val isIconOnly = text.isEmpty() && icon != null
+
     val rowModifier =
         modifier
-            .then(borderModifier)
+            .border(1.dp, borderColor(variant, isEnabled), ButtonShape)
             .clip(ButtonShape)
             .background(backgroundFor(variant))
             .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
@@ -127,72 +123,6 @@ fun AppButton(
             if (text.isNotEmpty()) ButtonLabel(text, tint)
         }
     }
-}
-
-private const val ANIMATION_DURATION = 8000
-private const val GLOW_STEPS = 24
-
-@Composable
-private fun animatedBorder(
-    variant: ButtonVariant,
-    enabled: Boolean,
-): Modifier {
-    if (variant != ButtonVariant.PRIMARY || !enabled) {
-        val color =
-            when (variant) {
-                ButtonVariant.DESTRUCTIVE -> {
-                    if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.2f)
-                }
-
-                else -> {
-                    if (enabled) Border else Border.copy(alpha = 0.5f)
-                }
-            }
-        return Modifier.border(1.dp, color, ButtonShape)
-    }
-
-    val spec =
-        infiniteRepeatable<Float>(
-            animation = tween(ANIMATION_DURATION, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        )
-    val transition = rememberInfiniteTransition(label = "border")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = spec,
-        label = "borderPhase",
-    )
-
-    val brush = glowBrush(phase)
-    return Modifier.border(1.dp, brush, ButtonShape)
-}
-
-private fun glowBrush(phase: Float): Brush {
-    // Generate evenly-spaced stops and compute alpha based on angular distance to peak
-    val stops =
-        Array(GLOW_STEPS) { i ->
-            val pos = i.toFloat() / GLOW_STEPS
-            val dist = angularDistance(pos, phase)
-            val alpha = glowAlpha(dist)
-            pos to Primary.copy(alpha = alpha)
-        }
-    return Brush.sweepGradient(colorStops = stops)
-}
-
-private fun angularDistance(
-    a: Float,
-    b: Float,
-): Float {
-    val d = kotlin.math.abs(a - b)
-    return kotlin.math.min(d, 1f - d)
-}
-
-private fun glowAlpha(dist: Float): Float {
-    // Cosine falloff for perfectly smooth gradient, spread ~0.25
-    val t = (dist / 0.25f).coerceIn(0f, 1f)
-    val smooth = (1f + kotlin.math.cos(t * kotlin.math.PI.toFloat())) / 2f
-    return 0.08f + (0.27f * smooth)
 }
 
 @Composable

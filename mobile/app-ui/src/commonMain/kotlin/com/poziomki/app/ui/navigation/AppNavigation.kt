@@ -561,9 +561,9 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(
                                         start = 8.dp,
-                                        top = 12.dp,
+                                        top = 16.dp,
                                         end = 8.dp,
-                                        bottom = 4.dp + bottomInsets,
+                                        bottom = 16.dp + bottomInsets,
                                     ),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically,
