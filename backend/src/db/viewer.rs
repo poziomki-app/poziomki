@@ -42,11 +42,16 @@ pub async fn set_viewer_context(
     // policy". set_config materialises the GUC eagerly because the call
     // itself returns the new value.
     //
+    // Each set_config has to be its own statement. Combining them as
+    // comma-separated targets in a single SELECT (verified empirically
+    // against PG18.3) leaves earlier GUCs unmaterialised when subsequent
+    // RLS WITH CHECK clauses run, so the first two reads still return NULL.
+    //
     // Safe interpolation: user_id is i32, is_review_stub is bool.
     let sql = format!(
-        "SELECT set_config('app.user_id', '{}', true), \
-                set_config('app.is_stub', '{}', true), \
-                set_config('app.role', 'user', true)",
+        "SELECT set_config('app.user_id', '{}', true); \
+         SELECT set_config('app.is_stub', '{}', true); \
+         SELECT set_config('app.role', 'user', true);",
         viewer.user_id, viewer.is_review_stub
     );
     conn.batch_execute(&sql).await
@@ -55,11 +60,11 @@ pub async fn set_viewer_context(
 /// Anonymous / pre-auth context. `app.user_id = 0`, `app.role = 'anon'`.
 pub async fn set_anon_context(conn: &mut AsyncPgConnection) -> Result<(), diesel::result::Error> {
     // See comment in set_viewer_context for why this uses set_config instead
-    // of SET LOCAL.
+    // of SET LOCAL and why each call is its own statement.
     conn.batch_execute(
-        "SELECT set_config('app.user_id', '0', true), \
-                set_config('app.is_stub', 'false', true), \
-                set_config('app.role', 'anon', true)",
+        "SELECT set_config('app.user_id', '0', true); \
+         SELECT set_config('app.is_stub', 'false', true); \
+         SELECT set_config('app.role', 'anon', true);",
     )
     .await
 }
