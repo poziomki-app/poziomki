@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.poziomki.app.data.repository.ProfileRepository
+import com.poziomki.app.data.repository.SettingsRepository
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import com.poziomki.app.network.ProfileWithTags
@@ -22,12 +23,14 @@ data class ProfileViewState(
     val isLoading: Boolean = true,
     val isOwnProfile: Boolean = false,
     val isBookmarked: Boolean = false,
+    val showOwnProgram: Boolean = true,
 )
 
 class ProfileViewViewModel(
     savedStateHandle: SavedStateHandle,
     private val profileRepository: ProfileRepository,
     private val sessionManager: SessionManager,
+    private val settingsRepository: SettingsRepository,
     private val apiService: ApiService,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Route.ProfileView>()
@@ -49,6 +52,17 @@ class ProfileViewViewModel(
             val ownProfileId = sessionManager.profileId.first()
             if (ownProfileId == profileId) {
                 _state.update { it.copy(isOwnProfile = true) }
+                observeOwnPrivacy()
+            }
+        }
+    }
+
+    private fun observeOwnPrivacy() {
+        viewModelScope.launch {
+            val userId = sessionManager.userId.first() ?: return@launch
+            settingsRepository.observeSettings(userId).collect { settings ->
+                val show = settings?.privacy_show_program?.let { it != 0L } ?: true
+                _state.update { it.copy(showOwnProgram = show) }
             }
         }
     }
