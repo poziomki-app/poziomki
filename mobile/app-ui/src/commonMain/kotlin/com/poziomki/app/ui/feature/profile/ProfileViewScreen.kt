@@ -72,9 +72,11 @@ fun ProfileViewScreen(
                 val bottomInsets =
                     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 Box(modifier = Modifier.fillMaxSize()) {
+                    val displayedProgram =
+                        if (state.isOwnProfile && !state.showOwnProgram) null else p.program
                     ProfilePreview(
                         name = p.name,
-                        program = p.program,
+                        program = displayedProgram,
                         bio = p.bio,
                         tags = p.tags,
                         images = images,
