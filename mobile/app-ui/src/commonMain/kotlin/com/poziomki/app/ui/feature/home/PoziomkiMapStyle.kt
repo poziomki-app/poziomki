@@ -44,18 +44,9 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
         { "id": "water", "type": "fill", "source": "openmaptiles", "source-layer": "water",
           "paint": { "fill-color": "#BFD8EF" } },
 
-        { "id": "buildings_flat", "type": "fill", "source": "openmaptiles", "source-layer": "building",
-          "minzoom": 13, "maxzoom": 15,
+        { "id": "buildings", "type": "fill", "source": "openmaptiles", "source-layer": "building",
+          "minzoom": 13,
           "paint": { "fill-color": "#EAE2D2", "fill-outline-color": "#D9D0BD" } },
-
-        { "id": "buildings_3d", "type": "fill-extrusion", "source": "openmaptiles", "source-layer": "building",
-          "minzoom": 15,
-          "paint": {
-            "fill-extrusion-color": "#EAE2D2",
-            "fill-extrusion-height": ["coalesce", ["get", "render_height"], 5],
-            "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-            "fill-extrusion-opacity": 0.92
-          } },
 
         { "id": "roads_minor", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
           "minzoom": 13,
@@ -69,25 +60,13 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
           "paint": { "line-color": "#FFE6BF", "line-width": 4 } },
 
         { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
-          "filter": ["in", "class", "city", "town", "neighbourhood", "suburb"],
+          "filter": ["in", "class", "city", "town", "neighbourhood"],
           "layout": {
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
             "text-font": ["Noto Sans Regular"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 8, 11, 16, 18]
           },
-          "paint": { "text-color": "#3D3530", "text-halo-color": "#FAF6F0", "text-halo-width": 1.6 } },
-
-        { "id": "poi_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "poi",
-          "minzoom": 14,
-          "filter": ["in", "class", "park", "shop", "school", "college"],
-          "layout": {
-            "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Noto Sans Regular"],
-            "text-size": 11,
-            "text-anchor": "top",
-            "text-offset": [0, 0.6]
-          },
-          "paint": { "text-color": "#5A5048", "text-halo-color": "#FAF6F0", "text-halo-width": 1.4 } }
+          "paint": { "text-color": "#3D3530", "text-halo-color": "#FAF6F0", "text-halo-width": 1.6 } }
       ]
     }
     """.trimIndent()

@@ -115,6 +115,14 @@ data class BottomNavItem(
 
 val LocalNavBarPadding = compositionLocalOf { 0.dp }
 
+/**
+ * Lets a screen request the bottom navbar (and the matching content
+ * padding) to hide for an immersive view — the nearby events map needs
+ * the whole height. The MutableState is reset on screen exit via
+ * DisposableEffect by the caller.
+ */
+val LocalImmersive = compositionLocalOf { androidx.compose.runtime.mutableStateOf(false) }
+
 val bottomNavItems =
     listOf(
         BottomNavItem("Poznaj", PhosphorIcons.Regular.UsersThree, PhosphorIcons.Fill.UsersThree, Route.Explore),
@@ -495,12 +503,18 @@ fun MainScreen(
         )
     }
 
+    val immersive = remember { mutableStateOf(false) }
+    val navBarPadding = if (immersive.value) 0.dp else navBarHeight + bottomInsets
+
     Scaffold(
         containerColor = Background,
         bottomBar = {},
         contentWindowInsets = WindowInsets(0),
     ) { _ ->
-        CompositionLocalProvider(LocalNavBarPadding provides (navBarHeight + bottomInsets)) {
+        CompositionLocalProvider(
+            LocalNavBarPadding provides navBarPadding,
+            LocalImmersive provides immersive,
+        ) {
             Column(modifier = Modifier.fillMaxSize().padding(top = safeTop)) {
                 OfflineBanner()
                 Box(modifier = Modifier.fillMaxSize().weight(1f)) {
@@ -546,69 +560,71 @@ fun MainScreen(
                         }
                     }
 
-                    // Bottom navbar
-                    Box(
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface),
-                        contentAlignment = Alignment.BottomCenter,
-                    ) {
-                        Row(
+                    // Bottom navbar — hidden when a screen requests immersive mode.
+                    if (!immersive.value) {
+                        Box(
                             modifier =
                                 Modifier
+                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .padding(
-                                        start = 8.dp,
-                                        top = 12.dp,
-                                        end = 8.dp,
-                                        bottom = 4.dp + bottomInsets,
-                                    ),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically,
+                                    .background(MaterialTheme.colorScheme.surface),
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
-                            val haptic = LocalHapticFeedback.current
-                            bottomNavItems.forEach { item ->
-                                val selected = currentDestination?.hasRoute(item.route::class) == true
-                                val tint =
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                Column(
-                                    modifier =
-                                        Modifier
-                                            .weight(1f)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null,
-                                            ) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                tabNavController.navigate(item.route) {
-                                                    popUpTo(tabNavController.graph.findStartDestination().id) {
-                                                        saveState = true
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            start = 8.dp,
+                                            top = 12.dp,
+                                            end = 8.dp,
+                                            bottom = 4.dp + bottomInsets,
+                                        ),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                val haptic = LocalHapticFeedback.current
+                                bottomNavItems.forEach { item ->
+                                    val selected = currentDestination?.hasRoute(item.route::class) == true
+                                    val tint =
+                                        if (selected) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    Column(
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null,
+                                                ) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    tabNavController.navigate(item.route) {
+                                                        popUpTo(tabNavController.graph.findStartDestination().id) {
+                                                            saveState = true
+                                                        }
+                                                        launchSingleTop = true
+                                                        restoreState = true
                                                     }
-                                                    launchSingleTop = true
-                                                    restoreState = true
-                                                }
-                                            },
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Icon(
-                                        if (selected) item.selectedIcon else item.icon,
-                                        contentDescription = item.label,
-                                        modifier = Modifier.size(26.dp),
-                                        tint = tint,
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = item.label,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = tint,
-                                    )
+                                                },
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Icon(
+                                            if (selected) item.selectedIcon else item.icon,
+                                            contentDescription = item.label,
+                                            modifier = Modifier.size(26.dp),
+                                            tint = tint,
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = item.label,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                            color = tint,
+                                        )
+                                    }
                                 }
                             }
                         }
