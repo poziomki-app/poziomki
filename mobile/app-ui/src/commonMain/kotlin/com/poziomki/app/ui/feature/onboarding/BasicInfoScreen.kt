@@ -61,6 +61,7 @@ fun BasicInfoScreen(
                 text = "dalej",
                 onClick = onNext,
                 enabled = state.name.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
             )
         },
     ) {
