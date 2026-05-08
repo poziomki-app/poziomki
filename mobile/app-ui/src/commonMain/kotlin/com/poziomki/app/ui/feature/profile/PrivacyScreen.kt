@@ -240,7 +240,7 @@ private fun PrivacyContent(
         AppButton(
             text = "zmień email",
             onClick = onOpenEmailDialog,
-            variant = ButtonVariant.OUTLINE,
+            variant = ButtonVariant.SECONDARY,
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
@@ -249,7 +249,7 @@ private fun PrivacyContent(
         AppButton(
             text = "zmień hasło",
             onClick = onOpenPasswordDialog,
-            variant = ButtonVariant.OUTLINE,
+            variant = ButtonVariant.SECONDARY,
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
@@ -313,7 +313,7 @@ private fun ExportDataSection(
     AppButton(
         text = "eksportuj dane",
         onClick = onExport,
-        variant = ButtonVariant.OUTLINE,
+        variant = ButtonVariant.SECONDARY,
         icon = PhosphorIcons.Bold.DownloadSimple,
         loading = isExporting,
     )

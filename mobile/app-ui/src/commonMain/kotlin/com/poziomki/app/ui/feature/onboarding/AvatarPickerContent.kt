@@ -99,7 +99,7 @@ internal fun AvatarPickerContent(
             text = "zr\u00f3b zdj\u0119cie",
             onClick = onPickAvatarImage,
             icon = PhosphorIcons.Bold.Camera,
-            variant = ButtonVariant.OUTLINE,
+            variant = ButtonVariant.SECONDARY,
             modifier = Modifier.fillMaxWidth(),
         )
     }
