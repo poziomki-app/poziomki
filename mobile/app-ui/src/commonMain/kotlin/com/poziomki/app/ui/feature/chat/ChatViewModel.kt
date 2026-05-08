@@ -682,7 +682,7 @@ class ChatViewModel(
                 summary = initialSummary,
                 overrides = _uiState.value.avatarOverrides,
                 roomDisplayName = initialDisplayName,
-                currentAvatar = null,
+                currentAvatar = _uiState.value.roomAvatarUrl,
                 directUserIdFallback = activeDirectUserId,
             )
         val initialIsDirect = initialSummary?.isDirect ?: (activeDirectUserId != null)
