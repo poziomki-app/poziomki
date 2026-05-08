@@ -62,6 +62,7 @@ fun PrivacyScreen(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
+    var showEmailDialog by remember { mutableStateOf(false) }
 
     val saveExport =
         rememberExportFileSaver(
@@ -93,12 +94,37 @@ fun PrivacyScreen(
             navBarBottom = navBarBottom,
             nunito = nunito,
             onOpenPasswordDialog = { showPasswordDialog = true },
+            onOpenEmailDialog = { showEmailDialog = true },
             onExport = { viewModel.exportData() },
             onDelete = { showDeleteDialog = true },
             onToggleDiscoverable = viewModel::toggleDiscoverable,
             onToggleShowProgram = viewModel::toggleShowProgram,
             onToggleScreenshots = viewModel::toggleScreenshotsAllowed,
         )
+    }
+
+    if (showEmailDialog) {
+        ChangeEmailDialog(
+            isRequesting = state.isRequestingEmailOtp,
+            isConfirming = state.isConfirmingEmail,
+            otpSent = state.emailOtpSent,
+            pendingNewEmail = state.pendingNewEmail,
+            error = state.emailChangeError,
+            onDismiss = {
+                showEmailDialog = false
+                viewModel.cancelEmailChange()
+            },
+            onRequestOtp = viewModel::requestEmailChange,
+            onConfirmOtp = viewModel::confirmEmailChange,
+        )
+    }
+
+    LaunchedEffect(state.emailChangeSuccess) {
+        if (state.emailChangeSuccess != null) {
+            showEmailDialog = false
+            kotlinx.coroutines.delay(2000)
+            viewModel.clearEmailChangeSuccess()
+        }
     }
 
     if (showPasswordDialog && state.error == null) {
@@ -128,13 +154,14 @@ fun PrivacyScreen(
     }
 }
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 private fun PrivacyContent(
     state: PrivacyState,
     navBarBottom: androidx.compose.ui.unit.Dp,
     nunito: androidx.compose.ui.text.font.FontFamily,
     onOpenPasswordDialog: () -> Unit,
+    onOpenEmailDialog: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
     onToggleDiscoverable: (Boolean) -> Unit,
@@ -178,6 +205,42 @@ private fun PrivacyContent(
             checked = state.screenshotsAllowed,
             onCheckedChange = onToggleScreenshots,
             nunito = nunito,
+        )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        SectionLabel("EMAIL", color = TextMuted)
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+        Text(
+            text = state.currentEmail.orEmpty(),
+            fontFamily = nunito,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
+        Text(
+            text = "kończysz studia a chcesz zostać w apce? wolisz korzystać z innego maila niż studenckiego?",
+            fontFamily = nunito,
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp,
+            color = TextSecondary,
+            lineHeight = 18.sp,
+        )
+        state.emailChangeSuccess?.let {
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+            Text(
+                text = it,
+                fontFamily = nunito,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = TextSecondary,
+            )
+        }
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        AppButton(
+            text = "zmień email",
+            onClick = onOpenEmailDialog,
+            variant = ButtonVariant.OUTLINE,
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))

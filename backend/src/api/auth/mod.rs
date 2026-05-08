@@ -1,5 +1,7 @@
 #[path = "account.rs"]
 mod auth_account;
+#[path = "email_change.rs"]
+mod auth_email_change;
 #[path = "rate_limit.rs"]
 mod auth_rate_limit;
 #[path = "service.rs"]
@@ -39,6 +41,7 @@ use crate::db::schema::sessions;
 use crate::jobs::enqueue_otp_email;
 
 pub(super) use auth_account::{change_password, delete_account, export_data};
+pub(super) use auth_email_change::{confirm_email_change, request_email_change};
 pub(super) use auth_session::get_session;
 
 pub(super) async fn sign_up(

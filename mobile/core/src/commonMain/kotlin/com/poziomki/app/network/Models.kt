@@ -415,6 +415,24 @@ data class ChangePasswordRequest(
     val newPassword: String,
 )
 
+@Serializable
+data class RequestEmailChangeRequest(
+    val newEmail: String,
+    val currentPassword: String,
+)
+
+@Serializable
+data class ConfirmEmailChangeRequest(
+    val newEmail: String,
+    val code: String,
+)
+
+@Serializable
+data class EmailChangeResponse(
+    val success: Boolean,
+    val email: String,
+)
+
 // Forgot password models
 
 @Serializable

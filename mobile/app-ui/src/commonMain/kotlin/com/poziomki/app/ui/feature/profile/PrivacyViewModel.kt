@@ -27,8 +27,16 @@ data class PrivacyState(
     val discoverable: Boolean = true,
     val showProgram: Boolean = true,
     val screenshotsAllowed: Boolean = false,
+    val currentEmail: String? = null,
+    val pendingNewEmail: String? = null,
+    val isRequestingEmailOtp: Boolean = false,
+    val isConfirmingEmail: Boolean = false,
+    val emailOtpSent: Boolean = false,
+    val emailChangeError: String? = null,
+    val emailChangeSuccess: String? = null,
 )
 
+@Suppress("TooManyFunctions")
 class PrivacyViewModel(
     private val apiService: ApiService,
     private val sessionManager: SessionManager,
@@ -52,6 +60,10 @@ class PrivacyViewModel(
                     )
             }
         }
+        sessionManager.email
+            .onEach { email ->
+                _state.value = _state.value.copy(currentEmail = email)
+            }.launchIn(viewModelScope)
         appPreferences.screenshotsAllowed
             .onEach { allowed ->
                 _state.value = _state.value.copy(screenshotsAllowed = allowed)
@@ -219,4 +231,104 @@ class PrivacyViewModel(
     fun clearPasswordSuccess() {
         _state.value = _state.value.copy(passwordSuccessMessage = null)
     }
+
+    fun requestEmailChange(
+        newEmail: String,
+        currentPassword: String,
+    ) {
+        val trimmed = newEmail.trim().lowercase()
+        if (trimmed.isBlank() || !trimmed.contains('@') || !trimmed.substringAfter('@').contains('.')) {
+            _state.value = _state.value.copy(emailChangeError = "Nieprawidłowy adres email")
+            return
+        }
+        if (currentPassword.isBlank()) {
+            _state.value = _state.value.copy(emailChangeError = "Wpisz aktualne hasło")
+            return
+        }
+        viewModelScope.launch {
+            _state.value =
+                _state.value.copy(
+                    isRequestingEmailOtp = true,
+                    emailChangeError = null,
+                    pendingNewEmail = trimmed,
+                )
+            when (val result = apiService.requestEmailChange(trimmed, currentPassword)) {
+                is ApiResult.Success -> {
+                    _state.value =
+                        _state.value.copy(
+                            isRequestingEmailOtp = false,
+                            emailOtpSent = true,
+                            emailChangeError = null,
+                        )
+                }
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            isRequestingEmailOtp = false,
+                            emailOtpSent = false,
+                            pendingNewEmail = null,
+                            emailChangeError = mapEmailChangeError(result),
+                        )
+                }
+            }
+        }
+    }
+
+    fun confirmEmailChange(code: String) {
+        val newEmail = _state.value.pendingNewEmail ?: return
+        if (code.length != 6) {
+            _state.value = _state.value.copy(emailChangeError = "Wpisz 6-cyfrowy kod")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isConfirmingEmail = true, emailChangeError = null)
+            when (val result = apiService.confirmEmailChange(newEmail, code)) {
+                is ApiResult.Success -> {
+                    sessionManager.updateEmail(result.data.email)
+                    _state.value =
+                        _state.value.copy(
+                            isConfirmingEmail = false,
+                            emailOtpSent = false,
+                            pendingNewEmail = null,
+                            emailChangeError = null,
+                            emailChangeSuccess = "email zmieniony",
+                        )
+                }
+
+                is ApiResult.Error -> {
+                    _state.value =
+                        _state.value.copy(
+                            isConfirmingEmail = false,
+                            emailChangeError = mapEmailChangeError(result),
+                        )
+                }
+            }
+        }
+    }
+
+    fun cancelEmailChange() {
+        _state.value =
+            _state.value.copy(
+                isRequestingEmailOtp = false,
+                isConfirmingEmail = false,
+                emailOtpSent = false,
+                pendingNewEmail = null,
+                emailChangeError = null,
+            )
+    }
+
+    fun clearEmailChangeSuccess() {
+        _state.value = _state.value.copy(emailChangeSuccess = null)
+    }
+
+    private fun mapEmailChangeError(error: ApiResult.Error): String =
+        when (error.code) {
+            "UNAUTHORIZED" -> "nieprawidłowe hasło"
+            "EMAIL_TAKEN" -> "ten email jest już zajęty"
+            "INVALID_OTP" -> "nieprawidłowy lub wygasły kod"
+            "VALIDATION_ERROR" -> "nieprawidłowy adres email"
+            "RATE_LIMITED" -> "poczekaj chwilę zanim spróbujesz ponownie"
+            else -> "nie udało się zmienić emaila"
+        }
 }

@@ -66,6 +66,24 @@ class ApiService(
             ChangePasswordRequest(currentPassword = currentPassword, newPassword = newPassword),
         )
 
+    suspend fun requestEmailChange(
+        newEmail: String,
+        currentPassword: String,
+    ): ApiResult<SuccessResponse> =
+        client.patch(
+            "/api/v1/auth/account/email/request",
+            RequestEmailChangeRequest(newEmail = newEmail, currentPassword = currentPassword),
+        )
+
+    suspend fun confirmEmailChange(
+        newEmail: String,
+        code: String,
+    ): ApiResult<EmailChangeResponse> =
+        client.patch(
+            "/api/v1/auth/account/email/confirm",
+            ConfirmEmailChangeRequest(newEmail = newEmail, code = code),
+        )
+
     // Profiles
 
     suspend fun getMyProfile(): ApiResult<Profile> = client.get("/api/v1/profiles/me")

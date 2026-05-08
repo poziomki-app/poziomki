@@ -79,6 +79,17 @@ class SessionManager(
         }
     }
 
+    val email: Flow<String?> =
+        dataStore.data.map { prefs ->
+            prefs[USER_EMAIL]
+        }
+
+    suspend fun updateEmail(email: String) {
+        dataStore.edit { prefs ->
+            prefs[USER_EMAIL] = email
+        }
+    }
+
     suspend fun saveProfileId(profileId: String) {
         dataStore.edit { prefs ->
             prefs[PROFILE_ID] = profileId
