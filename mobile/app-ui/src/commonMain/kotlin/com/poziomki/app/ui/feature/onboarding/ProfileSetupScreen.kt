@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -110,17 +109,13 @@ fun ProfileSetupScreen(
                     modifier = Modifier.padding(bottom = AppTheme.spacing.sm),
                 )
             }
-            Row(
+            AppButton(
+                text = "potwierd\u017a",
+                onClick = { viewModel.createProfile(onComplete) },
+                loading = state.isLoading,
+                variant = ButtonVariant.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                AppButton(
-                    text = "potwierd\u017a",
-                    onClick = { viewModel.createProfile(onComplete) },
-                    loading = state.isLoading,
-                    variant = ButtonVariant.PRIMARY,
-                )
-            }
+            )
         },
     ) {
         ProfileSetupContent(

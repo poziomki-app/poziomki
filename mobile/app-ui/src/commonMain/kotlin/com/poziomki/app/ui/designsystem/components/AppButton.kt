@@ -51,8 +51,12 @@ private val DestructiveGradient =
 
 private fun contentColor(variant: ButtonVariant): Color =
     when (variant) {
-        ButtonVariant.PRIMARY, ButtonVariant.OUTLINE -> Primary
-        ButtonVariant.SECONDARY -> White
+        // OUTLINE is kept as an alias for SECONDARY to avoid touching every
+        // call site — both render as the simple grey style.
+        ButtonVariant.PRIMARY -> Primary
+
+        ButtonVariant.SECONDARY, ButtonVariant.OUTLINE -> White
+
         ButtonVariant.DESTRUCTIVE -> Error
     }
 
@@ -89,9 +93,9 @@ fun AppButton(
             .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
             .then(
                 if (isIconOnly) {
-                    Modifier.padding(14.dp)
+                    Modifier.padding(16.dp)
                 } else {
-                    Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    Modifier.padding(horizontal = 28.dp, vertical = 20.dp)
                 },
             )
 
@@ -200,7 +204,7 @@ private fun ButtonLabel(
         text = text,
         fontFamily = NunitoFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
+        fontSize = 17.sp,
         color = color,
     )
 }

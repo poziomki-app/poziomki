@@ -87,17 +87,13 @@ fun InterestsScreen(
         showBack = true,
         onBack = onBack,
         footer = {
-            Row(
+            AppButton(
+                text = "dalej",
+                onClick = onNext,
+                enabled = ready,
+                variant = if (ready) ButtonVariant.PRIMARY else ButtonVariant.SECONDARY,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                AppButton(
-                    text = "dalej",
-                    onClick = onNext,
-                    enabled = ready,
-                    variant = if (ready) ButtonVariant.PRIMARY else ButtonVariant.OUTLINE,
-                )
-            }
+            )
         },
     ) {
         InterestsContent(
