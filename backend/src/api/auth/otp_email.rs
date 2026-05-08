@@ -222,6 +222,47 @@ async fn send_via_relay(
         .map_err(|e| format!("relay {relay_host}:{port}: {e}"))
 }
 
+async fn send_via_resend(to: &str, code: &str) -> Result<(), String> {
+    let api_key = env_nonempty("RESEND_API_KEY").ok_or_else(|| "no RESEND_API_KEY".to_string())?;
+    let from = env_nonempty("RESEND_FROM").unwrap_or_else(|| {
+        // Resend requires the From domain to match a verified domain in their
+        // dashboard. send.poziomki.app is the subdomain whose DNS records the
+        // dashboard provisioned.
+        "poziomki <noreply@send.poziomki.app>".into()
+    });
+
+    let body = serde_json::json!({
+        "from": from,
+        "to": [to],
+        "subject": format!("Twój kod logowania to {code}"),
+        "html": otp_email_html(code),
+        "text": format!(
+            "Twój kod logowania: {code}\n\nWpisz ten kod w aplikacji, aby potwierdzić swoje konto.\nKod wygasa za 10 minut.\n\n2026 poziomki 🩵"
+        ),
+    });
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("reqwest client: {e}"))?;
+
+    let response = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("resend HTTP: {e}"))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        Err(format!("resend {status}: {text}"))
+    }
+}
+
 async fn send_via_mx(
     envelope: &lettre::address::Envelope,
     body: &[u8],
@@ -288,17 +329,34 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
         }
     }
 
-    // FALLBACK: direct-to-MX (dev / when relay not configured or failing).
+    // FALLBACK 1: direct-to-MX (works when port 25 outbound is open).
     let domain = to
         .rsplit_once('@')
         .map(|(_, d)| d)
         .ok_or_else(|| format!("No domain in {redacted}"))?;
-    match send_via_mx(&envelope, &body, domain).await {
+    let mx_err = match send_via_mx(&envelope, &body, domain).await {
         Ok(mx_host) => {
             tracing::info!("OTP email delivered to {redacted} via MX {mx_host}");
+            return Ok(());
+        }
+        Err(e) => {
+            tracing::warn!("OTP direct MX failed ({e}); falling back to Resend for {redacted}");
+            e
+        }
+    };
+
+    // FALLBACK 2: Resend HTTP API. Independent of SMTP/port 25, so it covers
+    // VPS network egress problems, MX greylisting, and IP reputation hits.
+    // Skipped silently if RESEND_API_KEY is unset — local dev and staging
+    // don't need Resend to test the chain.
+    match send_via_resend(to, code).await {
+        Ok(()) => {
+            tracing::info!("OTP email delivered to {redacted} via Resend");
             Ok(())
         }
-        Err(e) => Err(format!("OTP delivery failed for {redacted}: {e}")),
+        Err(resend_err) => Err(format!(
+            "OTP delivery failed for {redacted}: MX={mx_err}; resend={resend_err}"
+        )),
     }
 }
 
