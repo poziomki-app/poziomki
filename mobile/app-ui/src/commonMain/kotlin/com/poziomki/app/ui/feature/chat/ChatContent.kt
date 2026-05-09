@@ -79,6 +79,7 @@ import com.poziomki.app.ui.feature.chat.model.ComposerMode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
@@ -158,7 +159,9 @@ fun ChatContent(
         }
 
         run {
-            val reversedItems = state.timelineItems.asReversed()
+            val itemsWithDividers =
+                remember(state.timelineItems) { withDateDividers(state.timelineItems) }
+            val reversedItems = itemsWithDividers.asReversed()
             val topTimelineLabel by remember(reversedItems, timelineListState) {
                 derivedStateOf {
                     val topVisibleIndex = timelineListState.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index }
@@ -200,7 +203,7 @@ fun ChatContent(
                         Box(modifier = itemPadding) {
                             when (item) {
                                 is TimelineItem.DateDivider -> {
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    DateDivider(item.timestampMillis)
                                 }
 
                                 is TimelineItem.Event -> {
@@ -810,6 +813,24 @@ internal fun shouldGroupWithPrevious(
     if (previous.isMine != current.isMine) return false
     val delta = current.timestampMillis - previous.timestampMillis
     return delta in 0..(5 * 60 * 1000)
+}
+
+internal fun withDateDividers(items: List<TimelineItem>): List<TimelineItem> {
+    if (items.isEmpty()) return items
+    val zone = TimeZone.currentSystemDefault()
+    val out = ArrayList<TimelineItem>(items.size + 4)
+    var lastDate: LocalDate? = null
+    for (item in items) {
+        if (item is TimelineItem.Event) {
+            val date = Instant.fromEpochMilliseconds(item.timestampMillis).toLocalDateTime(zone).date
+            if (date != lastDate) {
+                out.add(TimelineItem.DateDivider(item.timestampMillis))
+                lastDate = date
+            }
+        }
+        out.add(item)
+    }
+    return out
 }
 
 internal fun formatDate(timestampMillis: Long): String {
