@@ -80,6 +80,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.onboarding.INTEREST_CATEGORIES
+import com.poziomki.app.ui.feature.onboarding.InterestCategoryInfo
 import com.poziomki.app.ui.navigation.LocalImmersive
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.TimeFilter
@@ -346,6 +347,16 @@ private fun EventCard(
                                 .align(Alignment.TopEnd)
                                 .padding(PoziomkiTheme.spacing.sm),
                     )
+
+                    eventCategoryInfo(event.category)?.let { info ->
+                        CategoryFloatingChip(
+                            info = info,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(PoziomkiTheme.spacing.sm),
+                        )
+                    }
                 }
             }
 
@@ -467,6 +478,41 @@ private fun BookmarkOverlay(
             contentDescription = if (isSaved) "Usuń z zapisanych" else "Zapisz",
             modifier = Modifier.size(22.dp),
             tint = if (isSaved) Primary else TextPrimary,
+        )
+    }
+}
+
+private fun eventCategoryInfo(category: String?): InterestCategoryInfo? {
+    if (category.isNullOrBlank()) return null
+    return INTEREST_CATEGORIES.firstOrNull { it.key == category }
+}
+
+@Composable
+private fun CategoryFloatingChip(
+    info: InterestCategoryInfo,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(Overlay)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = info.icon,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = info.color,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = info.displayName,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+            color = TextPrimary,
         )
     }
 }
