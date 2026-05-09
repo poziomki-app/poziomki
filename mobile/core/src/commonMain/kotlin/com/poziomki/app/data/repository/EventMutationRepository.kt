@@ -132,6 +132,7 @@ internal class EventMutationRepository(
                     is_dirty = 1L,
                     requires_approval = current.requires_approval,
                     is_pending = current.is_pending,
+                    recurrence_rule = request.recurrenceRule ?: current.recurrence_rule,
                 )
             }
 
@@ -389,6 +390,7 @@ internal class EventMutationRepository(
             is_dirty = if (isDirty) 1L else 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
+            recurrence_rule = event.recurrenceRule,
         )
     }
 
@@ -452,6 +454,7 @@ internal class EventMutationRepository(
             longitude = request.longitude ?: cached.longitude,
             startsAt = request.startsAt ?: cached.startsAt,
             endsAt = request.endsAt ?: cached.endsAt,
+            recurrenceRule = request.recurrenceRule ?: cached.recurrenceRule,
             tags = optimisticTags,
         )
     }
@@ -502,6 +505,7 @@ internal class EventMutationRepository(
             is_dirty = event.is_dirty,
             requires_approval = event.requires_approval,
             is_pending = event.is_pending,
+            recurrence_rule = event.recurrence_rule,
         )
     }
 }

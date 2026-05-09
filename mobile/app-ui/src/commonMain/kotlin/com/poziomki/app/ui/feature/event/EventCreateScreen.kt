@@ -626,6 +626,14 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            SectionLabel("powtarzaj")
+            RecurrencePicker(
+                selected = state.recurrenceRule,
+                onSelect = viewModel::updateRecurrenceRule,
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Error
             state.error?.let { error ->
                 Text(
@@ -883,6 +891,46 @@ private fun EventTagChip(
                 tint = Primary,
                 modifier = Modifier.size(14.dp),
             )
+        }
+    }
+}
+
+private val RECURRENCE_OPTIONS: List<Pair<String?, String>> =
+    listOf(
+        null to "brak",
+        "FREQ=WEEKLY" to "co tydzień",
+        "FREQ=WEEKLY;INTERVAL=2" to "co 2 tyg.",
+        "FREQ=MONTHLY" to "co miesiąc",
+    )
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RecurrencePicker(
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        RECURRENCE_OPTIONS.forEach { (rule, label) ->
+            val isSelected = selected == rule
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (isSelected) PrimaryLight else SurfaceColor,
+                border = BorderStroke(1.dp, if (isSelected) Primary else Border),
+                modifier = Modifier.clickable { onSelect(rule) },
+            ) {
+                Text(
+                    text = label,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = if (isSelected) Primary else TextPrimary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 }

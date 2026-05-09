@@ -148,6 +148,16 @@ fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> Event
     if let Some(limit) = &payload.max_attendees {
         changeset.max_attendees = Some(*limit);
     }
+    if let Some(rule) = &payload.recurrence_rule {
+        changeset.recurrence_rule = Some(rule.as_ref().and_then(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }));
+    }
 
     let (new_starts, new_ends) = dates;
     changeset.starts_at = Some(new_starts);
