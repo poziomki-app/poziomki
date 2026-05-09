@@ -15,70 +15,84 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
     {
       "version": 8,
       "name": "Poziomki Pastel",
-      "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+      "glyphs": "https://poziomki.app/fonts/{fontstack}/{range}.pbf",
       "sprite": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
       "sources": {
         "openmaptiles": { "type": "vector", "url": "https://tiles.openfreemap.org/planet" }
       },
       "layers": [
         { "id": "background", "type": "background",
-          "paint": { "background-color": "#FAF6F0" } },
+          "paint": { "background-color": "#FFFFFF" } },
 
         { "id": "landcover_wood", "type": "fill", "source": "openmaptiles", "source-layer": "landcover",
           "filter": ["==", "class", "wood"],
-          "paint": { "fill-color": "#D2E1C2", "fill-opacity": 0.6 } },
+          "paint": { "fill-color": "#D8E6CC", "fill-opacity": 0.7 } },
         { "id": "landcover_grass", "type": "fill", "source": "openmaptiles", "source-layer": "landcover",
           "filter": ["==", "class", "grass"],
-          "paint": { "fill-color": "#DFEBC7", "fill-opacity": 0.6 } },
+          "paint": { "fill-color": "#E5EFD8", "fill-opacity": 0.7 } },
 
         { "id": "park", "type": "fill", "source": "openmaptiles", "source-layer": "park",
-          "paint": { "fill-color": "#D9E8C9" } },
+          "paint": { "fill-color": "#DDEAD0" } },
 
         { "id": "landuse_school", "type": "fill", "source": "openmaptiles", "source-layer": "landuse",
           "filter": ["in", "class", "school", "university"],
-          "paint": { "fill-color": "#F4DCC9", "fill-opacity": 0.7 } },
+          "paint": { "fill-color": "#E0EBF5", "fill-opacity": 0.8 } },
         { "id": "landuse_residential", "type": "fill", "source": "openmaptiles", "source-layer": "landuse",
           "filter": ["==", "class", "residential"],
-          "paint": { "fill-color": "#F1ECE2", "fill-opacity": 0.5 } },
+          "paint": { "fill-color": "#F4F4F4", "fill-opacity": 0.7 } },
 
         { "id": "water", "type": "fill", "source": "openmaptiles", "source-layer": "water",
-          "paint": { "fill-color": "#BFD8EF" } },
+          "paint": { "fill-color": "#BBE0E6" } },
 
         { "id": "buildings", "type": "fill", "source": "openmaptiles", "source-layer": "building",
           "minzoom": 13,
-          "paint": { "fill-color": "#EAE2D2", "fill-outline-color": "#D9D0BD" } },
+          "paint": { "fill-color": "#D6D6D6", "fill-outline-color": "#C2C2C2" } },
 
-        { "id": "roads_minor", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
-          "minzoom": 13,
+        { "id": "roads_minor_casing", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
+          "minzoom": 14,
           "filter": ["in", "class", "minor", "service", "track"],
-          "paint": { "line-color": "#FFFFFF", "line-width": 1.5 } },
+          "paint": { "line-color": "#E2E2E2", "line-width": 2 } },
+        { "id": "roads_minor", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
+          "minzoom": 14,
+          "filter": ["in", "class", "minor", "service", "track"],
+          "paint": { "line-color": "#FFFFFF", "line-width": 1.4 } },
+
+        { "id": "roads_major_casing", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
+          "filter": ["in", "class", "primary", "secondary", "tertiary", "trunk"],
+          "paint": { "line-color": "#C9D6E0", "line-width": 4.5 } },
         { "id": "roads_major", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
           "filter": ["in", "class", "primary", "secondary", "tertiary", "trunk"],
           "paint": { "line-color": "#FFFFFF", "line-width": 3 } },
+
+        { "id": "roads_motorway_casing", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
+          "filter": ["==", "class", "motorway"],
+          "paint": { "line-color": "#E8B98A", "line-width": 6 } },
         { "id": "roads_motorway", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
           "filter": ["==", "class", "motorway"],
-          "paint": { "line-color": "#FFE6BF", "line-width": 4 } },
+          "paint": { "line-color": "#FFE0B7", "line-width": 4 } },
 
         { "id": "street_labels_major", "type": "symbol", "source": "openmaptiles", "source-layer": "transportation_name",
           "minzoom": 13,
           "filter": ["in", "class", "primary", "secondary", "tertiary", "trunk", "motorway"],
           "layout": {
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Noto Sans Regular"],
+            "text-font": ["Nunito Regular"],
             "symbol-placement": "line",
             "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 18, 14],
-            "text-letter-spacing": 0.05
+            "text-letter-spacing": 0.04
           },
-          "paint": { "text-color": "#5A5048", "text-halo-color": "#FAF6F0", "text-halo-width": 1.6 } },
+          "paint": { "text-color": "#5A5A5A", "text-halo-color": "#FFFFFF", "text-halo-width": 1.6 } },
 
         { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
           "filter": ["in", "class", "neighbourhood", "suburb"],
           "layout": {
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Noto Sans Regular"],
-            "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 14]
+            "text-font": ["Montserrat ExtraBold"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 20],
+            "text-letter-spacing": 0.08,
+            "text-transform": "uppercase"
           },
-          "paint": { "text-color": "#5A5048", "text-halo-color": "#FAF6F0", "text-halo-width": 1.4 } }
+          "paint": { "text-color": "#1F2A33", "text-halo-color": "#FFFFFF", "text-halo-width": 2.0 } }
       ]
     }
     """.trimIndent()

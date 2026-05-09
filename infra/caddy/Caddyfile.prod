@@ -60,6 +60,17 @@ poziomki.app, www.poziomki.app {
 		file_server
 	}
 
+	# MapLibre glyph PBFs for the in-app pastel map. Folders contain
+	# spaces (e.g. "Nunito Regular") so the URL must encode them
+	# (Nunito%20Regular). Long cache — TTFs and the rasterised PBFs
+	# never change unless we re-run fontnik.
+	handle_path /fonts/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		header Access-Control-Allow-Origin "*"
+		root * /var/www/fonts
+		file_server
+	}
+
 	# APK mirror — populated by the Publish APKs to VPS workflow which rsyncs
 	# release artefacts into /var/www/download/ (universal + per-arch + a
 	# canonical poziomki-vX.Y.Z.apk alias). file_server browse exposes a
