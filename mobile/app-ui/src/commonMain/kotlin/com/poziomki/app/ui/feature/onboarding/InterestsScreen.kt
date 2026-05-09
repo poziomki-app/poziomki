@@ -328,7 +328,7 @@ private fun SearchBar(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "szukaj...",
+                        text = "szukaj",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextMuted,
                     )

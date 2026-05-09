@@ -80,6 +80,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
+import com.poziomki.app.ui.shared.POLISH_MONTHS_GENITIVE
 import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.formatPolishDateFromMillis
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
@@ -190,9 +191,7 @@ fun EventCreateScreen(
                 runCatching {
                     val instant = Instant.parse(state.startsAt)
                     val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-                    "${dt.day.toString().padStart(2, '0')}.${
-                        dt.month.toString().padStart(2, '0')
-                    }.${dt.year}"
+                    "${dt.day} ${POLISH_MONTHS_GENITIVE[dt.month.ordinal]} ${dt.year}"
                 }.getOrDefault("")
             } else {
                 ""
@@ -469,7 +468,7 @@ fun EventCreateScreen(
             PoziomkiTextField(
                 value = state.tagSearchQuery,
                 onValueChange = viewModel::updateTagSearch,
-                placeholder = "szukaj tagów...",
+                placeholder = "szukaj",
             )
 
             if (state.tagSearchQuery.isNotBlank()) {
@@ -654,6 +653,7 @@ fun EventCreateScreen(
                         state.startsAt.isNotBlank() &&
                         state.attendeeLimitError == null,
                 loading = state.isLoading,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))

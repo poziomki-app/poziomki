@@ -365,7 +365,7 @@ private fun ChatSearchBar(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "szukaj wiadomości...",
+                        text = "szukaj",
                         fontFamily = NunitoFamily,
                         color = TextMuted,
                         fontSize = 15.sp,

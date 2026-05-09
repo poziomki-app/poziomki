@@ -56,7 +56,7 @@ fun ProfileCard(
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
-    val cardHeight = 88.dp
+    val cardHeight = 104.dp
 
     val startColor = parseHexColor(gradientStart)
     val endColor = parseHexColor(gradientEnd)
@@ -130,6 +130,7 @@ fun ProfileCard(
                 )
 
                 if (!program.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = program,
                         fontFamily = NunitoFamily,

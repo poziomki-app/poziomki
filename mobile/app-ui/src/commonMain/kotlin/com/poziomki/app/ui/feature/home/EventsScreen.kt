@@ -65,8 +65,7 @@ import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
-import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
-import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.designsystem.components.SearchableScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -105,6 +104,7 @@ fun EventsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
     val requestLocationPermission =
         rememberLocationPermissionLauncher { granted ->
             if (granted) viewModel.retryNearby()
@@ -142,7 +142,23 @@ fun EventsScreen(
                 .fillMaxSize()
                 .background(Background),
     ) {
-        ScreenHeader(title = "wydarzenia") {
+        SearchableScreenHeader(
+            title = "wydarzenia",
+            searchQuery = searchQuery,
+            onSearchQueryChange = {
+                searchQuery = it
+                viewModel.setSearchQuery(it)
+            },
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
+            filterActive = state.selectedCategories.isNotEmpty(),
+            onFilterClick =
+                if (!isNearby) {
+                    { viewModel.toggleShowTagFilter() }
+                } else {
+                    null
+                },
+        ) {
             androidx.compose.material3.IconButton(onClick = onNavigateToEventCreate) {
                 Icon(
                     PhosphorIcons.Bold.Plus,
@@ -151,19 +167,6 @@ fun EventsScreen(
                 )
             }
             profileAvatarAction()
-        }
-
-        if (!isNearby) {
-            PoziomkiSearchBar(
-                query = searchQuery,
-                onQueryChange = {
-                    searchQuery = it
-                    viewModel.setSearchQuery(it)
-                },
-                placeholder = "szukaj wydarzeń...",
-                filterActive = state.selectedCategories.isNotEmpty(),
-                onFilterClick = { viewModel.toggleShowTagFilter() },
-            )
         }
 
         if (state.showTagFilter) {
