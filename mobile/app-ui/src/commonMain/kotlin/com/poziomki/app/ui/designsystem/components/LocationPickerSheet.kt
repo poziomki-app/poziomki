@@ -74,6 +74,16 @@ private const val DEFAULT_LNG = 21.0122
 
 private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/positron"
 
+// Warsaw metro bbox + min zoom that keeps the city in frame. Both the
+// nearby map and the event-create picker clamp to these so users can't
+// drift outside the supported area.
+private const val WARSAW_WEST = 20.85
+private const val WARSAW_SOUTH = 52.10
+private const val WARSAW_EAST = 21.27
+private const val WARSAW_NORTH = 52.37
+private const val WARSAW_MIN_ZOOM = 10.0
+private const val WARSAW_MAX_ZOOM = 18.0
+
 internal fun pointGeoJson(
     lat: Double,
     lng: Double,
@@ -125,10 +135,21 @@ fun LocationPickerSheet(
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Background)) {
             // Full-screen map
+            val warsawBounds =
+                remember {
+                    org.maplibre.spatialk.geojson.BoundingBox(
+                        west = WARSAW_WEST,
+                        south = WARSAW_SOUTH,
+                        east = WARSAW_EAST,
+                        north = WARSAW_NORTH,
+                    )
+                }
             MaplibreMap(
                 modifier = Modifier.fillMaxSize(),
                 baseStyle = BaseStyle.Uri(MAP_STYLE),
                 cameraState = cameraState,
+                boundingBox = warsawBounds,
+                zoomRange = WARSAW_MIN_ZOOM.toFloat()..WARSAW_MAX_ZOOM.toFloat(),
                 options =
                     MapOptions(
                         ornamentOptions =

@@ -196,6 +196,7 @@ internal fun NearbyEventsContent(
                 baseStyle = BaseStyle.Json(POZIOMKI_MAP_STYLE_JSON),
                 cameraState = cameraState,
                 boundingBox = warsawBounds,
+                zoomRange = 10f..18f,
                 options =
                     MapOptions(
                         ornamentOptions =
