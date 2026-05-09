@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,9 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -576,9 +573,9 @@ fun MainScreen(
                                         .fillMaxWidth()
                                         .padding(
                                             start = 8.dp,
-                                            top = 12.dp,
+                                            top = 16.dp,
                                             end = 8.dp,
-                                            bottom = 4.dp + bottomInsets,
+                                            bottom = 16.dp + bottomInsets,
                                         ),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically,
@@ -614,15 +611,8 @@ fun MainScreen(
                                         Icon(
                                             if (selected) item.selectedIcon else item.icon,
                                             contentDescription = item.label,
-                                            modifier = Modifier.size(26.dp),
+                                            modifier = Modifier.size(32.dp),
                                             tint = tint,
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = item.label,
-                                            fontSize = 10.sp,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                            color = tint,
                                         )
                                     }
                                 }
