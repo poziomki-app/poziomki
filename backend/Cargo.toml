@@ -40,7 +40,7 @@ default-run = "poziomki_backend-cli"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-tokio = { version = "=1.52.1", default-features = false, features = [
+tokio = { version = "=1.52.3", default-features = false, features = [
   "rt-multi-thread",
   "signal",
   "time",
@@ -56,7 +56,7 @@ uuid = { version = "=1.23.1", features = ["v4", "serde"] }
 hmac = { version = "0.13" }
 sha2 = { version = "0.11" }
 reqwest = { version = "=0.13.3", default-features = false, features = ["json", "rustls"] }
-rust-s3 = { version = "=0.37.1", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
+rust-s3 = { version = "=0.37.2", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 url = { version = "=2.5.8" }
 
 dashmap = { version = "6" }
@@ -69,7 +69,7 @@ fast_image_resize = "=6.0.0"
 webp = "=0.3.1"
 thumbhash = "=0.1.0"
 base64 = "=0.22.1"
-tower-http = { version = "=0.6.8", features = ["limit", "set-header", "trace"] }
+tower-http = { version = "=0.6.10", features = ["limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
 jsonwebtoken = "=10.3.0"
 dotenvy = "=0.15.7"
