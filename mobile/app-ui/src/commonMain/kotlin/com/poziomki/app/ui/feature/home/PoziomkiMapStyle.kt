@@ -44,10 +44,6 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
         { "id": "water", "type": "fill", "source": "openmaptiles", "source-layer": "water",
           "paint": { "fill-color": "#BBE0E6" } },
 
-        { "id": "buildings", "type": "fill", "source": "openmaptiles", "source-layer": "building",
-          "minzoom": 13,
-          "paint": { "fill-color": "#D6D6D6", "fill-outline-color": "#C2C2C2" } },
-
         { "id": "roads_minor_casing", "type": "line", "source": "openmaptiles", "source-layer": "transportation",
           "minzoom": 14,
           "filter": ["in", "class", "minor", "service", "track"],
@@ -81,7 +77,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
             "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 18, 14],
             "text-letter-spacing": 0.04
           },
-          "paint": { "text-color": "#5A5A5A", "text-halo-color": "#FFFFFF", "text-halo-width": 1.6 } },
+          "paint": { "text-color": "#5A5A5A" } },
 
         { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
           "filter": ["in", "class", "neighbourhood", "suburb"],
@@ -89,10 +85,10 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
             "text-font": ["Montserrat ExtraBold"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 20],
-            "text-letter-spacing": 0.08,
-            "text-transform": "uppercase"
+            "text-letter-spacing": 0.04,
+            "text-transform": "lowercase"
           },
-          "paint": { "text-color": "#1F2A33", "text-halo-color": "#FFFFFF", "text-halo-width": 2.0 } }
+          "paint": { "text-color": "#1F2A33" } }
       ]
     }
     """.trimIndent()
