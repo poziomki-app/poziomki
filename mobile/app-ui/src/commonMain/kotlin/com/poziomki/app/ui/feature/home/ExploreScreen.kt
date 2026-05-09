@@ -69,9 +69,10 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 fun ExploreScreen(
     onNavigateToProfile: (String) -> Unit,
-    onNavigateToEventDetail: (String) -> Unit = {},
+    @Suppress("UnusedParameter") onNavigateToEventDetail: (String) -> Unit = {},
     profileAvatarAction: @Composable () -> Unit = {},
     viewModel: ExploreViewModel = koinViewModel(),
 ) {
@@ -119,7 +120,7 @@ fun ExploreScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
         val isFilterOnlyMode = !isSearchActive && state.isFilterActive
         Box(modifier = Modifier.fillMaxSize()) {
@@ -167,20 +168,14 @@ fun ExploreScreen(
                     state.searchResults != null -> {
                         val raw = state.searchResults!!
                         val selectedIds = state.selectedTagIds
-                        val results =
+                        val profiles =
                             if (selectedIds.isEmpty()) {
-                                raw
+                                raw.profiles
                             } else {
-                                raw.copy(
-                                    profiles = raw.profiles.filter { p -> p.tags.any { it in selectedIds } },
-                                )
+                                raw.profiles.filter { p -> p.tags.any { it in selectedIds } }
                             }
-                        val hasResults =
-                            results.profiles.isNotEmpty() ||
-                                results.events.isNotEmpty() ||
-                                results.tags.isNotEmpty()
 
-                        if (!hasResults) {
+                        if (profiles.isEmpty()) {
                             EmptyView("brak wynik\u00f3w")
                         } else {
                             LazyColumn(
@@ -191,102 +186,14 @@ fun ExploreScreen(
                                 contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.sm),
                             ) {
-                                // Tags section
-                                if (results.tags.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = "tagi",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = TextSecondary,
-                                            modifier = Modifier.padding(vertical = 4.dp),
-                                        )
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            results.tags.forEach { tag ->
-                                                Surface(
-                                                    shape = RoundedCornerShape(16.dp),
-                                                    color = SurfaceElevated,
-                                                ) {
-                                                    Text(
-                                                        text = "${tag.emoji ?: ""} ${tag.name}".trim(),
-                                                        fontFamily = NunitoFamily,
-                                                        color = TextPrimary,
-                                                        fontSize = 13.sp,
-                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Profiles section
-                                if (results.profiles.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = "osoby",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = TextSecondary,
-                                            modifier = Modifier.padding(vertical = 4.dp),
-                                        )
-                                    }
-                                    items(results.profiles, key = { "p-${it.id}" }) { profile ->
-                                        ProfileCard(
-                                            name = profile.name,
-                                            profilePicture = profile.profilePicture,
-                                            matchingTags = state.ownTags.filter { it.id in profile.tags },
-                                            program = profile.program,
-                                            onClick = { onNavigateToProfile(profile.id) },
-                                        )
-                                    }
-                                }
-
-                                // Events section
-                                if (results.events.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = "wydarzenia",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = TextSecondary,
-                                            modifier = Modifier.padding(vertical = 4.dp),
-                                        )
-                                    }
-                                    items(results.events, key = { "e-${it.id}" }) { event ->
-                                        Surface(
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { onNavigateToEventDetail(event.id) },
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = SurfaceElevated,
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                Text(
-                                                    text = event.title,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    color = TextPrimary,
-                                                    fontFamily = NunitoFamily,
-                                                )
-                                                val loc = event.location
-                                                if (loc != null) {
-                                                    Text(
-                                                        text = loc,
-                                                        fontSize = 13.sp,
-                                                        color = TextSecondary,
-                                                        fontFamily = NunitoFamily,
-                                                    )
-                                                }
-                                                Text(
-                                                    text = event.creatorName,
-                                                    fontSize = 12.sp,
-                                                    color = TextMuted,
-                                                    fontFamily = NunitoFamily,
-                                                )
-                                            }
-                                        }
-                                    }
+                                items(profiles, key = { "p-${it.id}" }) { profile ->
+                                    ProfileCard(
+                                        name = profile.name,
+                                        profilePicture = profile.profilePicture,
+                                        matchingTags = state.ownTags.filter { it.id in profile.tags },
+                                        program = profile.program,
+                                        onClick = { onNavigateToProfile(profile.id) },
+                                    )
                                 }
                             }
                         }

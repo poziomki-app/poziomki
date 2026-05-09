@@ -58,6 +58,7 @@ import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.Plus
+import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
@@ -151,13 +152,6 @@ fun EventsScreen(
             },
             searchActive = searchActive,
             onSearchActiveChange = { searchActive = it },
-            filterActive = state.selectedCategories.isNotEmpty(),
-            onFilterClick =
-                if (!isNearby) {
-                    { viewModel.toggleShowTagFilter() }
-                } else {
-                    null
-                },
         ) {
             androidx.compose.material3.IconButton(onClick = onNavigateToEventCreate) {
                 Icon(
@@ -178,11 +172,32 @@ fun EventsScreen(
             )
         }
 
-        FilterTabs(
-            tabs = timeFilterTabs,
-            selected = state.activeFilter,
-            onSelect = { viewModel.setTimeFilter(it) },
-        )
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = PoziomkiTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterTabs(
+                tabs = timeFilterTabs,
+                selected = state.activeFilter,
+                onSelect = { viewModel.setTimeFilter(it) },
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+            )
+            androidx.compose.material3.IconButton(
+                onClick = { viewModel.toggleShowTagFilter() },
+            ) {
+                Icon(
+                    PhosphorIcons.Bold.SlidersHorizontal,
+                    contentDescription = "Filtruj",
+                    tint = if (state.selectedCategories.isNotEmpty()) Primary else TextPrimary,
+                )
+            }
+        }
 
         // Content
         Box(modifier = Modifier.fillMaxSize()) {

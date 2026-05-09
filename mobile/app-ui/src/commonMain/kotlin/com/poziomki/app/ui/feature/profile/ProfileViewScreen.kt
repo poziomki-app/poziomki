@@ -83,6 +83,7 @@ fun ProfileViewScreen(
                         emojiAvatar = emoji,
                         gradientStart = p.gradientStart,
                         gradientEnd = p.gradientEnd,
+                        ownTagIds = if (state.isOwnProfile) emptySet() else state.ownTagIds,
                         // X is rendered as a sticky overlay below; tell
                         // ProfilePreview not to draw its own (which would
                         // scroll with the image carousel).

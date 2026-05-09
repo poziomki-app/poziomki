@@ -36,8 +36,6 @@ import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.resolveImageUrl
@@ -152,25 +150,10 @@ fun ProfileCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         orderedTags.forEach { tag ->
-                            val isActivity = tag.scope == "activity"
-                            Text(
-                                text = tag.name.lowercase(),
-                                fontFamily = NunitoFamily,
-                                fontWeight = if (isActivity) FontWeight.SemiBold else FontWeight.Medium,
-                                fontSize = 11.sp,
-                                lineHeight = 12.sp,
-                                color = if (isActivity) PrimaryMuted else TextSecondary,
-                                modifier =
-                                    Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(
-                                            if (isActivity) {
-                                                Primary.copy(alpha = 0.18f)
-                                            } else {
-                                                Color.White.copy(alpha = 0.06f)
-                                            },
-                                        ).padding(horizontal = 7.dp, vertical = 1.dp),
-                            )
+                            // All tags here are shared with the viewer
+                            // (matchingTags is already filtered), so always
+                            // highlight blue.
+                            TagChip(tag = tag, matching = true, size = TagChipSize.SMALL)
                         }
                     }
                 }

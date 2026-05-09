@@ -2,7 +2,6 @@ package com.poziomki.app.ui.designsystem.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +48,6 @@ import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Black
-import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -83,6 +81,7 @@ fun ProfilePreview(
     emojiAvatar: String? = null,
     gradientStart: String? = null,
     gradientEnd: String? = null,
+    ownTagIds: Set<String> = emptySet(),
     onClose: (() -> Unit)? = null,
     bottomContent: @Composable (() -> Unit)? = null,
     headerAction: @Composable (() -> Unit)? = null,
@@ -303,8 +302,11 @@ fun ProfilePreview(
                 RichBio(bio = bio)
             }
 
-            // Tags — compact
-            if (tags.isNotEmpty()) {
+            // Tags — split into interests + activities, same chip style;
+            // shared tags (own user has them too) get the blue highlight.
+            val interestTags = tags.filter { it.scope == "interest" }
+            val activityTags = tags.filter { it.scope == "activity" }
+            if (interestTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
                 Text(
                     text = "zainteresowania",
@@ -314,24 +316,19 @@ fun ProfilePreview(
                     color = TextPrimary,
                 )
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    tags.forEach { tag ->
-                        Text(
-                            text = tag.name.lowercase(),
-                            fontFamily = nunito,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            modifier =
-                                Modifier
-                                    .border(1.dp, Border, RoundedCornerShape(50))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
+                TagFlowRow(tags = interestTags, ownTagIds = ownTagIds)
+            }
+            if (activityTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+                Text(
+                    text = "aktywności",
+                    fontFamily = montserrat,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 16.sp,
+                    color = TextPrimary,
+                )
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                TagFlowRow(tags = activityTags, ownTagIds = ownTagIds)
             }
 
             // Bottom content slot (e.g. "send message" button)
@@ -397,6 +394,22 @@ private fun RichBio(bio: String) {
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagFlowRow(
+    tags: List<Tag>,
+    ownTagIds: Set<String>,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tags.forEach { tag ->
+            TagChip(tag = tag, matching = tag.id in ownTagIds)
         }
     }
 }

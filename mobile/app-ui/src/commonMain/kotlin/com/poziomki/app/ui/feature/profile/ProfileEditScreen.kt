@@ -87,7 +87,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.PrimaryLight
+import com.poziomki.app.ui.designsystem.theme.PrimaryMuted
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
@@ -1184,29 +1184,27 @@ private fun TagChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val nunito = NunitoFamily
-    val bgColor = if (selected) PrimaryLight else Color.Transparent
-    val borderColor = if (selected) Primary else Border
-    val textColor = if (selected) Primary else TextSecondary
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(50)
+    val bgColor =
+        if (selected) Primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f)
+    val textColor = if (selected) PrimaryMuted else TextSecondary
 
     Row(
         modifier =
             Modifier
-                .background(bgColor, shape)
-                .border(1.dp, borderColor, shape)
                 .clip(shape)
+                .background(bgColor)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 5.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "${tag.emoji ?: ""} ${tag.name}".trim(),
-            fontFamily = nunito,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
+            text = "${tag.emoji ?: ""} ${tag.name}".trim().lowercase(),
+            fontFamily = NunitoFamily,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            fontSize = 13.sp,
             color = textColor,
-            lineHeight = 14.sp,
+            lineHeight = 16.sp,
         )
         if (selected) {
             Spacer(modifier = Modifier.width(4.dp))

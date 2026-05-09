@@ -62,7 +62,7 @@ fun SearchableScreenHeader(
     val rowModifier =
         modifier
             .fillMaxWidth()
-            .padding(PoziomkiTheme.spacing.md)
+            .padding(horizontal = PoziomkiTheme.spacing.md, vertical = PoziomkiTheme.spacing.xs)
             .height(48.dp)
     Row(
         modifier = rowModifier,
