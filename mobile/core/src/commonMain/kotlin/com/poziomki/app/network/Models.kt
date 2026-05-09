@@ -176,6 +176,7 @@ data class Event(
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val tags: List<Tag> = emptyList(),
     val conversationId: String? = null,
+    val visibility: String = "public",
     val score: Double = 0.0,
 )
 
@@ -193,6 +194,7 @@ data class CreateEventRequest(
     val maxAttendees: Int? = null,
     val tagIds: List<String> = emptyList(),
     val requiresApproval: Boolean? = null,
+    val visibility: String? = null,
 )
 
 @Serializable
@@ -209,6 +211,7 @@ data class UpdateEventRequest(
     val tagIds: List<String>? = null,
     val maxAttendees: JsonElement = JsonNull,
     val requiresApproval: Boolean? = null,
+    val visibility: String? = null,
 ) {
     companion object {
         fun maxAttendeesValue(value: Int?): JsonElement = value?.let { JsonPrimitive(it) } ?: JsonNull

@@ -137,6 +137,11 @@ fn events_routes() -> Router<AppContext> {
             post(events::event_reject_attendee),
         )
         .route("/{id}/report", post(events::event_report))
+        .route("/{id}/invites", post(events::event_invite_users))
+        .route(
+            "/{id}/invites/{profile_id}",
+            delete(events::event_uninvite_user),
+        )
         .layer(cache_layer("private, max-age=60"));
 
     personal.merge(shared)

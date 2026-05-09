@@ -46,6 +46,8 @@ pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) tag_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(in crate::api) requires_approval: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) visibility: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -82,6 +84,14 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) tag_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(in crate::api) requires_approval: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) visibility: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::api) struct InviteUsersBody {
+    pub(in crate::api) profile_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
