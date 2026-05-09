@@ -146,6 +146,7 @@ diesel::table! {
         updated_at -> Timestamptz,
         requires_approval -> Bool,
         recurrence_rule -> Nullable<Varchar>,
+        visibility -> Varchar,
     }
 }
 

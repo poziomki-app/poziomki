@@ -232,6 +232,7 @@ class SyncEngine(
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
             recurrence_rule = event.recurrenceRule,
+            visibility = event.visibility,
         )
     }
 

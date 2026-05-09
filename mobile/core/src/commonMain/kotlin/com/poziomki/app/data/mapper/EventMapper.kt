@@ -39,6 +39,7 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         tags = parseTags(tags_json),
         conversationId = conversation_id,
         recurrenceRule = recurrence_rule,
+        visibility = visibility,
         score = score,
     )
 

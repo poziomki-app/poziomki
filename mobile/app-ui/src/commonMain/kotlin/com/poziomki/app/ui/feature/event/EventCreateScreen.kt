@@ -634,6 +634,14 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            SectionLabel("widoczność")
+            VisibilityPicker(
+                selected = state.visibility,
+                onSelect = viewModel::updateVisibility,
+            )
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Error
             state.error?.let { error ->
                 Text(
@@ -921,6 +929,44 @@ private fun RecurrencePicker(
                 color = if (isSelected) PrimaryLight else SurfaceColor,
                 border = BorderStroke(1.dp, if (isSelected) Primary else Border),
                 modifier = Modifier.clickable { onSelect(rule) },
+            ) {
+                Text(
+                    text = label,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = if (isSelected) Primary else TextPrimary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+private val VISIBILITY_OPTIONS: List<Pair<String, String>> =
+    listOf(
+        "public" to "publiczne",
+        "private" to "prywatne (tylko zaproszeni)",
+    )
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VisibilityPicker(
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        VISIBILITY_OPTIONS.forEach { (value, label) ->
+            val isSelected = selected == value
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (isSelected) PrimaryLight else SurfaceColor,
+                border = BorderStroke(1.dp, if (isSelected) Primary else Border),
+                modifier = Modifier.clickable { onSelect(value) },
             ) {
                 Text(
                     text = label,

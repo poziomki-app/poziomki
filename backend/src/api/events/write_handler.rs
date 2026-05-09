@@ -206,8 +206,16 @@ fn build_new_event(
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(String::from),
+        visibility: normalize_visibility(payload.visibility.as_deref()),
     };
     (model, event_id)
+}
+
+fn normalize_visibility(value: Option<&str>) -> String {
+    match value.map(str::trim) {
+        Some("private") => "private".to_string(),
+        _ => "public".to_string(),
+    }
 }
 
 enum CreateOutcome {

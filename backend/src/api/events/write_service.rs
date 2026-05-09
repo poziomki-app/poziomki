@@ -158,6 +158,12 @@ fn build_update_changeset(payload: &UpdateEventBody, dates: EventDates) -> Event
             }
         }));
     }
+    if let Some(vis) = &payload.visibility {
+        changeset.visibility = Some(match vis.trim() {
+            "private" => "private".to_string(),
+            _ => "public".to_string(),
+        });
+    }
 
     let (new_starts, new_ends) = dates;
     changeset.starts_at = Some(new_starts);

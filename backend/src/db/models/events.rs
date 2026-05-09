@@ -24,6 +24,7 @@ pub struct Event {
     pub updated_at: DateTime<Utc>,
     pub requires_approval: bool,
     pub recurrence_rule: Option<String>,
+    pub visibility: String,
 }
 
 #[derive(Debug, Insertable)]
@@ -46,6 +47,7 @@ pub struct NewEvent {
     pub updated_at: DateTime<Utc>,
     pub requires_approval: bool,
     pub recurrence_rule: Option<String>,
+    pub visibility: String,
 }
 
 #[derive(Debug, AsChangeset, Default)]
@@ -65,4 +67,5 @@ pub struct EventChangeset {
     pub updated_at: Option<DateTime<Utc>>,
     pub requires_approval: Option<bool>,
     pub recurrence_rule: Option<Option<String>>,
+    pub visibility: Option<String>,
 }

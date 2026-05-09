@@ -177,6 +177,7 @@ data class Event(
     val tags: List<Tag> = emptyList(),
     val conversationId: String? = null,
     val recurrenceRule: String? = null,
+    val visibility: String = "public",
     val score: Double = 0.0,
 )
 
@@ -195,6 +196,7 @@ data class CreateEventRequest(
     val tagIds: List<String> = emptyList(),
     val requiresApproval: Boolean? = null,
     val recurrenceRule: String? = null,
+    val visibility: String? = null,
 )
 
 @Serializable
@@ -212,6 +214,7 @@ data class UpdateEventRequest(
     val maxAttendees: JsonElement = JsonNull,
     val requiresApproval: Boolean? = null,
     val recurrenceRule: String? = null,
+    val visibility: String? = null,
 ) {
     companion object {
         fun maxAttendeesValue(value: Int?): JsonElement = value?.let { JsonPrimitive(it) } ?: JsonNull

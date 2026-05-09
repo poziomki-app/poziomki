@@ -97,6 +97,7 @@ internal class EventRoomRepository(
             requires_approval = current.requires_approval,
             is_pending = current.is_pending,
             recurrence_rule = current.recurrence_rule,
+            visibility = current.visibility,
         )
     }
 }

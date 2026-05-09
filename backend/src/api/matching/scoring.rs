@@ -316,6 +316,7 @@ mod tests {
             updated_at: chrono::Utc::now(),
             requires_approval: false,
             recurrence_rule: None,
+            visibility: "public".to_string(),
         };
 
         let score = score_event(

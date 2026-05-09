@@ -99,6 +99,7 @@ fn build_from_context(
         requires_approval: event.requires_approval,
         conversation_id: event.conversation_id.clone(),
         recurrence_rule: event.recurrence_rule.clone(),
+        visibility: event.visibility.clone(),
         score: None,
     }
 }
