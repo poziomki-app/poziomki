@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,9 +61,7 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
-import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
@@ -82,6 +81,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.onboarding.INTEREST_CATEGORIES
+import com.poziomki.app.ui.navigation.LocalImmersive
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.dayLabel
@@ -127,6 +127,15 @@ fun EventsScreen(
             TimeFilter.WEEK to "ten tydzień",
         )
 
+    // The nearby tab gives the map the whole height (no navbar, no
+    // searchbar) so the user can pan/zoom freely. Reset on leave.
+    val immersive = LocalImmersive.current
+    val isNearby = state.activeFilter == TimeFilter.NEARBY
+    DisposableEffect(isNearby) {
+        immersive.value = isNearby
+        onDispose { immersive.value = false }
+    }
+
     Column(
         modifier =
             Modifier
@@ -134,19 +143,28 @@ fun EventsScreen(
                 .background(Background),
     ) {
         ScreenHeader(title = "wydarzenia") {
+            androidx.compose.material3.IconButton(onClick = onNavigateToEventCreate) {
+                Icon(
+                    PhosphorIcons.Bold.Plus,
+                    contentDescription = "Dodaj wydarzenie",
+                    tint = TextPrimary,
+                )
+            }
             profileAvatarAction()
         }
 
-        PoziomkiSearchBar(
-            query = searchQuery,
-            onQueryChange = {
-                searchQuery = it
-                viewModel.setSearchQuery(it)
-            },
-            placeholder = "szukaj wydarzeń...",
-            filterActive = state.selectedCategories.isNotEmpty(),
-            onFilterClick = { viewModel.toggleShowTagFilter() },
-        )
+        if (!isNearby) {
+            PoziomkiSearchBar(
+                query = searchQuery,
+                onQueryChange = {
+                    searchQuery = it
+                    viewModel.setSearchQuery(it)
+                },
+                placeholder = "szukaj wydarzeń...",
+                filterActive = state.selectedCategories.isNotEmpty(),
+                onFilterClick = { viewModel.toggleShowTagFilter() },
+            )
+        }
 
         if (state.showTagFilter) {
             CategoryFilterDialog(
@@ -245,21 +263,6 @@ fun EventsScreen(
                     }
                 }
             }
-
-            // FAB: create event
-            AppButton(
-                text = "",
-                onClick = onNavigateToEventCreate,
-                variant = ButtonVariant.PRIMARY,
-                icon = PhosphorIcons.Bold.Plus,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(
-                            end = PoziomkiTheme.spacing.lg,
-                            bottom = LocalNavBarPadding.current + 24.dp,
-                        ),
-            )
 
             // Refresh error snackbar
             state.refreshError?.let { error ->
