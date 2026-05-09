@@ -24,6 +24,7 @@ data class ProfileViewState(
     val isOwnProfile: Boolean = false,
     val isBookmarked: Boolean = false,
     val showOwnProgram: Boolean = true,
+    val ownTagIds: Set<String> = emptySet(),
 )
 
 class ProfileViewViewModel(
@@ -45,6 +46,20 @@ class ProfileViewViewModel(
         observeProfile()
         refreshProfile()
         checkOwnProfile()
+        observeOwnTags()
+    }
+
+    private fun observeOwnTags() {
+        viewModelScope.launch {
+            val ownProfileId = sessionManager.profileId.first() ?: return@launch
+            profileRepository.observeProfile(ownProfileId).collect { ownProfile ->
+                if (ownProfile != null) {
+                    _state.update {
+                        it.copy(ownTagIds = ownProfile.tags.mapTo(mutableSetOf()) { t -> t.id })
+                    }
+                }
+            }
+        }
     }
 
     private fun checkOwnProfile() {

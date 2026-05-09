@@ -35,16 +35,16 @@ fun <T> FilterTabs(
             modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        tabs.forEachIndexed { index, (value, label) ->
+        tabs.forEach { (value, label) ->
             val isSelected = value == selected
             Row(
                 modifier =
                     Modifier
                         .clickable { onSelect(value) }
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (isSelected) {
@@ -63,9 +63,6 @@ fun <T> FilterTabs(
                     fontSize = 16.sp,
                     color = if (isSelected) TextPrimary else TextMuted,
                 )
-            }
-            if (index < tabs.lastIndex) {
-                Spacer(modifier = Modifier.width(8.dp))
             }
         }
     }
