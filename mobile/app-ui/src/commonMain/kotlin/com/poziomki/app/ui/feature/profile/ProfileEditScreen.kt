@@ -294,7 +294,7 @@ fun ProfileEditScreen(
                     label = "zainteresowania",
                     query = state.interestQuery,
                     onQueryChange = { viewModel.updateInterestQuery(it) },
-                    searchPlaceholder = "szukaj zainteresowań...",
+                    searchPlaceholder = "szukaj",
                     searchResults = state.interestSearchResults,
                     isSearching = state.isSearchingInterests,
                     selectedTags = state.selectedTags.filter { it.scope == "interest" },
@@ -314,7 +314,7 @@ fun ProfileEditScreen(
                     label = "aktywności",
                     query = state.activityQuery,
                     onQueryChange = { viewModel.updateActivityQuery(it) },
-                    searchPlaceholder = "szukaj aktywności...",
+                    searchPlaceholder = "szukaj",
                     searchResults = state.activitySearchResults,
                     isSearching = state.isSearchingActivities,
                     selectedTags = state.selectedTags.filter { it.scope == "activity" },
@@ -330,14 +330,13 @@ fun ProfileEditScreen(
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
                 // Save button
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    AppButton(
-                        text = "zapisz",
-                        onClick = { viewModel.save(onBack) },
-                        variant = ButtonVariant.PRIMARY,
-                        loading = state.isSaving,
-                    )
-                }
+                AppButton(
+                    text = "zapisz",
+                    onClick = { viewModel.save(onBack) },
+                    variant = ButtonVariant.PRIMARY,
+                    loading = state.isSaving,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
             }
@@ -1171,6 +1170,7 @@ private fun GradientPickerDialog(
                 text = "zapisz",
                 onClick = { onSave(selectedStart, selectedEnd) },
                 variant = ButtonVariant.PRIMARY,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))

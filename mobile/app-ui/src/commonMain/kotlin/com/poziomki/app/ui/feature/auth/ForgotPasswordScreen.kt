@@ -114,6 +114,7 @@ fun ForgotPasswordScreen(
             onClick = { viewModel.forgotPassword(email) { onSuccess(email) } },
             enabled = email.isNotBlank(),
             loading = uiState.isLoading,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))

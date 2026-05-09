@@ -136,6 +136,7 @@ fun ResetPasswordScreen(
             },
             enabled = password.length >= 8 && password == confirmPassword,
             loading = uiState.isLoading,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

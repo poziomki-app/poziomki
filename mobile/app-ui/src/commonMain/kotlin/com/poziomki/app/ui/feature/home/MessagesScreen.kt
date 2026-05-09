@@ -19,8 +19,7 @@ import androidx.compose.ui.Modifier
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
-import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
-import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.designsystem.components.SearchableScreenHeader
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.feature.home.messages.MessagesRoomFilter
@@ -42,6 +41,7 @@ fun MessagesScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var selectedFilter by remember { mutableStateOf(MessagesRoomFilter.All) }
+    var searchActive by remember { mutableStateOf(false) }
 
     val filteredRooms =
         state.rooms.filterMessagesRooms(
@@ -58,14 +58,15 @@ fun MessagesScreen(
                 .fillMaxSize()
                 .background(Background),
     ) {
-        ScreenHeader(title = "wiadomości") {
+        SearchableScreenHeader(
+            title = "wiadomości",
+            searchQuery = state.searchQuery,
+            onSearchQueryChange = { viewModel.onSearchQueryChanged(it) },
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
+        ) {
             profileAvatarAction()
         }
-        PoziomkiSearchBar(
-            query = state.searchQuery,
-            onQueryChange = { viewModel.onSearchQueryChanged(it) },
-            placeholder = "szukaj wiadomości...",
-        )
         FilterTabs(
             tabs = roomFilterTabs,
             selected = selectedFilter,

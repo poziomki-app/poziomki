@@ -216,7 +216,7 @@ fun LocationPickerSheet(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = {
-                        Text("szukaj miejsca...", color = TextMuted, fontFamily = NunitoFamily)
+                        Text("szukaj", color = TextMuted, fontFamily = NunitoFamily)
                     },
                     leadingIcon = {
                         Icon(PhosphorIcons.Bold.MagnifyingGlass, contentDescription = null, tint = TextMuted)

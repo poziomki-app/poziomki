@@ -35,6 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -50,9 +53,8 @@ import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
-import com.poziomki.app.ui.designsystem.components.PoziomkiSearchBar
 import com.poziomki.app.ui.designsystem.components.ProfileCard
-import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.designsystem.components.SearchableScreenHeader
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -75,6 +77,7 @@ fun ExploreScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val isSearchActive = state.query.length >= 2
+    var searchActive by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -82,17 +85,17 @@ fun ExploreScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        ScreenHeader(title = "poznaj") {
-            profileAvatarAction()
-        }
-
-        PoziomkiSearchBar(
-            query = state.query,
-            onQueryChange = viewModel::updateQuery,
-            placeholder = "szukaj os\u00f3b, wydarze\u0144...",
+        SearchableScreenHeader(
+            title = "poznaj",
+            searchQuery = state.query,
+            onSearchQueryChange = viewModel::updateQuery,
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
             filterActive = state.isFilterActive,
             onFilterClick = { viewModel.toggleShowTagFilter() },
-        )
+        ) {
+            profileAvatarAction()
+        }
 
         if (state.showTagFilter) {
             ExploreTagFilterDialog(
@@ -482,7 +485,7 @@ private fun TagFilterSearchField(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "szukaj więcej tagów...",
+                        text = "szukaj",
                         fontFamily = NunitoFamily,
                         color = TextMuted,
                         fontSize = 14.sp,
@@ -584,7 +587,7 @@ private fun ActiveTagFilterRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp),
+                .padding(start = 24.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FlowRow(

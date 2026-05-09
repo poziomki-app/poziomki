@@ -16,7 +16,7 @@ enum class TimeFilter {
 private val POLISH_WEEKDAYS = arrayOf("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
 private val POLISH_WEEKDAYS_FULL =
     arrayOf("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")
-private val POLISH_MONTHS_GENITIVE =
+internal val POLISH_MONTHS_GENITIVE =
     arrayOf(
         "stycznia",
         "lutego",
