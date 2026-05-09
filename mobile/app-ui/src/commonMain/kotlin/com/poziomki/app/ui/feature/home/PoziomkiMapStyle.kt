@@ -29,13 +29,24 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
 
         { "id": "landcover_wood", "type": "fill", "source": "openmaptiles", "source-layer": "landcover",
           "filter": ["==", "class", "wood"],
-          "paint": { "fill-color": "#D8E6CC", "fill-opacity": 0.7 } },
+          "paint": { "fill-color": "#B7D49A" } },
         { "id": "landcover_grass", "type": "fill", "source": "openmaptiles", "source-layer": "landcover",
           "filter": ["==", "class", "grass"],
-          "paint": { "fill-color": "#E5EFD8", "fill-opacity": 0.7 } },
+          "paint": { "fill-color": "#CDE3B0" } },
 
         { "id": "park", "type": "fill", "source": "openmaptiles", "source-layer": "park",
-          "paint": { "fill-color": "#DDEAD0" } },
+          "paint": { "fill-color": "#A9CF94" } },
+        { "id": "park_outline", "type": "line", "source": "openmaptiles", "source-layer": "park",
+          "paint": { "line-color": "#7DB36A", "line-width": 0.8, "line-opacity": 0.6 } },
+        { "id": "park_label", "type": "symbol", "source": "openmaptiles", "source-layer": "park",
+          "minzoom": 12,
+          "layout": {
+            "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
+            "text-font": ["Nunito Regular"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10, 16, 13],
+            "text-letter-spacing": 0.02
+          },
+          "paint": { "text-color": "#3C5C2A" } },
 
         { "id": "landuse_school", "type": "fill", "source": "openmaptiles", "source-layer": "landuse",
           "filter": ["in", "class", "school", "university"],
@@ -95,10 +106,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
 
         { "id": "uw_campuses_fill", "type": "fill", "source": "uw_campuses",
           "filter": ["==", ["geometry-type"], "Polygon"],
-          "paint": { "fill-color": "#B8DCEA", "fill-opacity": 0.5 } },
-        { "id": "uw_campuses_outline", "type": "line", "source": "uw_campuses",
-          "filter": ["==", ["geometry-type"], "Polygon"],
-          "paint": { "line-color": "#2E9FCB", "line-width": 1.4 } },
+          "paint": { "fill-color": "#B8DCEA", "fill-opacity": 0.55 } },
 
         { "id": "uw_campus_labels", "type": "symbol", "source": "uw_campus_labels",
           "layout": {
@@ -131,19 +139,19 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
 
         { "id": "metro_circle", "type": "circle", "source": "metro",
           "paint": {
-            "circle-radius": 9,
-            "circle-color": "#FF6F1F",
+            "circle-radius": 7,
+            "circle-color": "#F5C518",
             "circle-stroke-color": "#FFFFFF",
-            "circle-stroke-width": 1.5
+            "circle-stroke-width": 1.2
           } },
         { "id": "metro_letter", "type": "symbol", "source": "metro",
           "layout": {
             "text-field": "M",
             "text-font": ["Montserrat ExtraBold"],
-            "text-size": 12,
+            "text-size": 10,
             "text-allow-overlap": true
           },
-          "paint": { "text-color": "#FFFFFF" } },
+          "paint": { "text-color": "#D6311A" } },
         { "id": "metro_name", "type": "symbol", "source": "metro",
           "minzoom": 13,
           "layout": {
