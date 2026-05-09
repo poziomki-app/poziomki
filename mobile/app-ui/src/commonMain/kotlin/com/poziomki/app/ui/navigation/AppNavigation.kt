@@ -474,7 +474,9 @@ fun MainScreen(
     val tabNavController = rememberNavController()
     val navBackStackEntry by tabNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val navBarHeight = 60.dp
+    // Bottom navbar Row: 16 top + 32 icon + 16 bottom = 64dp; +8dp breathing
+    // room so last list items don't visually crowd the navbar.
+    val navBarHeight = 72.dp
     val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val safeTop = maxOf(topInsets, 16.dp)
