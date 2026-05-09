@@ -561,9 +561,9 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(
                                         start = 8.dp,
-                                        top = 12.dp,
+                                        top = 16.dp,
                                         end = 8.dp,
-                                        bottom = 4.dp + bottomInsets,
+                                        bottom = 16.dp + bottomInsets,
                                     ),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically,
@@ -599,15 +599,8 @@ fun MainScreen(
                                     Icon(
                                         if (selected) item.selectedIcon else item.icon,
                                         contentDescription = item.label,
-                                        modifier = Modifier.size(26.dp),
+                                        modifier = Modifier.size(32.dp),
                                         tint = tint,
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = item.label,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = tint,
                                     )
                                 }
                             }
