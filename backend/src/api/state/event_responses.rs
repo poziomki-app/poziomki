@@ -42,6 +42,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) requires_approval: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
+    #[serde(rename = "recurrenceRule", skip_serializing_if = "Option::is_none")]
+    pub(in crate::api) recurrence_rule: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::api) score: Option<f64>,
 }

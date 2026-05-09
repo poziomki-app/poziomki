@@ -30,6 +30,7 @@ data class EventCreateState(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val requiresApproval: Boolean = false,
+    val recurrenceRule: String? = null,
     val selectedTags: List<Tag> = emptyList(),
     val tagSearchQuery: String = "",
     val tagSearchResults: List<Tag> = emptyList(),
@@ -76,6 +77,10 @@ class EventCreateViewModel(
 
     fun updateRequiresApproval(value: Boolean) {
         _state.value = _state.value.copy(requiresApproval = value)
+    }
+
+    fun updateRecurrenceRule(rule: String?) {
+        _state.value = _state.value.copy(recurrenceRule = rule)
     }
 
     fun updateAttendeeLimit(attendeeLimit: String) {
@@ -177,6 +182,7 @@ class EventCreateViewModel(
                         latitude = event.latitude,
                         longitude = event.longitude,
                         requiresApproval = event.requiresApproval,
+                        recurrenceRule = event.recurrenceRule,
                         selectedTags = event.tags,
                         isLoading = false,
                         eventId = eventId,
@@ -248,6 +254,7 @@ class EventCreateViewModel(
                 maxAttendees = UpdateEventRequest.maxAttendeesValue(maxAttendees),
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = s.requiresApproval,
+                recurrenceRule = s.recurrenceRule,
             )
         when (val result = eventRepository.updateEvent(eventId, request)) {
             is ApiResult.Success -> {
@@ -282,6 +289,7 @@ class EventCreateViewModel(
                 maxAttendees = maxAttendees,
                 tagIds = s.selectedTags.map { it.id },
                 requiresApproval = if (s.requiresApproval) true else null,
+                recurrenceRule = s.recurrenceRule,
             )
         when (val result = eventRepository.createEvent(request)) {
             is ApiResult.Success -> {

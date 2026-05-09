@@ -408,6 +408,17 @@ private fun EventCard(
                         }
                     }
 
+                    formatRecurrence(event.recurrenceRule)?.let { label ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = label,
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Attendees row
@@ -469,6 +480,25 @@ private fun BookmarkOverlay(
             tint = if (isSaved) Primary else TextPrimary,
         )
     }
+}
+
+private fun formatRecurrence(rule: String?): String? {
+    if (rule.isNullOrBlank()) return null
+    val parts = mutableMapOf<String, String>()
+    rule.split(';').forEach { segment ->
+        val kv = segment.split('=', limit = 2)
+        if (kv.size == 2) parts[kv[0]] = kv[1]
+    }
+    val freq = parts["FREQ"] ?: return null
+    val interval = parts["INTERVAL"]?.toIntOrNull() ?: 1
+    val base =
+        when (freq) {
+            "WEEKLY" -> if (interval == 1) "co tydzień" else "co $interval tyg."
+            "MONTHLY" -> if (interval == 1) "co miesiąc" else "co $interval mies."
+            "DAILY" -> if (interval == 1) "codziennie" else "co $interval dni"
+            else -> return null
+        }
+    return "🔁 $base"
 }
 
 private fun Event.attendeeUsageLabel(): String =
