@@ -137,6 +137,11 @@ fn events_routes() -> Router<AppContext> {
             post(events::event_reject_attendee),
         )
         .route("/{id}/report", post(events::event_report))
+        .route(
+            "/{id}/place-poll",
+            get(events::place_poll_get).post(events::place_poll_create),
+        )
+        .route("/{id}/place-poll/vote", post(events::place_poll_vote))
         .layer(cache_layer("private, max-age=60"));
 
     personal.merge(shared)
