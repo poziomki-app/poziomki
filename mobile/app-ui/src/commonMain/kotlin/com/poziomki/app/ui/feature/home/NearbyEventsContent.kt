@@ -227,18 +227,49 @@ internal fun NearbyEventsContent(
                     ClickResult.Consume
                 },
             ) {
-                // Campus markers (UW, PW, etc.) — small ring + above-text label.
+                // Campus polygons (UW Główny/Ochota/Służewiec, PW, SGH,
+                // SGGW, WUM, AWF, UKSW) — pastel blue tint + matching outline
+                // so the student-relevant blocks read at a glance.
                 val campusSource =
-                    rememberGeoJsonSource(
-                        data = campusGeoJson(),
-                    )
-                CircleLayer(
-                    id = "campuses-ring",
+                    rememberGeoJsonSource(data = GeoJsonData.JsonString(WARSAW_CAMPUSES_GEOJSON))
+                org.maplibre.compose.layers.FillLayer(
+                    id = "campuses-fill",
                     source = campusSource,
-                    radius = const(6.dp),
-                    color = const(White),
-                    strokeColor = const(Primary),
-                    strokeWidth = const(2.dp),
+                    color =
+                        const(
+                            androidx.compose.ui.graphics
+                                .Color(0xFFB8DCEA),
+                        ),
+                    opacity = const(0.45f),
+                )
+                org.maplibre.compose.layers.LineLayer(
+                    id = "campuses-outline",
+                    source = campusSource,
+                    color =
+                        const(
+                            androidx.compose.ui.graphics
+                                .Color(0xFF2E9FCB),
+                        ),
+                    width = const(1.2.dp),
+                )
+
+                // Metro stations — single layer, blue to match the apex
+                // accent. Per-line colours skipped because maplibre-compose
+                // 0.12 doesn't expose a typed `feature.get` we can plug
+                // into a `match` expression.
+                val metroSource =
+                    rememberGeoJsonSource(data = GeoJsonData.JsonString(WARSAW_METRO_GEOJSON))
+                CircleLayer(
+                    id = "metro-stations",
+                    source = metroSource,
+                    radius = const(5.dp),
+                    color =
+                        const(
+                            androidx.compose.ui.graphics
+                                .Color(0xFF2E9FCB),
+                        ),
+                    strokeColor = const(White),
+                    strokeWidth = const(1.5.dp),
                 )
 
                 // Unselected dots
@@ -406,16 +437,6 @@ private fun pointGeoJson(
     GeoJsonData.JsonString(
         """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[$lng,$lat]},"properties":{}}]}""",
     )
-
-private fun campusGeoJson(): GeoJsonData {
-    val features =
-        POLISH_CAMPUSES.joinToString(",") { c ->
-            """{"type":"Feature","geometry":{"type":"Point","coordinates":[${c.lng},${c.lat}]},"properties":{"name":"${c.name}"}}"""
-        }
-    return GeoJsonData.JsonString(
-        """{"type":"FeatureCollection","features":[$features]}""",
-    )
-}
 
 private fun multiPointGeoJson(events: List<Event>): GeoJsonData {
     val features =
