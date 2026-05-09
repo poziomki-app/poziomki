@@ -18,7 +18,10 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
       "glyphs": "https://poziomki.app/fonts/{fontstack}/{range}.pbf",
       "sprite": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
       "sources": {
-        "openmaptiles": { "type": "vector", "url": "https://tiles.openfreemap.org/planet" }
+        "openmaptiles": { "type": "vector", "url": "https://tiles.openfreemap.org/planet" },
+        "uw_campuses": { "type": "geojson", "data": $WARSAW_CAMPUSES_GEOJSON },
+        "uw_campus_labels": { "type": "geojson", "data": $WARSAW_CAMPUS_LABELS_GEOJSON },
+        "metro": { "type": "geojson", "data": $WARSAW_METRO_GEOJSON }
       },
       "layers": [
         { "id": "background", "type": "background",
@@ -88,7 +91,70 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
             "text-letter-spacing": 0.04,
             "text-transform": "lowercase"
           },
-          "paint": { "text-color": "#1F2A33" } }
+          "paint": { "text-color": "#1F2A33" } },
+
+        { "id": "uw_campuses_fill", "type": "fill", "source": "uw_campuses",
+          "filter": ["==", ["geometry-type"], "Polygon"],
+          "paint": { "fill-color": "#B8DCEA", "fill-opacity": 0.5 } },
+        { "id": "uw_campuses_outline", "type": "line", "source": "uw_campuses",
+          "filter": ["==", ["geometry-type"], "Polygon"],
+          "paint": { "line-color": "#2E9FCB", "line-width": 1.4 } },
+
+        { "id": "uw_campus_labels", "type": "symbol", "source": "uw_campus_labels",
+          "layout": {
+            "text-field": ["get", "name"],
+            "text-font": ["Montserrat ExtraBold"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 16],
+            "text-letter-spacing": 0.02,
+            "text-allow-overlap": false
+          },
+          "paint": { "text-color": "#1B4D63" } },
+
+        { "id": "buw_dot", "type": "circle", "source": "uw_campuses",
+          "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "name"], "BUW"]],
+          "paint": {
+            "circle-radius": 5,
+            "circle-color": "#1B4D63",
+            "circle-stroke-color": "#FFFFFF",
+            "circle-stroke-width": 2
+          } },
+        { "id": "buw_label", "type": "symbol", "source": "uw_campuses",
+          "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "name"], "BUW"]],
+          "layout": {
+            "text-field": "BUW",
+            "text-font": ["Montserrat ExtraBold"],
+            "text-size": 12,
+            "text-anchor": "top",
+            "text-offset": [0, 0.7]
+          },
+          "paint": { "text-color": "#1B4D63" } },
+
+        { "id": "metro_circle", "type": "circle", "source": "metro",
+          "paint": {
+            "circle-radius": 9,
+            "circle-color": "#FF6F1F",
+            "circle-stroke-color": "#FFFFFF",
+            "circle-stroke-width": 1.5
+          } },
+        { "id": "metro_letter", "type": "symbol", "source": "metro",
+          "layout": {
+            "text-field": "M",
+            "text-font": ["Montserrat ExtraBold"],
+            "text-size": 12,
+            "text-allow-overlap": true
+          },
+          "paint": { "text-color": "#FFFFFF" } },
+        { "id": "metro_name", "type": "symbol", "source": "metro",
+          "minzoom": 13,
+          "layout": {
+            "text-field": ["get", "name"],
+            "text-font": ["Nunito Regular"],
+            "text-size": 11,
+            "text-anchor": "top",
+            "text-offset": [0, 1.0],
+            "text-allow-overlap": false
+          },
+          "paint": { "text-color": "#5A5A5A" } }
       ]
     }
     """.trimIndent()

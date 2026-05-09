@@ -227,50 +227,9 @@ internal fun NearbyEventsContent(
                     ClickResult.Consume
                 },
             ) {
-                // Campus polygons (UW Główny/Ochota/Służewiec, PW, SGH,
-                // SGGW, WUM, AWF, UKSW) — pastel blue tint + matching outline
-                // so the student-relevant blocks read at a glance.
-                val campusSource =
-                    rememberGeoJsonSource(data = GeoJsonData.JsonString(WARSAW_CAMPUSES_GEOJSON))
-                org.maplibre.compose.layers.FillLayer(
-                    id = "campuses-fill",
-                    source = campusSource,
-                    color =
-                        const(
-                            androidx.compose.ui.graphics
-                                .Color(0xFFB8DCEA),
-                        ),
-                    opacity = const(0.45f),
-                )
-                org.maplibre.compose.layers.LineLayer(
-                    id = "campuses-outline",
-                    source = campusSource,
-                    color =
-                        const(
-                            androidx.compose.ui.graphics
-                                .Color(0xFF2E9FCB),
-                        ),
-                    width = const(1.2.dp),
-                )
-
-                // Metro stations — single layer, blue to match the apex
-                // accent. Per-line colours skipped because maplibre-compose
-                // 0.12 doesn't expose a typed `feature.get` we can plug
-                // into a `match` expression.
-                val metroSource =
-                    rememberGeoJsonSource(data = GeoJsonData.JsonString(WARSAW_METRO_GEOJSON))
-                CircleLayer(
-                    id = "metro-stations",
-                    source = metroSource,
-                    radius = const(5.dp),
-                    color =
-                        const(
-                            androidx.compose.ui.graphics
-                                .Color(0xFF2E9FCB),
-                        ),
-                    strokeColor = const(White),
-                    strokeWidth = const(1.5.dp),
-                )
+                // Campus polygons + labels + metro M markers all live in
+                // the inline style JSON (PoziomkiMapStyle.kt) — keeps the
+                // map self-contained.
 
                 // Unselected dots
                 if (geoEvents.size > (if (selectedEventId != null) 1 else 0)) {
