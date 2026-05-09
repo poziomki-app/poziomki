@@ -59,14 +59,26 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
           "filter": ["==", "class", "motorway"],
           "paint": { "line-color": "#FFE6BF", "line-width": 4 } },
 
-        { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
-          "filter": ["in", "class", "city", "town", "neighbourhood"],
+        { "id": "street_labels_major", "type": "symbol", "source": "openmaptiles", "source-layer": "transportation_name",
+          "minzoom": 13,
+          "filter": ["in", "class", "primary", "secondary", "tertiary", "trunk", "motorway"],
           "layout": {
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
             "text-font": ["Noto Sans Regular"],
-            "text-size": ["interpolate", ["linear"], ["zoom"], 8, 11, 16, 18]
+            "symbol-placement": "line",
+            "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 18, 14],
+            "text-letter-spacing": 0.05
           },
-          "paint": { "text-color": "#3D3530", "text-halo-color": "#FAF6F0", "text-halo-width": 1.6 } }
+          "paint": { "text-color": "#5A5048", "text-halo-color": "#FAF6F0", "text-halo-width": 1.6 } },
+
+        { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
+          "filter": ["in", "class", "neighbourhood", "suburb"],
+          "layout": {
+            "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
+            "text-font": ["Noto Sans Regular"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 14]
+          },
+          "paint": { "text-color": "#5A5048", "text-halo-color": "#FAF6F0", "text-halo-width": 1.4 } }
       ]
     }
     """.trimIndent()

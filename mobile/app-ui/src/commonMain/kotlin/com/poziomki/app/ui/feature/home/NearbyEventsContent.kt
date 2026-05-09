@@ -66,6 +66,14 @@ private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
 
+// Warsaw metro bounding box, slightly padded so the city fits with breathing
+// room. Pan is clamped to this — outside of Warsaw the nearby tab makes no
+// sense yet.
+private const val WARSAW_WEST = 20.85
+private const val WARSAW_SOUTH = 52.10
+private const val WARSAW_EAST = 21.27
+private const val WARSAW_NORTH = 52.37
+
 @Composable
 @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 internal fun NearbyEventsContent(
@@ -166,6 +174,18 @@ internal fun NearbyEventsContent(
                 }
             }
 
+            // Clamp panning to roughly the Warsaw metro area so the user
+            // can't drift into open ocean. Passed to MaplibreMap below.
+            val warsawBounds =
+                remember {
+                    org.maplibre.spatialk.geojson.BoundingBox(
+                        west = WARSAW_WEST,
+                        south = WARSAW_SOUTH,
+                        east = WARSAW_EAST,
+                        north = WARSAW_NORTH,
+                    )
+                }
+
             val unselectedGeoJson =
                 remember(geoEvents, selectedEventId) {
                     multiPointGeoJson(geoEvents.filter { it.id != selectedEventId })
@@ -175,6 +195,7 @@ internal fun NearbyEventsContent(
                 modifier = Modifier.fillMaxSize(),
                 baseStyle = BaseStyle.Json(POZIOMKI_MAP_STYLE_JSON),
                 cameraState = cameraState,
+                boundingBox = warsawBounds,
                 options =
                     MapOptions(
                         ornamentOptions =
