@@ -1,30 +1,7 @@
 package com.poziomki.app.network
 
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.http.HttpHeaders
-import io.ktor.serialization.kotlinx.json.json
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-
-@Serializable
-private data class OsrmResponse(
-    val code: String,
-    val routes: List<OsrmRoute> = emptyList(),
-)
-
-@Serializable
-private data class OsrmRoute(
-    val geometry: JsonElement,
-    val distance: Double,
-    val duration: Double,
-)
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class WalkingRoute(
     val geometryJson: String,
@@ -32,23 +9,17 @@ data class WalkingRoute(
     val durationSeconds: Double,
 )
 
+/**
+ * Resolves walking routes by calling our own backend, which proxies to a
+ * self-hosted OSRM instance. Coordinates never leave Poziomki infra.
+ */
 class RoutingService(
-    engine: HttpClientEngine,
+    private val apiService: ApiService,
 ) {
-    private val json =
-        Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-    private val client =
-        HttpClient(engine) {
-            install(ContentNegotiation) { json(json) }
-            defaultRequest {
-                url("https://router.project-osrm.org/")
-                header(HttpHeaders.UserAgent, "Poziomki/1.0")
-            }
-        }
+    private val cacheMutex = Mutex()
 
+    // mutableMapOf preserves insertion order on KMP; we evict the oldest
+    // entry once we exceed CACHE_CAPACITY. Good enough for a UI cache.
     private val cache = mutableMapOf<String, WalkingRoute>()
 
     suspend fun walkingRoute(
@@ -58,27 +29,32 @@ class RoutingService(
         toLng: Double,
     ): WalkingRoute? {
         val key = "$fromLat,$fromLng->$toLat,$toLng"
-        cache[key]?.let { return it }
-        return try {
-            val path = "route/v1/foot/$fromLng,$fromLat;$toLng,$toLat"
-            val resp: OsrmResponse =
-                client
-                    .get(path) {
-                        url { parameters.append("overview", "full") }
-                        url { parameters.append("geometries", "geojson") }
-                    }.body()
-            if (resp.code != "Ok") return null
-            val route = resp.routes.firstOrNull() ?: return null
-            val result =
-                WalkingRoute(
-                    geometryJson = json.encodeToString(JsonElement.serializer(), route.geometry),
-                    distanceMeters = route.distance,
-                    durationSeconds = route.duration,
-                )
+        cacheMutex.withLock { cache[key] }?.let { return it }
+        val result =
+            when (val r = apiService.walkingRoute(fromLat, fromLng, toLat, toLng)) {
+                is ApiResult.Success -> {
+                    WalkingRoute(
+                        geometryJson = r.data.geometryJson,
+                        distanceMeters = r.data.distanceMeters,
+                        durationSeconds = r.data.durationSeconds,
+                    )
+                }
+
+                is ApiResult.Error -> {
+                    return null
+                }
+            }
+        cacheMutex.withLock {
             cache[key] = result
-            result
-        } catch (_: Exception) {
-            null
+            while (cache.size > CACHE_CAPACITY) {
+                val eldest = cache.keys.iterator().next()
+                cache.remove(eldest)
+            }
         }
+        return result
+    }
+
+    private companion object {
+        const val CACHE_CAPACITY = 64
     }
 }

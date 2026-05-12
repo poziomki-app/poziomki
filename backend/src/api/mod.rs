@@ -22,6 +22,7 @@ pub mod ip_rate_limit;
 mod matching;
 mod profiles;
 mod root;
+mod routing;
 mod search;
 mod settings;
 mod state;
@@ -163,6 +164,12 @@ fn uploads_routes() -> Router<AppContext> {
         .route("/{filename}", delete(uploads::file_delete))
 }
 
+fn routing_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/walk", get(routing::walk))
+        .layer(cache_layer("private, max-age=300"))
+}
+
 fn settings_routes() -> Router<AppContext> {
     Router::new().route(
         "/",
@@ -276,6 +283,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/settings", settings_routes())
         .nest("/api/v1", search_routes())
         .nest("/api/v1/chat", chat_routes())
+        .nest("/api/v1/routing", routing_routes())
         .nest("/api/v1/ops", ops_routes())
         .nest("/api/v1/admin", admin_routes())
         .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
