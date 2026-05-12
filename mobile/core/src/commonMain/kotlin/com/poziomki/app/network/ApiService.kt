@@ -240,6 +240,16 @@ class ApiService(
 
     suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> = client.patch("/api/v1/settings", request)
 
+    suspend fun walkingRoute(
+        fromLat: Double,
+        fromLng: Double,
+        toLat: Double,
+        toLng: Double,
+    ): ApiResult<WalkingRouteResponse> =
+        client.get(
+            "/api/v1/routing/walk?fromLat=$fromLat&fromLng=$fromLng&toLat=$toLat&toLng=$toLng",
+        )
+
     // Chat (WebSocket backend)
 
     suspend fun getChatConfig(): ApiResult<ChatConfigData> = client.get("/api/v1/chat/config")

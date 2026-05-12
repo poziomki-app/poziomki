@@ -18,3 +18,4 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 *.jks
 *.keystore
+androidApp/google-services.json

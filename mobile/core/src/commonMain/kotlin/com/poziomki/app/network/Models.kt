@@ -485,3 +485,15 @@ data class UserSettingsResponse(
     val privacyShowProgram: Boolean,
     val privacyDiscoverable: Boolean,
 )
+
+// Routing models
+
+@Serializable
+data class WalkingRouteResponse(
+    @SerialName("geometryJson")
+    val geometryJson: String,
+    @SerialName("distanceMeters")
+    val distanceMeters: Double,
+    @SerialName("durationSeconds")
+    val durationSeconds: Double,
+)
