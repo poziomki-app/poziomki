@@ -14,8 +14,8 @@
         android:name="android.hardware.camera"
         android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <!-- Remove fine location auto-merged by MapLibre SDK — app only needs coarse -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove"/>
+    <!-- FINE required to read GPS_PROVIDER on degoogled devices without GMS/microG -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
     <application
         android:allowBackup="false"

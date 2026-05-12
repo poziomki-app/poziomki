@@ -4,14 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.data.repository.EventRepository
 import com.poziomki.app.location.LocationProvider
+import com.poziomki.app.location.LocationResult
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.matchesTimeFilter
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 data class EventsState(
     val allEvents: List<Event> = emptyList(),
@@ -40,6 +43,8 @@ class EventsViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(EventsState())
     val state: StateFlow<EventsState> = _state.asStateFlow()
+
+    private var locationJob: Job? = null
 
     init {
         observeEvents()
@@ -129,15 +134,12 @@ class EventsViewModel(
             }
             loadRecommendedEvents(forceRefresh = true)
             if (_state.value.activeFilter == TimeFilter.NEARBY) {
-                fetchNearbyIfPermitted()
+                val lat = _state.value.userLat ?: FALLBACK_LAT
+                val lng = _state.value.userLng ?: FALLBACK_LNG
+                loadNearbyEvents(lat, lng)
             }
             _state.value = _state.value.copy(isRefreshing = false)
         }
-    }
-
-    fun retryNearby() {
-        _state.value = _state.value.copy(isLocationPermissionDenied = false)
-        fetchNearbyIfPermitted()
     }
 
     fun selectNearbyEvent(id: String) {
@@ -178,34 +180,72 @@ class EventsViewModel(
                             },
                     )
             }
-            if (_state.value.userLat == null) {
-                fetchNearbyIfPermitted()
-            }
+            startLocationTracking()
+        } else {
+            stopLocationTracking()
         }
         filterEvents()
     }
 
-    private fun fetchNearbyIfPermitted() {
+    private fun startLocationTracking() {
         if (!locationProvider.isPermissionGranted()) {
             _state.value = _state.value.copy(isLocationPermissionDenied = true)
+            // Seed map at Warsaw so it renders, but keep user dot hidden.
+            if (_state.value.nearbyEvents.isEmpty()) {
+                loadNearbyEvents(FALLBACK_LAT, FALLBACK_LNG)
+            }
             return
         }
         _state.value = _state.value.copy(isLocationPermissionDenied = false)
-        viewModelScope.launch {
-            val loc = locationProvider.getCurrentLocation()
-            if (loc == null) {
-                loadNearbyEvents(FALLBACK_LAT, FALLBACK_LNG)
-                return@launch
+        if (locationJob?.isActive == true) return
+        locationJob =
+            viewModelScope.launch {
+                // Best-effort one-shot first so the dot appears as soon as possible
+                // (cached fix, fused last-known, etc.).
+                val initial = locationProvider.getCurrentLocation()
+                if (initial != null) {
+                    onLocationFix(initial)
+                } else {
+                    // No initial fix — still load nearby around Warsaw so map isn't blank.
+                    if (_state.value.nearbyEvents.isEmpty()) {
+                        loadNearbyEvents(FALLBACK_LAT, FALLBACK_LNG)
+                    }
+                }
+                locationProvider.locationUpdates().collect { onLocationFix(it) }
             }
-            _state.value = _state.value.copy(userLat = loc.latitude, userLng = loc.longitude)
+    }
+
+    private fun stopLocationTracking() {
+        locationJob?.cancel()
+        locationJob = null
+    }
+
+    private fun onLocationFix(loc: LocationResult) {
+        val prevLat = _state.value.userLat
+        val prevLng = _state.value.userLng
+        _state.value = _state.value.copy(userLat = loc.latitude, userLng = loc.longitude)
+        val movedSignificantly =
+            prevLat == null ||
+                prevLng == null ||
+                abs(prevLat - loc.latitude) > RELOAD_DEG_THRESHOLD ||
+                abs(prevLng - loc.longitude) > RELOAD_DEG_THRESHOLD
+        if (movedSignificantly) {
             loadNearbyEvents(loc.latitude, loc.longitude)
         }
+    }
+
+    fun retryNearby() {
+        _state.value = _state.value.copy(isLocationPermissionDenied = false)
+        startLocationTracking()
     }
 
     private companion object {
         // Warsaw — used when device location can't be obtained despite permission.
         const val FALLBACK_LAT = 52.2297
         const val FALLBACK_LNG = 21.0122
+
+        // ~111 m at the equator — reload nearby events when user has moved this far.
+        const val RELOAD_DEG_THRESHOLD = 0.001
     }
 
     fun loadNearbyEvents(
