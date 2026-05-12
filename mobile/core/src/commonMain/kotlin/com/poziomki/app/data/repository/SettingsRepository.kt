@@ -16,6 +16,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 
+@Suppress("TooManyFunctions")
 class SettingsRepository(
     private val db: PoziomkiDatabase,
     private val connectivityMonitor: ConnectivityMonitor,
@@ -31,6 +32,9 @@ class SettingsRepository(
             notifications_enabled = 1L,
             privacy_show_program = 1L,
             privacy_discoverable = 1L,
+            notify_dms = 1L,
+            notify_event_chats = 1L,
+            notify_tag_events = 1L,
             cached_at = Clock.System.now().toEpochMilliseconds(),
             is_dirty = 0L,
         )
@@ -43,6 +47,9 @@ class SettingsRepository(
             notifications_enabled = settings.notifications_enabled,
             privacy_show_program = settings.privacy_show_program,
             privacy_discoverable = settings.privacy_discoverable,
+            notify_dms = settings.notify_dms,
+            notify_event_chats = settings.notify_event_chats,
+            notify_tag_events = settings.notify_tag_events,
             cached_at = settings.cached_at,
             is_dirty = settings.is_dirty,
         )
@@ -109,6 +116,66 @@ class SettingsRepository(
                 ),
             )
             pendingOps.enqueue("update_settings", userId, json.encodeToString(UpdateSettingsRequest(notificationsEnabled = enabled)))
+        }
+    }
+
+    suspend fun updateNotifyDms(
+        userId: String,
+        enabled: Boolean,
+    ) {
+        withContext(Dispatchers.IO) {
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    notify_dms = if (enabled) 1L else 0L,
+                    is_dirty = 1L,
+                ),
+            )
+            pendingOps.enqueue(
+                "update_settings",
+                userId,
+                json.encodeToString(UpdateSettingsRequest(notifyDms = enabled)),
+            )
+        }
+    }
+
+    suspend fun updateNotifyEventChats(
+        userId: String,
+        enabled: Boolean,
+    ) {
+        withContext(Dispatchers.IO) {
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    notify_event_chats = if (enabled) 1L else 0L,
+                    is_dirty = 1L,
+                ),
+            )
+            pendingOps.enqueue(
+                "update_settings",
+                userId,
+                json.encodeToString(UpdateSettingsRequest(notifyEventChats = enabled)),
+            )
+        }
+    }
+
+    suspend fun updateNotifyTagEvents(
+        userId: String,
+        enabled: Boolean,
+    ) {
+        withContext(Dispatchers.IO) {
+            val current = getOrCreateSettings(userId)
+            upsertSettings(
+                current.copy(
+                    notify_tag_events = if (enabled) 1L else 0L,
+                    is_dirty = 1L,
+                ),
+            )
+            pendingOps.enqueue(
+                "update_settings",
+                userId,
+                json.encodeToString(UpdateSettingsRequest(notifyTagEvents = enabled)),
+            )
         }
     }
 

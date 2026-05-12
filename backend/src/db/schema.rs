@@ -24,6 +24,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    conversation_mutes (user_id, conversation_id) {
+        user_id -> Int4,
+        conversation_id -> Uuid,
+        muted_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     messages (id) {
         id -> Uuid,
         conversation_id -> Uuid,
@@ -293,6 +301,9 @@ diesel::table! {
         privacy_discoverable -> Bool,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        notify_dms -> Bool,
+        notify_event_chats -> Bool,
+        notify_tag_events -> Bool,
     }
 }
 
@@ -320,6 +331,8 @@ diesel::table! {
 }
 
 diesel::joinable!(conversation_members -> conversations (conversation_id));
+diesel::joinable!(conversation_mutes -> conversations (conversation_id));
+diesel::joinable!(conversation_mutes -> users (user_id));
 diesel::joinable!(conversations -> events (event_id));
 diesel::joinable!(messages -> conversations (conversation_id));
 diesel::joinable!(messages -> uploads (attachment_upload_id));
@@ -347,6 +360,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     chat_message_reports,
     chat_message_reveals,
     conversation_members,
+    conversation_mutes,
     conversations,
     degrees,
     event_attendees,

@@ -212,6 +212,10 @@ fn chat_routes() -> Router<AppContext> {
         )
         .route("/push/register", post(chat::push_register))
         .route("/push/unregister", post(chat::push_unregister))
+        .route(
+            "/conversations/{id}/mute",
+            post(chat::mutes::mute_conversation).delete(chat::mutes::unmute_conversation),
+        )
         .layer(cache_layer("no-store"))
 }
 

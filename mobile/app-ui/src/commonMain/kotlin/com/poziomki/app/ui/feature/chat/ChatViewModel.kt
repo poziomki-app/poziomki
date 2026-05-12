@@ -446,6 +446,29 @@ class ChatViewModel(
         }
     }
 
+    fun toggleMute() {
+        val roomId = boundRoomId ?: return
+        val wantMuted = !_uiState.value.isMuted
+        // Optimistic update — flip immediately, revert if the call fails.
+        _uiState.update { it.copy(isMuted = wantMuted) }
+        viewModelScope.launch {
+            val result =
+                if (wantMuted) {
+                    apiService.muteConversation(roomId)
+                } else {
+                    apiService.unmuteConversation(roomId)
+                }
+            if (result is ApiResult.Error) {
+                _uiState.update {
+                    it.copy(
+                        isMuted = !wantMuted,
+                        error = "Nie udało się zmienić wyciszenia",
+                    )
+                }
+            }
+        }
+    }
+
     fun toggleSearch() {
         _uiState.update {
             if (it.isSearchActive) {

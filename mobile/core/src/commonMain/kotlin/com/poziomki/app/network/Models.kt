@@ -476,6 +476,9 @@ data class UpdateSettingsRequest(
     val notificationsEnabled: Boolean? = null,
     val privacyShowProgram: Boolean? = null,
     val privacyDiscoverable: Boolean? = null,
+    val notifyDms: Boolean? = null,
+    val notifyEventChats: Boolean? = null,
+    val notifyTagEvents: Boolean? = null,
 )
 
 @Serializable
@@ -485,6 +488,9 @@ data class UserSettingsResponse(
     val notificationsEnabled: Boolean,
     val privacyShowProgram: Boolean,
     val privacyDiscoverable: Boolean,
+    val notifyDms: Boolean = true,
+    val notifyEventChats: Boolean = true,
+    val notifyTagEvents: Boolean = true,
 )
 
 // Routing models

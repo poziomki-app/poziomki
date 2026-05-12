@@ -96,6 +96,7 @@ import com.poziomki.app.ui.feature.home.SavedScreen
 import com.poziomki.app.ui.feature.onboarding.BasicInfoScreen
 import com.poziomki.app.ui.feature.onboarding.InterestsScreen
 import com.poziomki.app.ui.feature.onboarding.ProfileSetupScreen
+import com.poziomki.app.ui.feature.profile.PowiadomieniaScreen
 import com.poziomki.app.ui.feature.profile.PrivacyScreen
 import com.poziomki.app.ui.feature.profile.ProfileEditScreen
 import com.poziomki.app.ui.feature.profile.ProfileViewScreen
@@ -379,6 +380,7 @@ fun AppNavigation(
                 onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
                 onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
                 onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
+                onNavigateToPowiadomienia = { navController.navigate(Route.Powiadomienia) },
                 onNavigateToSaved = { navController.navigate(Route.Saved) },
                 onNavigateToChat = navigateToChat,
                 onSignOut = {
@@ -444,6 +446,11 @@ fun AppNavigation(
                 },
             )
         }
+        composable<Route.Powiadomienia> {
+            PowiadomieniaScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
         composable<Route.Chat> { backStackEntry ->
             val chat = backStackEntry.toRoute<Route.Chat>()
             ChatScreen(
@@ -467,6 +474,7 @@ fun MainScreen(
     onNavigateToProfileView: (String) -> Unit,
     onNavigateToProfileEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    onNavigateToPowiadomienia: () -> Unit,
     onNavigateToSaved: () -> Unit,
     onNavigateToChat: (String, String?) -> Unit,
     onSignOut: () -> Unit,
@@ -552,6 +560,7 @@ fun MainScreen(
                             ProfileScreen(
                                 onNavigateToEdit = onNavigateToProfileEdit,
                                 onNavigateToPrivacy = onNavigateToPrivacy,
+                                onNavigateToPowiadomienia = onNavigateToPowiadomienia,
                                 onNavigateToSaved = onNavigateToSaved,
                                 onNavigateToProfileView = onNavigateToProfileView,
                                 onSignOut = onSignOut,

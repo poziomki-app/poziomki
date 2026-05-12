@@ -472,6 +472,33 @@ pub async fn push_tokens_for_users(
     Ok(rows)
 }
 
+#[derive(Debug, Clone, QueryableByName)]
+struct UserIdRow {
+    #[diesel(sql_type = Integer)]
+    user_id: i32,
+}
+
+/// Filter push recipients by notification preferences.
+///
+/// Returns only those whose master switch is on, channel for the
+/// conversation kind is on, and who haven't muted the conversation.
+/// Server-side delivery only.
+pub async fn filter_push_targets(
+    conn: &mut AsyncPgConnection,
+    user_ids: &[i32],
+    conversation_id: uuid::Uuid,
+) -> Result<Vec<i32>, diesel::result::Error> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = diesel::sql_query("SELECT * FROM app.push_targets_filtered($1, $2)")
+        .bind::<diesel::sql_types::Array<Integer>, _>(user_ids)
+        .bind::<diesel::sql_types::Uuid, _>(conversation_id)
+        .load::<UserIdRow>(conn)
+        .await?;
+    Ok(rows.into_iter().map(|r| r.user_id).collect())
+}
+
 // ---------------------------------------------------------------------------
 // Narrow public projections used by the events module.
 // ---------------------------------------------------------------------------

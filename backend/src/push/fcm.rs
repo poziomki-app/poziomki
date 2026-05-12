@@ -259,7 +259,24 @@ pub async fn send_wake(user_ids: Vec<i32>, conversation_id: Uuid) {
                 return;
             }
         };
-        match db::push_tokens_for_users(&mut conn, &user_ids).await {
+        // Honour per-channel preferences and per-conversation mute. The
+        // event-approval call path passes Uuid::nil() (no conversation
+        // row to join against); fall through to the master switch only.
+        let targets = if conversation_id.is_nil() {
+            user_ids.clone()
+        } else {
+            match db::filter_push_targets(&mut conn, &user_ids, conversation_id).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(error = %e, "fcm: filter targets failed");
+                    return;
+                }
+            }
+        };
+        if targets.is_empty() {
+            return;
+        }
+        match db::push_tokens_for_users(&mut conn, &targets).await {
             Ok(rows) => rows,
             Err(e) => {
                 tracing::warn!(error = %e, "fcm: token lookup failed");

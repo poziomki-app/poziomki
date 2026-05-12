@@ -1,0 +1,3 @@
+ALTER TABLE user_settings ADD COLUMN notify_dms INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_settings ADD COLUMN notify_event_chats INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_settings ADD COLUMN notify_tag_events INTEGER NOT NULL DEFAULT 1;

@@ -54,5 +54,6 @@ data class ChatUiState(
     val searchMatchIndices: List<Int> = emptyList(),
     val currentSearchMatchIndex: Int = -1,
     val isBlocked: Boolean = false,
+    val isMuted: Boolean = false,
     val transientNotice: TransientNotice? = null,
 )
