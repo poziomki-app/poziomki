@@ -46,9 +46,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -176,10 +180,15 @@ fun ChatContent(
             ) {
                 val itemPadding = Modifier.padding(horizontal = 10.dp)
 
+                @OptIn(ExperimentalComposeUiApi::class)
                 LazyColumn(
                     state = timelineListState,
                     reverseLayout = true,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .testTag("chatMessages")
+                            .semantics { testTagsAsResourceId = true },
                 ) {
                     // In reverseLayout, first items render at the BOTTOM of the screen.
                     // Order: typing indicator (bottom) → timeline items → pagination button (top)
