@@ -506,10 +506,8 @@ async fn handle_send(
                     .filter(|&id| id != user_id)
                     .collect();
                 if !push_targets.is_empty() {
-                    let msg_body = body.to_string();
                     tokio::spawn(async move {
-                        super::push::notify_push(push_targets, conversation_id, user_id, &msg_body)
-                            .await;
+                        crate::push::fcm::send_wake(push_targets, conversation_id).await;
                     });
                 }
             } else {

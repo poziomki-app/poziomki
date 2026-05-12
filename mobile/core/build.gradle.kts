@@ -50,6 +50,7 @@ kotlin {
             implementation(libs.androidx.security.crypto)
             implementation(libs.play.services.location)
             implementation(libs.sqldelight.android.driver)
+            implementation(libs.firebase.messaging)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

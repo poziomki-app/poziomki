@@ -126,5 +126,5 @@ actual fun platformModule(): Module =
         single<ConnectivityMonitor> { AndroidConnectivityMonitor(get<Context>()) }
         single { LocationProvider(get<Context>()) }
         single { NotificationHelper(get<Context>()) }
-        single { PushManager(get(), get(), get<Context>()) }
+        single { PushManager(get(), get()) }
     }

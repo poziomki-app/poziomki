@@ -1,0 +1,20 @@
+{
+  "_comment": "Sample only. Real google-services.json is gitignored. Download yours from Firebase console → Project settings → General → Your apps → Android app → google-services.json, and drop it at mobile/androidApp/google-services.json before building.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": { "package_name": "app.poziomki" }
+      },
+      "oauth_client": [],
+      "api_key": [ { "current_key": "REPLACE_ME" } ],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+    }
+  ],
+  "configuration_version": "1"
+}

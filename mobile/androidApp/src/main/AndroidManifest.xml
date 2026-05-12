@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature
@@ -45,12 +43,11 @@
             android:screenOrientation="portrait"
             android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
         <service
-            android:name="com.poziomki.app.chat.push.NtfyPushService"
-            android:foregroundServiceType="specialUse"
+            android:name="com.poziomki.app.chat.push.PoziomkiFirebaseMessagingService"
             android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Push notification relay via ntfy SSE" />
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
         </service>
         <provider
             android:name="androidx.core.content.FileProvider"

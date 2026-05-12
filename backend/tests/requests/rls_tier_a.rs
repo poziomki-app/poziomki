@@ -265,7 +265,8 @@ async fn push_subscriptions_viewer_sees_only_own_row() {
                 .values((
                     push_subscriptions::user_id.eq(u.id),
                     push_subscriptions::device_id.eq(format!("device-{}", u.id)),
-                    push_subscriptions::ntfy_topic.eq(format!("topic-{}", u.id)),
+                    push_subscriptions::fcm_token.eq(format!("token-{}", u.id)),
+                    push_subscriptions::platform.eq("android"),
                 ))
                 .execute(&mut conn)
                 .await

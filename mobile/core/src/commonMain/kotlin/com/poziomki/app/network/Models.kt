@@ -306,8 +306,8 @@ data class MatchProfile(
 data class ChatConfigData(
     @SerialName("chatMode")
     val chatMode: String = "ws",
-    @SerialName("ntfyServer")
-    val ntfyServer: String? = null,
+    @SerialName("pushProvider")
+    val pushProvider: String? = null,
 )
 
 @Serializable
@@ -323,7 +323,8 @@ data class ChatDmRequest(
 @Serializable
 data class ChatPushRequest(
     val deviceId: String,
-    val ntfyTopic: String,
+    val fcmToken: String,
+    val platform: String,
 )
 
 @Serializable

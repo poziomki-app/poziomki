@@ -24,6 +24,9 @@ qrose = "1.1.2"
 cameraX = "1.6.0"
 zxingCore = "3.5.4"
 sqldelight = "2.3.2"
+firebaseBom = "33.6.0"
+firebaseMessaging = "24.1.0"
+googleServices = "4.4.2"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
@@ -64,6 +67,8 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -76,3 +81,4 @@ ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "14.2.0" }
 versions = { id = "com.github.ben-manes.versions", version = "0.54.0" }
 kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

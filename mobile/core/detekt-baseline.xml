@@ -23,7 +23,6 @@
     <ID>Indentation:ProfileRepository.kt$ProfileRepository$ </ID>
     <ID>Indentation:SyncEngine.kt$SyncEngine$ </ID>
     <ID>LongMethod:WsConnection.kt$WsConnection$private suspend fun connectOnce()</ID>
-    <ID>LoopWithTooManyJumpStatements:NtfyPushService.kt$NtfyPushService$while</ID>
     <ID>LoopWithTooManyJumpStatements:WsConnection.kt$WsConnection$while</ID>
     <ID>MaximumLineLength:ApiService.kt$ApiService$ </ID>
     <ID>MaximumLineLength:SettingsRepository.kt$SettingsRepository$ </ID>
