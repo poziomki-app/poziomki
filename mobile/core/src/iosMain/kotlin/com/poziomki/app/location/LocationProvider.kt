@@ -2,6 +2,9 @@ package com.poziomki.app.location
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.useContents
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import platform.CoreLocation.CLAuthorizationStatus
@@ -68,4 +71,37 @@ actual class LocationProvider {
             }
         }
     }
+
+    actual fun locationUpdates(): Flow<LocationResult> =
+        callbackFlow {
+            if (!isPermissionGranted()) {
+                close()
+                return@callbackFlow
+            }
+            val delegate =
+                object : NSObject(), CLLocationManagerDelegateProtocol {
+                    override fun locationManager(
+                        manager: CLLocationManager,
+                        didUpdateLocations: List<*>,
+                    ) {
+                        val location = didUpdateLocations.lastOrNull() as? CLLocation ?: return
+                        location.coordinate.useContents {
+                            trySend(LocationResult(latitude, longitude))
+                        }
+                    }
+
+                    override fun locationManager(
+                        manager: CLLocationManager,
+                        didFailWithError: NSError,
+                    ) {
+                        // Keep flow open; transient errors shouldn't kill subscription.
+                    }
+                }
+            manager.delegate = delegate
+            manager.startUpdatingLocation()
+            awaitClose {
+                manager.stopUpdatingLocation()
+                manager.delegate = null
+            }
+        }
 }

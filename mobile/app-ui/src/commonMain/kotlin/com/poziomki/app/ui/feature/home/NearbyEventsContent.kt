@@ -1,5 +1,11 @@
 package com.poziomki.app.ui.feature.home
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +41,8 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPinLine
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
+import com.poziomki.app.network.RoutingService
+import com.poziomki.app.network.WalkingRoute
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -52,6 +60,7 @@ import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.OrnamentOptions
@@ -65,6 +74,8 @@ private const val DEFAULT_ZOOM = 14.0
 private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
+private const val USER_DOT_RADIUS_DP = 9f
+private const val USER_HALO_MAX_RADIUS_DP = 24f
 
 // Warsaw metro bounding box, slightly padded so the city fits with breathing
 // room. Pan is clamped to this — outside of Warsaw the nearby tab makes no
@@ -134,6 +145,9 @@ internal fun NearbyEventsContent(
     val geocoding = koinInject<GeocodingService>()
     var geocodedLocation by remember { mutableStateOf<String?>(null) }
 
+    val routing = koinInject<RoutingService>()
+    var route by remember { mutableStateOf<WalkingRoute?>(null) }
+
     LaunchedEffect(selectedEventId) {
         geocodedLocation = null
         val event = events.find { it.id == selectedEventId } ?: return@LaunchedEffect
@@ -142,6 +156,15 @@ internal fun NearbyEventsContent(
         val lat = event.latitude ?: return@LaunchedEffect
         val lng = event.longitude ?: return@LaunchedEffect
         geocodedLocation = geocoding.reverse(lat, lng)
+    }
+
+    LaunchedEffect(selectedEventId, userLat, userLng) {
+        route = null
+        if (userLat == null || userLng == null) return@LaunchedEffect
+        val event = events.find { it.id == selectedEventId } ?: return@LaunchedEffect
+        val evLat = event.latitude ?: return@LaunchedEffect
+        val evLng = event.longitude ?: return@LaunchedEffect
+        route = routing.walkingRoute(userLat, userLng, evLat, evLng)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -244,18 +267,60 @@ internal fun NearbyEventsContent(
                     )
                 }
 
-                // User location dot
+                // Walking route polyline — drawn underneath the user dot.
+                val routeJson = route?.geometryJson
+                if (routeJson != null) {
+                    val routeSource =
+                        rememberGeoJsonSource(data = GeoJsonData.JsonString(featureFromGeometry(routeJson)))
+                    LineLayer(
+                        id = "user-route",
+                        source = routeSource,
+                        color = const(Primary),
+                        width = const(4.dp),
+                        opacity = const(0.85f),
+                    )
+                }
+
+                // User location: animated halo + solid core dot.
                 if (userLat != null && userLng != null) {
                     val userSource =
                         rememberGeoJsonSource(
                             data = pointGeoJson(userLat, userLng),
                         )
+                    val pulse = rememberInfiniteTransition(label = "user-pulse")
+                    val haloRadius by pulse.animateFloat(
+                        initialValue = USER_DOT_RADIUS_DP,
+                        targetValue = USER_HALO_MAX_RADIUS_DP,
+                        animationSpec =
+                            infiniteRepeatable(
+                                animation = tween(durationMillis = 1_400, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart,
+                            ),
+                        label = "halo-radius",
+                    )
+                    val haloAlpha by pulse.animateFloat(
+                        initialValue = 0.45f,
+                        targetValue = 0f,
+                        animationSpec =
+                            infiniteRepeatable(
+                                animation = tween(durationMillis = 1_400, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart,
+                            ),
+                        label = "halo-alpha",
+                    )
+                    CircleLayer(
+                        id = "user-halo",
+                        source = userSource,
+                        radius = const(haloRadius.dp),
+                        color = const(Primary),
+                        opacity = const(haloAlpha),
+                    )
                     CircleLayer(
                         id = "user-location",
                         source = userSource,
-                        radius = const(8.dp),
-                        color = const(White),
-                        strokeColor = const(Primary),
+                        radius = const(USER_DOT_RADIUS_DP.dp),
+                        color = const(Primary),
+                        strokeColor = const(White),
                         strokeWidth = const(3.dp),
                     )
                 }
@@ -312,6 +377,22 @@ internal fun NearbyEventsContent(
                         fontSize = 13.sp,
                         color = TextSecondary,
                     )
+                    val distanceMeters = route?.distanceMeters
+                    if (distanceMeters != null) {
+                        Text(
+                            text = " · ",
+                            fontFamily = NunitoFamily,
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                        )
+                        Text(
+                            text = formatDistance(distanceMeters),
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Primary,
+                        )
+                    }
                     val displayLocation =
                         selectedEvent.location
                             ?.takeIf { !looksLikeCoordinates(it) }
@@ -389,6 +470,11 @@ internal fun NearbyEventsContent(
     }
 }
 
+// Wrap a raw GeoJSON geometry (e.g. OSRM LineString) into a FeatureCollection
+// so it can be fed to GeoJsonSource.
+private fun featureFromGeometry(geometryJson: String): String =
+    """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":$geometryJson,"properties":{}}]}"""
+
 private fun pointGeoJson(
     lat: Double,
     lng: Double,
@@ -421,3 +507,12 @@ private fun distanceDeg(
 }
 
 private fun looksLikeCoordinates(s: String): Boolean = s.matches(Regex("""^-?\d+[.,]\d+\s*,\s*-?\d+[.,]\d+$"""))
+
+private fun formatDistance(meters: Double): String =
+    if (meters < 1_000) {
+        "${meters.toInt()} m"
+    } else {
+        val km = meters / 1_000.0
+        val rounded = (km * 10).toInt() / 10.0
+        "$rounded km"
+    }
