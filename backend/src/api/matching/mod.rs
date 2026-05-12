@@ -205,7 +205,7 @@ pub(super) async fn events_recommendations(
                     .iter()
                     .copied()
                     .map(|tag_id| (tag_id, 1.0)),
-                &tag_parent_map,
+                tag_parent_map.as_ref(),
             );
 
             let saved_event_ids: Vec<Uuid> = user_ctx.saved_event_ids.iter().copied().collect();
@@ -231,7 +231,7 @@ pub(super) async fn events_recommendations(
                         tags.iter().copied().map(move |tag_id| (tag_id, weight))
                     })
                 }),
-                &tag_parent_map,
+                tag_parent_map.as_ref(),
             );
 
             let user_geo = query.lat.zip(query.lng).map(|(lat, lng)| {
@@ -253,7 +253,7 @@ pub(super) async fn events_recommendations(
                         &event_tag_ids,
                         event,
                         user_geo,
-                        &tag_parent_map,
+                        tag_parent_map.as_ref(),
                     );
                     (s, event)
                 })

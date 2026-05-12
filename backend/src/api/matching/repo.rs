@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, OnceLock, RwLock};
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -341,14 +343,53 @@ impl MatchingRepository {
     pub(super) async fn load_tag_parent_map(
         &self,
         conn: &mut diesel_async::AsyncPgConnection,
-    ) -> std::result::Result<HashMap<Uuid, Option<Uuid>>, crate::error::AppError> {
-        Ok(tags::table
+    ) -> std::result::Result<Arc<HashMap<Uuid, Option<Uuid>>>, crate::error::AppError> {
+        if let Some(map) = cached_tag_parent_map() {
+            return Ok(map);
+        }
+        let map: HashMap<Uuid, Option<Uuid>> = tags::table
             .select((tags::id, tags::parent_id))
             .load::<(Uuid, Option<Uuid>)>(conn)
             .await?
             .into_iter()
-            .collect())
+            .collect();
+        Ok(store_tag_parent_map(map))
     }
+}
+
+const TAG_PARENT_MAP_TTL: Duration = Duration::from_secs(60);
+
+struct TagParentMapCache {
+    map: Arc<HashMap<Uuid, Option<Uuid>>>,
+    refreshed_at: Instant,
+}
+
+fn cache_slot() -> &'static RwLock<Option<TagParentMapCache>> {
+    static CACHE: OnceLock<RwLock<Option<TagParentMapCache>>> = OnceLock::new();
+    CACHE.get_or_init(|| RwLock::new(None))
+}
+
+fn cached_tag_parent_map() -> Option<Arc<HashMap<Uuid, Option<Uuid>>>> {
+    let guard = cache_slot().read().ok()?;
+    let entry = guard.as_ref()?;
+    if entry.refreshed_at.elapsed() < TAG_PARENT_MAP_TTL {
+        let map = Arc::clone(&entry.map);
+        drop(guard);
+        Some(map)
+    } else {
+        None
+    }
+}
+
+fn store_tag_parent_map(map: HashMap<Uuid, Option<Uuid>>) -> Arc<HashMap<Uuid, Option<Uuid>>> {
+    let arc = Arc::new(map);
+    if let Ok(mut guard) = cache_slot().write() {
+        *guard = Some(TagParentMapCache {
+            map: Arc::clone(&arc),
+            refreshed_at: Instant::now(),
+        });
+    }
+    arc
 }
 
 fn scope_from_str(s: &str) -> TagScope {
