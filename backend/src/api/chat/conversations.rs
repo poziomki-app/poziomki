@@ -7,7 +7,9 @@ use uuid::Uuid;
 use crate::db;
 use crate::db::models::conversation_members::NewConversationMember;
 use crate::db::models::conversations::{Conversation, NewConversation};
-use crate::db::schema::{conversation_members, conversations, events, profile_blocks, profiles};
+use crate::db::schema::{
+    conversation_members, conversation_mutes, conversations, events, profile_blocks, profiles,
+};
 
 /// Fetch the canonical DM conversation for `(low, high)` via the
 /// SECURITY DEFINER helper installed in the Tier-B migration. Bypasses
@@ -399,6 +401,22 @@ pub async fn list_for_user(
             std::collections::HashSet::new()
         };
 
+    // Batch-load muted conversation ids for this user. RLS scopes the
+    // table to own rows, but we run via the API role anyway — no SD
+    // helper needed.
+    let muted_ids: std::collections::HashSet<Uuid> = if conv_ids.is_empty() {
+        std::collections::HashSet::new()
+    } else {
+        conversation_mutes::table
+            .filter(conversation_mutes::user_id.eq(user_id))
+            .filter(conversation_mutes::conversation_id.eq_any(&conv_ids))
+            .select(conversation_mutes::conversation_id)
+            .load::<Uuid>(conn)
+            .await?
+            .into_iter()
+            .collect()
+    };
+
     let mut payloads = Vec::with_capacity(convs.len());
     for conv in &convs {
         let latest = latest_map.get(&conv.id).copied();
@@ -481,6 +499,7 @@ pub async fn list_for_user(
             latest_message_is_mine: latest_is_mine,
             latest_sender_name,
             is_blocked,
+            muted: muted_ids.contains(&conv.id),
             latest_moderation_verdict: latest_verdict,
             latest_moderation_categories: latest_categories,
         });

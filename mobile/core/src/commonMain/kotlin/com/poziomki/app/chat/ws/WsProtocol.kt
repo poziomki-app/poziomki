@@ -240,6 +240,7 @@ data class WsConversationPayload(
     val latestMessageIsMine: Boolean = false,
     val latestSenderName: String? = null,
     val isBlocked: Boolean = false,
+    val muted: Boolean = false,
     val latestModerationVerdict: String? = null,
     val latestModerationCategories: List<String> = emptyList(),
 )

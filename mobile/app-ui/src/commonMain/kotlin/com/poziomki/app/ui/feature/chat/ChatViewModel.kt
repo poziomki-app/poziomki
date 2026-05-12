@@ -458,12 +458,20 @@ class ChatViewModel(
                 } else {
                     apiService.unmuteConversation(roomId)
                 }
-            if (result is ApiResult.Error) {
-                _uiState.update {
-                    it.copy(
-                        isMuted = !wantMuted,
-                        error = "Nie udało się zmienić wyciszenia",
-                    )
+            when (result) {
+                is ApiResult.Success -> {
+                    // Refresh the room list so the new muted state is reflected
+                    // on the next chat reopen and in the conversations payload.
+                    runCatching { chatClient.refreshRooms() }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isMuted = !wantMuted,
+                            error = "Nie udało się zmienić wyciszenia",
+                        )
+                    }
                 }
             }
         }
@@ -716,6 +724,7 @@ class ChatViewModel(
                 roomAvatarUrl = initialAvatar,
                 isDirectRoom = initialIsDirect,
                 isBlocked = initialSummary?.isBlocked ?: false,
+                isMuted = initialSummary?.isMuted ?: false,
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
@@ -792,6 +801,7 @@ class ChatViewModel(
                         current.copy(
                             roomDisplayName = resolvedName,
                             isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
+                            isMuted = summary?.isMuted ?: current.isMuted,
                             directProfileId = current.directProfileId ?: activeDirectProfileId ?: activeDirectUserId,
                             roomAvatarUrl =
                                 resolveRoomAvatar(
