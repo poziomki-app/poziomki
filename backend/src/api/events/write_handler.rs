@@ -1189,7 +1189,7 @@ pub(in crate::api) async fn event_leave(
 // Push notification for approval/rejection (spawned background task)
 // ---------------------------------------------------------------------------
 
-async fn notify_event_approval(target_profile_id: Uuid, event_title: &str, approved: bool) {
+async fn notify_event_approval(target_profile_id: Uuid, _event_title: &str, _approved: bool) {
     let Ok(mut conn) = crate::db::conn().await else {
         return;
     };
@@ -1199,11 +1199,8 @@ async fn notify_event_approval(target_profile_id: Uuid, event_title: &str, appro
         return;
     };
 
-    let body = if approved {
-        format!("Twoje zgloszenie na \"{event_title}\" zostalo zatwierdzone!")
-    } else {
-        format!("Twoje zgloszenie na \"{event_title}\" zostalo odrzucone.")
-    };
-
-    crate::api::chat::push::notify_push(vec![user_id], Uuid::nil(), 0, &body).await;
+    // Data-only wake-up. The body that used to ride the ntfy payload now
+    // stays server-side; the mobile client fetches the approval status
+    // over the authenticated API when it wakes.
+    crate::push::fcm::send_wake(vec![user_id], Uuid::nil()).await;
 }

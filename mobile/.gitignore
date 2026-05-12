@@ -18,3 +18,7 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 *.jks
 *.keystore
+
+# Firebase credentials — provisioned per-environment, never committed.
+androidApp/google-services.json
+iosApp/iosApp/GoogleService-Info.plist

@@ -252,11 +252,12 @@ class ApiService(
 
     suspend fun registerChatPush(
         deviceId: String,
-        ntfyTopic: String,
+        fcmToken: String,
+        platform: String,
     ): ApiResult<SuccessResponse> =
         client.post(
             "/api/v1/chat/push/register",
-            ChatPushRequest(deviceId = deviceId, ntfyTopic = ntfyTopic),
+            ChatPushRequest(deviceId = deviceId, fcmToken = fcmToken, platform = platform),
         )
 
     suspend fun unregisterChatPush(deviceId: String): ApiResult<SuccessResponse> =

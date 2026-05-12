@@ -284,16 +284,18 @@ class WsChatClient(
         invitedUserIds: List<String>,
     ): Result<String> = Result.failure(UnsupportedOperationException("Event rooms are created server-side"))
 
-    override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> {
+    override suspend fun registerPusher(
+        fcmToken: String,
+        platform: String,
+    ): Result<Unit> {
         val deviceId = deviceId()
-        val ntfyTopic = "poz_$deviceId"
-        return when (val result = apiService.registerChatPush(deviceId, ntfyTopic)) {
+        return when (val result = apiService.registerChatPush(deviceId, fcmToken, platform)) {
             is ApiResult.Success -> Result.success(Unit)
             is ApiResult.Error -> Result.failure(IllegalStateException(result.message))
         }
     }
 
-    override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> {
+    override suspend fun unregisterPusher(): Result<Unit> {
         val deviceId = deviceId()
         return when (val result = apiService.unregisterChatPush(deviceId)) {
             is ApiResult.Success -> Result.success(Unit)
