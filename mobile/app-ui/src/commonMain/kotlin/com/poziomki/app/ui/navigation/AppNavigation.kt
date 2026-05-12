@@ -155,6 +155,14 @@ fun AppNavigation(
     val chatRoomRepository = koinInject<ChatRoomRepository>()
     val navigationScope = rememberCoroutineScope()
 
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect { entry ->
+            entry.destination.route?.substringAfterLast('.')?.substringBefore('/')?.let { name ->
+                emitScreenTrace(name)
+            }
+        }
+    }
+
     // Navigate to auth screen only on actual logout (true → false), not on initial composition.
     var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
     LaunchedEffect(isLoggedIn) {
