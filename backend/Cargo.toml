@@ -74,7 +74,7 @@ argon2 = { version = "=0.5.3", features = ["rand"] }
 jsonwebtoken = { version = "=10.3.0", features = ["rust_crypto"] }
 dotenvy = "=0.15.7"
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
-diesel-async = { version = "0.8", features = ["postgres", "deadpool"] }
+diesel-async = { version = "0.9", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 deadpool = { version = "=0.13.0", features = ["rt_tokio_1"] }
 thiserror = "2"
