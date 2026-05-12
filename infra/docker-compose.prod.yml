@@ -155,6 +155,9 @@ services:
       # fails to boot instead of silently accepting everything. Override
       # to `false` only for a deliberate unmoderated rollout.
       MODERATION_REQUIRED: ${MODERATION_REQUIRED:-true}
+      OSRM_URL: ${OSRM_URL:-http://osrm-foot:5000}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
     volumes:
       - ./ops/moderation/bielik-guard-onnx:/app/moderation:ro
     healthcheck:
