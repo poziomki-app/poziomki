@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.androidx.baselineprofile)
     id("poziomki.detekt")
     id("poziomki.ktlint")
     id("poziomki.kotlin-warnings")
@@ -132,5 +133,7 @@ dependencies {
     implementation(libs.koin.android)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(projects.benchmark)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

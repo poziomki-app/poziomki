@@ -1,5 +1,6 @@
 plugins {
     id("com.android.test")
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -27,6 +28,10 @@ android {
 
     targetProjectPath = ":androidApp"
     experimentalProperties["android.experimental.self-instrumenting"] = true
+}
+
+baselineProfile {
+    useConnectedDevices = true
 }
 
 dependencies {
