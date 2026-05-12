@@ -18,15 +18,18 @@ class ScreenTraceBenchmark {
     @get:Rule
     val rule = MacrobenchmarkRule()
 
+    // Cold start lands on the AuthGraph's start destination (Route.Login),
+    // so the trace section emitted by AppNavigation is "screen:Login".
     @Test
-    fun authScreenTrace() =
+    fun loginScreenTrace() =
         rule.measureRepeated(
             packageName = "app.poziomki",
-            metrics = listOf(TraceSectionMetric("screen:Auth"), FrameTimingMetric()),
-            iterations = 5,
+            metrics = listOf(TraceSectionMetric("screen:Login"), FrameTimingMetric()),
+            iterations = 3,
             startupMode = StartupMode.COLD,
         ) {
             startActivityAndWait()
             device.wait(Until.hasObject(By.pkg("app.poziomki").depth(0)), 5_000)
+            device.waitForIdle(1_500)
         }
 }
