@@ -29,13 +29,14 @@ fun <T> FilterTabs(
     selected: T,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(24.dp),
 ) {
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = horizontalArrangement,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         tabs.forEach { (value, label) ->
