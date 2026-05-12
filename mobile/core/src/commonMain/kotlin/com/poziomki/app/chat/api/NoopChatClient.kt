@@ -39,9 +39,12 @@ class NoopChatClient : ChatClient {
         invitedUserIds: List<String>,
     ): Result<String> = Result.failure(IllegalStateException("Chat is not available yet"))
 
-    override suspend fun registerPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
+    override suspend fun registerPusher(
+        fcmToken: String,
+        platform: String,
+    ): Result<Unit> = Result.success(Unit)
 
-    override suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit> = Result.success(Unit)
+    override suspend fun unregisterPusher(): Result<Unit> = Result.success(Unit)
 
     override suspend fun hideConversation(roomId: String) = Unit
 

@@ -3,7 +3,6 @@ pub mod hub;
 pub mod message_report_handler;
 pub mod messages;
 pub mod protocol;
-pub mod push;
 pub mod report_handler;
 pub mod report_repo;
 pub mod reveal_handler;
@@ -360,8 +359,9 @@ pub async fn resolve_event_conversation(
 pub struct PushRegisterRequest {
     #[serde(rename = "deviceId")]
     device_id: String,
-    #[serde(rename = "ntfyTopic")]
-    ntfy_topic: String,
+    #[serde(rename = "fcmToken")]
+    fcm_token: String,
+    platform: String,
 }
 
 pub async fn push_register(
@@ -387,18 +387,29 @@ pub async fn push_register(
         ));
     }
 
-    if body.ntfy_topic.is_empty()
-        || body.ntfy_topic.len() > 128
-        || !body
-            .ntfy_topic
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    // FCM tokens are opaque but always printable ASCII; cap to a sane
+    // bound to keep the row small. Real-world tokens are ~163 chars.
+    if body.fcm_token.is_empty()
+        || body.fcm_token.len() > 4096
+        || !body.fcm_token.chars().all(|c| !c.is_control())
     {
         return Ok(error_response(
             StatusCode::BAD_REQUEST,
             &headers,
             ErrorSpec {
-                error: "invalid ntfy_topic".to_string(),
+                error: "invalid fcm_token".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        ));
+    }
+
+    if body.platform != "android" && body.platform != "ios" {
+        return Ok(error_response(
+            StatusCode::BAD_REQUEST,
+            &headers,
+            ErrorSpec {
+                error: "invalid platform".to_string(),
                 code: "BAD_REQUEST",
                 details: None,
             },
@@ -411,7 +422,8 @@ pub async fn push_register(
     };
     let user_id = user.id;
     let device_id = body.device_id.clone();
-    let ntfy_topic = body.ntfy_topic.clone();
+    let fcm_token = body.fcm_token.clone();
+    let platform = body.platform.clone();
 
     db::with_viewer_tx(viewer, move |conn| {
         async move {
@@ -422,13 +434,19 @@ pub async fn push_register(
                         id: uuid::Uuid::new_v4(),
                         user_id,
                         device_id: device_id.clone(),
-                        ntfy_topic: ntfy_topic.clone(),
+                        fcm_token: fcm_token.clone(),
                         created_at: now,
+                        platform: platform.clone(),
+                        token_updated_at: now,
                     },
                 )
                 .on_conflict((push_subscriptions::user_id, push_subscriptions::device_id))
                 .do_update()
-                .set(push_subscriptions::ntfy_topic.eq(&ntfy_topic))
+                .set((
+                    push_subscriptions::fcm_token.eq(&fcm_token),
+                    push_subscriptions::platform.eq(&platform),
+                    push_subscriptions::token_updated_at.eq(now),
+                ))
                 .execute(conn)
                 .await?;
             Ok::<(), diesel::result::Error>(())
@@ -489,14 +507,12 @@ pub async fn push_unregister(
 pub async fn chat_config(State(_ctx): State<AppContext>, headers: HeaderMap) -> Result<Response> {
     let _ = auth_or_respond!(headers);
 
-    let ntfy_server = crate::api::chat::push::resolved_ntfy_server();
-
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
             "data": {
                 "chatMode": "ws",
-                "ntfyServer": ntfy_server,
+                "pushProvider": "fcm",
             }
         })),
     )

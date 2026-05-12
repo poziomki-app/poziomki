@@ -77,9 +77,12 @@ interface ChatClient {
         invitedUserIds: List<String>,
     ): Result<String>
 
-    suspend fun registerPusher(ntfyEndpoint: String): Result<Unit>
+    suspend fun registerPusher(
+        fcmToken: String,
+        platform: String,
+    ): Result<Unit>
 
-    suspend fun unregisterPusher(ntfyEndpoint: String): Result<Unit>
+    suspend fun unregisterPusher(): Result<Unit>
 
     suspend fun hideConversation(roomId: String)
 

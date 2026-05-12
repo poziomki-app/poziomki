@@ -1,34 +1,43 @@
 package com.poziomki.app.chat.push
 
-import android.content.Context
-import android.content.Intent
+import com.google.firebase.messaging.FirebaseMessaging
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.api.ChatClientState
-import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
+/**
+ * Tracks the FCM token and keeps the backend's `push_subscriptions` row
+ * in sync with whichever device the user is currently signed in on.
+ * On sign-in we fetch the current FCM token and register it; on sign-out
+ * we unregister so a logged-out device stops receiving wake-ups.
+ */
 class PushManager(
     private val chatClient: ChatClient,
-    private val apiService: ApiService,
-    private val appContext: Context,
+    @Suppress("UnusedPrivateProperty") private val apiService: ApiService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Volatile
+    private var registeredDeviceId: String? = null
 
     fun startObserving() {
         scope.launch {
             chatClient.state.collectLatest { state ->
                 when (state) {
                     is ChatClientState.Ready -> {
-                        startPushService(state.deviceId)
+                        registerCurrentToken(state.deviceId)
                     }
 
                     is ChatClientState.Idle -> {
-                        stopPushService()
+                        unregister()
                     }
 
                     else -> {}
@@ -37,40 +46,37 @@ class PushManager(
         }
     }
 
-    private suspend fun startPushService(deviceId: String) {
-        val config =
-            when (val result = apiService.getChatConfig()) {
-                is ApiResult.Success -> result.data
-                is ApiResult.Error -> return
-            }
-
-        val ntfyServer = config.ntfyServer ?: return
-        if (!isAllowedNtfyServer(ntfyServer)) return
-        val ntfyTopic = "poz_$deviceId"
-
-        // Register push subscription with backend
-        apiService.registerChatPush(deviceId, ntfyTopic)
-
-        val sseUrl = "$ntfyServer/$ntfyTopic/sse"
-        val intent =
-            Intent(appContext, NtfyPushService::class.java).apply {
-                putExtra(NtfyPushService.EXTRA_SSE_URL, sseUrl)
-            }
-        appContext.startForegroundService(intent)
+    /** Called by [PoziomkiFirebaseMessagingService.onNewToken] when FCM rotates the token. */
+    suspend fun onTokenRefreshed(token: String) {
+        if (registeredDeviceId != null) {
+            chatClient.registerPusher(token, PLATFORM_ANDROID)
+        }
     }
 
-    private fun stopPushService() {
-        val intent = Intent(appContext, NtfyPushService::class.java)
-        appContext.stopService(intent)
+    private suspend fun registerCurrentToken(deviceId: String) {
+        val token =
+            runCatching { fetchToken() }
+                .getOrNull() ?: return
+        chatClient.registerPusher(token, PLATFORM_ANDROID)
+        registeredDeviceId = deviceId
     }
+
+    private suspend fun unregister() {
+        if (registeredDeviceId == null) return
+        runCatching { chatClient.unregisterPusher() }
+        registeredDeviceId = null
+    }
+
+    private suspend fun fetchToken(): String =
+        suspendCancellableCoroutine { cont ->
+            FirebaseMessaging
+                .getInstance()
+                .token
+                .addOnSuccessListener { t -> cont.resume(t) }
+                .addOnFailureListener { e -> cont.resumeWithException(e) }
+        }
 
     companion object {
-        private val ALLOWED_NTFY_HOSTS = setOf("ntfy.poziomki.app")
-
-        private fun isAllowedNtfyServer(url: String): Boolean =
-            url.startsWith("https://") &&
-                ALLOWED_NTFY_HOSTS.any { host ->
-                    url == "https://$host" || url.startsWith("https://$host/")
-                }
+        private const val PLATFORM_ANDROID = "android"
     }
 }

@@ -78,8 +78,10 @@ diesel::table! {
         id -> Uuid,
         user_id -> Int4,
         device_id -> Varchar,
-        ntfy_topic -> Varchar,
+        fcm_token -> Text,
         created_at -> Timestamptz,
+        platform -> Varchar,
+        token_updated_at -> Timestamptz,
     }
 }
 
