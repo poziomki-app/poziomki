@@ -71,7 +71,7 @@ thumbhash = "=0.1.0"
 base64 = "=0.22.1"
 tower-http = { version = "=0.6.10", features = ["limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
-jsonwebtoken = "=10.3.0"
+jsonwebtoken = { version = "=10.3.0", features = ["rust_crypto"] }
 dotenvy = "=0.15.7"
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.8", features = ["postgres", "deadpool"] }

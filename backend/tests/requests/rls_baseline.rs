@@ -71,7 +71,7 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     // row sets and are SECURITY DEFINER so policy expressions that embed
     // them don't recursively self-filter against RLS.
     "profiles_in_current_bucket",
-    "push_topics_for_users",
+    "push_tokens_for_users",
     "resolve_session",
     // Tier-C policy-support helpers.
     "event_auto_approves",
