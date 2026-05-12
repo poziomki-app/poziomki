@@ -21,7 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
 import com.poziomki.app.ui.designsystem.components.LoadingView
@@ -56,7 +58,12 @@ fun SavedScreen(
             modifier = Modifier.padding(top = statusBarPadding),
         )
 
-        FilterTabs(tabs = tabs, selected = selectedTab, onSelect = { selectedTab = it })
+        FilterTabs(
+            tabs = tabs,
+            selected = selectedTab,
+            onSelect = { selectedTab = it },
+            horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
+        )
 
         when {
             state.isLoading -> {
