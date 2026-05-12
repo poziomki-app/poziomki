@@ -15,13 +15,21 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.poziomki.app.chat.push.NotificationChatTarget
+import com.poziomki.app.chat.push.NotificationHelper
+import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.session.AppPreferences
+import com.poziomki.app.ui.cache.AppUpdateMigrator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
     private val appPreferences: AppPreferences by inject()
+    private val notificationHelper: NotificationHelper by inject()
+    private val pushManager: PushManager by inject()
+    private val appUpdateMigrator: AppUpdateMigrator by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +73,18 @@ class MainActivity : ComponentActivity() {
                 @Suppress("TooGenericExceptionCaught") t: Throwable,
             ) {
                 android.util.Log.e("MainActivity", "screenshotsAllowed observer crashed", t)
+            }
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.Default) { notificationHelper.createChannels() }
+                // PushManager observes caches the migrator may wipe — wait for readiness.
+                appUpdateMigrator.ready.await()
+                pushManager.startObserving()
+            } catch (
+                @Suppress("TooGenericExceptionCaught") t: Throwable,
+            ) {
+                android.util.Log.e("MainActivity", "deferred init failed", t)
             }
         }
         if (savedInstanceState == null) {
