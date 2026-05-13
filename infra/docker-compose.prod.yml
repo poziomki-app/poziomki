@@ -183,7 +183,7 @@ services:
           # the previous 512 MB would have been borderline once moderation
           # loaded. See scripts/guard-bench/Dockerfile.bench.
           memory: 768m
-          cpus: '1.0'
+          cpus: '3.0'
           pids: 256
     logging: *default-logging
     networks: [app]
