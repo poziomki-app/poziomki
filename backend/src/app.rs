@@ -221,7 +221,51 @@ async fn assert_pool_role(role: PoolRole) -> crate::error::AppResult<()> {
         )));
     }
     tracing::info!(db_user = %row.current_user, "pool role verified");
+    assert_pg_max_connections(&mut conn).await;
     Ok(())
+}
+
+// Pgdog is sized for 20 connections per role × 3 roles = 60. If postgres
+// `max_connections` drifts below that (e.g. an old ALTER SYSTEM override in
+// `postgresql.auto.conf` that survives a conf-file bump), pgdog can't realize
+// its configured pool and the API silently runs with a tighter cap. Profiling
+// in 2026-05 caught a 30-vs-60 drift this way. Warn loudly on boot so it's
+// visible in logs without failing startup.
+#[derive(diesel::deserialize::QueryableByName)]
+struct MaxConnectionsRow {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    setting: String,
+}
+
+const PG_MIN_MAX_CONNECTIONS: i32 = 60;
+
+async fn assert_pg_max_connections(conn: &mut crate::db::DbConn) {
+    use diesel_async::RunQueryDsl;
+
+    let row: Result<MaxConnectionsRow, _> =
+        diesel::sql_query("SELECT setting FROM pg_settings WHERE name = 'max_connections'")
+            .get_result(conn)
+            .await;
+    match row.map(|r| r.setting.parse::<i32>()) {
+        Ok(Ok(value)) if value < PG_MIN_MAX_CONNECTIONS => {
+            tracing::warn!(
+                max_connections = value,
+                expected_min = PG_MIN_MAX_CONNECTIONS,
+                "postgres max_connections below pgdog pool ceiling — \
+                 pool will be capped below configured size; check \
+                 postgresql.auto.conf for an ALTER SYSTEM override"
+            );
+        }
+        Ok(Ok(value)) => {
+            tracing::info!(max_connections = value, "postgres max_connections verified");
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "could not parse max_connections setting");
+        }
+        Err(error) => {
+            tracing::warn!(%error, "max_connections probe failed");
+        }
+    }
 }
 
 fn build_app_context(role: PoolRole) -> crate::error::AppResult<AppContext> {
