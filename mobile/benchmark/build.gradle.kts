@@ -10,6 +10,8 @@ android {
         minSdk = 28
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Preserve login state between iterations so chat-flow bench can drive the UI.
+        testInstrumentationRunnerArguments["androidx.benchmark.clearPackageData"] = "false"
     }
 
     buildTypes {

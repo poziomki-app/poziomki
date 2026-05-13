@@ -23,7 +23,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
@@ -148,11 +152,14 @@ fun MessagesScreen(
                     if (filteredRooms.isEmpty()) {
                         EmptyView("brak rozmów")
                     } else {
+                        @OptIn(ExperimentalComposeUiApi::class)
                         LazyColumn(
                             modifier =
                                 Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = PoziomkiTheme.spacing.lg),
+                                    .padding(horizontal = PoziomkiTheme.spacing.lg)
+                                    .testTag("chatList")
+                                    .semantics { testTagsAsResourceId = true },
                             contentPadding = PaddingValues(bottom = LocalNavBarPadding.current),
                         ) {
                             items(filteredRooms, key = { it.roomId }) { room ->
