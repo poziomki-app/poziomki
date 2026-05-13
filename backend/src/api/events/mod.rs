@@ -16,6 +16,7 @@ mod events_write_handler;
 mod events_write_repo;
 #[path = "write_service.rs"]
 mod events_write_service;
+mod invite_handler;
 mod report_handler;
 mod report_repo;
 
@@ -46,6 +47,7 @@ pub(super) use events_write_handler::{
     event_approve_attendee, event_attend, event_create, event_delete, event_leave,
     event_reject_attendee, event_save, event_unsave, event_update,
 };
+pub(super) use invite_handler::{event_invite_users, event_uninvite_user};
 pub(super) use report_handler::event_report;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
@@ -132,8 +134,10 @@ pub(super) async fn events_list(
 ) -> Result<Response> {
     let limit = i64::from(query.limit.unwrap_or(20).clamp(1, 100));
     let now = Utc::now();
-    list_events_with_viewer(&headers, move |conn, _profile_id| {
-        Box::pin(async move { events_repo::list_upcoming_events(conn, now, limit).await })
+    list_events_with_viewer(&headers, move |conn, profile_id| {
+        Box::pin(
+            async move { events_repo::list_upcoming_events(conn, now, limit, profile_id).await },
+        )
     })
     .await
 }
@@ -197,6 +201,15 @@ pub(super) async fn event_get(
             else {
                 return Ok(EventGetOutcome::NotFound);
             };
+
+            if event.visibility == "private" && event.creator_id != profile.id {
+                let invited = events_repo::is_invited(conn, event_uuid, profile.id)
+                    .await
+                    .map_err(into_diesel)?;
+                if !invited {
+                    return Ok(EventGetOutcome::NotFound);
+                }
+            }
 
             let response = build_event_response_raw(conn, &event, &profile.id)
                 .await

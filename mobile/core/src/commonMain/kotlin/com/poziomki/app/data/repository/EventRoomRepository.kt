@@ -96,6 +96,7 @@ internal class EventRoomRepository(
             is_dirty = current.is_dirty,
             requires_approval = current.requires_approval,
             is_pending = current.is_pending,
+            visibility = current.visibility,
         )
     }
 }

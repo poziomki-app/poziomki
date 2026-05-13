@@ -38,6 +38,7 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         attendeesPreview = parseAttendeesPreview(attendees_preview_json),
         tags = parseTags(tags_json),
         conversationId = conversation_id,
+        visibility = visibility,
         score = score,
     )
 

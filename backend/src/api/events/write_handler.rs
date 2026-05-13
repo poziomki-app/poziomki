@@ -200,8 +200,16 @@ fn build_new_event(
         created_at: now,
         updated_at: now,
         requires_approval: payload.requires_approval.unwrap_or(false),
+        visibility: normalize_visibility(payload.visibility.as_deref()),
     };
     (model, event_id)
+}
+
+fn normalize_visibility(value: Option<&str>) -> String {
+    match value.map(str::trim) {
+        Some("private") => "private".to_string(),
+        _ => "public".to_string(),
+    }
 }
 
 enum CreateOutcome {
