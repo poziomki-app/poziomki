@@ -99,6 +99,8 @@ import com.poziomki.app.ui.feature.onboarding.ProfileSetupScreen
 import com.poziomki.app.ui.feature.profile.PrivacyScreen
 import com.poziomki.app.ui.feature.profile.ProfileEditScreen
 import com.poziomki.app.ui.feature.profile.ProfileViewScreen
+import com.poziomki.app.ui.perf.ScreenTraceHandle
+import com.poziomki.app.ui.perf.startScreenTrace
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -154,6 +156,16 @@ fun AppNavigation(
     val chatClient = koinInject<ChatClient>()
     val chatRoomRepository = koinInject<ChatRoomRepository>()
     val navigationScope = rememberCoroutineScope()
+
+    LaunchedEffect(navController) {
+        var current: ScreenTraceHandle? = null
+        navController.currentBackStackEntryFlow.collect { entry ->
+            current?.stop()
+            val route = entry.destination.route ?: "unknown"
+            val name = route.substringAfterLast('.').substringBefore('/')
+            current = startScreenTrace(name)
+        }
+    }
 
     // Navigate to auth screen only on actual logout (true → false), not on initial composition.
     var wasLoggedIn by remember { mutableStateOf(isLoggedIn) }
