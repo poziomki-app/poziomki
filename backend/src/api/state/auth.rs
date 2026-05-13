@@ -107,7 +107,7 @@ fn auth_cache_ttl() -> Duration {
     })
 }
 
-async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
+pub(in crate::api) async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
     let now = Utc::now();
     let cached = {
         let guard = auth_cache().read().await;
@@ -124,7 +124,7 @@ async fn cache_auth_get(hashed_token: &str) -> Option<(Session, User)> {
     Some((entry.session, entry.user))
 }
 
-async fn cache_auth_put(hashed_token: String, session: &Session, user: &User) {
+pub(in crate::api) async fn cache_auth_put(hashed_token: String, session: &Session, user: &User) {
     let now = Utc::now();
     let ttl_until = now + auth_cache_ttl();
     let cached_until = if session.expires_at < ttl_until {
