@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.androidx.baselineprofile)
     id("poziomki.detekt")
     id("poziomki.ktlint")
     id("poziomki.kotlin-warnings")
@@ -77,6 +78,14 @@ android {
                 "proguard-rules.pro",
             )
         }
+        create("benchmark") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isProfileable = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -124,5 +133,7 @@ dependencies {
     implementation(libs.koin.android)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(projects.benchmark)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

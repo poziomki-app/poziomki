@@ -32,3 +32,4 @@ dependencyResolutionManagement {
 include(":core")
 include(":app-ui")
 include(":androidApp")
+include(":benchmark")
