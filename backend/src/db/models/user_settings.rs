@@ -17,6 +17,9 @@ pub struct UserSetting {
     pub privacy_discoverable: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub notify_dms: bool,
+    pub notify_event_chats: bool,
+    pub notify_tag_events: bool,
 }
 
 #[derive(Debug, Insertable)]
@@ -32,6 +35,9 @@ pub struct NewUserSetting {
     pub privacy_discoverable: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub notify_dms: bool,
+    pub notify_event_chats: bool,
+    pub notify_tag_events: bool,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -43,5 +49,8 @@ pub struct UserSettingChangeset {
     pub notifications_enabled: Option<bool>,
     pub privacy_show_program: Option<bool>,
     pub privacy_discoverable: Option<bool>,
+    pub notify_dms: Option<bool>,
+    pub notify_event_chats: Option<bool>,
+    pub notify_tag_events: Option<bool>,
     pub updated_at: Option<DateTime<Utc>>,
 }

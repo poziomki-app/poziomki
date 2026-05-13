@@ -360,6 +360,7 @@ private fun WsConversationPayload.toRoomSummary(): RoomSummary =
         latestMessageIsMine = latestMessageIsMine,
         latestMessageSendStatus = if (latestMessage != null) EventSendStatus.Sent else null,
         isBlocked = isBlocked,
+        isMuted = muted,
         latestModerationVerdict = latestModerationVerdict,
         latestModerationCategories = latestModerationCategories,
     )

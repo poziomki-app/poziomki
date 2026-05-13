@@ -446,6 +446,37 @@ class ChatViewModel(
         }
     }
 
+    fun toggleMute() {
+        val roomId = boundRoomId ?: return
+        val wantMuted = !_uiState.value.isMuted
+        // Optimistic update — flip immediately, revert if the call fails.
+        _uiState.update { it.copy(isMuted = wantMuted) }
+        viewModelScope.launch {
+            val result =
+                if (wantMuted) {
+                    apiService.muteConversation(roomId)
+                } else {
+                    apiService.unmuteConversation(roomId)
+                }
+            when (result) {
+                is ApiResult.Success -> {
+                    // Refresh the room list so the new muted state is reflected
+                    // on the next chat reopen and in the conversations payload.
+                    runCatching { chatClient.refreshRooms() }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isMuted = !wantMuted,
+                            error = "Nie udało się zmienić wyciszenia",
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun toggleSearch() {
         _uiState.update {
             if (it.isSearchActive) {
@@ -693,6 +724,7 @@ class ChatViewModel(
                 roomAvatarUrl = initialAvatar,
                 isDirectRoom = initialIsDirect,
                 isBlocked = initialSummary?.isBlocked ?: false,
+                isMuted = initialSummary?.isMuted ?: false,
                 timelineItems = cachedTimeline?.items ?: emptyList(),
                 isAwayFromLatest = false,
                 unreadBelowCount = 0,
@@ -769,6 +801,7 @@ class ChatViewModel(
                         current.copy(
                             roomDisplayName = resolvedName,
                             isDirectRoom = summary?.isDirect ?: current.isDirectRoom,
+                            isMuted = summary?.isMuted ?: current.isMuted,
                             directProfileId = current.directProfileId ?: activeDirectProfileId ?: activeDirectUserId,
                             roomAvatarUrl =
                                 resolveRoomAvatar(

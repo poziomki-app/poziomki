@@ -24,10 +24,17 @@ pub(in crate::api) struct UserSettingsResponse {
     pub(in crate::api) privacy_show_program: bool,
     #[serde(rename = "privacyDiscoverable")]
     pub(in crate::api) privacy_discoverable: bool,
+    #[serde(rename = "notifyDms")]
+    pub(in crate::api) notify_dms: bool,
+    #[serde(rename = "notifyEventChats")]
+    pub(in crate::api) notify_event_chats: bool,
+    #[serde(rename = "notifyTagEvents")]
+    pub(in crate::api) notify_tag_events: bool,
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
 pub(in crate::api) struct UpdateSettingsBody {
     #[serde(default)]
     pub(in crate::api) theme: Option<String>,
@@ -39,6 +46,12 @@ pub(in crate::api) struct UpdateSettingsBody {
     pub(in crate::api) privacy_show_program: Option<bool>,
     #[serde(default)]
     pub(in crate::api) privacy_discoverable: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) notify_dms: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) notify_event_chats: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) notify_tag_events: Option<bool>,
 }
 
 fn model_to_response(model: &UserSetting) -> UserSettingsResponse {
@@ -48,6 +61,9 @@ fn model_to_response(model: &UserSetting) -> UserSettingsResponse {
         notifications_enabled: model.notifications_enabled,
         privacy_show_program: model.privacy_show_program,
         privacy_discoverable: model.privacy_discoverable,
+        notify_dms: model.notify_dms,
+        notify_event_chats: model.notify_event_chats,
+        notify_tag_events: model.notify_tag_events,
     }
 }
 
@@ -58,6 +74,9 @@ fn default_response() -> UserSettingsResponse {
         notifications_enabled: true,
         privacy_show_program: true,
         privacy_discoverable: true,
+        notify_dms: true,
+        notify_event_chats: true,
+        notify_tag_events: true,
     }
 }
 
@@ -101,6 +120,9 @@ pub(super) async fn settings_update(
             notifications_enabled: body.notifications_enabled,
             privacy_show_program: body.privacy_show_program,
             privacy_discoverable: body.privacy_discoverable,
+            notify_dms: body.notify_dms,
+            notify_event_chats: body.notify_event_chats,
+            notify_tag_events: body.notify_tag_events,
             updated_at: Some(Utc::now()),
         };
         diesel::update(user_settings::table.find(record.id))
@@ -120,6 +142,9 @@ pub(super) async fn settings_update(
             notifications_enabled: body.notifications_enabled.unwrap_or(true),
             privacy_show_program: body.privacy_show_program.unwrap_or(true),
             privacy_discoverable: body.privacy_discoverable.unwrap_or(true),
+            notify_dms: body.notify_dms.unwrap_or(true),
+            notify_event_chats: body.notify_event_chats.unwrap_or(true),
+            notify_tag_events: body.notify_tag_events.unwrap_or(true),
             created_at: now,
             updated_at: now,
         };

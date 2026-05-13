@@ -29,6 +29,7 @@ const EXPECTED_TIER_A_TABLES: &[&str] = &[
     "user_settings",
     "user_audit_log",
     "push_subscriptions",
+    "conversation_mutes",
     "profile_bookmarks",
     "profile_blocks",
     "event_interactions",
@@ -71,6 +72,7 @@ const EXPECTED_SD_HELPERS: &[&str] = &[
     // row sets and are SECURITY DEFINER so policy expressions that embed
     // them don't recursively self-filter against RLS.
     "profiles_in_current_bucket",
+    "push_targets_filtered",
     "push_tokens_for_users",
     "resolve_session",
     // Tier-C policy-support helpers.

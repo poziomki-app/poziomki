@@ -1,5 +1,6 @@
 pub mod auth_rate_limits;
 pub mod conversation_members;
+pub mod conversation_mutes;
 pub mod conversations;
 pub mod degrees;
 pub mod event_attendees;

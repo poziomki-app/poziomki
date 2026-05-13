@@ -2,6 +2,7 @@ pub mod conversations;
 pub mod hub;
 pub mod message_report_handler;
 pub mod messages;
+pub mod mutes;
 pub mod protocol;
 pub mod report_handler;
 pub mod report_repo;

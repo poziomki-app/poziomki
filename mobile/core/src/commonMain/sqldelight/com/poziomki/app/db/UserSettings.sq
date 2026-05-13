@@ -5,6 +5,9 @@ CREATE TABLE user_settings (
     notifications_enabled INTEGER NOT NULL DEFAULT 1,
     privacy_show_program INTEGER NOT NULL DEFAULT 1,
     privacy_discoverable INTEGER NOT NULL DEFAULT 1,
+    notify_dms INTEGER NOT NULL DEFAULT 1,
+    notify_event_chats INTEGER NOT NULL DEFAULT 1,
+    notify_tag_events INTEGER NOT NULL DEFAULT 1,
     cached_at INTEGER NOT NULL DEFAULT 0,
     is_dirty INTEGER NOT NULL DEFAULT 0
 );
@@ -18,8 +21,9 @@ upsert:
 INSERT OR REPLACE INTO user_settings(
     user_id, theme, language, notifications_enabled,
     privacy_show_program, privacy_discoverable,
+    notify_dms, notify_event_chats, notify_tag_events,
     cached_at, is_dirty
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 clearDirty:
 UPDATE user_settings SET is_dirty = 0 WHERE user_id = ?;

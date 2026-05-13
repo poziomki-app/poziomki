@@ -68,6 +68,8 @@ sealed interface Route {
 
     @Serializable data object Privacy : Route
 
+    @Serializable data object Powiadomienia : Route
+
     @Serializable data object Saved : Route
 
     @Serializable data class Chat(

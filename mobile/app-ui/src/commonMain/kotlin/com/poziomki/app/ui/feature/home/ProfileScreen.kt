@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
+import com.adamglin.phosphoricons.bold.Bell
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretRight
 import com.adamglin.phosphoricons.bold.PencilSimple
@@ -57,10 +58,12 @@ import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 fun ProfileScreen(
     onNavigateToEdit: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    onNavigateToPowiadomienia: () -> Unit,
     onNavigateToSaved: () -> Unit,
     onNavigateToProfileView: (String) -> Unit,
     onSignOut: () -> Unit,
@@ -114,6 +117,12 @@ fun ProfileScreen(
                                         icon = PhosphorIcons.Bold.PencilSimple,
                                         label = "edytuj profil",
                                         onClick = onNavigateToEdit,
+                                    )
+                                    HorizontalDivider(color = Border, thickness = 1.dp)
+                                    SettingsMenuItem(
+                                        icon = PhosphorIcons.Bold.Bell,
+                                        label = "powiadomienia",
+                                        onClick = onNavigateToPowiadomienia,
                                     )
                                     HorizontalDivider(color = Border, thickness = 1.dp)
                                     SettingsMenuItem(

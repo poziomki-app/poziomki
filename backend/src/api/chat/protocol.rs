@@ -187,6 +187,7 @@ pub struct ReactionPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ConversationPayload {
     pub id: Uuid,
     pub kind: String,
@@ -202,6 +203,7 @@ pub struct ConversationPayload {
     pub latest_message_is_mine: bool,
     pub latest_sender_name: Option<String>,
     pub is_blocked: bool,
+    pub muted: bool,
     /// Bielik-Guard verdict for the latest message body — `None` until
     /// scanned, `"allow"`/`"flag"`/`"block"` after. Clients render the
     /// blur overlay in the chat list using this field; the body is

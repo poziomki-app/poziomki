@@ -283,6 +283,12 @@ class ApiService(
             ReportConversationRequest(reason = reason, description = description),
         )
 
+    suspend fun muteConversation(conversationId: String): ApiResult<SuccessResponse> =
+        client.post("/api/v1/chat/conversations/$conversationId/mute")
+
+    suspend fun unmuteConversation(conversationId: String): ApiResult<SuccessResponse> =
+        client.delete("/api/v1/chat/conversations/$conversationId/mute")
+
     // Audit a tap-to-reveal of a moderation-flagged chat message.
     @Suppress("ktlint:standard:function-signature")
     suspend fun revealChatMessage(messageId: String): ApiResult<SuccessResponse> =
