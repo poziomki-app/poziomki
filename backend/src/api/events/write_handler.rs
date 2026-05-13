@@ -200,6 +200,12 @@ fn build_new_event(
         created_at: now,
         updated_at: now,
         requires_approval: payload.requires_approval.unwrap_or(false),
+        recurrence_rule: payload
+            .recurrence_rule
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
     };
     (model, event_id)
 }
