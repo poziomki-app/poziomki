@@ -40,6 +40,7 @@ kotlin {
             implementation(libs.camerax.lifecycle)
             implementation(libs.camerax.view)
             implementation(libs.zxing.core)
+            implementation(libs.androidx.tracing)
         }
         commonMain.dependencies {
             implementation(projects.core)
