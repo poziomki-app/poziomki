@@ -23,18 +23,18 @@ class NotificationHelper(
         val messagesChannel =
             NotificationChannel(
                 CHANNEL_MESSAGES,
-                "Messages",
+                "Wiadomości",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "New message notifications"
+                description = "Powiadomienia o nowych wiadomościach"
             }
         val serviceChannel =
             NotificationChannel(
                 CHANNEL_SERVICE,
-                "Push Service",
+                "Usługa push",
                 NotificationManager.IMPORTANCE_MIN,
             ).apply {
-                description = "Background connection for push notifications"
+                description = "Połączenie w tle dla powiadomień push"
             }
         notificationManager.createNotificationChannel(messagesChannel)
         notificationManager.createNotificationChannel(serviceChannel)
@@ -56,8 +56,8 @@ class NotificationHelper(
         avatarUrl: String? = null,
         timestampMs: Long? = null,
     ) {
-        val title = sender ?: "New message"
-        val text = body ?: "You have a new message"
+        val title = sender ?: "Poziomki"
+        val text = body ?: "Nowa wiadomość"
         val groupKey = "poz_messages_${roomId ?: "unknown"}"
         val notificationTime = timestampMs ?: System.currentTimeMillis()
         val sortKey = notificationTime.toString().padStart(20, '0')
