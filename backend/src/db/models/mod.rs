@@ -4,6 +4,7 @@ pub mod conversations;
 pub mod degrees;
 pub mod event_attendees;
 pub mod event_interactions;
+pub mod event_place_polls;
 pub mod event_tags;
 pub mod events;
 pub mod job_outbox;

@@ -319,6 +319,39 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    event_place_polls (id) {
+        id -> Uuid,
+        event_id -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    event_place_options (id) {
+        id -> Uuid,
+        poll_id -> Uuid,
+        label -> Varchar,
+        latitude -> Nullable<Float8>,
+        longitude -> Nullable<Float8>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    event_place_votes (poll_id, profile_id) {
+        poll_id -> Uuid,
+        profile_id -> Uuid,
+        option_id -> Uuid,
+        voted_at -> Timestamptz,
+    }
+}
+
+diesel::joinable!(event_place_polls -> events (event_id));
+diesel::joinable!(event_place_options -> event_place_polls (poll_id));
+diesel::joinable!(event_place_votes -> event_place_polls (poll_id));
+diesel::joinable!(event_place_votes -> event_place_options (option_id));
+diesel::joinable!(event_place_votes -> profiles (profile_id));
 diesel::joinable!(conversation_members -> conversations (conversation_id));
 diesel::joinable!(conversations -> events (event_id));
 diesel::joinable!(messages -> conversations (conversation_id));
@@ -351,6 +384,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     degrees,
     event_attendees,
     event_interactions,
+    event_place_options,
+    event_place_polls,
+    event_place_votes,
     event_tags,
     events,
     job_outbox,

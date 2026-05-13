@@ -16,6 +16,7 @@ mod events_write_handler;
 mod events_write_repo;
 #[path = "write_service.rs"]
 mod events_write_service;
+mod place_poll;
 mod report_handler;
 mod report_repo;
 
@@ -46,6 +47,7 @@ pub(super) use events_write_handler::{
     event_approve_attendee, event_attend, event_create, event_delete, event_leave,
     event_reject_attendee, event_save, event_unsave, event_update,
 };
+pub(super) use place_poll::{place_poll_create, place_poll_get, place_poll_vote};
 pub(super) use report_handler::event_report;
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
