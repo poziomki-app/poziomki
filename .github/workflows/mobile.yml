@@ -35,6 +35,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
 
+      - name: Stub google-services.json for CI
+        run: cp androidApp/google-services.json.sample androidApp/google-services.json
+
       - run: ./gradlew :androidApp:assembleDebug
 
       # Upload debug APK on PR runs so the trusted pr-apk-comment workflow

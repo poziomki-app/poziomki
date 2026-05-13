@@ -9,8 +9,8 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 
 use super::super::state::{
-    extract_bearer_token, hash_session_token, session_model_to_view, user_model_to_view,
-    SessionResponse,
+    cache_auth_get, cache_auth_put, extract_bearer_token, hash_session_token,
+    session_model_to_view, user_model_to_view, SessionResponse,
 };
 use crate::db::models::sessions::Session;
 use crate::db::models::users::User;
@@ -33,14 +33,21 @@ async fn resolve_session_and_user(
     };
     let hashed = hash_session_token(&token);
 
+    // Fast path: in-process auth cache (15s TTL). Misses fall through to the
+    // SECURITY DEFINER session resolve below and re-populate the cache.
+    if let Some((session, user)) = cache_auth_get(&hashed).await {
+        return Ok(Some((session, user)));
+    }
+
     // Single transaction: SECURITY DEFINER session resolution, then viewer
     // context, then the User SELECT under that context. Matches the pattern
     // used by the require_auth_context middleware so both stay RLS-ready.
     let mut conn = crate::db::conn().await?;
+    let hashed_for_tx = hashed.clone();
     let result = conn
         .transaction::<Option<(Session, User)>, diesel::result::Error, _>(|conn| {
             async move {
-                let Some(row) = db::resolve_session(conn, &hashed).await? else {
+                let Some(row) = db::resolve_session(conn, &hashed_for_tx).await? else {
                     return Ok(None);
                 };
                 if row.expires_at <= Utc::now() {
@@ -74,6 +81,9 @@ async fn resolve_session_and_user(
             .scope_boxed()
         })
         .await?;
+    if let Some((session, user)) = &result {
+        cache_auth_put(hashed, session, user).await;
+    }
     Ok(result)
 }
 
