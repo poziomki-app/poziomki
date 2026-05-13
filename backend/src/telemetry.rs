@@ -40,7 +40,7 @@ pub fn init_metrics_exporter(kind: ProcessKind) -> AppResult<()> {
     let port = metrics_port(kind)?;
     PrometheusBuilder::new()
         .add_global_label("service", kind.as_str())
-        .with_http_listener(([127, 0, 0, 1], port))
+        .with_http_listener(([0, 0, 0, 0], port))
         .install()
         .map_err(|error| AppError::message(format!("metrics init: {error}")))?;
 
