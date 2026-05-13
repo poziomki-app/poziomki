@@ -46,6 +46,10 @@ pub(in crate::api) struct CreateEventBody {
     pub(in crate::api) tag_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(in crate::api) requires_approval: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) is_online: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) meeting_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -82,6 +86,10 @@ pub(in crate::api) struct UpdateEventBody {
     pub(in crate::api) tag_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(in crate::api) requires_approval: Option<bool>,
+    #[serde(default)]
+    pub(in crate::api) is_online: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub(in crate::api) meeting_url: Option<Option<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

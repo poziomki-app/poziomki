@@ -38,6 +38,9 @@ fun com.poziomki.app.db.Event.toApiModel(): Event =
         attendeesPreview = parseAttendeesPreview(attendees_preview_json),
         tags = parseTags(tags_json),
         conversationId = conversation_id,
+        labels = parseLabels(labels_json),
+        isOnline = is_online != 0L,
+        meetingUrl = meeting_url,
         score = score,
     )
 
@@ -47,6 +50,14 @@ private fun parseAttendeesPreview(jsonStr: String?): List<EventAttendeePreview> 
     } else {
         runCatching { json.decodeFromString<List<EventAttendeePreview>>(jsonStr) }
             .onFailure { /* parse error, return empty */ }
+            .getOrDefault(emptyList())
+    }
+
+private fun parseLabels(jsonStr: String?): List<String> =
+    if (jsonStr.isNullOrBlank()) {
+        emptyList()
+    } else {
+        runCatching { json.decodeFromString<List<String>>(jsonStr) }
             .getOrDefault(emptyList())
     }
 

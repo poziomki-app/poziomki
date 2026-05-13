@@ -315,6 +315,9 @@ mod tests {
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             requires_approval: false,
+            labels: vec![],
+            is_online: false,
+            meeting_url: None,
         };
 
         let score = score_event(

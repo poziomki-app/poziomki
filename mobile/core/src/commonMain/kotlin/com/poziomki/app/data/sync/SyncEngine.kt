@@ -231,6 +231,9 @@ class SyncEngine(
             is_dirty = 0L,
             requires_approval = if (event.requiresApproval) 1L else 0L,
             is_pending = if (event.isPending) 1L else 0L,
+            labels_json = if (event.labels.isEmpty()) null else json.encodeToString(event.labels),
+            is_online = if (event.isOnline) 1L else 0L,
+            meeting_url = event.meetingUrl,
         )
     }
 

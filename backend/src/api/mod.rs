@@ -40,6 +40,7 @@ fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
 fn admin_routes() -> Router<AppContext> {
     Router::new()
         .route("/users/{pid}/ban", post(admin::ban_user))
+        .route("/events/{id}/labels", post(admin::set_event_labels))
         .layer(cache_layer("no-store"))
 }
 

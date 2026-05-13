@@ -603,6 +603,38 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
+            // Online / hybrid toggle
+            SectionLabel("spotkanie online")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "wydarzenie odbywa się (też) online",
+                    fontFamily = NunitoFamily,
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.Switch(
+                    checked = state.isOnline,
+                    onCheckedChange = viewModel::updateIsOnline,
+                )
+            }
+            if (state.isOnline) {
+                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
+                PoziomkiTextField(
+                    value = state.meetingUrl,
+                    onValueChange = viewModel::updateMeetingUrl,
+                    placeholder = "link do spotkania",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
             // Requires approval toggle
             SectionLabel("wymagaj akceptacji")
             Row(

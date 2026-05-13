@@ -42,6 +42,11 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) requires_approval: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
+    pub(in crate::api) labels: Vec<String>,
+    #[serde(rename = "isOnline")]
+    pub(in crate::api) is_online: bool,
+    #[serde(rename = "meetingUrl")]
+    pub(in crate::api) meeting_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(in crate::api) score: Option<f64>,
 }

@@ -61,6 +61,8 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.MapPin
+import com.adamglin.phosphoricons.fill.Star
+import com.adamglin.phosphoricons.fill.VideoCamera
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
@@ -377,6 +379,10 @@ private fun EventCard(
                                 bottom = PoziomkiTheme.spacing.sm,
                             ),
                 ) {
+                    if ("featured" in event.labels) {
+                        FeaturedBadge()
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     // Title
                     Text(
                         text = event.title,
@@ -397,7 +403,11 @@ private fun EventCard(
                             fontSize = 15.sp,
                             color = TextSecondary,
                         )
-                        event.location?.let { location ->
+                        val showOnline = event.isOnline
+                        val placeText = if (showOnline) "online" else event.location
+                        val placeIcon =
+                            if (showOnline) PhosphorIcons.Fill.VideoCamera else PhosphorIcons.Fill.MapPin
+                        placeText?.let { text ->
                             Text(
                                 text = " · ",
                                 fontFamily = NunitoFamily,
@@ -405,14 +415,14 @@ private fun EventCard(
                                 color = TextMuted,
                             )
                             Icon(
-                                PhosphorIcons.Fill.MapPin,
+                                placeIcon,
                                 contentDescription = null,
                                 modifier = Modifier.size(13.dp),
                                 tint = TextMuted,
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
-                                text = location,
+                                text = text,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 14.sp,
@@ -624,11 +634,16 @@ internal fun EventRow(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun EventRowContent(
     event: Event,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
+        if ("featured" in event.labels) {
+            FeaturedBadge()
+            Spacer(modifier = Modifier.height(4.dp))
+        }
         Text(
             text = event.title,
             fontFamily = MontserratFamily,
@@ -645,17 +660,21 @@ private fun EventRowContent(
             fontSize = 13.sp,
             color = TextSecondary,
         )
-        event.location?.let { location ->
+        val showOnline = event.isOnline
+        val placeText = if (showOnline) "online" else event.location
+        val placeIcon =
+            if (showOnline) PhosphorIcons.Fill.VideoCamera else PhosphorIcons.Fill.MapPin
+        placeText?.let { text ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    PhosphorIcons.Fill.MapPin,
+                    placeIcon,
                     contentDescription = null,
                     modifier = Modifier.size(12.dp),
                     tint = TextMuted,
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = location,
+                    text = text,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 13.sp,
@@ -778,5 +797,31 @@ private fun CategoryFilterRow(
                         .background(category.color, CircleShape),
             )
         }
+    }
+}
+
+@Composable
+private fun FeaturedBadge() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .background(Primary.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Icon(
+            PhosphorIcons.Fill.Star,
+            contentDescription = null,
+            modifier = Modifier.size(11.dp),
+            tint = Primary,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = "wyróżnione",
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = Primary,
+        )
     }
 }

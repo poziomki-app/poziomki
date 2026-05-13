@@ -200,6 +200,13 @@ fn build_new_event(
         created_at: now,
         updated_at: now,
         requires_approval: payload.requires_approval.unwrap_or(false),
+        is_online: payload.is_online.unwrap_or(false),
+        meeting_url: payload
+            .meeting_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
     };
     (model, event_id)
 }

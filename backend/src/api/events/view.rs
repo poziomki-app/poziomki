@@ -98,6 +98,9 @@ fn build_from_context(
         is_pending,
         requires_approval: event.requires_approval,
         conversation_id: event.conversation_id.clone(),
+        labels: event.labels.clone(),
+        is_online: event.is_online,
+        meeting_url: event.meeting_url.clone(),
         score: None,
     }
 }
