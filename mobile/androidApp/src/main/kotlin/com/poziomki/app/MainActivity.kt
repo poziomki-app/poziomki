@@ -52,13 +52,10 @@ class MainActivity : ComponentActivity() {
             @Suppress("DEPRECATION")
             setTaskDescription(ActivityManager.TaskDescription(null, null, Color.BLACK))
         }
-        // Block screenshots + recent-apps previews by default. Chat
-        // messages, profile edit, and password-reset flows all surface
-        // PII that shouldn't leak to a device's recents carousel,
-        // screen-record apps, or untrusted projections. Users can opt
-        // in via Privacy settings; the toggle defaults off so the first
-        // frame is always protected.
-        applySecureFlag(secure = true)
+        // Allow screenshots by default. Users can opt into FLAG_SECURE
+        // via Privacy settings if they want to block screenshots + recent-
+        // apps previews.
+        applySecureFlag(secure = false)
         // Wrap defensively at the coroutine boundary — a failure to
         // read the privacy flag must never crash the activity. Worst
         // case the user stays on the safe default (FLAG_SECURE on).

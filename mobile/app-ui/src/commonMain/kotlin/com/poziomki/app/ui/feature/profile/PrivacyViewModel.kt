@@ -26,7 +26,7 @@ data class PrivacyState(
     val error: String? = null,
     val discoverable: Boolean = true,
     val showProgram: Boolean = true,
-    val screenshotsAllowed: Boolean = false,
+    val screenshotsAllowed: Boolean = true,
     val currentEmail: String? = null,
     val pendingNewEmail: String? = null,
     val isRequestingEmailOtp: Boolean = false,
@@ -177,12 +177,10 @@ class PrivacyViewModel(
                 )
             when (apiService.changePassword(currentPassword, newPassword)) {
                 is ApiResult.Success -> {
-                    cacheManager.clearAll()
-                    sessionManager.clearSession()
                     _state.value =
                         _state.value.copy(
                             isChangingPassword = false,
-                            passwordSuccessMessage = "Hasło zostało zmienione. Zaloguj się ponownie.",
+                            passwordSuccessMessage = "Hasło zostało zmienione.",
                         )
                     onPasswordChanged()
                 }
