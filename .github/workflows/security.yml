@@ -42,7 +42,7 @@ jobs:
           ./trivy --version
       - name: Scan repo config (Dockerfiles, compose, workflows)
         run: ./trivy config . --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-config.sarif --exit-code 0
-      - uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
+      - uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
         if: always()
         with:
           sarif_file: trivy-config.sarif
@@ -54,7 +54,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: EmbarkStudios/cargo-deny-action@91bf2b620e09e18d6eb78b92e7861937469acedb # v2
+      - uses: EmbarkStudios/cargo-deny-action@6c8f9facfa5047ec02d8485b6bf52b587b7777d1 # v2
         with:
           manifest-path: backend/Cargo.toml
           command: check advisories licenses bans sources
@@ -81,7 +81,7 @@ jobs:
           chmod +x gitleaks
       - name: Scan repo
         run: ./gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif --exit-code 0
-      - uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
+      - uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
         if: always()
         with:
           sarif_file: gitleaks.sarif
@@ -117,7 +117,7 @@ jobs:
           format: sarif
           output-file: hadolint.sarif
           no-fail: true
-      - uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
+      - uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
         if: always()
         with:
           sarif_file: hadolint.sarif
@@ -161,7 +161,7 @@ jobs:
           results_file: scorecard.sarif
           results_format: sarif
           publish_results: true
-      - uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
+      - uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
         if: always()
         with:
           sarif_file: scorecard.sarif
