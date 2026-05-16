@@ -15,7 +15,7 @@ composeCompiler {
 // Single source of truth for the app version. release-please bumps this line
 // (see .github/.release-please-manifest.json); versionCode is derived so it
 // never drifts out of monotonic order.
-val appVersionName = "0.22.1" // x-release-please-version
+val appVersionName = "0.22.2" // x-release-please-version
 
 fun computeVersionCode(name: String): Int {
     val parts = name.split(".").map { it.toInt() }
