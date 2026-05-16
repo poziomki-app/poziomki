@@ -446,11 +446,7 @@ fun AppNavigation(
         composable<Route.Privacy> {
             PrivacyScreen(
                 onBack = { navController.popBackStack() },
-                onPasswordChanged = {
-                    navController.navigate(Route.AuthGraph) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onPasswordChanged = {},
                 onAccountDeleted = {
                     navController.navigate(Route.AuthGraph) {
                         popUpTo(0) { inclusive = true }

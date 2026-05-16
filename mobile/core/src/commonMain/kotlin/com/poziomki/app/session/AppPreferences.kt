@@ -15,7 +15,7 @@ class AppPreferences(
     }
 
     val screenshotsAllowed: Flow<Boolean> =
-        dataStore.data.map { prefs -> prefs[SCREENSHOTS_ALLOWED] ?: false }
+        dataStore.data.map { prefs -> prefs[SCREENSHOTS_ALLOWED] ?: true }
 
     suspend fun setScreenshotsAllowed(allowed: Boolean) {
         dataStore.edit { it[SCREENSHOTS_ALLOWED] = allowed }

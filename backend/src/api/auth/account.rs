@@ -298,7 +298,7 @@ pub(in crate::api) async fn change_password(
     headers: HeaderMap,
     Json(payload): Json<ChangePasswordBody>,
 ) -> Result<Response> {
-    let (_session, user) = auth_or_respond!(headers);
+    let (session, user) = auth_or_respond!(headers);
 
     if payload.current_password.is_empty()
         || !crate::security::verify_password(&payload.current_password, &user.password)
@@ -334,9 +334,16 @@ pub(in crate::api) async fn change_password(
                 ))
                 .execute(conn)
                 .await?;
-            diesel::delete(sessions::table.filter(sessions::user_id.eq(user.id)))
-                .execute(conn)
-                .await?;
+            // Keep the caller's session active so changing their password
+            // doesn't kick them out of the device they just confirmed it on.
+            // Every OTHER session for the user is invalidated.
+            diesel::delete(
+                sessions::table
+                    .filter(sessions::user_id.eq(user.id))
+                    .filter(sessions::id.ne(session.id)),
+            )
+            .execute(conn)
+            .await?;
             Ok::<(), diesel::result::Error>(())
         }
         .scope_boxed()
