@@ -22,6 +22,7 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 @Composable
 fun ChangePasswordDialog(
     isLoading: Boolean,
+    error: String?,
     onDismiss: () -> Unit,
     onSubmit: (currentPassword: String, newPassword: String, confirmPassword: String) -> Unit,
 ) {
@@ -65,6 +66,7 @@ fun ChangePasswordDialog(
                     onValueChange = { confirm = it },
                     placeholder = "Powtórz nowe hasło",
                 )
+                DialogInlineError(error)
             }
         },
         confirmButton = {
