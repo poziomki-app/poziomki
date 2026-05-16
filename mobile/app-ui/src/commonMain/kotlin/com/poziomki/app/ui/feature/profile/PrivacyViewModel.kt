@@ -175,7 +175,7 @@ class PrivacyViewModel(
                     error = null,
                     passwordSuccessMessage = null,
                 )
-            when (apiService.changePassword(currentPassword, newPassword)) {
+            when (val result = apiService.changePassword(currentPassword, newPassword)) {
                 is ApiResult.Success -> {
                     _state.value =
                         _state.value.copy(
@@ -186,10 +186,15 @@ class PrivacyViewModel(
                 }
 
                 is ApiResult.Error -> {
+                    val message =
+                        when (result.code) {
+                            "INVALID_PASSWORD" -> "Nieprawidłowe aktualne hasło."
+                            else -> "Nie udało się zmienić hasła. Spróbuj ponownie."
+                        }
                     _state.value =
                         _state.value.copy(
                             isChangingPassword = false,
-                            error = "Nie udało się zmienić hasła. Sprawdź aktualne hasło.",
+                            error = message,
                         )
                 }
             }
@@ -203,7 +208,7 @@ class PrivacyViewModel(
         if (password.isBlank()) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isDeleting = true, error = null)
-            when (apiService.deleteAccount(password)) {
+            when (val result = apiService.deleteAccount(password)) {
                 is ApiResult.Success -> {
                     cacheManager.clearAll()
                     sessionManager.clearSession()
@@ -212,10 +217,15 @@ class PrivacyViewModel(
                 }
 
                 is ApiResult.Error -> {
+                    val message =
+                        when (result.code) {
+                            "INVALID_PASSWORD" -> "Nieprawidłowe hasło."
+                            else -> "Nie udało się usunąć konta. Spróbuj ponownie."
+                        }
                     _state.value =
                         _state.value.copy(
                             isDeleting = false,
-                            error = "Nie udało się usunąć konta. Sprawdź hasło.",
+                            error = message,
                         )
                 }
             }
