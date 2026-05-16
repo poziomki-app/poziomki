@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +49,14 @@ fun OnboardingLayout(
     Scaffold(
         containerColor = Background,
         bottomBar = {
+            // Union with IME so the footer lifts above the keyboard instead of
+            // being covered. Falls back to nav bar inset (or xl spacing,
+            // whichever is larger) when the keyboard is closed.
+            val bottomInset =
+                WindowInsets.navigationBars
+                    .union(WindowInsets.ime)
+                    .asPaddingValues()
+                    .calculateBottomPadding()
             Column(
                 modifier =
                     Modifier
@@ -55,11 +65,7 @@ fun OnboardingLayout(
                         .padding(horizontal = PoziomkiTheme.spacing.lg)
                         .padding(top = PoziomkiTheme.spacing.sm)
                         .padding(
-                            bottom =
-                                maxOf(
-                                    PoziomkiTheme.spacing.xl,
-                                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                                ),
+                            bottom = maxOf(PoziomkiTheme.spacing.xl, bottomInset),
                         ),
             ) {
                 footer()
