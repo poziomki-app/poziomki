@@ -305,7 +305,10 @@ pub(in crate::api) async fn delete_account(
     delete_user_data(viewer).await?;
     invalidate_auth_cache_for_user_id(user.id).await;
 
-    Ok(Json(SuccessResponse { success: true }).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 pub(in crate::api) async fn change_password(
