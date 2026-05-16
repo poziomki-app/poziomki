@@ -219,7 +219,7 @@ class PrivacyViewModel(
                 is ApiResult.Error -> {
                     val message =
                         when (result.code) {
-                            "INVALID_PASSWORD" -> "Nieprawidłowe hasło."
+                            "INVALID_PASSWORD" -> "Nieprawidłowe hasło"
                             else -> "Nie udało się usunąć konta. Spróbuj ponownie."
                         }
                     _state.value =

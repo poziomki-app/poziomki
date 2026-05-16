@@ -127,10 +127,14 @@ fun PrivacyScreen(
         }
     }
 
-    if (showPasswordDialog && state.error == null) {
+    if (showPasswordDialog) {
         ChangePasswordDialog(
             isLoading = state.isChangingPassword,
-            onDismiss = { showPasswordDialog = false },
+            error = state.error,
+            onDismiss = {
+                viewModel.clearError()
+                showPasswordDialog = false
+            },
             onSubmit = { current, new, confirm ->
                 viewModel.changePassword(current, new, confirm) {
                     showPasswordDialog = false
@@ -140,10 +144,14 @@ fun PrivacyScreen(
         )
     }
 
-    if (showDeleteDialog && state.error == null) {
+    if (showDeleteDialog) {
         DeleteAccountDialog(
             isLoading = state.isDeleting,
-            onDismiss = { showDeleteDialog = false },
+            error = state.error,
+            onDismiss = {
+                viewModel.clearError()
+                showDeleteDialog = false
+            },
             onConfirm = { password ->
                 viewModel.deleteAccount(password) {
                     showDeleteDialog = false
@@ -401,6 +409,7 @@ private fun PrivacyToggleRow(
 @Composable
 private fun DeleteAccountDialog(
     isLoading: Boolean,
+    error: String?,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
@@ -430,6 +439,7 @@ private fun DeleteAccountDialog(
                     onValueChange = { password = it },
                     placeholder = "Hasło",
                 )
+                DialogInlineError(error)
             }
         },
         confirmButton = {
@@ -456,5 +466,18 @@ private fun DeleteAccountDialog(
                 )
             }
         },
+    )
+}
+
+@Composable
+internal fun DialogInlineError(message: String?) {
+    if (message == null) return
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = message,
+        fontFamily = NunitoFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.error,
     )
 }
