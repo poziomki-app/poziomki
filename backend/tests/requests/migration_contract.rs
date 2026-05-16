@@ -809,7 +809,7 @@ async fn delete_account_verifies_hashed_password() {
 
 #[tokio::test]
 #[serial]
-async fn change_password_rotates_credentials_and_invalidates_sessions() {
+async fn change_password_rotates_credentials_and_invalidates_other_sessions() {
     request(|request, _ctx| async move {
         let token = sign_up_and_verify(
             &request,
@@ -820,6 +820,21 @@ async fn change_password_rotates_credentials_and_invalidates_sessions() {
         .await;
 
         let (auth_key, auth_value) = auth_header(&token);
+
+        // Second session from a different device — must be invalidated.
+        let other_sign_in = request
+            .post("/api/v1/auth/sign-in/email")
+            .json(&serde_json::json!({
+                "email": "change-password@example.com",
+                "password": "old-password",
+            }))
+            .await;
+        assert_eq!(other_sign_in.status_code(), 200);
+        let other_token = other_sign_in.json::<serde_json::Value>()["data"]["token"]
+            .as_str()
+            .expect("other token")
+            .to_string();
+        let (other_key, other_value) = auth_header(&other_token);
 
         let change_bad = request
             .patch("/api/v1/auth/account/password")
@@ -841,11 +856,19 @@ async fn change_password_rotates_credentials_and_invalidates_sessions() {
             .await;
         assert_eq!(change_ok.status_code(), 200);
 
-        let old_sessions = request
+        // Caller's session stays alive.
+        let current_sessions = request
             .get("/api/v1/auth/sessions")
             .add_header(auth_key.clone(), auth_value.clone())
             .await;
-        assert_eq!(old_sessions.status_code(), 401);
+        assert_eq!(current_sessions.status_code(), 200);
+
+        // Other device is logged out.
+        let other_sessions = request
+            .get("/api/v1/auth/sessions")
+            .add_header(other_key, other_value)
+            .await;
+        assert_eq!(other_sessions.status_code(), 401);
 
         let old_sign_in = request
             .post("/api/v1/auth/sign-in/email")
