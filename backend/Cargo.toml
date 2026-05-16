@@ -62,7 +62,7 @@ url = { version = "=2.5.8" }
 dashmap = { version = "6" }
 futures-util = { version = "0.3" }
 subtle = { version = "2" }
-lettre = { version = "=0.11.21", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "dkim"] }
+lettre = { version = "=0.11.22", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "dkim"] }
 hickory-resolver = { version = "0.26", features = ["tokio"] }
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 fast_image_resize = "=6.0.0"
@@ -71,7 +71,7 @@ thumbhash = "=0.1.0"
 base64 = "=0.22.1"
 tower-http = { version = "=0.6.10", features = ["limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
-jsonwebtoken = { version = "=10.3.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "=10.4.0", features = ["rust_crypto"] }
 dotenvy = "=0.15.7"
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.8", features = ["postgres", "deadpool"] }
