@@ -794,7 +794,7 @@ async fn delete_account_verifies_hashed_password() {
             .add_header(auth_key.clone(), auth_value.clone())
             .json(&serde_json::json!({ "password": "wrong-password" }))
             .await;
-        assert_eq!(delete_bad.status_code(), 401);
+        assert_eq!(delete_bad.status_code(), 403);
 
         // delete with correct password succeeds
         let delete_ok = request
@@ -844,7 +844,7 @@ async fn change_password_rotates_credentials_and_invalidates_other_sessions() {
                 "newPassword": "new-password-123",
             }))
             .await;
-        assert_eq!(change_bad.status_code(), 401);
+        assert_eq!(change_bad.status_code(), 403);
 
         let change_ok = request
             .patch("/api/v1/auth/account/password")

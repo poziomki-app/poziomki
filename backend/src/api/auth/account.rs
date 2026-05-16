@@ -11,14 +11,29 @@ use diesel::prelude::*;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 
-use crate::api::{auth_or_respond, error_response};
+use crate::api::{auth_or_respond, error_response, ErrorSpec};
 
 use super::super::state::{
     invalidate_auth_cache_for_user_id, ChangePasswordBody, DataResponse, DeleteAccountBody,
     SuccessResponse,
 };
-use super::auth_service::unauthorized_error;
 type Result<T> = crate::error::AppResult<T>;
+
+/// Password re-verification failed on a session-authenticated endpoint
+/// (change password, delete account). Returns 403 rather than 401 so the
+/// mobile client's generic 401 handler doesn't clear the session — the
+/// user is still authenticated; they just typed the wrong password.
+fn invalid_password_error(headers: &HeaderMap) -> Response {
+    error_response(
+        axum::http::StatusCode::FORBIDDEN,
+        headers,
+        ErrorSpec {
+            error: "Invalid password".to_string(),
+            code: "INVALID_PASSWORD",
+            details: None,
+        },
+    )
+}
 
 use crate::app::AppContext;
 use crate::db::models::profiles::Profile;
@@ -276,7 +291,7 @@ pub(in crate::api) async fn delete_account(
     if payload.password.is_empty()
         || !crate::security::verify_password(&payload.password, &user.password)
     {
-        return Ok(unauthorized_error(&headers, "Invalid password"));
+        return Ok(invalid_password_error(&headers));
     }
 
     let viewer = DbViewer {
@@ -303,7 +318,7 @@ pub(in crate::api) async fn change_password(
     if payload.current_password.is_empty()
         || !crate::security::verify_password(&payload.current_password, &user.password)
     {
-        return Ok(unauthorized_error(&headers, "Invalid password"));
+        return Ok(invalid_password_error(&headers));
     }
 
     if !(8..=128).contains(&payload.new_password.len()) {
