@@ -769,21 +769,20 @@ async fn event_conversation_insert_rejects_pending_attendee() {
 }
 
 // ---------------------------------------------------------------------------
-// API role must not be able to UPDATE or DELETE whole conversation
-// rows. A naive member-only UPDATE/DELETE policy would let any chat
-// participant nuke the room for everyone via ON DELETE CASCADE
-// through conversation_members / messages / message_reactions.
-// Legitimate event-chat cleanup routes through
-// app.delete_event_and_chat() instead.
+// The only DELETE policy on conversations is conversations_dm_delete,
+// scoped to the two pinned DM participants (added so the account-delete
+// path can drop a user's DM rows). Outsiders must still see DELETE as a
+// no-op, and event-chat conversations remain undeletable from the API
+// role (cleanup goes through app.delete_event_and_chat()).
 // ---------------------------------------------------------------------------
 #[tokio::test]
 #[serial]
-async fn conversations_member_cannot_delete() {
+async fn conversations_outsider_cannot_delete_dm() {
     let fx = setup_fixture().await;
-    let alice_id = fx.alice.id;
+    let carol_id = fx.carol.id;
     let dm_id = fx.dm_id;
 
-    let affected = rls_harness::with_api_viewer_tx(alice_id, false, move |conn| {
+    let affected = rls_harness::with_api_viewer_tx(carol_id, false, move |conn| {
         async move {
             let sql = format!("DELETE FROM public.conversations WHERE id = '{dm_id}'");
             Ok(execute_count(conn, &sql).await)
@@ -791,10 +790,10 @@ async fn conversations_member_cannot_delete() {
         .scope_boxed()
     })
     .await
-    .expect("alice tx");
+    .expect("carol tx");
     assert_eq!(
         affected, 0,
-        "no conversations_delete policy — member DELETE must be a no-op"
+        "conversations_dm_delete must reject non-participants"
     );
 
     let mut conn = db::conn().await.expect("pool");
