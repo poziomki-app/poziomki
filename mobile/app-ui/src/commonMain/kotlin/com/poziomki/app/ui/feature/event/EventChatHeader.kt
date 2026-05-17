@@ -8,13 +8,15 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -91,11 +93,14 @@ fun EventCoverImage(
     event: Event,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 10f),
+                .padding(start = 12.dp, end = 12.dp, top = statusBarTop + 8.dp)
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(24.dp)),
     ) {
         val coverImage = event.coverImage
         if (coverImage != null) {
@@ -270,7 +275,6 @@ fun EventChatHeader(
                 Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopStart)
-                    .statusBarsPadding()
                     .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
