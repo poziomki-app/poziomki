@@ -15,6 +15,7 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::api::common::{auth_or_respond, error_response, parse_uuid_response, ErrorSpec};
+use crate::api::state::{DataResponse, SuccessResponse};
 use crate::app::AppContext;
 use crate::db;
 
@@ -91,7 +92,10 @@ pub async fn mute_conversation(
         ));
     }
 
-    Ok((StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
 
 pub async fn unmute_conversation(
@@ -129,5 +133,8 @@ pub async fn unmute_conversation(
     })
     .await?;
 
-    Ok((StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response())
+    Ok(Json(DataResponse {
+        data: SuccessResponse { success: true },
+    })
+    .into_response())
 }
