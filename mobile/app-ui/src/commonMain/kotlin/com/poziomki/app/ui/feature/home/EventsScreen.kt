@@ -579,6 +579,9 @@ private fun WeekEventsContent(
                             .clickable { collapsedDays[dateKey] = !isCollapsed }
                             .padding(
                                 start = PoziomkiTheme.spacing.sm,
+                                // Matches IconButton's 12dp icon inset so the chevron
+                                // aligns with +, avatar, and the filter icon above.
+                                end = 12.dp,
                                 top = PoziomkiTheme.spacing.sm,
                                 bottom = PoziomkiTheme.spacing.sm,
                             ),
