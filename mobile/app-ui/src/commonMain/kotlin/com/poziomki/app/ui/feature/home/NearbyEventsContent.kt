@@ -1,11 +1,11 @@
 package com.poziomki.app.ui.feature.home
 
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,7 +75,10 @@ private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
 private const val USER_DOT_RADIUS_DP = 9f
-private const val USER_HALO_MAX_RADIUS_DP = 24f
+private const val USER_HALO_MAX_RADIUS_DP = 28f
+private const val USER_HALO_PEAK_ALPHA = 0.35f
+private const val USER_HALO_CYCLE_MS = 2_200
+private val UserHaloEasing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
 // Warsaw metro bounding box, slightly padded so the city fits with breathing
 // room. Pan is clamped to this — outside of Warsaw the nearby tab makes no
@@ -287,23 +290,39 @@ internal fun NearbyEventsContent(
                         rememberGeoJsonSource(
                             data = pointGeoJson(userLat, userLng),
                         )
+                    // One shared cycle drives both radius and opacity. Alpha
+                    // starts and ends at 0 so the loop restart is invisible —
+                    // no flash, no perceptible redraw seam.
                     val pulse = rememberInfiniteTransition(label = "user-pulse")
                     val haloRadius by pulse.animateFloat(
                         initialValue = USER_DOT_RADIUS_DP,
-                        targetValue = USER_HALO_MAX_RADIUS_DP,
+                        targetValue = USER_DOT_RADIUS_DP,
                         animationSpec =
                             infiniteRepeatable(
-                                animation = tween(durationMillis = 1_400, easing = LinearEasing),
+                                animation =
+                                    keyframes {
+                                        durationMillis = USER_HALO_CYCLE_MS
+                                        USER_DOT_RADIUS_DP at 0 using UserHaloEasing
+                                        USER_HALO_MAX_RADIUS_DP at (USER_HALO_CYCLE_MS - 400)
+                                        USER_HALO_MAX_RADIUS_DP at USER_HALO_CYCLE_MS
+                                    },
                                 repeatMode = RepeatMode.Restart,
                             ),
                         label = "halo-radius",
                     )
                     val haloAlpha by pulse.animateFloat(
-                        initialValue = 0.45f,
+                        initialValue = 0f,
                         targetValue = 0f,
                         animationSpec =
                             infiniteRepeatable(
-                                animation = tween(durationMillis = 1_400, easing = LinearEasing),
+                                animation =
+                                    keyframes {
+                                        durationMillis = USER_HALO_CYCLE_MS
+                                        0f at 0
+                                        USER_HALO_PEAK_ALPHA at 180
+                                        0f at (USER_HALO_CYCLE_MS - 400)
+                                        0f at USER_HALO_CYCLE_MS
+                                    },
                                 repeatMode = RepeatMode.Restart,
                             ),
                         label = "halo-alpha",
