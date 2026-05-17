@@ -140,6 +140,8 @@ fun EventChatScreen(
                             chatViewModel.removeConversation()
                             onBack()
                         },
+                        isMuted = chatState.isMuted,
+                        onToggleMute = chatViewModel::toggleMute,
                     )
                     ChatContent(
                         modifier = Modifier.weight(1f),

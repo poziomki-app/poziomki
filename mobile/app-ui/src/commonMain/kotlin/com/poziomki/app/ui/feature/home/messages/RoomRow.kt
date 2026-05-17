@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,8 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.bold.BellSlash
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.regular.User
 import com.poziomki.app.chat.api.RoomSummary
@@ -84,8 +88,18 @@ fun RoomRow(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                if (room.isMuted) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.BellSlash,
+                        contentDescription = "Wyciszone",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 room.latestTimestampMillis?.let {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(

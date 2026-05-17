@@ -407,8 +407,30 @@ class ChatViewModel(
         val profileId = activeDirectProfileId ?: activeDirectUserId ?: return
         viewModelScope.launch {
             when (apiService.blockProfile(profileId)) {
-                is ApiResult.Success -> _uiState.update { it.copy(isBlocked = true) }
-                is ApiResult.Error -> _uiState.update { it.copy(error = "Nie udało się zablokować") }
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isBlocked = true,
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Zablokowano",
+                                    type = SnackbarType.SUCCESS,
+                                ),
+                        )
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Nie udało się zablokować",
+                                    type = SnackbarType.ERROR,
+                                ),
+                        )
+                    }
+                }
             }
         }
     }
@@ -417,8 +439,30 @@ class ChatViewModel(
         val profileId = activeDirectProfileId ?: activeDirectUserId ?: return
         viewModelScope.launch {
             when (apiService.unblockProfile(profileId)) {
-                is ApiResult.Success -> _uiState.update { it.copy(isBlocked = false) }
-                is ApiResult.Error -> _uiState.update { it.copy(error = "Nie udało się odblokować") }
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isBlocked = false,
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Odblokowano",
+                                    type = SnackbarType.SUCCESS,
+                                ),
+                        )
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            transientNotice =
+                                TransientNotice(
+                                    message = "Nie udało się odblokować",
+                                    type = SnackbarType.ERROR,
+                                ),
+                        )
+                    }
+                }
             }
         }
     }

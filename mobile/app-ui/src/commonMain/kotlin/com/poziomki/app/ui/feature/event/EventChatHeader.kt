@@ -49,6 +49,8 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.ArrowLeft
+import com.adamglin.phosphoricons.bold.Bell
+import com.adamglin.phosphoricons.bold.BellSlash
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
 import com.adamglin.phosphoricons.bold.Flag
 import com.adamglin.phosphoricons.bold.PencilSimple
@@ -259,6 +261,8 @@ fun EventChatHeader(
     onEdit: () -> Unit,
     onReport: () -> Unit = {},
     onRemove: () -> Unit = {},
+    isMuted: Boolean = false,
+    onToggleMute: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -352,6 +356,19 @@ fun EventChatHeader(
                                 },
                             )
                         }
+                        ActionMenuItem(
+                            icon =
+                                if (isMuted) {
+                                    PhosphorIcons.Bold.Bell
+                                } else {
+                                    PhosphorIcons.Bold.BellSlash
+                                },
+                            label = if (isMuted) "Wyłącz wyciszenie" else "Wycisz czat",
+                            onClick = {
+                                showMenu = false
+                                onToggleMute()
+                            },
+                        )
                         ActionMenuItem(
                             icon = PhosphorIcons.Bold.Flag,
                             label = "Zgłoś",
