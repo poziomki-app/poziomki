@@ -112,16 +112,6 @@ fun PowiadomieniaScreen(
                 trailingBadge = "wkrótce",
             )
 
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
-            Text(
-                text = "Wyciszysz pojedynczy czat w jego ustawieniach (przycisk w nagłówku).",
-                fontFamily = nunito,
-                fontWeight = FontWeight.Normal,
-                fontSize = 12.sp,
-                color = TextSecondary,
-                lineHeight = 16.sp,
-            )
-
             Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
         }
     }
