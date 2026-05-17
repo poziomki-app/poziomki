@@ -33,8 +33,8 @@ class SettingsRepository(
             privacy_show_program = 1L,
             privacy_discoverable = 1L,
             notify_dms = 1L,
-            notify_event_chats = 1L,
-            notify_tag_events = 1L,
+            notify_event_chats = 0L,
+            notify_tag_events = 0L,
             cached_at = Clock.System.now().toEpochMilliseconds(),
             is_dirty = 0L,
         )

@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 data class PowiadomieniaState(
     val masterEnabled: Boolean = true,
     val dms: Boolean = true,
-    val eventChats: Boolean = true,
-    val tagEvents: Boolean = true,
+    val eventChats: Boolean = false,
+    val tagEvents: Boolean = false,
 )
 
 class PowiadomieniaViewModel(

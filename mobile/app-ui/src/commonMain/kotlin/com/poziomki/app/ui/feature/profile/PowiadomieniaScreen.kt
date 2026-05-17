@@ -103,8 +103,8 @@ fun PowiadomieniaScreen(
             )
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
             NotificationToggleRow(
-                label = "nowe wydarzenia w obserwowanych tagach",
-                description = "Powiadomienia o nowych wydarzeniach pasujących do Twoich zainteresowań.",
+                label = "wydarzenia w tagach",
+                description = "Nowe wydarzenia pasujące do obserwowanych tagów.",
                 checked = state.tagEvents,
                 enabled = state.masterEnabled,
                 onCheckedChange = viewModel::toggleTagEvents,
