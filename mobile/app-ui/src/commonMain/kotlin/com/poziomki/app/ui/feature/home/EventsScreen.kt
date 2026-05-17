@@ -65,6 +65,7 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
+import com.poziomki.app.ui.designsystem.components.FilterTabsStyle
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.SearchableScreenHeader
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
@@ -188,6 +189,8 @@ fun EventsScreen(
                     Modifier
                         .weight(1f)
                         .padding(end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                style = FilterTabsStyle.Pill,
             )
             androidx.compose.material3.IconButton(
                 onClick = { viewModel.toggleShowTagFilter() },
