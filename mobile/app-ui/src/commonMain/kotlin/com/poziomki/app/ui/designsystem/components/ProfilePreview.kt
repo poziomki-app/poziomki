@@ -111,12 +111,14 @@ fun ProfilePreview(
                 .then(pageBackground)
                 .verticalScroll(rememberScrollState()),
     ) {
+        val imageTopInset =
+            WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp
         // Image carousel or avatar placeholder — rounded card with margin
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 8.dp)
+                    .padding(start = 12.dp, end = 12.dp, top = imageTopInset)
                     .aspectRatio(0.75f)
                     .clip(RoundedCornerShape(24.dp)),
         ) {
