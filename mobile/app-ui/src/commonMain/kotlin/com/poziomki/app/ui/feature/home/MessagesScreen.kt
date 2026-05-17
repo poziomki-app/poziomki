@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
+import com.poziomki.app.ui.designsystem.components.FilterTabsStyle
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.SearchableScreenHeader
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -74,7 +75,8 @@ fun MessagesScreen(
             selected = selectedFilter,
             onSelect = { selectedFilter = it },
             modifier = Modifier.padding(start = 24.dp, end = PoziomkiTheme.spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(48.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            style = FilterTabsStyle.Pill,
         )
 
         when {
