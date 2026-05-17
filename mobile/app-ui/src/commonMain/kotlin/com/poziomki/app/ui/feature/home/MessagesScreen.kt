@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,7 +73,8 @@ fun MessagesScreen(
             tabs = roomFilterTabs,
             selected = selectedFilter,
             onSelect = { selectedFilter = it },
-            modifier = Modifier.padding(horizontal = 24.dp),
+            modifier = Modifier.padding(start = 24.dp, end = PoziomkiTheme.spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(48.dp),
         )
 
         when {
