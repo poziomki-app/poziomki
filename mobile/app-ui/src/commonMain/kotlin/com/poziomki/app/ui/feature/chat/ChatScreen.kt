@@ -42,8 +42,6 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.ArrowLeft
-import com.adamglin.phosphoricons.bold.Bell
-import com.adamglin.phosphoricons.bold.BellSlash
 import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
@@ -138,7 +136,6 @@ fun ChatScreen(
                     avatarUrl = state.roomAvatarUrl,
                     isEvent = !state.isDirectRoom,
                     isBlocked = state.isBlocked,
-                    isMuted = state.isMuted,
                     onBack = onBack,
                     onSearchClick = viewModel::toggleSearch,
                     onProfileClick =
@@ -150,7 +147,6 @@ fun ChatScreen(
                         viewModel.removeConversation()
                         onBack()
                     },
-                    onToggleMute = viewModel::toggleMute,
                 )
             }
         },
@@ -227,7 +223,6 @@ private fun ChatTopBar(
     title: String,
     avatarUrl: String?,
     isBlocked: Boolean,
-    isMuted: Boolean = false,
     isEvent: Boolean = false,
     onBack: () -> Unit,
     onSearchClick: () -> Unit,
@@ -235,7 +230,6 @@ private fun ChatTopBar(
     onBlock: () -> Unit = {},
     onReport: () -> Unit = {},
     onRemove: () -> Unit = {},
-    onToggleMute: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     Surface(
@@ -311,19 +305,6 @@ private fun ChatTopBar(
                             },
                             iconTint = Error,
                             labelColor = Error,
-                        )
-                        ActionMenuItem(
-                            icon =
-                                if (isMuted) {
-                                    PhosphorIcons.Bold.Bell
-                                } else {
-                                    PhosphorIcons.Bold.BellSlash
-                                },
-                            label = if (isMuted) "Wyłącz wyciszenie" else "Wycisz czat",
-                            onClick = {
-                                showMenu = false
-                                onToggleMute()
-                            },
                         )
                         ActionMenuItem(
                             icon = PhosphorIcons.Bold.Flag,
