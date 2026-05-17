@@ -55,7 +55,6 @@ import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.SignOut
 import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.bold.UserPlus
-import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
@@ -258,7 +257,6 @@ fun EventChatHeader(
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onReport: () -> Unit = {},
-    onRemove: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -358,14 +356,6 @@ fun EventChatHeader(
                             onClick = {
                                 showMenu = false
                                 onReport()
-                            },
-                        )
-                        ActionMenuItem(
-                            icon = PhosphorIcons.Bold.X,
-                            label = "Usuń",
-                            onClick = {
-                                showMenu = false
-                                onRemove()
                             },
                         )
                     }

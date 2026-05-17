@@ -136,10 +136,6 @@ fun EventChatScreen(
                         onDelete = { eventDetailViewModel.deleteEvent(onBack) },
                         onEdit = { onNavigateToEditEvent(event.id) },
                         onReport = { showReportDialog = true },
-                        onRemove = {
-                            chatViewModel.removeConversation()
-                            onBack()
-                        },
                     )
                     ChatContent(
                         modifier = Modifier.weight(1f),
