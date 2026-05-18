@@ -464,27 +464,7 @@ internal fun NearbyEventsContent(
                 }
             }
         } else {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                        .padding(bottom = LocalNavBarPadding.current),
-                contentAlignment = Alignment.Center,
-            ) {
-                val hint =
-                    if (geoEvents.isEmpty()) {
-                        "brak wydarzeń w pobliżu"
-                    } else {
-                        "wybierz wydarzenie na mapie"
-                    }
-                Text(
-                    text = hint,
-                    fontFamily = NunitoFamily,
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                )
-            }
+            Spacer(modifier = Modifier.height(LocalNavBarPadding.current))
         }
     }
 }

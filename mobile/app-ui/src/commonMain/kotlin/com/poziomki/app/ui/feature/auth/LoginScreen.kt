@@ -164,5 +164,5 @@ fun LoginScreen(
             variant = ButtonVariant.PRIMARY,
             modifier = Modifier.fillMaxWidth(),
         )
-        }
+    }
 }
