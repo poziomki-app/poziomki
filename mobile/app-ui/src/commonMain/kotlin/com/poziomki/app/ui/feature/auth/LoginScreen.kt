@@ -130,9 +130,9 @@ fun LoginScreen(
             Text(
                 text = "nie pami\u0119tam has\u0142a",
                 fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
-                color = TextMuted,
+                color = Primary,
             )
         }
 
