@@ -556,7 +556,7 @@ private fun WeekEventsContent(
     onEventClick: (String) -> Unit,
 ) {
     if (events.isEmpty()) {
-        EmptyView("brak wydarzeń w tym tygodniu")
+        EmptyView("brak wydarzeń w tym tygodniu", illustration = Res.drawable.doodle_meditating)
         return
     }
 
