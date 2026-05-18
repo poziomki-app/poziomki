@@ -148,17 +148,13 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        TextButton(
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+        AppButton(
+            text = "zarejestruj si\u0119",
             onClick = onNavigateToRegister,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        ) {
-            Text(
-                text = "zarejestruj si\u0119",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
-            )
-        }
+            variant = ButtonVariant.SECONDARY,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
