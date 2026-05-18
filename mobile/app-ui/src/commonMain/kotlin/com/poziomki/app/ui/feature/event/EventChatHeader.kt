@@ -59,7 +59,6 @@ import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.bold.UserPlus
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.fill.MapPin
-import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.ui.designsystem.Text
@@ -138,6 +137,7 @@ fun EventCoverImage(
 }
 
 @Composable
+@Suppress("UnusedParameter")
 fun EventMetaRows(
     event: Event,
     onParticipantsClick: (() -> Unit)? = null,
@@ -157,13 +157,6 @@ fun EventMetaRows(
                 onClick = onLocationClick,
             )
         }
-
-        MetaChip(
-            icon = PhosphorIcons.Fill.UsersThree,
-            text = event.attendeesCount.toString(),
-            onClick = onParticipantsClick,
-            accent = true,
-        )
 
         if (onInfoClick != null) {
             val infoShape = RoundedCornerShape(50)
@@ -605,7 +598,7 @@ private fun LocationMapDialog(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = locationName,
+                    text = formatEventLocation(locationName),
                     preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Bold,
