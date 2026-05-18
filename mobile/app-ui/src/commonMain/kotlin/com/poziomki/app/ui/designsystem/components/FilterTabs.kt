@@ -103,7 +103,7 @@ private fun PillTab(
         text = label,
         fontFamily = NunitoFamily,
         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-        fontSize = 14.sp,
+        fontSize = 15.sp,
         color = if (isSelected) TextPrimary else TextMuted,
         modifier =
             Modifier
@@ -111,6 +111,6 @@ private fun PillTab(
                 .background(
                     color = if (isSelected) Color(0xFF242424) else SurfaceElevated,
                     shape = RoundedCornerShape(50),
-                ).padding(horizontal = 10.dp, vertical = 4.dp),
+                ).padding(horizontal = 12.dp, vertical = 5.dp),
     )
 }
