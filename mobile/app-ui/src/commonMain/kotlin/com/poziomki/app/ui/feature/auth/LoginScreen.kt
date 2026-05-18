@@ -62,142 +62,107 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     var email by remember { mutableStateOf(prefillEmail.orEmpty()) }
     var password by remember { mutableStateOf("") }
-    val backgroundColor = MaterialTheme.colorScheme.background
 
-    Box(
+    Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(backgroundColor),
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = PoziomkiTheme.spacing.lg)
+                .padding(bottom = PoziomkiTheme.spacing.xl),
     ) {
-        Image(
-            painter = painterResource(Res.drawable.login_background),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .alpha(0.45f),
+        Spacer(modifier = Modifier.height(64.dp))
+
+        PoziomkiLogo(size = 48.dp)
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "poznajmy si\u0119!",
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 20.sp,
+            color = TextSecondary,
         )
 
-        // Scrim that fades the background image into the form area so the
-        // fields and buttons stay readable against the fire glow.
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors =
-                                listOf(
-                                    backgroundColor.copy(alpha = 0.10f),
-                                    backgroundColor.copy(alpha = 0.55f),
-                                    backgroundColor.copy(alpha = 0.92f),
-                                ),
-                        ),
-                    ),
-        )
+        Spacer(modifier = Modifier.height(48.dp))
 
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = PoziomkiTheme.spacing.lg)
-                    .padding(bottom = PoziomkiTheme.spacing.xl),
-        ) {
-            Spacer(modifier = Modifier.height(64.dp))
-
-            PoziomkiLogo(size = 48.dp)
-
-            Spacer(modifier = Modifier.height(4.dp))
-
+        // Error banner
+        uiState.error?.let { error ->
             Text(
-                text = "poznajmy si\u0119!",
+                text = error,
                 fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 20.sp,
-                color = TextSecondary,
-            )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Error banner
-            uiState.error?.let { error ->
-                Text(
-                    text = error,
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
-                )
-            }
-
-            PoziomkiTextField(
-                value = email,
-                onValueChange = {
-                    email = it
-                    viewModel.clearError()
-                },
-                label = "email",
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions =
-                    KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Next,
-                    ),
-                contentType = ContentType.Username + ContentType.EmailAddress,
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
-
-            PoziomkiPasswordField(
-                value = password,
-                onValueChange = {
-                    password = it
-                    viewModel.clearError()
-                },
-                label = "has\u0142o",
-                placeholder = "has\u0142o",
-                contentType = ContentType.Password,
-            )
-
-            TextButton(
-                onClick = onForgotPassword,
-                modifier = Modifier.align(Alignment.Start),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = "nie pami\u0119tam has\u0142a",
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = Primary,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            AppButton(
-                text = "zaloguj si\u0119",
-                onClick = {
-                    if (email.isNotBlank() && password.isNotBlank()) {
-                        viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
-                    }
-                },
-                loading = uiState.isLoading,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
-
-            AppButton(
-                text = "zarejestruj si\u0119",
-                onClick = onNavigateToRegister,
-                variant = ButtonVariant.PRIMARY,
-                modifier = Modifier.fillMaxWidth(),
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = PoziomkiTheme.spacing.md),
             )
         }
-    }
+
+        PoziomkiTextField(
+            value = email,
+            onValueChange = {
+                email = it
+                viewModel.clearError()
+            },
+            label = "email",
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next,
+                ),
+            contentType = ContentType.Username + ContentType.EmailAddress,
+        )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+
+        PoziomkiPasswordField(
+            value = password,
+            onValueChange = {
+                password = it
+                viewModel.clearError()
+            },
+            label = "has\u0142o",
+            placeholder = "has\u0142o",
+            contentType = ContentType.Password,
+        )
+
+        TextButton(
+            onClick = onForgotPassword,
+            modifier = Modifier.align(Alignment.Start),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = "nie pami\u0119tam has\u0142a",
+                fontFamily = NunitoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = Primary,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+        AppButton(
+            text = "zaloguj si\u0119",
+            onClick = {
+                if (email.isNotBlank() && password.isNotBlank()) {
+                    viewModel.signIn(email, password, onLoginSuccess, onNeedsVerification, onNeedsOnboarding)
+                }
+            },
+            loading = uiState.isLoading,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+
+        AppButton(
+            text = "zarejestruj si\u0119",
+            onClick = onNavigateToRegister,
+            variant = ButtonVariant.PRIMARY,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        }
 }

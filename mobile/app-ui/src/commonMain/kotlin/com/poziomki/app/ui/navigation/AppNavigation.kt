@@ -255,10 +255,6 @@ fun AppNavigation(
         navigation<Route.AuthGraph>(startDestination = Route.AuthLanding) {
             composable<Route.AuthLanding> {
                 AuthLandingScreen(
-                    onContinueWithGoogle = {
-                        // TODO: wire Google OAuth — placeholder until the
-                        // backend exposes the OIDC handshake.
-                    },
                     onSignUpWithEmail = { navController.navigate(Route.Register) },
                     onSignInWithEmail = { navController.navigate(Route.Login()) },
                 )
