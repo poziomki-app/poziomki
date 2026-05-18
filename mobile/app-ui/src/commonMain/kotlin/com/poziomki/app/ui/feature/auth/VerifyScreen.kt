@@ -63,17 +63,6 @@ fun VerifyScreen(
         focusRequester.requestFocus()
     }
 
-    // Auto-submit when 6 digits entered (with guard against double-submit)
-    var hasSubmitted by remember { mutableStateOf(false) }
-    LaunchedEffect(otp) {
-        if (otp.length < 6) {
-            hasSubmitted = false
-        } else if (!hasSubmitted && !uiState.isLoading) {
-            hasSubmitted = true
-            submit()
-        }
-    }
-
     Column(
         modifier =
             Modifier
