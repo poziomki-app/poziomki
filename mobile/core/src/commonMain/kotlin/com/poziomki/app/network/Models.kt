@@ -493,6 +493,15 @@ data class UserSettingsResponse(
     val notifyTagEvents: Boolean = true,
 )
 
+// Feedback models
+
+@Serializable
+data class FeedbackRequest(
+    val rating: Int,
+    val message: String? = null,
+    val appVersion: String? = null,
+)
+
 // Routing models
 
 @Serializable

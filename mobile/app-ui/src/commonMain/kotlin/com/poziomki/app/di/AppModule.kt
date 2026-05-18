@@ -5,6 +5,7 @@ import com.poziomki.app.ui.feature.auth.AuthViewModel
 import com.poziomki.app.ui.feature.chat.ChatViewModel
 import com.poziomki.app.ui.feature.event.EventCreateViewModel
 import com.poziomki.app.ui.feature.event.EventDetailViewModel
+import com.poziomki.app.ui.feature.feedback.FeedbackViewModel
 import com.poziomki.app.ui.feature.home.EventsViewModel
 import com.poziomki.app.ui.feature.home.ExploreViewModel
 import com.poziomki.app.ui.feature.home.MessagesViewModel
@@ -35,4 +36,5 @@ val appModule =
         viewModelOf(::PrivacyViewModel)
         viewModelOf(::PowiadomieniaViewModel)
         viewModelOf(::SavedViewModel)
+        viewModelOf(::FeedbackViewModel)
     }

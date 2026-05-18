@@ -88,6 +88,10 @@ import com.poziomki.app.ui.feature.auth.VerifyScreen
 import com.poziomki.app.ui.feature.chat.ChatScreen
 import com.poziomki.app.ui.feature.event.EventChatScreen
 import com.poziomki.app.ui.feature.event.EventCreateScreen
+import com.poziomki.app.ui.feature.feedback.FeedbackBanner
+import com.poziomki.app.ui.feature.feedback.FeedbackDialog
+import com.poziomki.app.ui.feature.feedback.FeedbackViewModel
+import com.poziomki.app.ui.feature.feedback.WelcomeDialog
 import com.poziomki.app.ui.feature.home.EventsScreen
 import com.poziomki.app.ui.feature.home.ExploreScreen
 import com.poziomki.app.ui.feature.home.MessagesScreen
@@ -508,6 +512,9 @@ fun MainScreen(
     val profileState by profileViewModel.state.collectAsState()
     val profilePicture = profileState.profile?.profilePicture
 
+    val feedbackViewModel: FeedbackViewModel = koinViewModel()
+    val feedbackState by feedbackViewModel.state.collectAsState()
+
     val navigateToProfileTab: () -> Unit = {
         tabNavController.navigate(Route.ProfileTab) {
             popUpTo(tabNavController.graph.findStartDestination().id) {
@@ -539,6 +546,12 @@ fun MainScreen(
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(top = safeTop)) {
                 OfflineBanner()
+                if (feedbackState.bannerVisible && !immersive.value) {
+                    FeedbackBanner(
+                        onClick = { feedbackViewModel.openDialog() },
+                        onDismiss = { feedbackViewModel.dismissBanner() },
+                    )
+                }
                 Box(modifier = Modifier.fillMaxSize().weight(1f)) {
                     NavHost(
                         navController = tabNavController,
@@ -578,6 +591,7 @@ fun MainScreen(
                                 onNavigateToPowiadomienia = onNavigateToPowiadomienia,
                                 onNavigateToSaved = onNavigateToSaved,
                                 onNavigateToProfileView = onNavigateToProfileView,
+                                onOpenFeedback = { feedbackViewModel.openDialog() },
                                 onSignOut = onSignOut,
                             )
                         }
@@ -648,6 +662,22 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    if (feedbackState.showWelcome) {
+        WelcomeDialog(onDismiss = { feedbackViewModel.dismissWelcome() })
+    }
+    if (feedbackState.dialogOpen) {
+        FeedbackDialog(
+            rating = feedbackState.rating,
+            message = feedbackState.message,
+            isSubmitting = feedbackState.isSubmitting,
+            error = feedbackState.error,
+            onRatingChange = { feedbackViewModel.setRating(it) },
+            onMessageChange = { feedbackViewModel.setMessage(it) },
+            onSubmit = { feedbackViewModel.submit(appVersion = null) },
+            onDismiss = { feedbackViewModel.closeDialog() },
+        )
     }
 }
 

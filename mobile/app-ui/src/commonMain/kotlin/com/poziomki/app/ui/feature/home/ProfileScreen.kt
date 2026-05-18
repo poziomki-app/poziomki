@@ -39,6 +39,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.Bell
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretRight
+import com.adamglin.phosphoricons.bold.ChatTeardropText
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
 import com.adamglin.phosphoricons.bold.SignOut
@@ -66,6 +67,7 @@ fun ProfileScreen(
     onNavigateToPowiadomienia: () -> Unit,
     onNavigateToSaved: () -> Unit,
     onNavigateToProfileView: (String) -> Unit,
+    onOpenFeedback: () -> Unit,
     onSignOut: () -> Unit,
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
@@ -135,6 +137,12 @@ fun ProfileScreen(
                                         icon = PhosphorIcons.Bold.BookmarkSimple,
                                         label = "zapisane",
                                         onClick = onNavigateToSaved,
+                                    )
+                                    HorizontalDivider(color = Border, thickness = 1.dp)
+                                    SettingsMenuItem(
+                                        icon = PhosphorIcons.Bold.ChatTeardropText,
+                                        label = "zostaw opinię",
+                                        onClick = onOpenFeedback,
                                     )
                                 }
 

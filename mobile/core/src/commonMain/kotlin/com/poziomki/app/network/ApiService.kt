@@ -240,6 +240,8 @@ class ApiService(
 
     suspend fun updateSettings(request: UpdateSettingsRequest): ApiResult<UserSettingsResponse> = client.patch("/api/v1/settings", request)
 
+    suspend fun submitFeedback(request: FeedbackRequest): ApiResult<SuccessResponse> = client.post("/api/v1/feedback", request)
+
     suspend fun walkingRoute(
         fromLat: Double,
         fromLng: Double,
