@@ -9,8 +9,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import coil3.ImageLoader
 import coil3.PlatformContext
+import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
-import coil3.compose.setSingletonImageLoaderFactory
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
@@ -37,13 +37,7 @@ private const val COIL_DISK_CACHE_MAX_SIZE_BYTES = 48L * 1024L * 1024L
 @Composable
 @Suppress("LongMethod")
 fun App() {
-    val engine = koinInject<HttpClientEngine>()
     val chatClient = koinInject<ChatClient>()
-    val imageHttpClient = remember(engine) { HttpClient(engine) }
-    val imageLoaderFactory: (PlatformContext) -> ImageLoader =
-        remember(imageHttpClient) { buildImageLoaderFactory(imageHttpClient) }
-
-    setSingletonImageLoaderFactory(imageLoaderFactory)
 
     val sessionManager = koinInject<SessionManager>()
     val syncEngine = koinInject<SyncEngine>()
@@ -96,7 +90,6 @@ fun App() {
     DisposableEffect(Unit) {
         onDispose {
             syncEngine.stop()
-            imageHttpClient.close()
         }
     }
 
@@ -121,7 +114,24 @@ fun App() {
     }
 }
 
-private fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformContext) -> ImageLoader =
+/**
+ * Install the Coil singleton image loader. Must be called from
+ * `Application.onCreate` after Koin has started — installing it lazily inside
+ * an @Composable races with `Application.onTrimMemory` / activity recreation
+ * touching `imageLoader` first, which permanently breaks `setSafe`.
+ */
+fun installCoilSingleton() {
+    val engine: HttpClientEngine = KoinPlatform.getKoin().get()
+    val imageHttpClient = HttpClient(engine)
+    val factory = buildImageLoaderFactory(imageHttpClient)
+    SingletonImageLoader.setSafe(
+        object : SingletonImageLoader.Factory {
+            override fun newImageLoader(context: PlatformContext): ImageLoader = factory(context)
+        },
+    )
+}
+
+internal fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformContext) -> ImageLoader =
     { context: PlatformContext ->
         ImageLoader
             .Builder(context)

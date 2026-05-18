@@ -33,6 +33,7 @@ class PoziomkiApp : Application() {
                 },
             )
         }
+        installCoilSingleton()
     }
 
     @Suppress("DEPRECATION")
