@@ -89,6 +89,7 @@ import com.poziomki.app.ui.shared.TimeFilter
 import com.poziomki.app.ui.shared.dayLabel
 import com.poziomki.app.ui.shared.eventDateKey
 import com.poziomki.app.ui.shared.formatEventDate
+import com.poziomki.app.ui.shared.formatEventLocation
 import com.poziomki.app.ui.shared.pluralizePolish
 import com.poziomki.app.ui.shared.rememberLocationPermissionLauncher
 import com.poziomki.app.ui.shared.resolveImageUrl
@@ -401,6 +402,7 @@ private fun EventCard(
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
 
                     Spacer(modifier = Modifier.height(2.dp))
@@ -429,13 +431,14 @@ private fun EventCard(
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
-                                text = location,
+                                text = formatEventLocation(location),
                                 preserveCase = true,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 14.sp,
                                 color = TextMuted,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
                             )
                         }
@@ -696,6 +699,7 @@ private fun EventRowContent(
             fontSize = 18.sp,
             color = TextPrimary,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
@@ -715,7 +719,7 @@ private fun EventRowContent(
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = location,
+                    text = formatEventLocation(location),
                     preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
