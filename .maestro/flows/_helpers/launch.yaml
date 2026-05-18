@@ -1,0 +1,4 @@
+appId: app.poziomki
+---
+- launchApp:
+    stopApp: true

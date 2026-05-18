@@ -1,0 +1,12 @@
+appId: app.poziomki
+name: Open register screen from login
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "zarejestruj się"
+    timeout: 15000
+- tapOn: "zarejestruj się"
+- waitForAnimationToEnd
+- takeScreenshot: 02_register_screen
+- back
+- assertVisible: "zaloguj się"

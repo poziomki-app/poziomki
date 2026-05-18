@@ -1,0 +1,17 @@
+appId: app.poziomki
+name: Login with invalid credentials shows error or stays on login
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "email"
+    timeout: 15000
+- tapOn: "email"
+- inputText: "nope-not-real@example.invalid"
+- tapOn: "hasło"
+- inputText: "wrong-password-xxxxx"
+- hideKeyboard
+- takeScreenshot: 04a_filled_form
+- tapOn: "zaloguj się"
+- waitForAnimationToEnd
+- takeScreenshot: 04b_after_submit
+- assertVisible: "zaloguj się"

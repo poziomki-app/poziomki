@@ -1,0 +1,18 @@
+appId: app.poziomki
+name: Form state survives rotation
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "email"
+    timeout: 15000
+- tapOn: "email"
+- inputText: "rotate-test@example.com"
+- hideKeyboard
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd
+- takeScreenshot: 05a_landscape
+- assertVisible: "zaloguj się"
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd
+- takeScreenshot: 05b_portrait
+- assertVisible: "zaloguj się"

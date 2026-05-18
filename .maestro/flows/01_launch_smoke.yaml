@@ -1,0 +1,12 @@
+appId: app.poziomki
+name: Launch smoke — login screen renders
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "zaloguj się"
+    timeout: 15000
+- assertVisible: "zarejestruj się"
+- assertVisible: "nie pamiętam hasła"
+- assertVisible: "email"
+- assertVisible: "hasło"
+- takeScreenshot: 01_login_screen
