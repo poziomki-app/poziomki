@@ -6,6 +6,8 @@ sealed interface Route {
     // Auth
     @Serializable data object AuthGraph : Route
 
+    @Serializable data object AuthLanding : Route
+
     @Serializable data class Login(
         val prefillEmail: String? = null,
     ) : Route

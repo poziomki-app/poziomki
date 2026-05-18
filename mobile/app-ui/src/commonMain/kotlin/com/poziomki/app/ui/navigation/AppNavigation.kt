@@ -78,6 +78,7 @@ import com.poziomki.app.ui.designsystem.theme.forwardSlide
 import com.poziomki.app.ui.designsystem.theme.forwardSlideExit
 import com.poziomki.app.ui.designsystem.theme.tabFadeIn
 import com.poziomki.app.ui.designsystem.theme.tabFadeOut
+import com.poziomki.app.ui.feature.auth.AuthLandingScreen
 import com.poziomki.app.ui.feature.auth.AuthViewModel
 import com.poziomki.app.ui.feature.auth.ForgotPasswordScreen
 import com.poziomki.app.ui.feature.auth.LoginScreen
@@ -251,7 +252,17 @@ fun AppNavigation(
         popExitTransition = { backSlideExit() },
     ) {
         // Auth graph
-        navigation<Route.AuthGraph>(startDestination = Route.Login()) {
+        navigation<Route.AuthGraph>(startDestination = Route.AuthLanding) {
+            composable<Route.AuthLanding> {
+                AuthLandingScreen(
+                    onContinueWithGoogle = {
+                        // TODO: wire Google OAuth — placeholder until the
+                        // backend exposes the OIDC handshake.
+                    },
+                    onSignUpWithEmail = { navController.navigate(Route.Register) },
+                    onSignInWithEmail = { navController.navigate(Route.Login()) },
+                )
+            }
             composable<Route.Login> { backStackEntry ->
                 val login = backStackEntry.toRoute<Route.Login>()
                 LoginScreen(
