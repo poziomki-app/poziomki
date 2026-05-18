@@ -1,0 +1,3 @@
+appId: app.poziomki
+---
+- runFlow: flows/_helpers/launch.yaml

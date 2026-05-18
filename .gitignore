@@ -81,3 +81,7 @@ backend/seed/
 # Python build cache
 __pycache__/
 *.pyc
+
+# Maestro e2e artifacts
+.maestro/artifacts/
+/0[0-9]_*.png
