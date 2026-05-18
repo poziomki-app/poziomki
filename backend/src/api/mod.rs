@@ -17,6 +17,7 @@ mod catalog;
 pub(crate) mod chat;
 mod common;
 mod events;
+mod feedback;
 pub(crate) mod imgproxy_signing;
 pub mod ip_rate_limit;
 mod matching;
@@ -170,6 +171,12 @@ fn routing_routes() -> Router<AppContext> {
         .layer(cache_layer("private, max-age=300"))
 }
 
+fn feedback_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/", post(feedback::create))
+        .layer(cache_layer("no-store"))
+}
+
 fn settings_routes() -> Router<AppContext> {
     Router::new().route(
         "/",
@@ -285,6 +292,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/matching", matching_routes())
         .nest("/api/v1/uploads", uploads_routes())
         .nest("/api/v1/settings", settings_routes())
+        .nest("/api/v1/feedback", feedback_routes())
         .nest("/api/v1", search_routes())
         .nest("/api/v1/chat", chat_routes())
         .nest("/api/v1/routing", routing_routes())
