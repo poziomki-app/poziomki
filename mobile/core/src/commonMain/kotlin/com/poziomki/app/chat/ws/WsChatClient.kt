@@ -192,29 +192,22 @@ class WsChatClient(
 
         _state.value = ChatClientState.Connecting
 
-        openedRoomsMutex.withLock {
-            openedRooms.values.forEach {
-                it.close()
-                it.liveTimeline.close()
-            }
-            openedRooms.clear()
-        }
-        latestConversations = emptyList()
-        _rooms.value = emptyList()
+        // Don't wipe _rooms / latestConversations / openedRooms here.
+        // ensureStarted runs on every chat open and pull-to-refresh, and
+        // a transient reconnect would otherwise blank the rooms list
+        // (MessagesScreen shows LoadingView while rooms is empty). The
+        // server resends Conversations after auth, and the reconnect
+        // handler in init backfills opened rooms. Sign-out goes through
+        // stop(), which is where the wholesale clear belongs.
 
         wsConnection.connect()
 
-        // Wait for connected state
         val connected =
             withTimeoutOrNull(15_000L) {
                 wsConnection.isConnected.first { it }
             }
 
         return if (connected == true) {
-            // Don't clear the persistent timeline cache here — server
-            // snapshots overwrite stale entries as they arrive, and
-            // wiping on every cold start defeats the offline-open path
-            // (UI reads the cache first in ChatViewModel.openRoom).
             Result.success(Unit)
         } else {
             _state.value = ChatClientState.Error("Connection timeout")
