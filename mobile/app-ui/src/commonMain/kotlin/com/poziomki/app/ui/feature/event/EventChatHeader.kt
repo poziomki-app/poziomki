@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -76,6 +77,7 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.chat.ActionMenuItem
 import com.poziomki.app.ui.shared.formatEventDateCompact
+import com.poziomki.app.ui.shared.formatEventLocation
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
@@ -151,7 +153,7 @@ fun EventMetaRows(
         event.location?.let { location ->
             MetaChip(
                 icon = PhosphorIcons.Fill.MapPin,
-                text = shortenLocation(location),
+                text = formatEventLocation(location),
                 onClick = onLocationClick,
             )
         }
@@ -241,12 +243,6 @@ private fun ChipContent(
             maxLines = 1,
         )
     }
-}
-
-private fun shortenLocation(location: String): String {
-    val parts = location.split(",").map { it.trim() }
-    if (parts.size <= 2) return location
-    return parts.dropLast(1).joinToString(", ")
 }
 
 @Composable
@@ -379,6 +375,8 @@ fun EventChatHeader(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
