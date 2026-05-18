@@ -1,4 +1,5 @@
 mod db_viewer;
+mod early_access;
 mod email_change;
 mod migration_contract;
 mod rls_baseline;

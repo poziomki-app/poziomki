@@ -69,7 +69,7 @@ fast_image_resize = "=6.0.0"
 webp = "=0.3.1"
 thumbhash = "=0.1.0"
 base64 = "=0.22.1"
-tower-http = { version = "=0.6.10", features = ["limit", "set-header", "trace"] }
+tower-http = { version = "=0.6.10", features = ["cors", "limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
 jsonwebtoken = { version = "=10.3.0", features = ["rust_crypto"] }
 dotenvy = "=0.15.7"
@@ -95,6 +95,10 @@ path = "src/bin/worker.rs"
 [[bin]]
 name = "moderation-stress"
 path = "src/bin/moderation_stress.rs"
+
+[[bin]]
+name = "export-testers"
+path = "src/bin/export_testers.rs"
 
 [dev-dependencies]
 serial_test = { version = "=3.4.0" }
