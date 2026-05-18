@@ -148,7 +148,6 @@ fun EventChatJoinRequiredView(
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
-                        .statusBarsPadding()
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                         .size(40.dp),
                 shape = CircleShape,
