@@ -32,6 +32,8 @@ import com.poziomki.app.ui.feature.home.messages.resolveRoomProfilePicture
 import com.poziomki.app.ui.feature.home.messages.roomFilterTabs
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import org.koin.compose.viewmodel.koinViewModel
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.doodle_chilling
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +87,7 @@ fun MessagesScreen(
             }
 
             state.rooms.isEmpty() -> {
-                EmptyView("brak rozmów")
+                EmptyView("brak rozmów", illustration = Res.drawable.doodle_chilling)
             }
 
             else -> {
@@ -94,7 +96,7 @@ fun MessagesScreen(
                     onRefresh = { viewModel.pullToRefresh() },
                 ) {
                     if (filteredRooms.isEmpty()) {
-                        EmptyView("brak rozmów")
+                        EmptyView("brak rozmów", illustration = Res.drawable.doodle_chilling)
                     } else {
                         LazyColumn(
                             modifier =

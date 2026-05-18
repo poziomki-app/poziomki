@@ -94,6 +94,8 @@ import com.poziomki.app.ui.shared.rememberLocationPermissionLauncher
 import com.poziomki.app.ui.shared.resolveImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.doodle_meditating
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -262,7 +264,7 @@ fun EventsScreen(
                             ) {
                                 if (state.events.isEmpty()) {
                                     item {
-                                        EmptyView("brak wydarzeń")
+                                        EmptyView("brak wydarzeń", illustration = Res.drawable.doodle_meditating)
                                     }
                                 } else {
                                     items(state.events, key = { it.id }) { event ->
