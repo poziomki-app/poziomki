@@ -33,7 +33,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +65,7 @@ import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.chat.api.Reaction
 import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
@@ -474,6 +474,7 @@ private fun MessageActionDialog(
                     listOf("❤️", "👍", "👎", "😂", "😮", "😢", "🔥", "🎉").forEach { emoji ->
                         Text(
                             text = emoji,
+                            preserveCase = true,
                             style = MaterialTheme.typography.headlineSmall,
                             modifier =
                                 Modifier
@@ -490,6 +491,7 @@ private fun MessageActionDialog(
                 ) {
                     Text(
                         text = event.body,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary,
                         maxLines = 3,
@@ -637,6 +639,7 @@ private fun ReactionBreakdownSheet(
 
                     Text(
                         text = name,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyLarge,
                         color = TextPrimary,
                         maxLines = 1,
@@ -646,6 +649,7 @@ private fun ReactionBreakdownSheet(
 
                     Text(
                         text = emoji,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -764,6 +768,7 @@ internal fun ComposerModeBanner(
                         )
                         Text(
                             text = mode.bodyPreview,
+                            preserveCase = true,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                             maxLines = 1,

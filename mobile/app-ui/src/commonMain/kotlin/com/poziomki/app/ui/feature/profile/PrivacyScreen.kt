@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +36,7 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.DownloadSimple
 import com.adamglin.phosphoricons.bold.Trash
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
@@ -220,6 +220,7 @@ private fun PrivacyContent(
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
         Text(
             text = state.currentEmail.orEmpty(),
+            preserveCase = true,
             fontFamily = nunito,
             fontWeight = FontWeight.SemiBold,
             fontSize = 15.sp,

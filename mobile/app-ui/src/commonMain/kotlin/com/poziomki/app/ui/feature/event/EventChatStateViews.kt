@@ -18,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +29,7 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.poziomki.app.network.Event
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -171,6 +171,7 @@ fun EventChatJoinRequiredView(
             ) {
                 Text(
                     text = event.title,
+                    preserveCase = true,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -228,6 +229,7 @@ fun EventChatJoinRequiredView(
                     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
                     Text(
                         text = description,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +44,7 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
 import com.poziomki.app.network.RoutingService
 import com.poziomki.app.network.WalkingRoute
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -388,14 +388,15 @@ internal fun NearbyEventsContent(
                         contentScale = ContentScale.Crop,
                         modifier =
                             Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(12.dp)),
+                                .size(88.dp)
+                                .clip(RoundedCornerShape(14.dp)),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = selectedEvent.title,
+                        preserveCase = true,
                         fontFamily = MontserratFamily,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp,

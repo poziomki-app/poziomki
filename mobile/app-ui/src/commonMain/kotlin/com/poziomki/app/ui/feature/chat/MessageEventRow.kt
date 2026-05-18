@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -59,6 +58,7 @@ import com.adamglin.phosphoricons.bold.WarningCircle
 import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.ReplyDetails
 import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -241,6 +241,7 @@ internal fun MessageEventRow(
                                             ) {
                                                 Text(
                                                     text = reaction.emoji,
+                                                    preserveCase = true,
                                                     style = MaterialTheme.typography.labelSmall,
                                                 )
                                                 if (reactionCount > 1) {
@@ -277,6 +278,7 @@ internal fun MessageEventRow(
                                     val senderNameColor = ChatNameColors[abs(event.senderId.hashCode()) % ChatNameColors.size]
                                     Text(
                                         text = event.senderDisplayName ?: event.senderId,
+                                        preserveCase = true,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = senderNameColor,
                                         maxLines = 1,
@@ -357,6 +359,7 @@ internal fun MessageEventRow(
                                                 ) {
                                                     Text(
                                                         text = reaction.emoji,
+                                                        preserveCase = true,
                                                         style = MaterialTheme.typography.labelSmall,
                                                     )
                                                     if (reactionCount > 1) {
@@ -403,6 +406,7 @@ private fun BubbleContent(
         }
         Text(
             text = event.body,
+            preserveCase = true,
             style = MaterialTheme.typography.bodyLarge,
             color = TextPrimary,
         )
@@ -575,6 +579,7 @@ private fun ReplyReference(
             Column {
                 Text(
                     text = reply.senderDisplayName ?: "wiadomość",
+                    preserveCase = true,
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                     maxLines = 1,
@@ -582,6 +587,7 @@ private fun ReplyReference(
                 )
                 Text(
                     text = reply.body ?: "odpowiedź",
+                    preserveCase = true,
                     style = MaterialTheme.typography.bodySmall,
                     color = TextPrimary,
                     maxLines = 1,
