@@ -14,6 +14,7 @@
     <ID>CyclomaticComplexMethod:MessageEventRow.kt$@Composable internal fun MessageEventRow( event: TimelineItem.Event, groupedWithPrevious: Boolean, showSenderMeta: Boolean, onToggleReaction: (String) -&gt; Unit, onReactionsClick: () -&gt; Unit, onFocusOnReply: () -&gt; Unit, onSenderClick: () -&gt; Unit, onActionsLongPress: () -&gt; Unit, onSwipeReply: () -&gt; Unit, compactTimestamp: Boolean = false, avatarOverride: String? = null, isHighlighted: Boolean = false, )</ID>
     <ID>CyclomaticComplexMethod:NearbyEventsContent.kt$@Composable internal fun NearbyEventsContent( events: List&lt;Event&gt;, selectedEventId: String?, userLat: Double?, userLng: Double?, isPermissionDenied: Boolean, isLocationUnavailable: Boolean, onEventSelected: (String) -&gt; Unit, onEventClick: (String) -&gt; Unit, onRequestPermission: () -&gt; Unit = {}, )</ID>
     <ID>Indentation:AppNavigation.kt$ </ID>
+    <ID>Indentation:AuthLandingScreen.kt$ </ID>
     <ID>Indentation:AvatarPickerContent.kt$ </ID>
     <ID>Indentation:BasicInfoScreen.kt$ </ID>
     <ID>Indentation:ChatContent.kt$ </ID>
