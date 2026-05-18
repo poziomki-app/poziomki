@@ -77,7 +77,7 @@ fun MessagesScreen(
             selected = selectedFilter,
             onSelect = { selectedFilter = it },
             modifier = Modifier.padding(start = 24.dp, end = PoziomkiTheme.spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             style = FilterTabsStyle.Pill,
         )
 

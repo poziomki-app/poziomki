@@ -21,11 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.FilterTabs
+import com.poziomki.app.ui.designsystem.components.FilterTabsStyle
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
@@ -62,7 +62,9 @@ fun SavedScreen(
             tabs = tabs,
             selected = selectedTab,
             onSelect = { selectedTab = it },
-            horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.padding(start = 24.dp, end = PoziomkiTheme.spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            style = FilterTabsStyle.Pill,
         )
 
         when {

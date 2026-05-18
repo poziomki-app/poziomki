@@ -130,7 +130,7 @@ fun EventsScreen(
         listOf(
             TimeFilter.ALL to "polecane",
             TimeFilter.NEARBY to "w pobliżu",
-            TimeFilter.WEEK to "ten tydzień",
+            TimeFilter.WEEK to "weekend",
         )
 
     // The nearby tab gives the map the whole height (no navbar, no
@@ -192,7 +192,7 @@ fun EventsScreen(
                     Modifier
                         .weight(1f)
                         .padding(end = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 style = FilterTabsStyle.Pill,
             )
             androidx.compose.material3.IconButton(
