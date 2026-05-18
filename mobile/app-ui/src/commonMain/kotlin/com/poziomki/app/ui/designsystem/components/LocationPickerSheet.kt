@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -43,6 +42,7 @@ import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.MagnifyingGlass
 import com.poziomki.app.network.GeocodingResult
 import com.poziomki.app.network.GeocodingService
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -248,6 +248,7 @@ fun LocationPickerSheet(
                             results.forEach { result ->
                                 Text(
                                     text = result.name,
+                                    preserveCase = true,
                                     fontFamily = NunitoFamily,
                                     fontSize = 14.sp,
                                     color = TextPrimary,

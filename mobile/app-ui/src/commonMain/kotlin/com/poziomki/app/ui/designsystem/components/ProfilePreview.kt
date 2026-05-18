@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,6 +45,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.User
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -272,6 +272,7 @@ fun ProfilePreview(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = name.ifBlank { "imi\u0119" },
+                        preserveCase = true,
                         fontFamily = montserrat,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 28.sp,
@@ -358,6 +359,7 @@ private fun RichBio(bio: String) {
     if (!bio.contains("![](")) {
         Text(
             text = bio,
+            preserveCase = true,
             fontFamily = nunito,
             fontWeight = FontWeight.Normal,
             fontSize = 15.sp,
@@ -375,6 +377,7 @@ private fun RichBio(bio: String) {
                     if (segment.text.isNotBlank()) {
                         Text(
                             text = segment.text,
+                            preserveCase = true,
                             fontFamily = nunito,
                             fontWeight = FontWeight.Normal,
                             fontSize = 15.sp,

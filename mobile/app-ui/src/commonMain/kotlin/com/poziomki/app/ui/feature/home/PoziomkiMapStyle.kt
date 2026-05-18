@@ -7,7 +7,9 @@ package com.poziomki.app.ui.feature.home
  * landcover → landuse → buildings → roads → labels.
  *
  * Field names (`class`, `subclass`, `render_height`) match OpenMapTiles
- * schema, which OpenFreeMap serves at /planet.
+ * schema, which OpenFreeMap serves at /planet. Glyphs come from
+ * OpenFreeMap's font endpoint, which only serves the Noto Sans family —
+ * do not reference other families here or labels silently disappear.
  */
 @Suppress("MaxLineLength", "LongMethod")
 internal val POZIOMKI_MAP_STYLE_JSON: String =
@@ -15,7 +17,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
     {
       "version": 8,
       "name": "Poziomki Pastel",
-      "glyphs": "https://poziomki.app/fonts/{fontstack}/{range}.pbf",
+      "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
       "sprite": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
       "sources": {
         "openmaptiles": { "type": "vector", "url": "https://tiles.openfreemap.org/planet" },
@@ -38,15 +40,6 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
           "paint": { "fill-color": "#A9CF94" } },
         { "id": "park_outline", "type": "line", "source": "openmaptiles", "source-layer": "park",
           "paint": { "line-color": "#7DB36A", "line-width": 0.8, "line-opacity": 0.6 } },
-        { "id": "park_label", "type": "symbol", "source": "openmaptiles", "source-layer": "park",
-          "minzoom": 12,
-          "layout": {
-            "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Nunito Regular"],
-            "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10, 16, 13],
-            "text-letter-spacing": 0.02
-          },
-          "paint": { "text-color": "#3C5C2A" } },
 
         { "id": "landuse_school", "type": "fill", "source": "openmaptiles", "source-layer": "landuse",
           "filter": ["in", "class", "school", "university"],
@@ -84,23 +77,18 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
             "fill-extrusion-opacity": 0.85
           } },
 
-        { "id": "street_labels_major", "type": "symbol", "source": "openmaptiles", "source-layer": "transportation_name",
-          "minzoom": 13,
-          "filter": ["in", "class", "primary", "secondary", "tertiary", "trunk", "motorway"],
-          "layout": {
-            "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Nunito Regular"],
-            "symbol-placement": "line",
-            "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 18, 14],
-            "text-letter-spacing": 0.04
-          },
-          "paint": { "text-color": "#5A5A5A" } },
-
         { "id": "place_labels", "type": "symbol", "source": "openmaptiles", "source-layer": "place",
-          "filter": ["in", "class", "neighbourhood", "suburb"],
+          "filter": ["all",
+            ["==", "class", "suburb"],
+            ["in", "name",
+              "Śródmieście", "Mokotów", "Wola", "Ochota", "Żoliborz",
+              "Bielany", "Bemowo", "Ursynów", "Wilanów", "Włochy",
+              "Ursus", "Targówek", "Białołęka", "Rembertów", "Wawer",
+              "Wesoła", "Praga-Północ", "Praga-Południe"]
+          ],
           "layout": {
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
-            "text-font": ["Montserrat ExtraBold"],
+            "text-font": ["Noto Sans Bold"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 20],
             "text-letter-spacing": 0.04,
             "text-transform": "lowercase"
@@ -114,7 +102,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
         { "id": "uw_campus_labels", "type": "symbol", "source": "uw_campus_labels",
           "layout": {
             "text-field": ["get", "name"],
-            "text-font": ["Montserrat ExtraBold"],
+            "text-font": ["Noto Sans Bold"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 16],
             "text-letter-spacing": 0.02,
             "text-allow-overlap": false
@@ -133,7 +121,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
           "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "name"], "BUW"]],
           "layout": {
             "text-field": "BUW",
-            "text-font": ["Montserrat ExtraBold"],
+            "text-font": ["Noto Sans Bold"],
             "text-size": 12,
             "text-anchor": "top",
             "text-offset": [0, 0.7]
@@ -150,7 +138,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
         { "id": "metro_letter", "type": "symbol", "source": "metro",
           "layout": {
             "text-field": "M",
-            "text-font": ["Montserrat ExtraBold"],
+            "text-font": ["Noto Sans Bold"],
             "text-size": 10,
             "text-allow-overlap": true
           },
@@ -159,7 +147,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
           "minzoom": 13,
           "layout": {
             "text-field": ["get", "name"],
-            "text-font": ["Nunito Regular"],
+            "text-font": ["Noto Sans Regular"],
             "text-size": 11,
             "text-anchor": "top",
             "text-offset": [0, 1.0],

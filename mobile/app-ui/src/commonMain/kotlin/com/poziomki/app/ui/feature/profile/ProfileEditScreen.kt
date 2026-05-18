@@ -32,7 +32,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -74,6 +73,7 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.AppSnackbar
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
@@ -268,6 +268,7 @@ fun ProfileEditScreen(
                 ) {
                     Text(
                         text = state.program.ifEmpty { "Wybierz kierunek" },
+                        preserveCase = true,
                         fontFamily = nunito,
                         fontWeight = FontWeight.Normal,
                         fontSize = 16.sp,
@@ -1099,6 +1100,7 @@ private fun GradientPickerDialog(
                 Column {
                     Text(
                         text = name.ifBlank { "imię" },
+                        preserveCase = true,
                         fontFamily = montserrat,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 22.sp,
@@ -1117,6 +1119,7 @@ private fun GradientPickerDialog(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = bio,
+                            preserveCase = true,
                             fontFamily = nunito,
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,

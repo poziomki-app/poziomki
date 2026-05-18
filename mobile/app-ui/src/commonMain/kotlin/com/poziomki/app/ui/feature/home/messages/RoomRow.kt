@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +26,7 @@ import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.adamglin.phosphoricons.regular.User
 import com.poziomki.app.chat.api.RoomSummary
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -79,6 +79,7 @@ fun RoomRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
+                    preserveCase = true,
                     style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold,
@@ -105,6 +106,7 @@ fun RoomRow(
                         room.latestModerationVerdict in setOf("flag", "block")
                 Text(
                     text = room.latestMessagePreview(),
+                    preserveCase = true,
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
                     fontStyle = if (flagged) FontStyle.Italic else null,

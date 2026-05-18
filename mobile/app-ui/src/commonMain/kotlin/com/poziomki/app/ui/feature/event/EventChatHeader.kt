@@ -28,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import com.adamglin.phosphoricons.fill.MapPin
 import com.adamglin.phosphoricons.fill.UsersThree
 import com.poziomki.app.network.Event
 import com.poziomki.app.network.EventAttendee
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
@@ -375,6 +375,7 @@ fun EventChatHeader(
         ) {
             Text(
                 text = event.title,
+                preserveCase = true,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
@@ -395,6 +396,7 @@ fun EventChatHeader(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = creator.name,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = Primary,
@@ -513,6 +515,7 @@ private fun AttendeesDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = attendee.name,
+                                preserveCase = true,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
@@ -565,6 +568,7 @@ private fun EventInfoDialog(
         text = {
             Text(
                 text = description,
+                preserveCase = true,
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
@@ -604,6 +608,7 @@ private fun LocationMapDialog(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = locationName,
+                    preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,

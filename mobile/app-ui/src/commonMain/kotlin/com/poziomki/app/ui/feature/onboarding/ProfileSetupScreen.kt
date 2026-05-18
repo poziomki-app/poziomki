@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -48,6 +47,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.User
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
@@ -269,6 +269,7 @@ private fun CardInfoColumn(
     Column(modifier = modifier.padding(vertical = 16.dp)) {
         Text(
             text = name.ifBlank { "imi\u0119" },
+            preserveCase = true,
             fontFamily = MontserratFamily,
             fontWeight = FontWeight.ExtraBold,
             fontSize = 20.sp,

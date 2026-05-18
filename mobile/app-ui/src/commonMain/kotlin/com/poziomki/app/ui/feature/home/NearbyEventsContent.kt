@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,10 +31,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.MapPinLine
@@ -43,6 +44,7 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.network.GeocodingService
 import com.poziomki.app.network.RoutingService
 import com.poziomki.app.network.WalkingRoute
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.StackedAvatars
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -55,6 +57,7 @@ import com.poziomki.app.ui.designsystem.theme.White
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
 import com.poziomki.app.ui.shared.formatEventDate
 import com.poziomki.app.ui.shared.pluralizePolish
+import com.poziomki.app.ui.shared.resolveImageUrl
 import org.koin.compose.koinInject
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
@@ -367,124 +370,121 @@ internal fun NearbyEventsContent(
         // No background image, no scroll: title + date + location + attendees,
         // tap → full event screen.
         if (selectedEvent != null) {
-            Column(
+            Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .background(Background)
                         .clickable { onEventClick(selectedEvent.id) }
                         .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .padding(bottom = LocalNavBarPadding.current),
+                        .padding(bottom = LocalNavBarPadding.current + 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = selectedEvent.title,
-                    fontFamily = MontserratFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formatEventDate(selectedEvent.startsAt),
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
-                        color = TextSecondary,
+                val cover = selectedEvent.coverImage
+                if (cover != null) {
+                    AsyncImage(
+                        model = resolveImageUrl(cover),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                            Modifier
+                                .size(88.dp)
+                                .clip(RoundedCornerShape(14.dp)),
                     )
-                    val distanceMeters = route?.distanceMeters
-                    if (distanceMeters != null) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedEvent.title,
+                        preserveCase = true,
+                        fontFamily = MontserratFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = " · ",
-                            fontFamily = NunitoFamily,
-                            fontSize = 13.sp,
-                            color = TextMuted,
-                        )
-                        Text(
-                            text = formatDistance(distanceMeters),
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Primary,
-                        )
-                    }
-                    val displayLocation =
-                        selectedEvent.location
-                            ?.takeIf { !looksLikeCoordinates(it) }
-                            ?: geocodedLocation
-                    if (displayLocation != null) {
-                        Text(
-                            text = " · ",
-                            fontFamily = NunitoFamily,
-                            fontSize = 13.sp,
-                            color = TextMuted,
-                        )
-                        Text(
-                            text = displayLocation,
+                            text = formatEventDate(selectedEvent.startsAt),
                             fontFamily = NunitoFamily,
                             fontWeight = FontWeight.Normal,
                             fontSize = 13.sp,
-                            color = TextMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
+                            color = TextSecondary,
                         )
-                    }
-                }
-
-                if (selectedEvent.attendeesCount > 0 || selectedEvent.maxAttendees != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (selectedEvent.attendeesPreview.isNotEmpty()) {
-                            StackedAvatars(
-                                imageUrls = selectedEvent.attendeesPreview.map { it.profilePicture },
-                                avatarSize = 24.dp,
+                        val distanceMeters = route?.distanceMeters
+                        if (distanceMeters != null) {
+                            Text(
+                                text = " · ",
+                                fontFamily = NunitoFamily,
+                                fontSize = 13.sp,
+                                color = TextMuted,
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = formatDistance(distanceMeters),
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Primary,
+                            )
                         }
-                        Text(
-                            text =
-                                selectedEvent.maxAttendees?.let { "${selectedEvent.attendeesCount} / $it" }
-                                    ?: pluralizePolish(
-                                        selectedEvent.attendeesCount,
-                                        "osoba",
-                                        "osoby",
-                                        "osób",
-                                    ),
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = TextPrimary,
-                        )
+                        val displayLocation =
+                            selectedEvent.location
+                                ?.takeIf { !looksLikeCoordinates(it) }
+                                ?: geocodedLocation
+                        if (displayLocation != null) {
+                            Text(
+                                text = " · ",
+                                fontFamily = NunitoFamily,
+                                fontSize = 13.sp,
+                                color = TextMuted,
+                            )
+                            Text(
+                                text = displayLocation,
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                color = TextMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
+                    }
+
+                    if (selectedEvent.attendeesCount > 0 || selectedEvent.maxAttendees != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (selectedEvent.attendeesPreview.isNotEmpty()) {
+                                StackedAvatars(
+                                    imageUrls = selectedEvent.attendeesPreview.map { it.profilePicture },
+                                    avatarSize = 24.dp,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text =
+                                    selectedEvent.maxAttendees?.let { "${selectedEvent.attendeesCount} / $it" }
+                                        ?: pluralizePolish(
+                                            selectedEvent.attendeesCount,
+                                            "osoba",
+                                            "osoby",
+                                            "osób",
+                                        ),
+                                fontFamily = NunitoFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = TextPrimary,
+                            )
+                        }
                     }
                 }
             }
         } else {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                        .padding(bottom = LocalNavBarPadding.current),
-                contentAlignment = Alignment.Center,
-            ) {
-                val hint =
-                    if (geoEvents.isEmpty()) {
-                        "brak wydarzeń w pobliżu"
-                    } else {
-                        "wybierz wydarzenie na mapie"
-                    }
-                Text(
-                    text = hint,
-                    fontFamily = NunitoFamily,
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                )
-            }
+            Spacer(modifier = Modifier.height(LocalNavBarPadding.current + 16.dp))
         }
     }
 }
