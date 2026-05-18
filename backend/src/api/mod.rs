@@ -16,6 +16,7 @@ mod auth;
 mod catalog;
 pub(crate) mod chat;
 mod common;
+mod dev;
 mod events;
 pub(crate) mod imgproxy_signing;
 pub mod ip_rate_limit;
@@ -40,6 +41,13 @@ fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
 fn admin_routes() -> Router<AppContext> {
     Router::new()
         .route("/users/{pid}/ban", post(admin::ban_user))
+        .layer(cache_layer("no-store"))
+}
+
+fn dev_routes() -> Router<AppContext> {
+    Router::new()
+        .route("/otp/{email}", get(dev::latest_otp))
+        .route("/wipe-user/{email}", post(dev::wipe_user))
         .layer(cache_layer("no-store"))
 }
 
@@ -290,6 +298,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/routing", routing_routes())
         .nest("/api/v1/ops", ops_routes())
         .nest("/api/v1/admin", admin_routes())
+        .nest("/api/v1/dev", dev_routes())
         .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
         .layer(middleware::from_fn(observe_http_metrics))
         .layer(
