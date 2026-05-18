@@ -77,9 +77,9 @@ private const val DEFAULT_ZOOM = 14.0
 private const val DEFAULT_LAT = 52.2297
 private const val DEFAULT_LNG = 21.0122
 private const val TAP_THRESHOLD_DEG = 0.005
-private const val USER_DOT_RADIUS_DP = 9f
-private const val USER_HALO_MAX_RADIUS_DP = 28f
-private const val USER_HALO_PEAK_ALPHA = 0.35f
+private const val USER_DOT_RADIUS_DP = 7f
+private const val USER_HALO_MAX_RADIUS_DP = 18f
+private const val USER_HALO_PEAK_ALPHA = 0.3f
 private const val USER_HALO_CYCLE_MS = 2_200
 private val UserHaloEasing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
@@ -164,23 +164,30 @@ internal fun NearbyEventsContent(
         geocodedLocation = geocoding.reverse(lat, lng)
     }
 
-    LaunchedEffect(selectedEventId, userLat, userLng) {
+    // Route is keyed on event + presence of user location only — re-running on
+    // every GPS tick would cancel the in-flight request before it returns and
+    // the distance would never render.
+    val hasUserLoc = userLat != null && userLng != null
+    LaunchedEffect(selectedEventId, hasUserLoc) {
         route = null
-        if (userLat == null || userLng == null) return@LaunchedEffect
+        if (!hasUserLoc) return@LaunchedEffect
         val event = events.find { it.id == selectedEventId } ?: return@LaunchedEffect
         val evLat = event.latitude ?: return@LaunchedEffect
         val evLng = event.longitude ?: return@LaunchedEffect
         route = routing.walkingRoute(userLat, userLng, evLat, evLng)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Map container — fill the available height (weight=1f) instead of a fixed 280dp.
+    // Layout the map as the full-screen background and float the panel as a
+    // bottom overlay. A Column with map weight(1f) + panel below it leaves a
+    // small but visible gap above the panel on some devices, presumably from
+    // PullToRefreshBox / nested fillMaxSize constraints. Overlaying sidesteps
+    // that — the panel sits directly on top of the map's last few rows.
+    Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier =
                 Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .weight(1f)
                     .clip(RoundedCornerShape(20.dp)),
         ) {
             val cameraState =
@@ -192,8 +199,12 @@ internal fun NearbyEventsContent(
                         ),
                 )
 
-            LaunchedEffect(userLat, userLng) {
-                if (userLat != null && userLng != null) {
+            // Centre on the user once when their location first resolves. We
+            // intentionally do NOT re-key on userLat/userLng — GPS updates every
+            // ~second and re-animating would yank the camera away from any pan
+            // or zoom the user has made.
+            LaunchedEffect(hasUserLoc) {
+                if (hasUserLoc) {
                     cameraState.animateTo(
                         CameraPosition(
                             target = Position(latitude = userLat, longitude = userLng),
@@ -373,11 +384,12 @@ internal fun NearbyEventsContent(
             Row(
                 modifier =
                     Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .background(Background)
                         .clickable { onEventClick(selectedEvent.id) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .padding(bottom = LocalNavBarPadding.current + 16.dp),
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 10.dp, bottom = LocalNavBarPadding.current + 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val cover = selectedEvent.coverImage
@@ -388,8 +400,8 @@ internal fun NearbyEventsContent(
                         contentScale = ContentScale.Crop,
                         modifier =
                             Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(12.dp)),
+                                .size(88.dp)
+                                .clip(RoundedCornerShape(14.dp)),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                 }
@@ -482,8 +494,6 @@ internal fun NearbyEventsContent(
                     }
                 }
             }
-        } else {
-            Spacer(modifier = Modifier.height(LocalNavBarPadding.current + 16.dp))
         }
     }
 }
