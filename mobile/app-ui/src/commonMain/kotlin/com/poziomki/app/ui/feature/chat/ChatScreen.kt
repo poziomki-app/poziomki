@@ -20,7 +20,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +51,7 @@ import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.CalendarDots
 import com.poziomki.app.chat.ActiveChat
 import com.poziomki.app.chat.api.TimelineItem
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.ReportDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
@@ -271,6 +271,7 @@ private fun ChatTopBar(
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    preserveCase = true,
                 )
             }
 

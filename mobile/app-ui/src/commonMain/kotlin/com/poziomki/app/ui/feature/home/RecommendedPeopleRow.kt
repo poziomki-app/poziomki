@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.network.MatchProfile
+import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.SectionLabel
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -136,6 +136,7 @@ private fun RecommendedPersonItem(
 
         Text(
             text = firstName,
+            preserveCase = true,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
