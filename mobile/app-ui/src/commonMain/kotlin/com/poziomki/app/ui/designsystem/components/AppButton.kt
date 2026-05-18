@@ -61,8 +61,8 @@ private fun borderColor(
     enabled: Boolean,
 ): Color =
     when (variant) {
-        ButtonVariant.DESTRUCTIVE -> if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.2f)
-        else -> if (enabled) Border else Border.copy(alpha = 0.5f)
+        ButtonVariant.DESTRUCTIVE -> if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.15f)
+        else -> if (enabled) Border else Border.copy(alpha = 0.3f)
     }
 
 @Suppress("LongParameterList")
@@ -78,7 +78,10 @@ fun AppButton(
     icon: ImageVector? = null,
 ) {
     val isEnabled = enabled && !loading
-    val tint = contentColor(variant).let { if (isEnabled) it else it.copy(alpha = 0.4f) }
+    // Stronger disabled fade (was 0.4) so disabled buttons read clearly as
+    // off-state against the dark form backgrounds — previously they were
+    // nearly indistinguishable from the enabled state.
+    val tint = contentColor(variant).let { if (isEnabled) it else it.copy(alpha = 0.25f) }
     val isIconOnly = text.isEmpty() && icon != null
 
     val rowModifier =
