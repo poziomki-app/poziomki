@@ -54,7 +54,10 @@ fun BasicInfoScreen(
     OnboardingLayout(
         currentStep = 1,
         totalSteps = 3,
-        showBack = true,
+        // First onboarding step — pressing back from here would silently
+        // leave the user logged in but without a profile, which is a worse
+        // dead end than just staying on the form. Hide the affordance.
+        showBack = false,
         onBack = onBack,
         footer = {
             AppButton(
