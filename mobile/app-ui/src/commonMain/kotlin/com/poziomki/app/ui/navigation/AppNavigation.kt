@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.navigation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -71,7 +71,6 @@ import com.poziomki.app.ui.designsystem.components.OfflineBanner
 import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.backSlide
 import com.poziomki.app.ui.designsystem.theme.backSlideExit
 import com.poziomki.app.ui.designsystem.theme.forwardSlide
@@ -525,12 +524,7 @@ fun MainScreen(
         }
     }
 
-    val profileAvatarAction: @Composable () -> Unit = {
-        ProfileAvatarButton(
-            profilePicture = profilePicture,
-            onClick = navigateToProfileTab,
-        )
-    }
+    val profileAvatarAction: @Composable () -> Unit = {}
 
     val immersive = remember { mutableStateOf(false) }
     val navBarPadding = if (immersive.value) 0.dp else navBarHeight + bottomInsets
@@ -651,8 +645,62 @@ fun MainScreen(
                                         Icon(
                                             if (selected) item.selectedIcon else item.icon,
                                             contentDescription = item.label,
-                                            modifier = Modifier.size(32.dp),
+                                            modifier = Modifier.size(26.dp),
                                             tint = tint,
+                                        )
+                                    }
+                                }
+                                val profileSelected =
+                                    currentDestination?.hasRoute(Route.ProfileTab::class) == true
+                                Column(
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                            ) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                navigateToProfileTab()
+                                            },
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    if (profilePicture != null) {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .size(28.dp)
+                                                    .then(
+                                                        if (profileSelected) {
+                                                            Modifier
+                                                                .border(
+                                                                    width = 1.5.dp,
+                                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                                    shape = CircleShape,
+                                                                ).padding(3.dp)
+                                                        } else {
+                                                            Modifier
+                                                        },
+                                                    ),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            UserAvatar(
+                                                picture = profilePicture,
+                                                displayName = null,
+                                                size = if (profileSelected) 22.dp else 26.dp,
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            PhosphorIcons.Bold.GearSix,
+                                            contentDescription = "Profil",
+                                            modifier = Modifier.size(26.dp),
+                                            tint =
+                                                if (profileSelected) {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
                                         )
                                     }
                                 }
@@ -678,29 +726,5 @@ fun MainScreen(
             onSubmit = { feedbackViewModel.submit(appVersion = null) },
             onDismiss = { feedbackViewModel.closeDialog() },
         )
-    }
-}
-
-@Composable
-private fun ProfileAvatarButton(
-    profilePicture: String?,
-    onClick: () -> Unit,
-) {
-    val avatarSize = 28.dp
-    IconButton(onClick = onClick) {
-        if (profilePicture != null) {
-            UserAvatar(
-                picture = profilePicture,
-                displayName = null,
-                size = avatarSize,
-            )
-        } else {
-            Icon(
-                PhosphorIcons.Bold.GearSix,
-                contentDescription = "Profil",
-                modifier = Modifier.size(22.dp),
-                tint = TextMuted,
-            )
-        }
     }
 }
