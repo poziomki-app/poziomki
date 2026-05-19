@@ -25,6 +25,7 @@ pub struct User {
     pub is_review_stub: bool,
     pub banned_at: Option<DateTime<Utc>>,
     pub banned_reason: Option<String>,
+    pub is_system: bool,
 }
 
 #[derive(Debug, Insertable)]
