@@ -260,6 +260,7 @@ private fun ProfilePreviewCard(
             ) {
                 Text(
                     text = state.name.ifBlank { "imi\u0119" },
+                    preserveCase = true,
                     fontFamily = MontserratFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 19.sp,

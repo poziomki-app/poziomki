@@ -78,6 +78,7 @@ fun ResetPasswordScreen(
 
         Text(
             text = email,
+            preserveCase = true,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,

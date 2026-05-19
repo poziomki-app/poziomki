@@ -92,6 +92,7 @@ fun VerifyScreen(
 
         Text(
             text = email,
+            preserveCase = true,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 16.sp,

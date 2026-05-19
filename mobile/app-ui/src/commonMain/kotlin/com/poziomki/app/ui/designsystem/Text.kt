@@ -16,9 +16,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.material3.Text as M3Text
 
-// Default preserves case. Opt-in to lowercase = true only for deliberately styled
-// static copy (section labels, chips). Never use lowercase on user-generated content,
-// acronyms (OTP, QR), proper nouns, or localized strings (city names, university names).
+// Lowercases static UI copy by project convention. Pass preserveCase = true for
+// user-generated content (names, messages, emails) and acronyms/codes (OTP, QR, URLs).
 @Composable
 @Suppress("LongParameterList")
 fun Text(
@@ -39,10 +38,10 @@ fun Text(
     minLines: Int = 1,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     style: TextStyle = LocalTextStyle.current,
-    lowercase: Boolean = false,
+    preserveCase: Boolean = false,
 ) {
     M3Text(
-        text = if (lowercase) text.lowercase() else text,
+        text = if (preserveCase) text else text.lowercase(),
         modifier = modifier,
         color = color,
         fontSize = fontSize,

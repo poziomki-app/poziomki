@@ -121,6 +121,7 @@ fun ProfileCard(
             ) {
                 Text(
                     text = name,
+                    preserveCase = true,
                     fontFamily = MontserratFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 19.sp,

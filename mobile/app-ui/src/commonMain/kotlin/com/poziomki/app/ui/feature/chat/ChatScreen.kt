@@ -271,6 +271,7 @@ private fun ChatTopBar(
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    preserveCase = true,
                 )
             }
 
