@@ -99,6 +99,9 @@ android {
         // Same rationale as OldTargetApi — let the bot handle SDK bumps.
         disable += "OldTargetApi"
         disable += "GradleDependency"
+        // Portrait-only is a product decision. CI's newer SDK emits this
+        // even though the local baseline captured it.
+        disable += "LockedOrientationActivity"
     }
 }
 
