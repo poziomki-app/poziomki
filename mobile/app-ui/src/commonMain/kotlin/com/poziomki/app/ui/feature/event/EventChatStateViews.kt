@@ -1,7 +1,10 @@
 package com.poziomki.app.ui.feature.event
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,8 +13,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -21,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -216,20 +222,23 @@ fun EventChatJoinRequiredView(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            if (event.isPending) {
-                AppButton(
-                    text = "oczekuje na akceptację",
-                    onClick = {},
-                    variant = ButtonVariant.SECONDARY,
-                    enabled = false,
-                )
-            } else {
-                AppButton(
-                    text = "dołącz",
-                    onClick = onJoin,
-                    variant = ButtonVariant.PRIMARY,
-                    loading = isUpdatingAttendance,
-                )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (event.isPending) {
+                    JoinPillButton(
+                        text = "oczekuje na akceptację",
+                        onClick = {},
+                        enabled = false,
+                    )
+                } else {
+                    JoinPillButton(
+                        text = "dołącz",
+                        onClick = onJoin,
+                        loading = isUpdatingAttendance,
+                    )
+                }
             }
 
             event.description?.let { description ->
@@ -253,5 +262,42 @@ fun EventChatJoinRequiredView(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
         }
+    }
+}
+
+@Composable
+private fun JoinPillButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+) {
+    val isEnabled = enabled && !loading
+    val fill = Color(0xFFF2F4F7)
+    val contentColor = Color(0xFF0B0F14).let { if (isEnabled) it else it.copy(alpha = 0.35f) }
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(fill)
+                .then(if (isEnabled) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 22.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = contentColor,
+                strokeWidth = 2.dp,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            color = contentColor,
+        )
     }
 }
