@@ -10,13 +10,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.unit.dp
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.imageResource
 import poziomki_mobile.app_ui.generated.resources.Res
 import poziomki_mobile.app_ui.generated.resources.doodle_splash
 
@@ -41,13 +43,13 @@ fun EmptyView(
             if (illustration != null) {
                 Box(contentAlignment = Alignment.Center) {
                     Image(
-                        painter = painterResource(Res.drawable.doodle_splash),
+                        painter = highQualityPainter(Res.drawable.doodle_splash),
                         contentDescription = null,
                         alpha = 0.6f,
                         modifier = Modifier.size(260.dp, 170.dp),
                     )
                     Image(
-                        painter = painterResource(illustration),
+                        painter = highQualityPainter(illustration),
                         contentDescription = null,
                         modifier = Modifier.size(160.dp),
                     )
@@ -61,3 +63,10 @@ fun EmptyView(
         }
     }
 }
+
+// Use FilterQuality.High so scaled doodle PNGs render with a proper bilinear
+// resampler instead of the default Low which leaves nearest-neighbour pixel
+// stair-stepping on the sketchy outlines.
+@Composable
+private fun highQualityPainter(resource: DrawableResource): BitmapPainter =
+    BitmapPainter(imageResource(resource), filterQuality = FilterQuality.High)
