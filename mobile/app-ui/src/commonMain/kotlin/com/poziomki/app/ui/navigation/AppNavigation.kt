@@ -60,6 +60,7 @@ import com.adamglin.phosphoricons.fill.PaperPlaneTilt
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.chat.push.NotificationDeepLinkTarget
+import com.poziomki.app.chat.push.NotificationEventTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
@@ -148,6 +149,7 @@ private fun rememberGraphEntry(
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun AppNavigation(
     startDestination: Route,
@@ -194,6 +196,17 @@ fun AppNavigation(
     val deepLink by NotificationDeepLinkTarget.link.collectAsState()
     LaunchedEffect(isLoggedIn, deepLink) {
         handleBroadcastDeepLink(deepLink, isLoggedIn, startDestination)
+    }
+
+    val notificationEventTarget by NotificationEventTarget.eventId.collectAsState()
+    LaunchedEffect(isLoggedIn, notificationEventTarget) {
+        val eventId = notificationEventTarget ?: return@LaunchedEffect
+        if (!isLoggedIn || startDestination == Route.OnboardingGraph) return@LaunchedEffect
+        navController.navigate(Route.MainGraph) {
+            popUpTo(0) { inclusive = true }
+        }
+        navController.navigate(Route.EventDetail(eventId))
+        NotificationEventTarget.consume(eventId)
     }
 
     val navigateToChat: (String, String?) -> Unit = navigateToChat@{ chatTargetId, avatarHint ->
@@ -485,10 +498,12 @@ fun AppNavigation(
     }
 }
 
-// Broadcast deep links. Today we only recognise poziomki://chat/<roomId>
-// (forwarded into the existing chat target). Unknown schemes fall through
-// — the app just opens at its current destination and the link is dropped
-// so taps still open the app from a notification.
+// Broadcast deep links. Recognised schemes:
+//   poziomki://chat/<roomId>   → forwarded into NotificationChatTarget
+//   poziomki://event/<eventId> → forwarded into NotificationEventTarget
+// Unknown schemes fall through — the app just opens at its current
+// destination and the link is dropped so taps still open the app from
+// a notification.
 private fun handleBroadcastDeepLink(
     deepLink: String?,
     isLoggedIn: Boolean,
@@ -500,9 +515,11 @@ private fun handleBroadcastDeepLink(
         return
     }
     val chatPrefix = "poziomki://chat/"
+    val eventPrefix = "poziomki://event/"
     if (link.startsWith(chatPrefix)) {
-        val roomId = link.removePrefix(chatPrefix).takeIf { it.isNotBlank() }
-        if (roomId != null) NotificationChatTarget.open(roomId)
+        link.removePrefix(chatPrefix).takeIf { it.isNotBlank() }?.let(NotificationChatTarget::open)
+    } else if (link.startsWith(eventPrefix)) {
+        link.removePrefix(eventPrefix).takeIf { it.isNotBlank() }?.let(NotificationEventTarget::open)
     }
     NotificationDeepLinkTarget.consume(link)
 }

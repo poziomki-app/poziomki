@@ -521,6 +521,136 @@ pub async fn send_broadcast(
     )
 }
 
+/// Send a tag-matched event recommendation push.
+///
+/// Resolves the audience from `app.users_for_event_tag_match` (already
+/// filtered by opt-in preferences, ban status, and creator exclusion),
+/// then fans out per-user with a visible title + deep link to the event page.
+pub async fn send_event_tag_match(
+    event_id: Uuid,
+    event_title: String,
+    creator_user_id: i32,
+) -> (usize, usize) {
+    let Some(fcm) = client() else {
+        return (0, 0);
+    };
+    let (user_ids, rows) = {
+        let mut conn = match db::conn().await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(error = %e, "fcm_event_tag: db conn failed");
+                return (0, 0);
+            }
+        };
+        let user_ids =
+            match db::users_for_event_tag_match(&mut conn, event_id, creator_user_id).await {
+                Ok(u) => u,
+                Err(e) => {
+                    tracing::warn!(error = %e, "fcm_event_tag: audience lookup failed");
+                    return (0, 0);
+                }
+            };
+        if user_ids.is_empty() {
+            return (0, 0);
+        }
+        let rows = match db::push_tokens_for_users(&mut conn, &user_ids).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(error = %e, "fcm_event_tag: token lookup failed");
+                return (0, 0);
+            }
+        };
+        (user_ids, rows)
+    };
+    if rows.is_empty() {
+        tracing::info!(
+            audience = user_ids.len(),
+            "fcm_event_tag: matched users have no registered tokens"
+        );
+        return (0, 0);
+    }
+
+    let access = match fcm.access_token().await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(error = %e, "fcm_event_tag: access token failed");
+            return (0, 0);
+        }
+    };
+    let url = fcm.send_url();
+    let deep_link = format!("poziomki://event/{event_id}");
+    let body_text = "Nowe wydarzenie pasujące do Twoich tagów".to_string();
+
+    let delivered = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let rejected = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    let mut handles = Vec::with_capacity(rows.len());
+    for row in rows {
+        let sem = fcm.sem.clone();
+        let http = fcm.http.clone();
+        let access = access.clone();
+        let url = url.clone();
+        let title = event_title.clone();
+        let body = body_text.clone();
+        let deep_link = deep_link.clone();
+        let delivered = delivered.clone();
+        let rejected = rejected.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = sem.acquire_owned().await.ok();
+            let payload = build_broadcast_message(
+                &row.fcm_token,
+                &row.platform,
+                &title,
+                &body,
+                Some(&deep_link),
+            );
+            let masked = mask_token(&row.fcm_token);
+            let resp = http
+                .post(&url)
+                .bearer_auth(&access)
+                .json(&payload)
+                .send()
+                .await;
+            match resp {
+                Ok(r) => {
+                    let status = r.status();
+                    if status.is_success() {
+                        delivered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::info!(token = %masked, "fcm_event_tag_delivered");
+                    } else if status == reqwest::StatusCode::NOT_FOUND
+                        || status == reqwest::StatusCode::BAD_REQUEST
+                        || status == reqwest::StatusCode::UNAUTHORIZED
+                    {
+                        let detail = r.text().await.unwrap_or_default();
+                        let stale = detail.contains("UNREGISTERED")
+                            || detail.contains("INVALID_ARGUMENT")
+                            || status == reqwest::StatusCode::NOT_FOUND;
+                        rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::warn!(token = %masked, status = %status, stale, "fcm_event_tag_rejected");
+                        if stale {
+                            cleanup_stale_token(&row.fcm_token).await;
+                        }
+                    } else {
+                        rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::warn!(token = %masked, status = %status, "fcm_event_tag_error");
+                    }
+                }
+                Err(e) => {
+                    rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    tracing::warn!(token = %masked, error = %e, "fcm_event_tag_send_failed");
+                }
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
+    (
+        delivered.load(std::sync::atomic::Ordering::Relaxed),
+        rejected.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
 async fn cleanup_stale_token(fcm_token: &str) {
     use diesel_async::RunQueryDsl;
 

@@ -317,6 +317,22 @@ pub(in crate::api) async fn event_create(
         CreateOutcome::NoProfile => Ok(profile_not_found(&headers)),
         CreateOutcome::CoverInvalid(response) => Ok(*response),
         CreateOutcome::Created { event, profile_id } => {
+            // Fan out tag-matched event push notifications in the background.
+            // Audience + opt-in filtering happens in the SECURITY DEFINER
+            // helper; this can never block or fail the response.
+            let event_id = event.id;
+            let event_title = event.title.clone();
+            tokio::spawn(async move {
+                let (delivered, rejected) =
+                    crate::push::fcm::send_event_tag_match(event_id, event_title, user_id).await;
+                tracing::info!(
+                    %event_id,
+                    delivered,
+                    rejected,
+                    "fcm_event_tag_match_sent"
+                );
+            });
+
             let mut response = build_response_after_tx(viewer, &event, profile_id).await?;
             resolve_single(&mut response).await;
             Ok(created_event_response(response))

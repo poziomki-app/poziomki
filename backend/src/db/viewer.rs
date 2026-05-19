@@ -488,6 +488,22 @@ struct UserIdRow {
     user_id: i32,
 }
 
+/// Resolve users with at least one tag matching the given event's tags,
+/// gated by `notify_tag_events` opt-in. Used to fan out tag-matched
+/// event push notifications from `event_create`.
+pub async fn users_for_event_tag_match(
+    conn: &mut AsyncPgConnection,
+    event_id: uuid::Uuid,
+    creator_user_id: i32,
+) -> Result<Vec<i32>, diesel::result::Error> {
+    let rows = diesel::sql_query("SELECT * FROM app.users_for_event_tag_match($1, $2)")
+        .bind::<diesel::sql_types::Uuid, _>(event_id)
+        .bind::<diesel::sql_types::Integer, _>(creator_user_id)
+        .load::<UserIdRow>(conn)
+        .await?;
+    Ok(rows.into_iter().map(|r| r.user_id).collect())
+}
+
 /// Filter push recipients by notification preferences.
 ///
 /// Returns only those whose master switch is on, channel for the
