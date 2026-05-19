@@ -180,7 +180,6 @@ fun EventChatJoinRequiredView(
             ) {
                 Text(
                     text = event.title,
-                    preserveCase = true,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -253,7 +252,6 @@ fun EventChatJoinRequiredView(
                     Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xs))
                     Text(
                         text = description,
-                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )

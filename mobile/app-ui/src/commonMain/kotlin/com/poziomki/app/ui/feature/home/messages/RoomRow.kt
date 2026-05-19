@@ -80,7 +80,6 @@ fun RoomRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
-                    preserveCase = true,
                     style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold,
@@ -108,7 +107,6 @@ fun RoomRow(
                         room.latestModerationVerdict in setOf("flag", "block")
                 Text(
                     text = room.latestMessagePreview(),
-                    preserveCase = true,
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (room.unreadCount > 0) TextPrimary else TextSecondary,
                     fontStyle = if (flagged) FontStyle.Italic else null,

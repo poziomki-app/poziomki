@@ -248,7 +248,6 @@ fun LocationPickerSheet(
                             results.forEach { result ->
                                 Text(
                                     text = result.name,
-                                    preserveCase = true,
                                     fontFamily = NunitoFamily,
                                     fontSize = 14.sp,
                                     color = TextPrimary,

@@ -408,7 +408,6 @@ internal fun NearbyEventsContent(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = selectedEvent.title,
-                        preserveCase = true,
                         fontFamily = MontserratFamily,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp,

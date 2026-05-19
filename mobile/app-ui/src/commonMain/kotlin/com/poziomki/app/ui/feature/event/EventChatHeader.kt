@@ -174,7 +174,6 @@ fun EventMetaRows(
                 icon = PhosphorIcons.Fill.MapPin,
                 text = formatEventLocation(location),
                 onClick = onLocationClick,
-                preserveCase = true,
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
@@ -208,7 +207,6 @@ private fun MetaChip(
     text: String,
     onClick: (() -> Unit)? = null,
     accent: Boolean = false,
-    preserveCase: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(50)
@@ -217,11 +215,11 @@ private fun MetaChip(
 
     if (onClick != null) {
         Surface(onClick = onClick, shape = shape, color = bgColor, modifier = modifier) {
-            ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
+            ChipContent(icon = icon, text = text, tint = contentColor)
         }
     } else {
         Surface(shape = shape, color = bgColor, modifier = modifier) {
-            ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
+            ChipContent(icon = icon, text = text, tint = contentColor)
         }
     }
 }
@@ -231,7 +229,6 @@ private fun ChipContent(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     tint: Color,
-    preserveCase: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -255,7 +252,6 @@ private fun ChipContent(
             color = tint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            preserveCase = preserveCase,
         )
     }
 }
@@ -397,7 +393,6 @@ fun EventChatHeader(
                 }
             Text(
                 text = event.title,
-                preserveCase = true,
                 fontFamily = MontserratFamily,
                 fontSize = titleFontSize,
                 lineHeight = titleFontSize * 1.15f,
@@ -422,7 +417,6 @@ fun EventChatHeader(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = creator.name,
-                        preserveCase = true,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = Primary,
@@ -531,7 +525,6 @@ private fun AttendeesDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = attendee.name,
-                                preserveCase = true,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
