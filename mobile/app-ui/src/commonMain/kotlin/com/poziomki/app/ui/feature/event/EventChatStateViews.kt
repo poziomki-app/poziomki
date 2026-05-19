@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.event
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -39,6 +41,7 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
+import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.mapsDeeplink
 import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -221,9 +224,9 @@ fun EventChatJoinRequiredView(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            Box(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterStart,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (event.isPending) {
                     JoinPillButton(
@@ -236,6 +239,13 @@ fun EventChatJoinRequiredView(
                         text = "dołącz",
                         onClick = onJoin,
                         loading = isUpdatingAttendance,
+                    )
+                }
+                if (event.attendeesPreview.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.md))
+                    AttendeesCluster(
+                        previews = event.attendeesPreview,
+                        totalCount = event.attendeesCount,
                     )
                 }
             }
@@ -259,6 +269,55 @@ fun EventChatJoinRequiredView(
             }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
+        }
+    }
+}
+
+@Composable
+private fun AttendeesCluster(
+    previews: List<com.poziomki.app.network.EventAttendeePreview>,
+    totalCount: Int,
+    maxAvatars: Int = 3,
+) {
+    val avatarSize = 32.dp
+    val overlapOffset = (-10).dp
+    val step = avatarSize + overlapOffset
+    val shown = previews.take(maxAvatars)
+    val overflow = (totalCount - shown.size).coerceAtLeast(0)
+    val slots = shown.size + if (overflow > 0) 1 else 0
+    val totalWidth = if (slots == 0) 0.dp else avatarSize + (step * (slots - 1))
+
+    Box(modifier = Modifier.size(width = totalWidth, height = avatarSize)) {
+        shown.forEachIndexed { index, preview ->
+            UserAvatar(
+                picture = preview.profilePicture,
+                displayName = preview.name,
+                size = avatarSize,
+                modifier =
+                    Modifier
+                        .offset(x = step * index)
+                        .border(2.dp, Color(0xFF0B0F14), CircleShape),
+            )
+        }
+        if (overflow > 0) {
+            Box(
+                modifier =
+                    Modifier
+                        .offset(x = step * shown.size)
+                        .size(avatarSize)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF2F4F7))
+                        .border(2.dp, Color(0xFF0B0F14), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+$overflow",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF0B0F14),
+                )
+            }
         }
     }
 }
