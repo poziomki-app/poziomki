@@ -82,6 +82,7 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 ort = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "download-binaries", "tls-rustls", "ndarray"] }
 tokenizers = { version = "=0.23.1", default-features = false, features = ["onig"] }
 ndarray = "0.17"
+sentry = { version = "=0.48.2", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing", "tower", "tower-http"] }
 
 [[bin]]
 name = "poziomki_backend-cli"

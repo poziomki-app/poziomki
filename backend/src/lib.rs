@@ -6,6 +6,7 @@ pub mod error;
 pub mod healthcheck;
 pub mod jobs;
 pub mod moderation;
+pub mod observability;
 pub mod push;
 pub mod search;
 pub mod security;
