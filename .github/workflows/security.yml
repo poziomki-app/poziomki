@@ -152,7 +152,9 @@ jobs:
   # pinned deps, token permissions, etc.). Runs on schedule + default-branch
   # pushes; results flow to the Security tab.
   scorecard:
-    if: github.event_name == 'schedule' || github.event_name == 'push'
+    # Weekly cron only — pushes to main don't need it (results are
+    # repo-level posture, not per-commit signal).
+    if: github.event_name == 'schedule'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       security-events: write
