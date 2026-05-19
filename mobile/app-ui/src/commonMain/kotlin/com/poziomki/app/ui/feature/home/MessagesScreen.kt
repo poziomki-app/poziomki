@@ -49,13 +49,21 @@ fun MessagesScreen(
     var searchActive by remember { mutableStateOf(false) }
 
     val filteredRooms =
-        state.rooms.filterMessagesRooms(
+        remember(
+            state.rooms,
             selectedFilter,
             state.searchQuery,
             state.eventRoomIds,
             state.searchMatchingRoomIds,
-        )
-    val roomFilterTabs = roomFilterTabs()
+        ) {
+            state.rooms.filterMessagesRooms(
+                selectedFilter,
+                state.searchQuery,
+                state.eventRoomIds,
+                state.searchMatchingRoomIds,
+            )
+        }
+    val roomFilterTabs = remember { roomFilterTabs() }
 
     Column(
         modifier =

@@ -3,7 +3,6 @@ package com.poziomki.app.ui.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.poziomki.app.chat.api.ChatClient
-import com.poziomki.app.chat.api.ChatClientState
 import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.data.repository.EventRepository
@@ -33,7 +32,7 @@ class MessagesViewModel(
 ) : ViewModel() {
     private companion object {
         const val PROFILE_PICTURE_REFRESH_INTERVAL_MS = 30 * 60 * 1000L
-        const val EMPTY_ROOMS_FALLBACK_MS = 15_000L
+        const val EMPTY_ROOMS_FALLBACK_MS = 4_000L
         const val PREVIEW_WARMUP_BATCH_SIZE = 4
     }
 
@@ -60,7 +59,6 @@ class MessagesViewModel(
             _state.value = _state.value.copy(rooms = cachedRooms, isLoading = false)
         }
         observeConnectivity()
-        observeClientState()
         observeRooms()
         observeEventRooms()
         observeEventRoomAvatars()
@@ -176,14 +174,6 @@ class MessagesViewModel(
                     pendingConnectivityRetry = false
                     refresh()
                 }
-            }
-        }
-    }
-
-    private fun observeClientState() {
-        viewModelScope.launch {
-            chatClient.state.collect { chatState ->
-                _state.update { current -> current.copy(chatState = chatState) }
             }
         }
     }
