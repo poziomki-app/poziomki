@@ -29,6 +29,7 @@ use axum::{
     Json,
 };
 use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::RunQueryDsl;
 use profiles_http::not_found_profile;
 pub(super) use profiles_http::validation_error;
 use profiles_repo::{load_profile_by_user_id, load_profile_with_owner_pid};
@@ -36,6 +37,49 @@ pub(super) use profiles_tags_repo::sync_profile_tags;
 pub(super) use profiles_tags_service::parse_tag_uuids;
 pub(super) use profiles_view::{full_profile_response, profile_to_response};
 pub(super) use profiles_write_handler::{profile_create, profile_delete, profile_update};
+
+/// POST /api/v1/profiles/me/finalize-pre-launch
+///
+/// Mobile-onboarding completion hook: clears `is_pre_launch` on the
+/// caller's own profile so it becomes visible to other app users. Safe
+/// to call repeatedly — returns `{ "data": { "finalized": false } }`
+/// when nothing changed (already finalized, or no pre-launch profile
+/// exists for the user).
+pub(super) async fn profile_finalize_pre_launch(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let user_id = user.id;
+    let viewer = db::DbViewer {
+        user_id,
+        is_review_stub: user.is_review_stub,
+    };
+
+    let finalized = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            use diesel::sql_types::{BigInt, Bool};
+            #[derive(diesel::deserialize::QueryableByName)]
+            struct Row {
+                #[diesel(sql_type = Bool)]
+                v: bool,
+            }
+            let row: Row = diesel::sql_query("SELECT app.finalize_pre_launch_profile($1) AS v")
+                .bind::<BigInt, _>(i64::from(user_id))
+                .get_result(conn)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok::<_, diesel::result::Error>(row.v)
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    Ok(Json(DataResponse {
+        data: serde_json::json!({ "finalized": finalized }),
+    })
+    .into_response())
+}
 
 pub(super) async fn profile_me(
     State(_ctx): State<AppContext>,

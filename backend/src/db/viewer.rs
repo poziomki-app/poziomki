@@ -224,6 +224,72 @@ pub async fn create_user_for_signup(
     .await
 }
 
+/// Stamp a user as a pre-launch (early-access) signup.
+///
+/// Idempotent on the first-set timestamp and platform — the original values
+/// stick on retry, so a user who restarts the form keeps their original cohort
+/// timestamp. Connects through the API pool, so no viewer required.
+///
+/// Returns a stringified error so callers in the sign-up path can log
+/// and continue — the metadata is supporting data, not on the critical
+/// path for the user completing onboarding.
+pub async fn set_pre_launch_signup_metadata(
+    user_pid: uuid::Uuid,
+    platform_pref: Option<&str>,
+    signup_source: Option<&str>,
+) -> Result<(), String> {
+    let mut conn = crate::db::conn().await.map_err(|e| format!("pool: {e}"))?;
+    diesel::sql_query("SELECT app.set_pre_launch_signup_metadata($1, $2, $3)")
+        .bind::<SqlUuid, _>(user_pid)
+        .bind::<Nullable<Text>, _>(platform_pref)
+        .bind::<Nullable<Text>, _>(signup_source)
+        .execute(&mut conn)
+        .await
+        .map_err(|e| format!("diesel: {e}"))?;
+    Ok(())
+}
+
+#[derive(Debug, QueryableByName)]
+pub struct WelcomeEmailClaim {
+    #[diesel(sql_type = Text)]
+    pub email: String,
+    #[diesel(sql_type = Text)]
+    pub name: String,
+}
+
+/// Atomically reserve a welcome-email send for a user.
+///
+/// Returns `Some(row)` only when the user is a pre-launch signup whose welcome
+/// email has not yet been sent — the `welcome_email_sent_at` column is
+/// updated in the same statement, so concurrent worker retries cannot
+/// produce duplicate sends. Returns `None` when the user is non-pre-launch
+/// or already received the welcome.
+pub async fn claim_welcome_email_send(user_id: i32) -> Result<Option<WelcomeEmailClaim>, String> {
+    let mut conn = crate::db::conn().await.map_err(|e| format!("pool: {e}"))?;
+    diesel::sql_query("SELECT email, name FROM app.claim_welcome_email_send($1)")
+        .bind::<Integer, _>(user_id)
+        .get_result::<WelcomeEmailClaim>(&mut conn)
+        .await
+        .optional()
+        .map_err(|e| format!("diesel: {e}"))
+}
+
+/// Mark the per-launch welcome email as sent for a user. Idempotent
+/// — the timestamp only sets on first call. Called from the worker
+/// after `welcome_pre_launch` delivers successfully.
+pub async fn mark_welcome_email_sent(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("SELECT app.mark_welcome_email_sent($1, $2)")
+        .bind::<Integer, _>(user_id)
+        .bind::<Timestamptz, _>(now)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
 /// Mark a user's email as verified. Idempotent.
 pub async fn mark_email_verified(
     conn: &mut AsyncPgConnection,

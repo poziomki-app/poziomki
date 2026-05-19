@@ -8,8 +8,13 @@ mod auth_rate_limit;
 mod auth_service;
 #[path = "session.rs"]
 mod auth_session;
+#[path = "turnstile.rs"]
+mod auth_turnstile;
+#[path = "welcome_email.rs"]
+mod auth_welcome_email;
 
 use crate::api::auth_or_respond;
+use crate::api::ip_rate_limit::{enforce_ip_rate_limit, IpRateLimitAction};
 
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
 use self::auth_service::{
@@ -17,6 +22,8 @@ use self::auth_service::{
     reset_password_inner, send_otp_email, sign_in_success_or_unauthorized, verify_otp_inner,
     OTP_RESEND_COOLDOWN_SECS,
 };
+use self::auth_turnstile::verify_turnstile;
+use self::auth_welcome_email::send_welcome_email;
 type Result<T> = crate::error::AppResult<T>;
 
 use crate::app::AppContext;
@@ -44,22 +51,80 @@ pub(super) use auth_account::{change_password, delete_account, export_data};
 pub(super) use auth_email_change::{confirm_email_change, request_email_change};
 pub(super) use auth_session::get_session;
 
+/// Source-tag value the landing-page pre-launch form sends. Used to
+/// branch on the IP-rate-limit + Turnstile + `pre_launch_signed_up_at`
+/// behaviour. Mobile clients send `source = None`.
+const EARLY_ACCESS_SOURCE: &str = "landing_early_access";
+
 pub(super) async fn sign_up(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
     Json(payload): Json<SignUpBody>,
 ) -> Result<Response> {
     let normalized_email = normalize_email(&payload.email);
+    let is_early_access = payload.source.as_deref() == Some(EARLY_ACCESS_SOURCE);
+
+    // Per-email throttle covers both flows. The IP-keyed throttle below
+    // is the additional defence specifically for the public landing.
     if let Err(response) =
         enforce_rate_limit(&headers, AuthRateLimitAction::SignUp, &normalized_email).await
     {
         return Ok(*response);
     }
 
+    if is_early_access {
+        if let Err(response) =
+            enforce_ip_rate_limit(&headers, IpRateLimitAction::EarlyAccessSignUp).await
+        {
+            return Ok(*response);
+        }
+
+        let token = payload.turnstile_token.as_deref().unwrap_or("");
+        if let Err(reason) = verify_turnstile(token, None).await {
+            tracing::warn!(reason = %reason, "early-access turnstile verification failed");
+            return Ok(error_response(
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                &headers,
+                ErrorSpec {
+                    error: "Captcha verification failed".to_string(),
+                    code: "CAPTCHA_FAILED",
+                    details: None,
+                },
+            ));
+        }
+
+        if !is_valid_platform_pref(payload.platform_pref.as_deref()) {
+            return Ok(error_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                &headers,
+                ErrorSpec {
+                    error: "Invalid platform preference".to_string(),
+                    code: "VALIDATION_ERROR",
+                    details: None,
+                },
+            ));
+        }
+    }
+
     let user = match create_user_or_error(&headers, &payload).await {
         Ok(user) => user,
         Err(response) => return Ok(response),
     };
+
+    if is_early_access {
+        // Best-effort stamp. Logged-and-ignored on failure so a stuck
+        // metadata write doesn't block the OTP-send path — the user can
+        // still complete onboarding; the next admin sync can backfill.
+        if let Err(error) = crate::db::set_pre_launch_signup_metadata(
+            user.pid,
+            payload.platform_pref.as_deref(),
+            Some(EARLY_ACCESS_SOURCE),
+        )
+        .await
+        {
+            tracing::error!(%error, "failed to stamp pre-launch signup metadata");
+        }
+    }
 
     // Generate and send OTP for email verification
     {
@@ -74,6 +139,10 @@ pub(super) async fn sign_up(
         "user": auth_user_row_to_view(&user),
     });
     Ok((axum::http::StatusCode::OK, Json(DataResponse { data })).into_response())
+}
+
+fn is_valid_platform_pref(value: Option<&str>) -> bool {
+    matches!(value, None | Some("android" | "ios" | "either"))
 }
 
 fn is_invalid_credentials(email: &str, password: &str) -> bool {
@@ -271,6 +340,38 @@ pub(super) async fn reset_password(
 
 pub(super) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {
     send_otp_email(to, code).await
+}
+
+/// Worker entrypoint for the welcome-email outbox topic.
+///
+/// The claim step both authorises the send (must be a pre-launch user,
+/// must not already have `welcome_email_sent_at`) and reserves it
+/// atomically, so a retry that lands after a successful delivery
+/// becomes a no-op instead of a second send.
+#[allow(dead_code)] // worker integration lands in a sibling branch
+pub(super) async fn deliver_welcome_email_job(user_id: i32) -> std::result::Result<(), String> {
+    let claim = crate::db::claim_welcome_email_send(user_id).await?;
+    let Some(claim) = claim else {
+        tracing::debug!(
+            user_id,
+            "welcome email claim returned no row; nothing to send"
+        );
+        return Ok(());
+    };
+
+    match send_welcome_email(&claim.email, &claim.name).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // We've already stamped welcome_email_sent_at via the claim. A
+            // delivery failure here means we won't retry the inbox send,
+            // which is intentional: the welcome email is best-effort, and
+            // retrying after a hard Resend failure (bad address, suppression
+            // list) just produces log noise. The user still has a working
+            // account.
+            tracing::warn!(user_id, error = %e, "welcome email delivery failed after claim");
+            Err(e)
+        }
+    }
 }
 
 pub(super) async fn sign_out(

@@ -18,6 +18,7 @@ pub struct Profile {
     pub gradient_end: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_pre_launch: bool,
 }
 
 #[derive(Debug, Insertable)]
@@ -34,6 +35,7 @@ pub struct NewProfile {
     pub gradient_end: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_pre_launch: bool,
 }
 
 #[derive(Debug, AsChangeset, Default)]

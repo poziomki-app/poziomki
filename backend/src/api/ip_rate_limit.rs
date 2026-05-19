@@ -42,6 +42,11 @@ const UPLOAD_WRITE_MAX_PER_MIN: u32 = 30;
 // surfaces are single-operator, low-frequency by design.
 const ADMIN_AUTH_MAX_PER_MIN: u32 = 10;
 const OPS_AUTH_MAX_PER_MIN: u32 = 20;
+// Public-internet landing form. Lower cap because the auth/rate_limit
+// per-email key only catches naive bots — anything rotating email
+// addresses needs an IP-keyed throttle here as the second line of
+// defence (Turnstile is the first).
+const EARLY_ACCESS_SIGN_UP_MAX_PER_MIN: u32 = 5;
 
 /// Bucket name used when no trustworthy client IP can be parsed from the
 /// proxy headers. A shared bucket still caps the endpoint, so missing
@@ -56,6 +61,7 @@ pub enum IpRateLimitAction {
     UploadWrite,
     AdminAuth,
     OpsAuth,
+    EarlyAccessSignUp,
 }
 
 impl IpRateLimitAction {
@@ -67,6 +73,7 @@ impl IpRateLimitAction {
             Self::UploadWrite => UPLOAD_WRITE_MAX_PER_MIN,
             Self::AdminAuth => ADMIN_AUTH_MAX_PER_MIN,
             Self::OpsAuth => OPS_AUTH_MAX_PER_MIN,
+            Self::EarlyAccessSignUp => EARLY_ACCESS_SIGN_UP_MAX_PER_MIN,
         }
     }
 
@@ -78,6 +85,7 @@ impl IpRateLimitAction {
             Self::UploadWrite => "ip_upload_write",
             Self::AdminAuth => "ip_admin_auth",
             Self::OpsAuth => "ip_ops_auth",
+            Self::EarlyAccessSignUp => "ip_early_access_sign_up",
         }
     }
 }

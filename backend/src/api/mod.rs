@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
@@ -85,6 +86,10 @@ fn profiles_routes() -> Router<AppContext> {
     // me" flags). Default to no-store to keep that data off shared caches.
     Router::new()
         .route("/me", get(profiles::profile_me))
+        .route(
+            "/me/finalize-pre-launch",
+            post(profiles::profile_finalize_pre_launch),
+        )
         .route("/bookmarked", get(profiles::profiles_bookmarked_handler))
         .route("/", post(profiles::profile_create))
         .route("/{id}", get(profiles::profile_get))
@@ -288,6 +293,38 @@ async fn observe_http_metrics(
     response
 }
 
+/// CORS for the cross-origin landing (poziomki.app → api.poziomki.app).
+/// Mobile clients share the API origin and don't need this.
+/// `CORS_EXTRA_ORIGINS` (comma-separated) extends the allowlist for dev/staging.
+fn landing_cors_layer() -> CorsLayer {
+    use axum::http::{header, HeaderValue, Method};
+
+    let mut origins: Vec<HeaderValue> = ["https://poziomki.app", "https://www.poziomki.app"]
+        .into_iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
+
+    if let Ok(extra) = std::env::var("CORS_EXTRA_ORIGINS") {
+        for o in extra.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            if let Ok(value) = HeaderValue::from_str(o) {
+                origins.push(value);
+            }
+        }
+    }
+
+    CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .max_age(std::time::Duration::from_secs(86400))
+}
+
 pub fn router() -> Router<AppContext> {
     Router::new()
         .route("/health", get(root::health))
@@ -308,6 +345,7 @@ pub fn router() -> Router<AppContext> {
         .nest("/api/v1/admin", admin_routes())
         .nest("/api/v1/dev", dev_routes())
         .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
+        .layer(landing_cors_layer())
         .layer(middleware::from_fn(observe_http_metrics))
         .layer(
             TraceLayer::new_for_http()
@@ -336,6 +374,11 @@ pub fn router() -> Router<AppContext> {
                 })
                 .on_response(StatusAwareOnResponse),
         )
+}
+
+#[allow(dead_code)] // worker integration lands in a sibling branch
+pub(crate) async fn deliver_welcome_email_job(user_id: i32) -> std::result::Result<(), String> {
+    auth::deliver_welcome_email_job(user_id).await
 }
 
 pub(crate) async fn deliver_otp_email_job(to: &str, code: &str) -> std::result::Result<(), String> {

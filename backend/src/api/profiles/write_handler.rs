@@ -36,6 +36,7 @@ fn build_create_model(
     user: &crate::db::models::users::User,
     payload: &CreateProfileBody,
     profile_picture: Option<String>,
+    is_pre_launch: bool,
 ) -> (NewProfile, Uuid) {
     let now = Utc::now();
     let profile_id = Uuid::new_v4();
@@ -55,8 +56,31 @@ fn build_create_model(
         gradient_end: payload.gradient_end.clone(),
         created_at: now,
         updated_at: now,
+        is_pre_launch,
     };
     (model, profile_id)
+}
+
+/// Returns true when the user signed up via the landing page (and so
+/// the profile they're creating is part of the pre-launch cohort that
+/// should stay hidden from mobile-app reads until they finalize).
+async fn user_is_pre_launch(
+    conn: &mut AsyncPgConnection,
+    user_id: i32,
+) -> std::result::Result<bool, diesel::result::Error> {
+    use diesel::sql_types::{BigInt, Bool};
+    #[derive(diesel::deserialize::QueryableByName)]
+    struct Row {
+        #[diesel(sql_type = Bool)]
+        v: bool,
+    }
+    let row: Row = diesel::sql_query(
+        "SELECT (pre_launch_signed_up_at IS NOT NULL) AS v FROM public.users WHERE id = $1",
+    )
+    .bind::<BigInt, _>(i64::from(user_id))
+    .get_result(conn)
+    .await?;
+    Ok(row.v)
 }
 
 async fn insert_profile(
@@ -133,7 +157,11 @@ pub(in crate::api) async fn profile_create(
                 Err(response) => return Ok(*response),
             };
 
-            let (new_profile, profile_id) = build_create_model(&user, &payload_clone, picture);
+            let is_pre_launch = user_is_pre_launch(conn, user.id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            let (new_profile, profile_id) =
+                build_create_model(&user, &payload_clone, picture, is_pre_launch);
             let inserted = insert_profile(conn, &new_profile, profile_id, &payload_clone)
                 .await
                 .map_err(|_| diesel::result::Error::RollbackTransaction)?;

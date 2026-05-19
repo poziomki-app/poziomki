@@ -1,10 +1,19 @@
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::api) struct SignUpBody {
     pub(in crate::api) email: String,
     pub(in crate::api) name: String,
     pub(in crate::api) password: String,
+    // Optional fields below are populated only by the landing-page
+    // pre-launch flow. Mobile clients omit them.
+    #[serde(default)]
+    pub(in crate::api) platform_pref: Option<String>,
+    #[serde(default)]
+    pub(in crate::api) source: Option<String>,
+    #[serde(default)]
+    pub(in crate::api) turnstile_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -235,6 +235,7 @@ diesel::table! {
         gradient_end -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        is_pre_launch -> Bool,
     }
 }
 

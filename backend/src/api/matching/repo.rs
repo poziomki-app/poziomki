@@ -208,6 +208,10 @@ impl MatchingRepository {
                     .or(user_settings::privacy_discoverable.is_null()),
             )
             .filter(profiles::id.ne_all(&blocked_profile_ids))
+            // Pre-launch (landing-signup) profiles stay hidden from the
+            // mobile app until the owner finishes mobile onboarding,
+            // which clears the flag via finalize_pre_launch_profile.
+            .filter(profiles::is_pre_launch.eq(false))
             .order(profiles::created_at.desc())
             .limit(limit)
             .select(profiles::all_columns)
