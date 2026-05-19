@@ -92,6 +92,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
+import com.poziomki.app.ui.feature.event.JoinPillButton
 import com.poziomki.app.ui.shared.rememberSingleImagePicker
 import com.poziomki.app.ui.shared.resolveImageUrl
 import org.koin.compose.viewmodel.koinViewModel
@@ -330,14 +331,17 @@ fun ProfileEditScreen(
 
                 Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-                // Save button
-                AppButton(
-                    text = "zapisz",
-                    onClick = { viewModel.save(onBack) },
-                    variant = ButtonVariant.PRIMARY,
-                    loading = state.isSaving,
+                // Save button — small pill, right-aligned to match dołącz style.
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                )
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    JoinPillButton(
+                        text = "zapisz",
+                        onClick = { viewModel.save(onBack) },
+                        loading = state.isSaving,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(navBarBottom + PoziomkiTheme.spacing.xl))
             }
@@ -798,13 +802,17 @@ private object BioImageVisualTransformation : VisualTransformation {
     }
 }
 
+@Suppress("LongParameterList", "LongMethod")
 @Composable
-private fun BioEditorDialog(
+internal fun BioEditorDialog(
     bio: String,
     isBioImageUploading: Boolean,
     onBioChange: (String) -> Unit,
     onAddImage: () -> Unit,
     onDismiss: () -> Unit,
+    title: String = "bio",
+    maxChars: Int = 1500,
+    allowImages: Boolean = true,
 ) {
     val nunito = NunitoFamily
     val focusRequester = remember { FocusRequester() }
@@ -830,7 +838,7 @@ private fun BioEditorDialog(
                 // Top bar
                 Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
                 ScreenHeader(
-                    title = "bio",
+                    title = title,
                     onBack = onDismiss,
                 )
 
@@ -934,22 +942,24 @@ private fun BioEditorDialog(
                             .padding(horizontal = PoziomkiTheme.spacing.md, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (isBioImageUploading) {
-                        CircularProgressIndicator(
-                            color = Primary,
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            PhosphorIcons.Bold.Image,
-                            contentDescription = "Dodaj zdjęcie",
-                            tint = TextMuted,
-                            modifier =
-                                Modifier
-                                    .size(20.dp)
-                                    .clickable(onClick = onAddImage),
-                        )
+                    if (allowImages) {
+                        if (isBioImageUploading) {
+                            CircularProgressIndicator(
+                                color = Primary,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                PhosphorIcons.Bold.Image,
+                                contentDescription = "Dodaj zdjęcie",
+                                tint = TextMuted,
+                                modifier =
+                                    Modifier
+                                        .size(20.dp)
+                                        .clickable(onClick = onAddImage),
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.weight(1f))
                     val visibleLength =
@@ -957,22 +967,21 @@ private fun BioEditorDialog(
                             bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
                         }
                     Text(
-                        text = "$visibleLength/1500",
+                        text = "$visibleLength/$maxChars",
                         fontFamily = nunito,
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
                         color =
-                            if (visibleLength > 1400) {
+                            if (visibleLength > maxChars - 100) {
                                 com.poziomki.app.ui.designsystem.theme.Error
                             } else {
                                 TextMuted
                             },
                     )
-                    AppButton(
+                    Spacer(modifier = Modifier.width(12.dp))
+                    JoinPillButton(
                         text = "zapisz",
                         onClick = onDismiss,
-                        variant = ButtonVariant.PRIMARY,
-                        modifier = Modifier.padding(start = 12.dp),
                     )
                 }
             }
