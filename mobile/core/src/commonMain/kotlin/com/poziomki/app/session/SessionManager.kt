@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.poziomki.app.cache.ImageCacheCleaner
+import com.poziomki.app.observability.CrashReporter
+import com.poziomki.app.observability.NoopCrashReporter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -21,6 +23,7 @@ class SessionManager(
     private val dataStore: DataStore<Preferences>,
     private val tokenStore: SessionTokenStore,
     private val imageCacheCleaner: ImageCacheCleaner,
+    private val crashReporter: CrashReporter = NoopCrashReporter,
 ) {
     private companion object {
         val USER_ID = stringPreferencesKey("user_id")
@@ -85,6 +88,7 @@ class SessionManager(
             prefs[USER_EMAIL] = email
             prefs[USER_NAME] = name
         }
+        crashReporter.setUserId(userId)
     }
 
     val email: Flow<String?> =
@@ -165,5 +169,6 @@ class SessionManager(
         }
         tokenStore.clearToken()
         runCatching { imageCacheCleaner.clear() }
+        crashReporter.setUserId(null)
     }
 }

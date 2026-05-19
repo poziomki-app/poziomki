@@ -12,6 +12,8 @@ import com.poziomki.app.connectivity.AndroidConnectivityMonitor
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.location.LocationProvider
+import com.poziomki.app.observability.CrashReporter
+import com.poziomki.app.observability.FirebaseCrashReporter
 import com.poziomki.app.session.AndroidSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStore
@@ -127,4 +129,5 @@ actual fun platformModule(): Module =
         single { LocationProvider(get<Context>()) }
         single { NotificationHelper(get<Context>()) }
         single { PushManager(get(), get()) }
+        single<CrashReporter> { FirebaseCrashReporter() }
     }
