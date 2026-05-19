@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::db::schema::user_feedback;
 
-#[derive(Debug, Insertable)]
+#[derive(Debug, Clone, Insertable)]
 #[diesel(table_name = user_feedback)]
 pub struct NewUserFeedback {
     pub id: Uuid,

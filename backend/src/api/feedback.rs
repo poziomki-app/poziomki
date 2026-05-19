@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use chrono::Utc;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -16,6 +17,7 @@ use uuid::Uuid;
 use super::state::DataResponse;
 use crate::api::common::{auth_or_respond, error_response, ErrorSpec};
 use crate::app::AppContext;
+use crate::db;
 use crate::db::models::user_feedback::NewUserFeedback;
 use crate::db::schema::user_feedback;
 
@@ -92,11 +94,26 @@ pub(super) async fn create(
         feature_request: feature_request.clone(),
     };
 
-    let mut conn = crate::db::conn().await?;
-    diesel::insert_into(user_feedback::table)
-        .values(&row)
-        .execute(&mut conn)
-        .await?;
+    // user_feedback is RLS-gated by user_id = app.current_user_id(). The
+    // viewer-context wrapper sets that for the duration of the tx; a
+    // plain db::conn() insert has no viewer and hits a WITH CHECK
+    // violation (the bug that was masking submissions before).
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let insert_row = row.clone();
+    db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            diesel::insert_into(user_feedback::table)
+                .values(&insert_row)
+                .execute(conn)
+                .await?;
+            Ok::<_, diesel::result::Error>(())
+        }
+        .scope_boxed()
+    })
+    .await?;
 
     // Notify the operator inbox in the background. Failure to send mail
     // must never make the user think their submission was lost — they
