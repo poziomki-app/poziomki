@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   comment:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Only run for PRs that built successfully. Fork PRs and in-repo PRs
     # both satisfy this: event=pull_request is recorded in workflow_run.
     if: >
