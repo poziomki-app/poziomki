@@ -19,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.poziomki.app.chat.push.NotificationChatTarget
+import com.poziomki.app.chat.push.NotificationDeepLinkTarget
 import com.poziomki.app.chat.push.NotificationHelper
 import com.poziomki.app.chat.push.PushManager
 import com.poziomki.app.session.AppPreferences
@@ -120,6 +121,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         NotificationChatTarget.open(intent?.getStringExtra(NotificationChatTarget.EXTRA_OPEN_CHAT_ROOM_ID))
+        NotificationDeepLinkTarget.open(intent?.getStringExtra(NotificationDeepLinkTarget.EXTRA_OPEN_DEEP_LINK))
     }
 
     // On API 33+, POST_NOTIFICATIONS defaults to denied — without this prompt,

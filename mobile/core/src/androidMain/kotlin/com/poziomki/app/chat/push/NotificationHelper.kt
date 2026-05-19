@@ -136,6 +136,39 @@ class NotificationHelper(
     }
 
     /**
+     * Show a broadcast (admin announcement) notification. Unlike chat
+     * pushes, broadcasts carry visible title + body directly in the
+     * payload and bypass per-conversation grouping. Tapping launches
+     * the app, with the optional deep link forwarded so the nav layer
+     * can route to a specific destination.
+     */
+    fun showBroadcastNotification(
+        title: String,
+        body: String,
+        deepLink: String?,
+        timestampMs: Long? = null,
+    ) {
+        val notificationTime = timestampMs ?: System.currentTimeMillis()
+        val builder =
+            Notification
+                .Builder(context, CHANNEL_MESSAGES)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setSmallIcon(smallIconRes)
+                .setColor(accentColor)
+                .setAutoCancel(true)
+                .setWhen(notificationTime)
+                .setShowWhen(true)
+
+        deepLink
+            ?.let(::buildDeepLinkPendingIntent)
+            ?.let(builder::setContentIntent)
+
+        notificationManager.notify(notificationIdCounter.getAndIncrement(), builder.build())
+    }
+
+    /**
      * Builds an EXPLICIT PendingIntent that opens the launcher activity.
      *
      * Returns null if — for any reason — the package manager cannot resolve our own
@@ -151,6 +184,25 @@ class NotificationHelper(
         return PendingIntent.getActivity(
             context,
             roomId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /**
+     * EXPLICIT PendingIntent that opens the launcher activity and
+     * forwards an arbitrary deep-link string. The nav graph reads it
+     * via [NotificationDeepLinkTarget] and routes based on URL shape.
+     */
+    private fun buildDeepLinkPendingIntent(deepLink: String): PendingIntent? {
+        val intent =
+            context.packageManager.getLaunchIntentForPackage(context.packageName)
+                ?: return null
+        intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.putExtra(NotificationDeepLinkTarget.EXTRA_OPEN_DEEP_LINK, deepLink)
+        return PendingIntent.getActivity(
+            context,
+            deepLink.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

@@ -42,6 +42,14 @@ pub(super) struct BanBody {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub(super) struct BroadcastBody {
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub deep_link: Option<String>,
+}
+
 fn admin_auth(headers: &HeaderMap) -> Result<(), Box<Response>> {
     let Some(expected) = std::env::var("ADMIN_TOKEN")
         .ok()
@@ -164,6 +172,64 @@ pub(super) async fn ban_user(
     (
         StatusCode::OK,
         Json(serde_json::json!({ "banned_at": now })),
+    )
+        .into_response()
+}
+
+/// Fan-out broadcast push to every registered device. Bypasses
+/// per-user notification preferences — operators use this for
+/// announcements, outages, etc., not for normal product traffic.
+pub(super) async fn broadcast_push(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Json(body): Json<BroadcastBody>,
+) -> Response {
+    if let Err(resp) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::AdminAuth,
+    )
+    .await
+    {
+        return *resp;
+    }
+    if let Err(resp) = admin_auth(&headers) {
+        return *resp;
+    }
+
+    let title = body.title.trim();
+    let body_text = body.body.trim();
+    if title.is_empty() || body_text.is_empty() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            &headers,
+            ErrorSpec {
+                error: "title and body are required".to_string(),
+                code: "BAD_REQUEST",
+                details: None,
+            },
+        );
+    }
+
+    let (delivered, rejected) = crate::push::fcm::send_broadcast(
+        title.to_string(),
+        body_text.to_string(),
+        body.deep_link.clone().filter(|s| !s.trim().is_empty()),
+    )
+    .await;
+
+    tracing::info!(
+        delivered,
+        rejected,
+        deep_link = ?body.deep_link.as_deref(),
+        "fcm_broadcast_sent"
+    );
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "delivered": delivered,
+            "rejected": rejected,
+        })),
     )
         .into_response()
 }

@@ -472,6 +472,16 @@ pub async fn push_tokens_for_users(
     Ok(rows)
 }
 
+/// Return every registered FCM token + platform. Admin broadcast path
+/// only — bypasses per-user notification preferences.
+pub async fn all_push_tokens(
+    conn: &mut AsyncPgConnection,
+) -> Result<Vec<PushTokenRow>, diesel::result::Error> {
+    diesel::sql_query("SELECT * FROM app.all_push_tokens()")
+        .load::<PushTokenRow>(conn)
+        .await
+}
+
 #[derive(Debug, Clone, QueryableByName)]
 struct UserIdRow {
     #[diesel(sql_type = Integer)]
