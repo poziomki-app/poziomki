@@ -33,7 +33,7 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.jetbrains.compose.resources.painterResource
 import poziomki_mobile.app_ui.generated.resources.Res
-import poziomki_mobile.app_ui.generated.resources.doodle_chilling
+import poziomki_mobile.app_ui.generated.resources.doodle_dancing
 
 @Composable
 fun WelcomeDialog(onDismiss: () -> Unit) {
@@ -88,7 +88,7 @@ private fun WelcomeHero() {
             .background(heroBrush)
     Box(modifier = heroModifier, contentAlignment = Alignment.Center) {
         Image(
-            painter = painterResource(Res.drawable.doodle_chilling),
+            painter = painterResource(Res.drawable.doodle_dancing),
             contentDescription = null,
             modifier = Modifier.size(140.dp),
         )
