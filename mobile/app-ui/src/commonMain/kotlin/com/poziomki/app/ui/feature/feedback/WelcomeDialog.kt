@@ -2,6 +2,8 @@ package com.poziomki.app.ui.feature.feedback
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,13 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.poziomki.app.ui.designsystem.Text
-import com.poziomki.app.ui.designsystem.components.AppButton
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -59,7 +60,7 @@ private fun WelcomeBody(onDismiss: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "studencka apka eventów. to wciąż wczesna wersja, więc coś może działać dziwnie.",
+            text = "studencka apka eventów - to wciąż wczesna wersja, więc coś może działać dziwnie.",
             fontFamily = NunitoFamily,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -72,7 +73,36 @@ private fun WelcomeBody(onDismiss: () -> Unit) {
         Spacer(modifier = Modifier.height(6.dp))
         WelcomeBullet("napisz co działa, a co nie, w „zostaw opinię”.")
         Spacer(modifier = Modifier.height(24.dp))
-        AppButton(text = "zaczynamy", onClick = onDismiss, variant = ButtonVariant.PRIMARY)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            WelcomePillButton(text = "zaczynamy", onClick = onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun WelcomePillButton(
+    text: String,
+    onClick: () -> Unit,
+) {
+    val fill = Color(0xFFF2F4F7)
+    val contentColor = Color(0xFF0B0F14)
+    val rowModifier =
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(fill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 10.dp)
+    Row(
+        modifier = rowModifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            fontFamily = NunitoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            color = contentColor,
+        )
     }
 }
 
