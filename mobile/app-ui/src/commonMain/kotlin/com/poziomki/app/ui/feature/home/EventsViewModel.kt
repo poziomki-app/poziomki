@@ -62,9 +62,13 @@ class EventsViewModel(
                         _state.value = _state.value.copy(isLoading = false)
                     }
                 } else {
+                    val byId = events.associateBy { it.id }
+                    val syncedRecommended =
+                        _state.value.recommendedEvents.mapNotNull { byId[it.id] }
                     _state.value =
                         _state.value.copy(
                             allEvents = events,
+                            recommendedEvents = syncedRecommended,
                             isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
                         )
                     filterEvents()
