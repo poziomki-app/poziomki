@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,6 +81,7 @@ import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.designsystem.theme.White
+import com.poziomki.app.ui.feature.profile.BioEditorDialog
 import com.poziomki.app.ui.shared.POLISH_MONTHS_GENITIVE
 import com.poziomki.app.ui.shared.decodeImageBytes
 import com.poziomki.app.ui.shared.formatPolishDateFromMillis
@@ -126,6 +128,7 @@ fun EventCreateScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
+    var showDescriptionEditor by remember { mutableStateOf(false) }
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
     var selectedHour by remember { mutableStateOf(18) }
     var selectedMinute by remember { mutableStateOf(0) }
@@ -450,16 +453,39 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-            // Description
+            // Description — same UX as bio editor (full-screen on tap, no images).
             SectionLabel("opis")
-            PoziomkiTextField(
-                value = state.description,
-                onValueChange = viewModel::updateDescription,
-                placeholder = "co, dla kogo, jak się przygotować",
-                singleLine = false,
-                maxLines = 5,
-                minLines = 3,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .background(SurfaceColor, RoundedCornerShape(PoziomkiTheme.radius.md))
+                        .border(1.dp, Border, RoundedCornerShape(PoziomkiTheme.radius.md))
+                        .clip(RoundedCornerShape(PoziomkiTheme.radius.md))
+                        .clickable { showDescriptionEditor = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                if (state.description.isBlank()) {
+                    Text(
+                        text = "co, dla kogo, jak się przygotować",
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 16.sp,
+                        color = TextMuted,
+                    )
+                } else {
+                    Text(
+                        text = state.description,
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 16.sp,
+                        color = TextPrimary,
+                        maxLines = 4,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
@@ -711,6 +737,20 @@ fun EventCreateScreen(
                 },
             )
         }
+    }
+
+    // Description editor — reuses the bio editor full-screen, no image inserts.
+    if (showDescriptionEditor) {
+        BioEditorDialog(
+            bio = state.description,
+            isBioImageUploading = false,
+            onBioChange = viewModel::updateDescription,
+            onAddImage = {},
+            onDismiss = { showDescriptionEditor = false },
+            title = "opis",
+            maxChars = 4000,
+            allowImages = false,
+        )
     }
 
     // Location Picker Sheet

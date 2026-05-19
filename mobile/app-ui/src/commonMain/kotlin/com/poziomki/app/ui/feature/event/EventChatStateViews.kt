@@ -325,7 +325,7 @@ private fun AttendeesCluster(
 }
 
 @Composable
-private fun JoinPillButton(
+internal fun JoinPillButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
