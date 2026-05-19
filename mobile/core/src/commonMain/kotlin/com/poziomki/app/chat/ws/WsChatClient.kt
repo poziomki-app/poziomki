@@ -143,14 +143,15 @@ class WsChatClient(
         if (idx >= 0) {
             val isMine = msg.senderId.toString() == wsConnection.userId.value
             val isFocusedRoom = msg.conversationId == activeRoomId
+            val existing = current[idx]
             val nextUnread =
                 if (isMine || isFocusedRoom) {
-                    current[idx].unreadCount
+                    existing.unreadCount
                 } else {
-                    current[idx].unreadCount + 1
+                    existing.unreadCount + 1
                 }
-            current[idx] =
-                current[idx].copy(
+            val updated =
+                existing.copy(
                     latestMessage = msg.body,
                     latestTimestampMillis = parseTimestamp(msg.createdAt),
                     latestMessageIsMine = isMine,
@@ -165,6 +166,8 @@ class WsChatClient(
                     latestModerationVerdict = if (isMine) null else msg.moderationVerdict,
                     latestModerationCategories = if (isMine) emptyList() else msg.moderationCategories,
                 )
+            if (updated == existing) return
+            current[idx] = updated
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
         } else {
@@ -181,7 +184,7 @@ class WsChatClient(
     private fun clearRoomUnreadCount(roomId: String) {
         val current = _rooms.value.toMutableList()
         val idx = current.indexOfFirst { it.roomId == roomId }
-        if (idx >= 0) {
+        if (idx >= 0 && current[idx].unreadCount != 0) {
             current[idx] = current[idx].copy(unreadCount = 0)
             _rooms.value = current
         }

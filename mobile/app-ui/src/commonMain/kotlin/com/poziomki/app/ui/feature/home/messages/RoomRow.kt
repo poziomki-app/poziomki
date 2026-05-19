@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -89,8 +90,9 @@ fun RoomRow(
                 )
                 room.latestTimestampMillis?.let {
                     Spacer(modifier = Modifier.width(8.dp))
+                    val formatted = remember(it) { formatRoomTimestamp(it) }
                     Text(
-                        text = formatRoomTimestamp(it),
+                        text = formatted,
                         style = MaterialTheme.typography.labelSmall,
                         color = if (room.unreadCount > 0) Primary else TextSecondary,
                     )
