@@ -115,6 +115,7 @@ services:
       IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     healthcheck:
       test: ["CMD", "/usr/local/bin/poziomki_backend-cli", "healthcheck"]
       interval: 10s
@@ -179,6 +180,7 @@ services:
       IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
       IMGPROXY_BASE_URL: ${IMGPROXY_BASE_URL:-}
       IMGPROXY_URL_EXPIRY_SECS: ${IMGPROXY_URL_EXPIRY_SECS:-120}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
       - ./ops/dkim/private.key:/etc/dkim/private.key:ro
     healthcheck:
