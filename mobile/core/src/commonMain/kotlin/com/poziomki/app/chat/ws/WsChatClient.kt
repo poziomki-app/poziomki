@@ -6,6 +6,7 @@ import com.poziomki.app.chat.api.EventSendStatus
 import com.poziomki.app.chat.api.JoinedRoom
 import com.poziomki.app.chat.api.RoomSummary
 import com.poziomki.app.chat.api.RoomTimelineCacheSnapshot
+import com.poziomki.app.chat.cache.RoomPreviewStore
 import com.poziomki.app.chat.cache.RoomTimelineCacheStore
 import com.poziomki.app.network.ApiResult
 import com.poziomki.app.network.ApiService
@@ -29,6 +30,7 @@ class WsChatClient(
     private val sessionManager: SessionManager,
     private val wsConnection: WsConnection,
     private val roomTimelineCacheStore: RoomTimelineCacheStore,
+    private val roomPreviewStore: RoomPreviewStore,
 ) : ChatClient {
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.Default)
@@ -36,7 +38,9 @@ class WsChatClient(
     private val _state = MutableStateFlow<ChatClientState>(ChatClientState.Idle)
     override val state: StateFlow<ChatClientState> = _state
 
-    private val _rooms = MutableStateFlow<List<RoomSummary>>(emptyList())
+    // Hydrate from disk so MessagesViewModel sees cached rooms on cold launch
+    // and avoids the "isLoading && rooms.isEmpty()" spinner branch.
+    private val _rooms = MutableStateFlow<List<RoomSummary>>(roomPreviewStore.loadAll())
     override val rooms: StateFlow<List<RoomSummary>> = _rooms
 
     private val openedRoomsMutex = Mutex()
@@ -91,7 +95,9 @@ class WsChatClient(
         when (msg) {
             is WsServerMessage.Conversations -> {
                 latestConversations = msg.conversations
-                _rooms.value = msg.conversations.map { it.toRoomSummary() }
+                val summaries = msg.conversations.map { it.toRoomSummary() }
+                _rooms.value = summaries
+                roomPreviewStore.upsertAll(summaries)
             }
 
             is WsServerMessage.Message -> {
@@ -170,6 +176,7 @@ class WsChatClient(
             current[idx] = updated
             current.sortByDescending { it.latestTimestampMillis ?: 0L }
             _rooms.value = current
+            roomPreviewStore.upsert(updated)
         } else {
             // Unknown room — debounce a conversation list refresh
             refreshJob?.cancel()
@@ -187,6 +194,7 @@ class WsChatClient(
         if (idx >= 0 && current[idx].unreadCount != 0) {
             current[idx] = current[idx].copy(unreadCount = 0)
             _rooms.value = current
+            roomPreviewStore.updateUnreadCount(roomId, 0)
         }
     }
 
@@ -319,6 +327,7 @@ class WsChatClient(
             }
         }
         roomTimelineCacheStore.clear(roomId)
+        roomPreviewStore.delete(roomId)
     }
 
     override suspend fun stop() {
