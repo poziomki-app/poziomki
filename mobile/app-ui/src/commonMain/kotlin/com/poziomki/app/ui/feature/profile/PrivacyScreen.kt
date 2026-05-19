@@ -221,6 +221,7 @@ private fun PrivacyContent(
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
         Text(
             text = state.currentEmail.orEmpty(),
+            preserveCase = true,
             fontFamily = nunito,
             fontWeight = FontWeight.SemiBold,
             fontSize = 15.sp,

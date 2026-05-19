@@ -241,6 +241,7 @@ internal fun MessageEventRow(
                                             ) {
                                                 Text(
                                                     text = reaction.emoji,
+                                                    preserveCase = true,
                                                     style = MaterialTheme.typography.labelSmall,
                                                 )
                                                 if (reactionCount > 1) {
@@ -277,6 +278,7 @@ internal fun MessageEventRow(
                                     val senderNameColor = ChatNameColors[abs(event.senderId.hashCode()) % ChatNameColors.size]
                                     Text(
                                         text = event.senderDisplayName ?: event.senderId,
+                                        preserveCase = true,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = senderNameColor,
                                         maxLines = 1,
@@ -357,6 +359,7 @@ internal fun MessageEventRow(
                                                 ) {
                                                     Text(
                                                         text = reaction.emoji,
+                                                        preserveCase = true,
                                                         style = MaterialTheme.typography.labelSmall,
                                                     )
                                                     if (reactionCount > 1) {
@@ -403,6 +406,7 @@ private fun BubbleContent(
         }
         Text(
             text = event.body,
+            preserveCase = true,
             style = MaterialTheme.typography.bodyLarge,
             color = TextPrimary,
         )
@@ -575,6 +579,7 @@ private fun ReplyReference(
             Column {
                 Text(
                     text = reply.senderDisplayName ?: "wiadomość",
+                    preserveCase = true,
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                     maxLines = 1,
@@ -582,6 +587,7 @@ private fun ReplyReference(
                 )
                 Text(
                     text = reply.body ?: "odpowiedź",
+                    preserveCase = true,
                     style = MaterialTheme.typography.bodySmall,
                     color = TextPrimary,
                     maxLines = 1,

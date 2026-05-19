@@ -475,6 +475,7 @@ private fun MessageActionDialog(
                     listOf("❤️", "👍", "👎", "😂", "😮", "😢", "🔥", "🎉").forEach { emoji ->
                         Text(
                             text = emoji,
+                            preserveCase = true,
                             style = MaterialTheme.typography.headlineSmall,
                             modifier =
                                 Modifier
@@ -491,6 +492,7 @@ private fun MessageActionDialog(
                 ) {
                     Text(
                         text = event.body,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary,
                         maxLines = 3,
@@ -639,6 +641,7 @@ private fun ReactionBreakdownSheet(
 
                     Text(
                         text = name,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyLarge,
                         color = TextPrimary,
                         maxLines = 1,
@@ -648,6 +651,7 @@ private fun ReactionBreakdownSheet(
 
                     Text(
                         text = emoji,
+                        preserveCase = true,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -766,6 +770,7 @@ internal fun ComposerModeBanner(
                         )
                         Text(
                             text = mode.bodyPreview,
+                            preserveCase = true,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                             maxLines = 1,

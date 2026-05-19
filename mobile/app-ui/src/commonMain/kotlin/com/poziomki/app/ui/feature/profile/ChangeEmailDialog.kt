@@ -104,6 +104,7 @@ private fun EnterEmailStep(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = it,
+                        preserveCase = true,
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
@@ -170,6 +171,7 @@ private fun OtpStep(
                 )
                 Text(
                     text = newEmail,
+                    preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -185,6 +187,7 @@ private fun OtpStep(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = it,
+                        preserveCase = true,
                         fontFamily = NunitoFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,

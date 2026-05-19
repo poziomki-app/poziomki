@@ -136,6 +136,7 @@ private fun RecommendedPersonItem(
 
         Text(
             text = firstName,
+            preserveCase = true,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,

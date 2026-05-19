@@ -268,6 +268,7 @@ fun ProfileEditScreen(
                 ) {
                     Text(
                         text = state.program.ifEmpty { "Wybierz kierunek" },
+                        preserveCase = true,
                         fontFamily = nunito,
                         fontWeight = FontWeight.Normal,
                         fontSize = 16.sp,
@@ -1099,6 +1100,7 @@ private fun GradientPickerDialog(
                 Column {
                     Text(
                         text = name.ifBlank { "imię" },
+                        preserveCase = true,
                         fontFamily = montserrat,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 22.sp,
@@ -1117,6 +1119,7 @@ private fun GradientPickerDialog(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = bio,
+                            preserveCase = true,
                             fontFamily = nunito,
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,

@@ -397,6 +397,7 @@ private fun EventCard(
                     // Title
                     Text(
                         text = event.title,
+                        preserveCase = true,
                         style = MaterialTheme.typography.titleMedium,
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
@@ -431,6 +432,7 @@ private fun EventCard(
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = formatEventLocation(location),
+                                preserveCase = true,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 14.sp,
@@ -457,6 +459,7 @@ private fun EventCard(
                             }
                             Text(
                                 text = event.attendeeUsageLabel(),
+                                preserveCase = true,
                                 fontFamily = NunitoFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
@@ -532,6 +535,7 @@ private fun CategoryFloatingChip(
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = info.displayName,
+            preserveCase = true,
             fontFamily = NunitoFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,
@@ -689,6 +693,7 @@ private fun EventRowContent(
     Column(modifier = modifier) {
         Text(
             text = event.title,
+            preserveCase = true,
             fontFamily = MontserratFamily,
             fontWeight = FontWeight.ExtraBold,
             fontSize = 18.sp,
@@ -715,6 +720,7 @@ private fun EventRowContent(
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = formatEventLocation(location),
+                    preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 13.sp,

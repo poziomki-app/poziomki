@@ -39,6 +39,7 @@ fun rememberExternalLinkOpener(): (String) -> Unit {
             title = {
                 Text(
                     text = if (isMaps) "otworzyć w mapach?" else "otworzyć link zewnętrzny?",
+                    preserveCase = false,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -48,6 +49,7 @@ fun rememberExternalLinkOpener(): (String) -> Unit {
             text = {
                 Text(
                     text = humanReadable(url),
+                    preserveCase = true,
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Normal,
                     fontSize = 13.sp,
