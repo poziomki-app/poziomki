@@ -15,16 +15,24 @@
 --   3. relax `app.push_targets_filtered` to LEFT JOIN + COALESCE so push
 --      keeps working with sensible defaults even if (1)/(2) ever miss
 
+-- 0. Drop orphan column ------------------------------------------------
+-- `privacy_show_age` was removed from the mobile sqldelight schema
+-- (migration 9.sqm) and from schema.rs, but no backend migration ever
+-- dropped it from postgres. Prod still has it as NOT NULL with no
+-- default, which would silently break the trigger below. Drop it now
+-- so the canonical schema and prod converge.
+ALTER TABLE public.user_settings DROP COLUMN IF EXISTS privacy_show_age;
+
 -- 1. Backfill -----------------------------------------------------------
 -- Several user_settings columns are NOT NULL with no schema default
--- (theme/language/privacy_*/notifications_enabled), so we have to spell
+-- (theme/language/notifications_enabled/privacy_*), so we have to spell
 -- the defaults out here. These match the values the lazy PUT /settings
 -- handler creates (api/settings.rs).
 INSERT INTO public.user_settings (
     user_id, theme, language,
-    notifications_enabled, privacy_show_age, privacy_show_program, privacy_discoverable
+    notifications_enabled, privacy_show_program, privacy_discoverable
 )
-SELECT u.id, 'system', 'pl', TRUE, TRUE, TRUE, TRUE
+SELECT u.id, 'system', 'pl', TRUE, TRUE, TRUE
 FROM public.users u
 WHERE NOT EXISTS (
     SELECT 1 FROM public.user_settings s WHERE s.user_id = u.id
@@ -40,9 +48,9 @@ AS $$
 BEGIN
     INSERT INTO public.user_settings (
         user_id, theme, language,
-        notifications_enabled, privacy_show_age, privacy_show_program, privacy_discoverable
+        notifications_enabled, privacy_show_program, privacy_discoverable
     )
-    VALUES (NEW.id, 'system', 'pl', TRUE, TRUE, TRUE, TRUE)
+    VALUES (NEW.id, 'system', 'pl', TRUE, TRUE, TRUE)
     ON CONFLICT (user_id) DO NOTHING;
     RETURN NEW;
 END;
