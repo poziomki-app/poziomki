@@ -172,6 +172,7 @@ data class Event(
     val isSaved: Boolean = false,
     val isPending: Boolean = false,
     val requiresApproval: Boolean = false,
+    val isFeatured: Boolean = false,
     val creator: EventCreator? = null,
     val attendeesPreview: List<EventAttendeePreview> = emptyList(),
     val tags: List<Tag> = emptyList(),

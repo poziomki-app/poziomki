@@ -40,6 +40,8 @@ pub(in crate::api) struct EventResponse {
     pub(in crate::api) is_pending: bool,
     #[serde(rename = "requiresApproval")]
     pub(in crate::api) requires_approval: bool,
+    #[serde(rename = "isFeatured")]
+    pub(in crate::api) is_featured: bool,
     #[serde(rename = "conversationId")]
     pub(in crate::api) conversation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

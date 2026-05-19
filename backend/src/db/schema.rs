@@ -155,6 +155,7 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         requires_approval -> Bool,
+        is_featured -> Bool,
     }
 }
 

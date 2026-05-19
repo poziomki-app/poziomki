@@ -97,6 +97,7 @@ fn build_from_context(
         is_saved,
         is_pending,
         requires_approval: event.requires_approval,
+        is_featured: event.is_featured,
         conversation_id: event.conversation_id.clone(),
         score: None,
     }

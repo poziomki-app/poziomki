@@ -18,7 +18,9 @@ pub(in crate::api) async fn list_upcoming_events(
                 .and(events::starts_at.ge(now))
                 .or(events::ends_at.ge(now)),
         )
-        .order(events::starts_at.asc())
+        // Featured events float to the top; otherwise chronological by
+        // start time. Admin sets is_featured via POST /admin/events/{id}/feature.
+        .order((events::is_featured.desc(), events::starts_at.asc()))
         .limit(limit)
         .load::<Event>(conn)
         .await?;
