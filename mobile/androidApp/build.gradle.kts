@@ -94,7 +94,11 @@ android {
         baseline = file("lint-baseline.xml")
         // CI lint is one minor version ahead of local and flags 36 as
         // "old"; the release-please bot owns targetSdk bumps anyway.
+        // GradleDependency: CI hosts a newer Android SDK (37) than the
+        // pinned compileSdk (36) and lint treats that as an error.
+        // Same rationale as OldTargetApi — let the bot handle SDK bumps.
         disable += "OldTargetApi"
+        disable += "GradleDependency"
     }
 }
 
