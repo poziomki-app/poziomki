@@ -13,4 +13,5 @@ pub struct NewUserFeedback {
     pub message: Option<String>,
     pub app_version: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub feature_request: Option<String>,
 }

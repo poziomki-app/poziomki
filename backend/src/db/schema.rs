@@ -298,6 +298,7 @@ diesel::table! {
         message -> Nullable<Text>,
         app_version -> Nullable<Text>,
         created_at -> Timestamptz,
+        feature_request -> Nullable<Text>,
     }
 }
 

@@ -759,10 +759,12 @@ fun MainScreen(
         FeedbackDialog(
             rating = feedbackState.rating,
             message = feedbackState.message,
+            featureRequest = feedbackState.featureRequest,
             isSubmitting = feedbackState.isSubmitting,
             error = feedbackState.error,
             onRatingChange = { feedbackViewModel.setRating(it) },
             onMessageChange = { feedbackViewModel.setMessage(it) },
+            onFeatureRequestChange = { feedbackViewModel.setFeatureRequest(it) },
             onSubmit = { feedbackViewModel.submit(appVersion = null) },
             onDismiss = { feedbackViewModel.closeDialog() },
         )

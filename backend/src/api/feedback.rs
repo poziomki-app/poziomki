@@ -23,6 +23,7 @@ type Result<T> = crate::error::AppResult<T>;
 
 const MAX_MESSAGE_LEN: usize = 4000;
 const MAX_APP_VERSION_LEN: usize = 64;
+const FEEDBACK_NOTIFY_TO: &str = "kontakt@poziomki.app";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +33,8 @@ pub(in crate::api) struct CreateFeedbackBody {
     pub message: Option<String>,
     #[serde(default)]
     pub app_version: Option<String>,
+    #[serde(default)]
+    pub feature_request: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -72,13 +75,21 @@ pub(super) async fn create(
         .filter(|s| !s.is_empty())
         .map(|s| s.chars().take(MAX_APP_VERSION_LEN).collect::<String>());
 
+    let feature_request = body
+        .feature_request
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().take(MAX_MESSAGE_LEN).collect::<String>());
+
     let row = NewUserFeedback {
         id: Uuid::new_v4(),
         user_id: user.id,
         rating: body.rating,
-        message,
-        app_version,
+        message: message.clone(),
+        app_version: app_version.clone(),
         created_at: Utc::now(),
+        feature_request: feature_request.clone(),
     };
 
     let mut conn = crate::db::conn().await?;
@@ -87,8 +98,56 @@ pub(super) async fn create(
         .execute(&mut conn)
         .await?;
 
+    // Notify the operator inbox in the background. Failure to send mail
+    // must never make the user think their submission was lost — they
+    // already saw a 200. The body is anonymous: rating + free text only,
+    // no user id or email. Look up the row by id in the DB if needed.
+    let rating = body.rating;
+    let app_version_for_mail = app_version.clone();
+    tokio::spawn(async move {
+        if let Err(e) = send_feedback_email(
+            rating,
+            message.as_deref(),
+            feature_request.as_deref(),
+            app_version_for_mail.as_deref(),
+        )
+        .await
+        {
+            tracing::warn!(error = %e, "feedback notify email failed");
+        }
+    });
+
     Ok(Json(DataResponse {
         data: CreateFeedbackResponse { id: row.id },
     })
     .into_response())
+}
+
+/// Send the operator-facing feedback notification to kontakt@poziomki.app.
+/// Anonymous: just rating + free text + app version.
+async fn send_feedback_email(
+    rating: i16,
+    message: Option<&str>,
+    feature_request: Option<&str>,
+    app_version: Option<&str>,
+) -> std::result::Result<(), String> {
+    use std::fmt::Write;
+
+    let stars: String = (1..=5)
+        .map(|i| if i <= rating { '★' } else { '☆' })
+        .collect();
+    let subject = format!("Nowa opinia {stars} ({rating}/5)");
+
+    let mut body = String::new();
+    let _ = writeln!(body, "Ocena: {stars} ({rating}/5)");
+    if let Some(v) = app_version {
+        let _ = writeln!(body, "Wersja: {v}");
+    }
+    body.push_str("\nWiadomość:\n");
+    body.push_str(message.unwrap_or("(brak)"));
+    body.push_str("\n\nCo dodać do apki:\n");
+    body.push_str(feature_request.unwrap_or("(brak)"));
+    body.push('\n');
+
+    crate::api::auth::send_simple_mail(FEEDBACK_NOTIFY_TO, &subject, &body).await
 }

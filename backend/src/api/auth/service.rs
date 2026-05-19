@@ -1,6 +1,7 @@
 #[path = "otp_email.rs"]
 mod auth_otp_email;
 pub(super) use auth_otp_email::send_otp_email;
+pub(in crate::api) use auth_otp_email::send_simple_mail;
 
 use axum::response::Response;
 use axum::{http::HeaderMap, response::IntoResponse, Json};
