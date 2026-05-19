@@ -960,8 +960,8 @@ internal fun BioEditorDialog(
                                         .clickable(onClick = onAddImage),
                             )
                         }
+                        Spacer(modifier = Modifier.width(12.dp))
                     }
-                    Spacer(modifier = Modifier.weight(1f))
                     val visibleLength =
                         remember(bio) {
                             bio.replace(Regex("""!\[\]\([^)]*\)"""), "").length
@@ -978,7 +978,7 @@ internal fun BioEditorDialog(
                                 TextMuted
                             },
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.weight(1f))
                     JoinPillButton(
                         text = "zapisz",
                         onClick = onDismiss,
