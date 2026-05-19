@@ -1,5 +1,6 @@
 package com.poziomki.app.ui.feature.feedback
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,11 +9,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -56,7 +59,8 @@ fun FeedbackDialog(
             )
         },
         text = {
-            Column {
+            val scrollState = remember { ScrollState(0) }
+            Column(modifier = Modifier.verticalScroll(scrollState)) {
                 Text(
                     text = "Jak oceniasz aplikację?",
                     fontFamily = NunitoFamily,
