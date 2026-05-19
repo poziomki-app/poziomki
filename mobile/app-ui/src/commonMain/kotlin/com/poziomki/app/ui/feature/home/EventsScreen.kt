@@ -402,6 +402,16 @@ private fun EventCard(
                                 bottom = PoziomkiTheme.spacing.sm,
                             ),
                 ) {
+                    if (event.isFeatured) {
+                        Text(
+                            text = "wyróżnione",
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            color = Primary,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
                     // Title
                     Text(
                         text = event.title,

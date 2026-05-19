@@ -50,6 +50,11 @@ pub(super) struct BroadcastBody {
     pub deep_link: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub(super) struct FeatureEventBody {
+    pub is_featured: bool,
+}
+
 fn admin_auth(headers: &HeaderMap) -> Result<(), Box<Response>> {
     let Some(expected) = std::env::var("ADMIN_TOKEN")
         .ok()
@@ -232,4 +237,70 @@ pub(super) async fn broadcast_push(
         })),
     )
         .into_response()
+}
+
+/// Toggle an event's `is_featured` flag. The public event-create payload
+/// does NOT accept this — only operators can mark an event featured via
+/// this endpoint. Featured events sort to the top of the wydarzenia list
+/// and render with a "wyróżnione" badge.
+pub(super) async fn feature_event(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(event_id): Path<Uuid>,
+    Json(body): Json<FeatureEventBody>,
+) -> Response {
+    if let Err(resp) = crate::api::ip_rate_limit::enforce_ip_rate_limit(
+        &headers,
+        crate::api::ip_rate_limit::IpRateLimitAction::AdminAuth,
+    )
+    .await
+    {
+        return *resp;
+    }
+    if let Err(resp) = admin_auth(&headers) {
+        return *resp;
+    }
+
+    let Ok(mut conn) = crate::db::conn().await else {
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &headers,
+            ErrorSpec {
+                error: "DB unavailable".to_string(),
+                code: "INTERNAL_ERROR",
+                details: None,
+            },
+        );
+    };
+
+    // events is RLS-gated by the viewer policy; admin has no viewer
+    // context. Route through a narrow SECURITY DEFINER helper.
+    let rows = diesel::sql_query("SELECT app.admin_set_event_featured($1, $2) AS updated")
+        .bind::<SqlUuid, _>(event_id)
+        .bind::<diesel::sql_types::Bool, _>(body.is_featured)
+        .execute(&mut conn)
+        .await;
+
+    match rows {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "event_id": event_id,
+                "is_featured": body.is_featured,
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "admin feature_event failed");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &headers,
+                ErrorSpec {
+                    error: "feature toggle failed".to_string(),
+                    code: "INTERNAL_ERROR",
+                    details: None,
+                },
+            )
+        }
+    }
 }

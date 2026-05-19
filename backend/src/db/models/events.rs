@@ -23,6 +23,7 @@ pub struct Event {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub requires_approval: bool,
+    pub is_featured: bool,
 }
 
 #[derive(Debug, Insertable)]
@@ -62,4 +63,5 @@ pub struct EventChangeset {
     pub max_attendees: Option<Option<i32>>,
     pub updated_at: Option<DateTime<Utc>>,
     pub requires_approval: Option<bool>,
+    pub is_featured: Option<bool>,
 }
