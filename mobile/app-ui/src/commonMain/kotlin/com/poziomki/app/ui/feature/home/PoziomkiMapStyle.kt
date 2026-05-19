@@ -90,8 +90,7 @@ internal val POZIOMKI_MAP_STYLE_JSON: String =
             "text-field": ["coalesce", ["get", "name:pl"], ["get", "name:latin"], ["get", "name"]],
             "text-font": ["Noto Sans Bold"],
             "text-size": ["interpolate", ["linear"], ["zoom"], 11, 12, 16, 20],
-            "text-letter-spacing": 0.04,
-            "text-transform": "lowercase"
+            "text-letter-spacing": 0.04
           },
           "paint": { "text-color": "#1F2A33" } },
 

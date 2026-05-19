@@ -271,7 +271,6 @@ fun ProfilePreview(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = name.ifBlank { "imi\u0119" },
-                        preserveCase = true,
                         fontFamily = montserrat,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 28.sp,
@@ -354,7 +353,6 @@ private fun RichBio(bio: String) {
     if (!bio.contains("![](")) {
         Text(
             text = bio,
-            preserveCase = true,
             fontFamily = nunito,
             fontWeight = FontWeight.Normal,
             fontSize = 15.sp,
@@ -372,7 +370,6 @@ private fun RichBio(bio: String) {
                     if (segment.text.isNotBlank()) {
                         Text(
                             text = segment.text,
-                            preserveCase = true,
                             fontFamily = nunito,
                             fontWeight = FontWeight.Normal,
                             fontSize = 15.sp,
