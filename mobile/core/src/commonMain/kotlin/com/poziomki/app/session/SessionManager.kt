@@ -2,6 +2,7 @@ package com.poziomki.app.session
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -29,6 +30,13 @@ class SessionManager(
         val ONBOARDING_DRAFT = stringPreferencesKey("onboarding_draft")
         val DEVICE_ID = stringPreferencesKey("device_id")
         val LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
+
+        // Mirrors keys in AppPreferences (same DataStore). Preserved across
+        // logouts so onboarding-style flags don't reappear when a user signs
+        // back in on the same device.
+        val WELCOME_SEEN = booleanPreferencesKey("welcome_seen_v1")
+        val FEEDBACK_BANNER_DISMISSED = booleanPreferencesKey("feedback_banner_dismissed_v1")
+        val SCREENSHOTS_ALLOWED = booleanPreferencesKey("screenshots_allowed")
     }
 
     suspend fun getLastSeenVersionCode(): Int? = dataStore.data.first()[LAST_SEEN_VERSION_CODE]
@@ -144,10 +152,16 @@ class SessionManager(
         val snapshot = dataStore.data.first()
         val deviceId = snapshot[DEVICE_ID]
         val lastSeenVersion = snapshot[LAST_SEEN_VERSION_CODE]
+        val welcomeSeen = snapshot[WELCOME_SEEN]
+        val feedbackBannerDismissed = snapshot[FEEDBACK_BANNER_DISMISSED]
+        val screenshotsAllowed = snapshot[SCREENSHOTS_ALLOWED]
         dataStore.edit {
             it.clear()
             if (deviceId != null) it[DEVICE_ID] = deviceId
             if (lastSeenVersion != null) it[LAST_SEEN_VERSION_CODE] = lastSeenVersion
+            if (welcomeSeen != null) it[WELCOME_SEEN] = welcomeSeen
+            if (feedbackBannerDismissed != null) it[FEEDBACK_BANNER_DISMISSED] = feedbackBannerDismissed
+            if (screenshotsAllowed != null) it[SCREENSHOTS_ALLOWED] = screenshotsAllowed
         }
         tokenStore.clearToken()
         runCatching { imageCacheCleaner.clear() }
