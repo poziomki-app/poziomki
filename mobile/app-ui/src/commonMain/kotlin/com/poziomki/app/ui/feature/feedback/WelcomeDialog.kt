@@ -33,7 +33,7 @@ import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.jetbrains.compose.resources.painterResource
 import poziomki_mobile.app_ui.generated.resources.Res
-import poziomki_mobile.app_ui.generated.resources.strawberry_logo
+import poziomki_mobile.app_ui.generated.resources.doodle_chilling
 
 @Composable
 fun WelcomeDialog(onDismiss: () -> Unit) {
@@ -59,18 +59,18 @@ private fun WelcomeBody(onDismiss: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "studencka apka eventów. to wciąż wczesna wersja — niektóre rzeczy mogą działać dziwnie.",
+            text = "studencka apka eventów. to wciąż wczesna wersja, więc coś może działać dziwnie.",
             fontFamily = NunitoFamily,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             color = TextSecondary,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        WelcomeBullet("bądź miły — to nie aplikacja randkowa.")
+        WelcomeBullet("bądź miły, to nie aplikacja randkowa.")
         Spacer(modifier = Modifier.height(6.dp))
         WelcomeBullet("zgłaszaj nadużycia długim przytrzymaniem wiadomości lub z menu profilu.")
         Spacer(modifier = Modifier.height(6.dp))
-        WelcomeBullet("daj znać co działa, a co nie — przez „zostaw opinię”.")
+        WelcomeBullet("napisz co działa, a co nie, w „zostaw opinię”.")
         Spacer(modifier = Modifier.height(24.dp))
         AppButton(text = "zaczynamy", onClick = onDismiss, variant = ButtonVariant.PRIMARY)
     }
@@ -88,9 +88,9 @@ private fun WelcomeHero() {
             .background(heroBrush)
     Box(modifier = heroModifier, contentAlignment = Alignment.Center) {
         Image(
-            painter = painterResource(Res.drawable.strawberry_logo),
+            painter = painterResource(Res.drawable.doodle_chilling),
             contentDescription = null,
-            modifier = Modifier.size(96.dp),
+            modifier = Modifier.size(140.dp),
         )
     }
 }
