@@ -322,10 +322,11 @@ private fun EditableAvatar(
             modifier =
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .size(24.dp)
+                    .padding(10.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
-                    .background(Primary),
+                    .background(Primary)
+                    .border(2.dp, Black, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(PhosphorIcons.Bold.PencilSimple, null, Modifier.size(14.dp), tint = Black)
