@@ -23,6 +23,7 @@ import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
 @Composable
@@ -68,6 +69,8 @@ private fun EnterEmailStep(
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "Zmień email",
@@ -149,6 +152,8 @@ private fun OtpStep(
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "Potwierdź email",

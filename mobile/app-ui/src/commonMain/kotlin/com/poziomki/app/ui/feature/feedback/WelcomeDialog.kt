@@ -14,12 +14,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
 @Composable
 fun WelcomeDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "Witaj w Poziomkach!",

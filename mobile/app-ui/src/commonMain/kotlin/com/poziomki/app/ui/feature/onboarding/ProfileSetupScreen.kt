@@ -132,6 +132,7 @@ fun ProfileSetupScreen(
             onDismissRequest = { showAvatarPicker = false },
             sheetState = sheetState,
             containerColor = SurfaceElevated,
+            tonalElevation = 0.dp,
             dragHandle = {
                 Box(
                     modifier =

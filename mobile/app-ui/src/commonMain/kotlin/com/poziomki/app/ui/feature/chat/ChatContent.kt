@@ -72,6 +72,7 @@ import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.feature.chat.model.ChatUiState
@@ -560,7 +561,8 @@ private fun ReactionBreakdownSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = SurfaceColor,
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -570,7 +572,7 @@ private fun ReactionBreakdownSheet(
         ) {
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = SurfaceColor,
+                containerColor = SurfaceElevated,
                 contentColor = Primary,
                 edgePadding = 16.dp,
                 divider = {},

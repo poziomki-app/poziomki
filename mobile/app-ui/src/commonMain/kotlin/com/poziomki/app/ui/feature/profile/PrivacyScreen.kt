@@ -44,6 +44,7 @@ import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.SectionLabel
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import com.poziomki.app.ui.shared.rememberExportFileSaver
@@ -418,6 +419,8 @@ private fun DeleteAccountDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "Usunąć konto?",

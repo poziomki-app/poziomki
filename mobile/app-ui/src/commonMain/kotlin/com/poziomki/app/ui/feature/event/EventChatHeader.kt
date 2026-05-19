@@ -475,6 +475,7 @@ private fun AttendeesDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
         containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "uczestnicy",
@@ -547,6 +548,7 @@ private fun EventInfoDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
         containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "opis",
