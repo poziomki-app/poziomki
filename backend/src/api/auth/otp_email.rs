@@ -364,6 +364,78 @@ pub(in crate::api) async fn send_otp_email(to: &str, code: &str) -> Result<(), S
     }
 }
 
+/// Send a plain-text operational email (e.g. feedback notifications).
+///
+/// Uses the same relay → direct-MX cascade as the OTP path, but builds a
+/// simple text/plain message instead of the OTP MJML/HTML template. No
+/// Resend fallback — these are low volume and the relay handles them.
+/// Returns `Ok(())` when SMTP is disabled so the caller treats mail as
+/// best-effort (matches the OTP behaviour).
+pub(in crate::api) async fn send_simple_mail(
+    to: &str,
+    subject: &str,
+    body: &str,
+) -> Result<(), String> {
+    if !super::env_truthy("SMTP_ENABLE") {
+        tracing::debug!("Mail disabled, skipping simple mail to {to}");
+        return Ok(());
+    }
+
+    let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@poziomki.app".into());
+    let from_mbox = parse_from_mailbox(&from).ok_or("Invalid SMTP_FROM")?;
+    let to_mbox: Mailbox = to
+        .parse()
+        .map_err(|e| format!("Invalid recipient {to}: {e}"))?;
+    let msg_id = format!("<{}@poziomki.app>", uuid::Uuid::new_v4());
+
+    let mut email = Message::builder()
+        .from(from_mbox)
+        .to(to_mbox)
+        .message_id(Some(msg_id))
+        .subject(subject)
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("Auto-Submitted"),
+            "auto-generated".to_owned(),
+        ))
+        .raw_header(header::HeaderValue::new(
+            header::HeaderName::new_from_ascii_str("Precedence"),
+            "transactional".to_owned(),
+        ))
+        .body(body.to_string())
+        .map_err(|e| format!("Failed to build mail: {e}"))?;
+
+    if let Some(dkim) = dkim_config()? {
+        dkim_sign(&mut email, dkim);
+    }
+
+    let envelope = email.envelope().clone();
+    let raw = email.formatted();
+
+    if let Some(relay_host) = env_nonempty("SMTP_HOST") {
+        match send_via_relay(&envelope, &raw, &relay_host).await {
+            Ok(()) => {
+                tracing::info!("Simple mail delivered to {to} via relay {relay_host}");
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::warn!("Simple mail relay failed ({e}); falling back to MX for {to}");
+            }
+        }
+    }
+
+    let domain = to
+        .split('@')
+        .nth(1)
+        .ok_or_else(|| format!("No domain in {to}"))?;
+    match send_via_mx(&envelope, &raw, domain).await {
+        Ok(mx_host) => {
+            tracing::info!("Simple mail delivered to {to} via MX {mx_host}");
+            Ok(())
+        }
+        Err(e) => Err(format!("Simple mail delivery failed for {to}: {e}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::select_mx_hosts;

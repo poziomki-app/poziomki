@@ -500,6 +500,7 @@ data class FeedbackRequest(
     val rating: Int,
     val message: String? = null,
     val appVersion: String? = null,
+    val featureRequest: String? = null,
 )
 
 // Routing models

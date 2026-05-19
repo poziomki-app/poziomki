@@ -12,6 +12,7 @@ mod auth_session;
 use crate::api::auth_or_respond;
 
 use self::auth_rate_limit::{enforce_rate_limit, AuthRateLimitAction};
+pub(in crate::api) use self::auth_service::send_simple_mail;
 use self::auth_service::{
     create_user_or_error, find_user_by_email, forgot_password_verify_inner, generate_otp_code,
     reset_password_inner, send_otp_email, sign_in_success_or_unauthorized, verify_otp_inner,

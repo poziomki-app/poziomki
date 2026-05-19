@@ -60,6 +60,7 @@ import com.adamglin.phosphoricons.fill.PaperPlaneTilt
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.chat.push.NotificationDeepLinkTarget
+import com.poziomki.app.chat.push.NotificationEventTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
@@ -113,6 +114,44 @@ data class BottomNavItem(
     val route: Route,
 )
 
+@Composable
+private fun NavBarIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    showTopDot: Boolean,
+    showBottomDot: Boolean,
+) {
+    Box(contentAlignment = Alignment.Center) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(26.dp),
+            tint = tint,
+        )
+        if (showTopDot) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(Primary),
+            )
+        }
+        if (showBottomDot) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)),
+            )
+        }
+    }
+}
+
 val LocalNavBarPadding = compositionLocalOf { 0.dp }
 
 /**
@@ -148,6 +187,7 @@ private fun rememberGraphEntry(
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun AppNavigation(
     startDestination: Route,
@@ -194,6 +234,17 @@ fun AppNavigation(
     val deepLink by NotificationDeepLinkTarget.link.collectAsState()
     LaunchedEffect(isLoggedIn, deepLink) {
         handleBroadcastDeepLink(deepLink, isLoggedIn, startDestination)
+    }
+
+    val notificationEventTarget by NotificationEventTarget.eventId.collectAsState()
+    LaunchedEffect(isLoggedIn, notificationEventTarget) {
+        val eventId = notificationEventTarget ?: return@LaunchedEffect
+        if (!isLoggedIn || startDestination == Route.OnboardingGraph) return@LaunchedEffect
+        navController.navigate(Route.MainGraph) {
+            popUpTo(0) { inclusive = true }
+        }
+        navController.navigate(Route.EventDetail(eventId))
+        NotificationEventTarget.consume(eventId)
     }
 
     val navigateToChat: (String, String?) -> Unit = navigateToChat@{ chatTargetId, avatarHint ->
@@ -485,10 +536,12 @@ fun AppNavigation(
     }
 }
 
-// Broadcast deep links. Today we only recognise poziomki://chat/<roomId>
-// (forwarded into the existing chat target). Unknown schemes fall through
-// — the app just opens at its current destination and the link is dropped
-// so taps still open the app from a notification.
+// Broadcast deep links. Recognised schemes:
+//   poziomki://chat/<roomId>   → forwarded into NotificationChatTarget
+//   poziomki://event/<eventId> → forwarded into NotificationEventTarget
+// Unknown schemes fall through — the app just opens at its current
+// destination and the link is dropped so taps still open the app from
+// a notification.
 private fun handleBroadcastDeepLink(
     deepLink: String?,
     isLoggedIn: Boolean,
@@ -500,14 +553,16 @@ private fun handleBroadcastDeepLink(
         return
     }
     val chatPrefix = "poziomki://chat/"
+    val eventPrefix = "poziomki://event/"
     if (link.startsWith(chatPrefix)) {
-        val roomId = link.removePrefix(chatPrefix).takeIf { it.isNotBlank() }
-        if (roomId != null) NotificationChatTarget.open(roomId)
+        link.removePrefix(chatPrefix).takeIf { it.isNotBlank() }?.let(NotificationChatTarget::open)
+    } else if (link.startsWith(eventPrefix)) {
+        link.removePrefix(eventPrefix).takeIf { it.isNotBlank() }?.let(NotificationEventTarget::open)
     }
     NotificationDeepLinkTarget.consume(link)
 }
 
-@Suppress("LongMethod", "LongParameterList")
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 fun MainScreen(
     onNavigateToEventDetail: (String) -> Unit,
@@ -533,6 +588,11 @@ fun MainScreen(
     val profileViewModel: ProfileViewModel = koinViewModel()
     val profileState by profileViewModel.state.collectAsState()
     val profilePicture = profileState.profile?.profilePicture
+
+    val chatClient = koinInject<ChatClient>()
+    val chatRooms by chatClient.rooms.collectAsState()
+    val hasUnreadFriendMessages = chatRooms.any { it.isDirect && it.unreadCount > 0 }
+    val hasUnreadEventMessages = chatRooms.any { !it.isDirect && it.unreadCount > 0 }
 
     val feedbackViewModel: FeedbackViewModel = koinViewModel()
     val feedbackState by feedbackViewModel.state.collectAsState()
@@ -665,11 +725,13 @@ fun MainScreen(
                                                 },
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
-                                        Icon(
-                                            if (selected) item.selectedIcon else item.icon,
+                                        val isMessagesTab = item.route is Route.Messages
+                                        NavBarIcon(
+                                            icon = if (selected) item.selectedIcon else item.icon,
                                             contentDescription = item.label,
-                                            modifier = Modifier.size(26.dp),
                                             tint = tint,
+                                            showTopDot = isMessagesTab && hasUnreadFriendMessages,
+                                            showBottomDot = isMessagesTab && hasUnreadEventMessages,
                                         )
                                     }
                                 }
@@ -742,10 +804,12 @@ fun MainScreen(
         FeedbackDialog(
             rating = feedbackState.rating,
             message = feedbackState.message,
+            featureRequest = feedbackState.featureRequest,
             isSubmitting = feedbackState.isSubmitting,
             error = feedbackState.error,
             onRatingChange = { feedbackViewModel.setRating(it) },
             onMessageChange = { feedbackViewModel.setMessage(it) },
+            onFeatureRequestChange = { feedbackViewModel.setFeatureRequest(it) },
             onSubmit = { feedbackViewModel.submit(appVersion = null) },
             onDismiss = { feedbackViewModel.closeDialog() },
         )
