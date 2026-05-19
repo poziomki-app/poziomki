@@ -136,7 +136,7 @@ internal fun MessageEventRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(top = if (groupedWithPrevious) 2.dp else 10.dp),
+                .padding(top = if (groupedWithPrevious) 4.dp else 12.dp),
         horizontalAlignment = horizontalAlignment,
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {

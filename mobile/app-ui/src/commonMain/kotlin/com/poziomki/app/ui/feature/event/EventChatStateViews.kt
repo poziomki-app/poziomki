@@ -33,6 +33,8 @@ import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
+import com.poziomki.app.ui.designsystem.components.mapsDeeplink
+import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -137,6 +139,7 @@ fun EventChatJoinRequiredView(
     onJoin: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val openLink = rememberExternalLinkOpener()
     Column(
         modifier =
             Modifier
@@ -189,7 +192,17 @@ fun EventChatJoinRequiredView(
         ) {
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.sm))
 
-            EventMetaRows(event = event)
+            EventMetaRows(
+                event = event,
+                onLocationClick =
+                    event.latitude?.let { lat ->
+                        event.longitude?.let { lng ->
+                            {
+                                openLink(mapsDeeplink(lat, lng, event.location))
+                            }
+                        }
+                    },
+            )
 
             if (event.requiresApproval) {
                 Spacer(modifier = Modifier.height(4.dp))

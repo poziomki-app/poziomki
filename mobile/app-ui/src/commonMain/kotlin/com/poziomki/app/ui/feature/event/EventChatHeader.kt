@@ -41,12 +41,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
@@ -66,7 +71,8 @@ import com.poziomki.app.network.EventAttendee
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.UserAvatar
-import com.poziomki.app.ui.designsystem.components.pointGeoJson
+import com.poziomki.app.ui.designsystem.components.mapsDeeplink
+import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
@@ -81,16 +87,6 @@ import com.poziomki.app.ui.feature.chat.ActionMenuItem
 import com.poziomki.app.ui.shared.formatEventDateCompact
 import com.poziomki.app.ui.shared.formatEventLocation
 import com.poziomki.app.ui.shared.resolveImageUrl
-import org.maplibre.compose.camera.CameraPosition
-import org.maplibre.compose.camera.rememberCameraState
-import org.maplibre.compose.expressions.dsl.const
-import org.maplibre.compose.layers.CircleLayer
-import org.maplibre.compose.map.MapOptions
-import org.maplibre.compose.map.MaplibreMap
-import org.maplibre.compose.map.OrnamentOptions
-import org.maplibre.compose.sources.rememberGeoJsonSource
-import org.maplibre.compose.style.BaseStyle
-import org.maplibre.spatialk.geojson.Position
 
 @Composable
 fun EventCoverImage(
@@ -179,6 +175,7 @@ fun EventMetaRows(
                 text = formatEventLocation(location),
                 onClick = onLocationClick,
                 preserveCase = true,
+                modifier = Modifier.weight(1f, fill = false),
             )
         }
 
@@ -205,23 +202,25 @@ fun EventMetaRows(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun MetaChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     onClick: (() -> Unit)? = null,
     accent: Boolean = false,
     preserveCase: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(50)
     val bgColor = if (accent) Primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.12f)
     val contentColor = if (accent) Primary else Color.White
 
     if (onClick != null) {
-        Surface(onClick = onClick, shape = shape, color = bgColor) {
+        Surface(onClick = onClick, shape = shape, color = bgColor, modifier = modifier) {
             ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
         }
     } else {
-        Surface(shape = shape, color = bgColor) {
+        Surface(shape = shape, color = bgColor, modifier = modifier) {
             ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
         }
     }
@@ -255,6 +254,7 @@ private fun ChipContent(
             fontSize = 12.sp,
             color = tint,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             preserveCase = preserveCase,
         )
     }
@@ -277,8 +277,8 @@ fun EventChatHeader(
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAttendeesDialog by remember { mutableStateOf(false) }
-    var showLocationDialog by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    val openLink = rememberExternalLinkOpener()
 
     EventCoverImage(event = event, strongOverlay = true) {
         Row(
@@ -435,10 +435,12 @@ fun EventChatHeader(
                 event = event,
                 onParticipantsClick = { showAttendeesDialog = true },
                 onLocationClick =
-                    if (event.latitude != null && event.longitude != null) {
-                        { showLocationDialog = true }
-                    } else {
-                        null
+                    event.latitude?.let { lat ->
+                        event.longitude?.let { lng ->
+                            {
+                                openLink(mapsDeeplink(lat, lng, event.location))
+                            }
+                        }
                     },
                 onInfoClick =
                     if (!event.description.isNullOrBlank()) {
@@ -475,24 +477,11 @@ fun EventChatHeader(
         )
     }
 
-    if (showLocationDialog) {
-        val lat = event.latitude
-        val lng = event.longitude
-        val loc = event.location
-        if (lat != null && lng != null && loc != null) {
-            LocationMapDialog(
-                locationName = loc,
-                latitude = lat,
-                longitude = lng,
-                onDismiss = { showLocationDialog = false },
-            )
-        }
-    }
-
     if (showInfoDialog) {
         event.description?.let { description ->
             EventInfoDialog(
                 description = description,
+                onLinkClick = openLink,
                 onDismiss = { showInfoDialog = false },
             )
         }
@@ -577,6 +566,7 @@ private fun AttendeesDialog(
 @Composable
 private fun EventInfoDialog(
     description: String,
+    onLinkClick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -595,8 +585,7 @@ private fun EventInfoDialog(
         },
         text = {
             Text(
-                text = description,
-                preserveCase = true,
+                text = linkifiedText(description, onLinkClick),
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
@@ -617,104 +606,34 @@ private fun EventInfoDialog(
     )
 }
 
-@Composable
-@Suppress("LongMethod")
-private fun LocationMapDialog(
-    locationName: String,
-    latitude: Double,
-    longitude: Double,
-    onDismiss: () -> Unit,
-) {
-    val uriHandler = LocalUriHandler.current
-    val mapsUrl = "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
+private val urlRegex = Regex("https?://[\\w./?=&#%~_+\\-:@!$']+")
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = SurfaceElevated,
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = formatEventLocation(locationName),
-                    preserveCase = true,
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = TextPrimary,
-                    maxLines = 2,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                ) {
-                    MaplibreMap(
-                        modifier = Modifier.fillMaxSize(),
-                        baseStyle =
-                            BaseStyle.Uri("https://tiles.openfreemap.org/styles/positron"),
-                        cameraState =
-                            rememberCameraState(
-                                firstPosition =
-                                    CameraPosition(
-                                        target = Position(latitude = latitude, longitude = longitude),
-                                        zoom = 14.0,
-                                    ),
-                            ),
-                        options =
-                            MapOptions(
-                                ornamentOptions =
-                                    OrnamentOptions(
-                                        isLogoEnabled = false,
-                                        isCompassEnabled = false,
-                                        isScaleBarEnabled = false,
-                                    ),
-                            ),
-                    ) {
-                        val source = rememberGeoJsonSource(data = pointGeoJson(latitude, longitude))
-                        CircleLayer(
-                            id = "location-marker",
-                            source = source,
-                            radius = const(8.dp),
-                            color = const(Primary),
-                            strokeColor = const(Color.White),
-                            strokeWidth = const(2.dp),
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { uriHandler.openUri(mapsUrl) }) {
-                        Icon(
-                            imageVector = PhosphorIcons.Fill.MapPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = Primary,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "otwórz w mapach",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Primary,
-                        )
-                    }
-                    TextButton(onClick = onDismiss) {
-                        Text(
-                            text = "zamknij",
-                            fontFamily = NunitoFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextMuted,
-                        )
-                    }
-                }
+@Composable
+private fun linkifiedText(
+    text: String,
+    onLinkClick: (String) -> Unit,
+): AnnotatedString =
+    buildAnnotatedString {
+        var cursor = 0
+        for (match in urlRegex.findAll(text)) {
+            if (match.range.first > cursor) {
+                append(text.substring(cursor, match.range.first))
             }
+            val url = match.value
+            val link =
+                LinkAnnotation.Clickable(
+                    tag = url,
+                    styles =
+                        TextLinkStyles(
+                            style =
+                                SpanStyle(
+                                    color = Primary,
+                                    textDecoration = TextDecoration.Underline,
+                                ),
+                        ),
+                ) { onLinkClick(url) }
+            withLink(link) { append(url) }
+            cursor = match.range.last + 1
         }
+        if (cursor < text.length) append(text.substring(cursor))
     }
-}
