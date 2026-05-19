@@ -36,14 +36,6 @@ use matching_scoring::{
 
 const PRIVATE_CACHE_SHORT: HeaderValue = HeaderValue::from_static("private, max-age=60");
 
-fn should_exclude_seen_event(
-    event_id: Uuid,
-    saved_event_ids: &std::collections::HashSet<Uuid>,
-    joined_event_ids: &std::collections::HashSet<Uuid>,
-) -> bool {
-    saved_event_ids.contains(&event_id) || joined_event_ids.contains(&event_id)
-}
-
 pub(super) async fn profiles_recommendations(
     State(_ctx): State<AppContext>,
     headers: HeaderMap,
@@ -175,19 +167,13 @@ pub(super) async fn events_recommendations(
                 .map_err(matching_into_diesel)?;
             let my_profile_id = user_ctx.profile.as_ref().map_or(Uuid::nil(), |p| p.id);
 
+            // Saved/joined events stay in the list — hiding them made events
+            // visibly disappear after a tap, which surprised users. The join
+            // state still feeds scoring weights below.
             let future_events = repo
                 .load_future_events(now, candidate_limit, conn)
                 .await
-                .map_err(matching_into_diesel)?
-                .into_iter()
-                .filter(|event| {
-                    !should_exclude_seen_event(
-                        event.id,
-                        &user_ctx.saved_event_ids,
-                        &user_ctx.joined_event_ids,
-                    )
-                })
-                .collect::<Vec<_>>();
+                .map_err(matching_into_diesel)?;
 
             let event_ids: Vec<Uuid> = future_events.iter().map(|e| e.id).collect();
             let all_event_tags = repo
@@ -293,34 +279,4 @@ pub(super) async fn events_recommendations(
         .headers_mut()
         .insert(axum::http::header::CACHE_CONTROL, PRIVATE_CACHE_SHORT);
     Ok(response)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::should_exclude_seen_event;
-    use std::collections::HashSet;
-    use uuid::Uuid;
-
-    #[test]
-    fn seen_events_are_excluded() {
-        let seen = Uuid::from_u128(1);
-        let saved_event_ids = HashSet::from([seen]);
-        let joined_event_ids = HashSet::from([Uuid::from_u128(2)]);
-
-        assert!(should_exclude_seen_event(
-            seen,
-            &saved_event_ids,
-            &joined_event_ids,
-        ));
-        assert!(should_exclude_seen_event(
-            Uuid::from_u128(2),
-            &saved_event_ids,
-            &joined_event_ids,
-        ));
-        assert!(!should_exclude_seen_event(
-            Uuid::from_u128(3),
-            &saved_event_ids,
-            &joined_event_ids,
-        ));
-    }
 }

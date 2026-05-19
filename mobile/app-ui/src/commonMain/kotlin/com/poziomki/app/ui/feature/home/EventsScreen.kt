@@ -59,6 +59,7 @@ import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.SlidersHorizontal
 import com.adamglin.phosphoricons.fill.BookmarkSimple
+import com.adamglin.phosphoricons.fill.CheckCircle
 import com.adamglin.phosphoricons.fill.MapPin
 import com.poziomki.app.network.Event
 import com.poziomki.app.ui.designsystem.Text
@@ -77,6 +78,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.Success
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -360,9 +362,10 @@ private fun EventCard(
                         contentScale = ContentScale.Crop,
                     )
 
-                    BookmarkOverlay(
+                    EventCornerActions(
                         isSaved = event.isSaved,
-                        onClick = onSaveClick,
+                        isAttending = event.isAttending,
+                        onSaveClick = onSaveClick,
                         modifier =
                             Modifier
                                 .align(Alignment.TopEnd)
@@ -389,7 +392,12 @@ private fun EventCard(
                             .fillMaxWidth()
                             .padding(
                                 start = PoziomkiTheme.spacing.md,
-                                end = if (coverImage == null) 56.dp else PoziomkiTheme.spacing.md,
+                                end =
+                                    when {
+                                        coverImage != null -> PoziomkiTheme.spacing.md
+                                        event.isAttending -> 96.dp
+                                        else -> 56.dp
+                                    },
                                 top = PoziomkiTheme.spacing.sm,
                                 bottom = PoziomkiTheme.spacing.sm,
                             ),
@@ -470,9 +478,10 @@ private fun EventCard(
                 }
 
                 if (coverImage == null) {
-                    BookmarkOverlay(
+                    EventCornerActions(
                         isSaved = event.isSaved,
-                        onClick = onSaveClick,
+                        isAttending = event.isAttending,
+                        onSaveClick = onSaveClick,
                         modifier =
                             Modifier
                                 .align(Alignment.TopEnd)
@@ -481,6 +490,44 @@ private fun EventCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EventCornerActions(
+    isSaved: Boolean,
+    isAttending: Boolean,
+    onSaveClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(PoziomkiTheme.spacing.xs),
+    ) {
+        if (isAttending) {
+            AttendingBadge()
+        }
+        BookmarkOverlay(isSaved = isSaved, onClick = onSaveClick)
+    }
+}
+
+@Composable
+private fun AttendingBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Overlay),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            PhosphorIcons.Fill.CheckCircle,
+            contentDescription = "Bierzesz udział",
+            modifier = Modifier.size(22.dp),
+            tint = Success,
+        )
     }
 }
 
@@ -691,16 +738,28 @@ private fun EventRowContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = event.title,
-            preserveCase = true,
-            fontFamily = MontserratFamily,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 18.sp,
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = event.title,
+                preserveCase = true,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (event.isAttending) {
+                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.xs))
+                Icon(
+                    PhosphorIcons.Fill.CheckCircle,
+                    contentDescription = "Bierzesz udział",
+                    modifier = Modifier.size(18.dp),
+                    tint = Success,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = formatEventDate(event.startsAt),
