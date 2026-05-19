@@ -59,6 +59,7 @@ import com.adamglin.phosphoricons.bold.GearSix
 import com.adamglin.phosphoricons.fill.PaperPlaneTilt
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationChatTarget
+import com.poziomki.app.chat.push.NotificationDeepLinkTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.OfflineBanner
@@ -188,6 +189,11 @@ fun AppNavigation(
         }
         navController.navigate(Route.Chat(roomId))
         NotificationChatTarget.consume(roomId)
+    }
+
+    val deepLink by NotificationDeepLinkTarget.link.collectAsState()
+    LaunchedEffect(isLoggedIn, deepLink) {
+        handleBroadcastDeepLink(deepLink, isLoggedIn, startDestination)
     }
 
     val navigateToChat: (String, String?) -> Unit = navigateToChat@{ chatTargetId, avatarHint ->
@@ -477,6 +483,28 @@ fun AppNavigation(
             )
         }
     }
+}
+
+// Broadcast deep links. Today we only recognise poziomki://chat/<roomId>
+// (forwarded into the existing chat target). Unknown schemes fall through
+// — the app just opens at its current destination and the link is dropped
+// so taps still open the app from a notification.
+private fun handleBroadcastDeepLink(
+    deepLink: String?,
+    isLoggedIn: Boolean,
+    startDestination: Route,
+) {
+    val link = deepLink ?: return
+    if (!isLoggedIn || startDestination == Route.OnboardingGraph) {
+        NotificationDeepLinkTarget.consume(link)
+        return
+    }
+    val chatPrefix = "poziomki://chat/"
+    if (link.startsWith(chatPrefix)) {
+        val roomId = link.removePrefix(chatPrefix).takeIf { it.isNotBlank() }
+        if (roomId != null) NotificationChatTarget.open(roomId)
+    }
+    NotificationDeepLinkTarget.consume(link)
 }
 
 @Suppress("LongMethod", "LongParameterList")

@@ -31,14 +31,30 @@ class PoziomkiFirebaseMessagingService :
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        val roomId = data["conversation_id"]?.takeIf { it.isNotBlank() }
-        if (roomId != null && roomId == ActiveChat.roomId) return
-        notificationHelper.showMessageNotification(
-            sender = null,
-            roomId = roomId,
-            body = null,
-            avatarUrl = null,
-            timestampMs = message.sentTime.takeIf { it > 0 },
-        )
+        when (data["type"]) {
+            "broadcast" -> {
+                val title = data["title"]?.takeIf { it.isNotBlank() } ?: "Poziomki"
+                val body = data["body"]?.takeIf { it.isNotBlank() } ?: ""
+                val deepLink = data["deep_link"]?.takeIf { it.isNotBlank() }
+                notificationHelper.showBroadcastNotification(
+                    title = title,
+                    body = body,
+                    deepLink = deepLink,
+                    timestampMs = message.sentTime.takeIf { it > 0 },
+                )
+            }
+
+            else -> {
+                val roomId = data["conversation_id"]?.takeIf { it.isNotBlank() }
+                if (roomId != null && roomId == ActiveChat.roomId) return
+                notificationHelper.showMessageNotification(
+                    sender = null,
+                    roomId = roomId,
+                    body = null,
+                    avatarUrl = null,
+                    timestampMs = message.sentTime.takeIf { it > 0 },
+                )
+            }
+        }
     }
 }

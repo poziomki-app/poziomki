@@ -3,7 +3,7 @@ pub mod schema;
 pub mod viewer;
 
 pub use viewer::{
-    complete_password_reset, create_session_for_user, create_user_for_signup,
+    all_push_tokens, complete_password_reset, create_session_for_user, create_user_for_signup,
     delete_session_by_token, filter_push_targets, find_user_for_login,
     find_user_for_password_reset, mark_email_verified, profile_owner_user_id,
     profile_program_visibility, push_tokens_for_users, resolve_session, set_anon_context,

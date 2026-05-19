@@ -342,6 +342,185 @@ pub async fn send_wake(user_ids: Vec<i32>, conversation_id: Uuid) {
     }
 }
 
+/// Build a broadcast push payload (title + body + optional deep link).
+/// Unlike the data-only chat wake, broadcasts carry visible content
+/// directly in the payload since there's no per-conversation API to
+/// fetch from. Android uses a `notification` block so the system can
+/// render the alert even when the app process is dead; iOS uses the
+/// standard `apns.alert` shape. The deep link is mirrored into `data`
+/// so the client can route on tap.
+pub(crate) fn build_broadcast_message(
+    token: &str,
+    platform: &str,
+    title: &str,
+    body: &str,
+    deep_link: Option<&str>,
+) -> serde_json::Value {
+    let mut data = serde_json::Map::new();
+    data.insert(
+        "type".to_string(),
+        serde_json::Value::String("broadcast".to_string()),
+    );
+    data.insert(
+        "v".to_string(),
+        serde_json::Value::String(PAYLOAD_VERSION.to_string()),
+    );
+    data.insert(
+        "title".to_string(),
+        serde_json::Value::String(title.to_string()),
+    );
+    data.insert(
+        "body".to_string(),
+        serde_json::Value::String(body.to_string()),
+    );
+    if let Some(dl) = deep_link {
+        data.insert(
+            "deep_link".to_string(),
+            serde_json::Value::String(dl.to_string()),
+        );
+    }
+    let data = serde_json::Value::Object(data);
+    let msg = match platform {
+        "ios" => serde_json::json!({
+            "token": token,
+            "data": data,
+            "apns": {
+                "headers": { "apns-priority": "10" },
+                "payload": {
+                    "aps": {
+                        "alert": { "title": title, "body": body },
+                        "sound": "default",
+                    }
+                }
+            },
+        }),
+        _ => serde_json::json!({
+            "token": token,
+            "data": data,
+            "notification": { "title": title, "body": body },
+            "android": {
+                "priority": "high",
+                "ttl": "86400s",
+                "notification": { "channel_id": "poz_messages" },
+            },
+        }),
+    };
+    serde_json::json!({ "message": msg })
+}
+
+/// Send a broadcast to every registered device. Returns `(delivered, rejected)`.
+///
+/// Visible title + body land directly on the device; optional `deep_link`
+/// is forwarded in `data` for the client to route on tap. Bypasses
+/// per-user notification preferences — operator-driven announcements only.
+pub async fn send_broadcast(
+    title: String,
+    body: String,
+    deep_link: Option<String>,
+) -> (usize, usize) {
+    let Some(fcm) = client() else {
+        return (0, 0);
+    };
+    let rows = {
+        let mut conn = match db::conn().await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(error = %e, "fcm_broadcast: db conn failed");
+                return (0, 0);
+            }
+        };
+        match db::all_push_tokens(&mut conn).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(error = %e, "fcm_broadcast: token lookup failed");
+                return (0, 0);
+            }
+        }
+    };
+    if rows.is_empty() {
+        tracing::info!("fcm_broadcast: no registered tokens, nothing to send");
+        return (0, 0);
+    }
+
+    let access = match fcm.access_token().await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(error = %e, "fcm_broadcast: access token failed");
+            return (0, 0);
+        }
+    };
+    let url = fcm.send_url();
+
+    let delivered = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let rejected = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    let mut handles = Vec::with_capacity(rows.len());
+    for row in rows {
+        let sem = fcm.sem.clone();
+        let http = fcm.http.clone();
+        let access = access.clone();
+        let url = url.clone();
+        let title = title.clone();
+        let body = body.clone();
+        let deep_link = deep_link.clone();
+        let delivered = delivered.clone();
+        let rejected = rejected.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = sem.acquire_owned().await.ok();
+            let payload = build_broadcast_message(
+                &row.fcm_token,
+                &row.platform,
+                &title,
+                &body,
+                deep_link.as_deref(),
+            );
+            let masked = mask_token(&row.fcm_token);
+            let resp = http
+                .post(&url)
+                .bearer_auth(&access)
+                .json(&payload)
+                .send()
+                .await;
+            match resp {
+                Ok(r) => {
+                    let status = r.status();
+                    if status.is_success() {
+                        delivered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::info!(token = %masked, "fcm_broadcast_delivered");
+                    } else if status == reqwest::StatusCode::NOT_FOUND
+                        || status == reqwest::StatusCode::BAD_REQUEST
+                        || status == reqwest::StatusCode::UNAUTHORIZED
+                    {
+                        let detail = r.text().await.unwrap_or_default();
+                        let stale = detail.contains("UNREGISTERED")
+                            || detail.contains("INVALID_ARGUMENT")
+                            || status == reqwest::StatusCode::NOT_FOUND;
+                        rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::warn!(token = %masked, status = %status, stale, "fcm_broadcast_rejected");
+                        if stale {
+                            cleanup_stale_token(&row.fcm_token).await;
+                        }
+                    } else {
+                        rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        tracing::warn!(token = %masked, status = %status, "fcm_broadcast_error");
+                    }
+                }
+                Err(e) => {
+                    rejected.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    tracing::warn!(token = %masked, error = %e, "fcm_broadcast_send_failed");
+                }
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
+    (
+        delivered.load(std::sync::atomic::Ordering::Relaxed),
+        rejected.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
 async fn cleanup_stale_token(fcm_token: &str) {
     use crate::db::schema::push_subscriptions;
     use diesel::prelude::*;

@@ -42,6 +42,7 @@ fn cache_layer(value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
 fn admin_routes() -> Router<AppContext> {
     Router::new()
         .route("/users/{pid}/ban", post(admin::ban_user))
+        .route("/broadcast", post(admin::broadcast_push))
         .layer(cache_layer("no-store"))
 }
 
