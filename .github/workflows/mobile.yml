@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     defaults:
       run:
@@ -52,7 +52,7 @@ jobs:
           if-no-files-found: error
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     defaults:
       run:
@@ -76,7 +76,7 @@ jobs:
     # runs skip it to avoid gating merges on an upstream version bump we
     # haven't had time to triage.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     defaults:
       run:
