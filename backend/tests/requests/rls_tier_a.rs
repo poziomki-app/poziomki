@@ -196,6 +196,9 @@ async fn user_settings_viewer_sees_only_own_row() {
     {
         let mut conn = db::conn().await.expect("pool");
         for u in [&alice.user, &bob.user] {
+            // user_settings rows are auto-created by an AFTER INSERT trigger
+            // on users (migration 2026-05-19-000000). on_conflict_do_nothing
+            // keeps this test compatible — we just want one row per user.
             diesel::insert_into(user_settings::table)
                 .values((
                     user_settings::user_id.eq(u.id),
@@ -205,6 +208,8 @@ async fn user_settings_viewer_sees_only_own_row() {
                     user_settings::privacy_show_program.eq(true),
                     user_settings::privacy_discoverable.eq(true),
                 ))
+                .on_conflict(user_settings::user_id)
+                .do_nothing()
                 .execute(&mut conn)
                 .await
                 .expect("seed settings");

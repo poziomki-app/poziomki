@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification small icon. Path data is the canonical Poziomki strawberry
+  silhouette, ported verbatim from StrawberryIcon.Filled in app-ui. The two
+  seed dots are cut from the body via evenOdd fill so the silhouette reads
+  as the brand mark in the status bar.
+
+  Android API 21+ uses only the alpha channel of the small icon — the
+  fill colour here is irrelevant at runtime; the system tints the
+  silhouette via setColor() or the status-bar palette.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M9.36,2.03 C6.94,2.84 5.22,4.58 3.68,7.78 C2.28,10.67 1.53,13.67 1.51,16.50 C1.50,19.81 2.22,21.16 4.47,22.04 C5.62,22.50 8.57,22.50 10.63,22.04 C14.83,21.11 18.50,19.22 20.32,17.08 C22.01,15.04 22.50,12.21 21.59,9.61 C21.12,8.28 19.79,6.29 18.61,5.13 C17.61,4.15 15.58,2.73 14.61,2.33 C12.91,1.61 10.92,1.50 9.36,2.03 Z M10.6,5.1 C10.6,5.98 9.88,6.7 9.0,6.7 C8.12,6.7 7.4,5.98 7.4,5.1 C7.4,4.22 8.12,3.5 9.0,3.5 C9.88,3.5 10.6,4.22 10.6,5.1 Z M7.8,9.85 C7.8,10.73 7.08,11.45 6.2,11.45 C5.32,11.45 4.6,10.73 4.6,9.85 C4.6,8.97 5.32,8.25 6.2,8.25 C7.08,8.25 7.8,8.97 7.8,9.85 Z" />
+</vector>

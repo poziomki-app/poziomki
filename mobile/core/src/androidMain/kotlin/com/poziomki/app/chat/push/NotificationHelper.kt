@@ -19,6 +19,24 @@ class NotificationHelper(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val notificationIdCounter = AtomicInteger(1000)
 
+    // Resolve the app-provided notification icon at runtime. NotificationHelper
+    // lives in the shared core module and cannot reference the app's R class
+    // directly. If the app forgets to ship ic_stat_notification we fall back
+    // to a system glyph so notifications still appear instead of crashing.
+    private val smallIconRes: Int =
+        context.resources
+            .getIdentifier("ic_stat_notification", "drawable", context.packageName)
+            .takeIf { it != 0 }
+            ?: android.R.drawable.sym_action_chat
+
+    @Suppress("DEPRECATION")
+    private val accentColor: Int =
+        context.resources
+            .getIdentifier("notification_accent", "color", context.packageName)
+            .takeIf { it != 0 }
+            ?.let { context.resources.getColor(it) }
+            ?: 0
+
     fun createChannels() {
         val messagesChannel =
             NotificationChannel(
@@ -45,7 +63,8 @@ class NotificationHelper(
             .Builder(context, CHANNEL_SERVICE)
             .setContentTitle("Poziomki")
             .setContentText("Connected")
-            .setSmallIcon(android.R.drawable.sym_action_chat)
+            .setSmallIcon(smallIconRes)
+            .setColor(accentColor)
             .setOngoing(true)
             .build()
 
@@ -67,7 +86,8 @@ class NotificationHelper(
                 .Builder(context, CHANNEL_MESSAGES)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.sym_action_chat)
+                .setSmallIcon(smallIconRes)
+                .setColor(accentColor)
                 .setAutoCancel(true)
                 .setGroup(groupKey)
                 .setWhen(notificationTime)
@@ -103,7 +123,8 @@ class NotificationHelper(
                 .Builder(context, CHANNEL_MESSAGES)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.sym_action_chat)
+                .setSmallIcon(smallIconRes)
+                .setColor(accentColor)
                 .setGroup(groupKey)
                 .setGroupSummary(true)
                 .setGroupAlertBehavior(Notification.GROUP_ALERT_CHILDREN)
