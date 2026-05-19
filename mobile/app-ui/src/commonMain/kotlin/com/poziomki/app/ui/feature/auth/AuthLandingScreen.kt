@@ -75,7 +75,7 @@ fun AuthLandingScreen(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .alpha(0.75f),
+                        .alpha(0.92f),
             )
             Box(
                 modifier =

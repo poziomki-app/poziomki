@@ -2,6 +2,7 @@ package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,14 +28,18 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
@@ -156,13 +161,29 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.md))
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
 
-        AppButton(
-            text = "zarejestruj si\u0119",
-            onClick = onNavigateToRegister,
-            variant = ButtonVariant.PRIMARY,
-            modifier = Modifier.fillMaxWidth(),
+        Text(
+            text =
+                buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            color = Primary,
+                            fontFamily = NunitoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            textDecoration = TextDecoration.Underline,
+                        ),
+                    ) {
+                        append("zarejestruj si\u0119")
+                    }
+                },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToRegister() }
+                    .padding(vertical = PoziomkiTheme.spacing.sm),
+            textAlign = TextAlign.Center,
         )
     }
 }
