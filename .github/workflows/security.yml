@@ -26,6 +26,10 @@ jobs:
   # produced near-zero signal. We keep `config` because Hadolint doesn't
   # catch compose/k8s/terraform misconfigs that Trivy does.
   trivy:
+    # Skip on PRs — runs on main push + weekly schedule. Config scan is
+    # slow (Docker pull + SARIF upload) and findings are environmental,
+    # not delta to a single PR.
+    if: github.event_name != 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       security-events: write
@@ -49,6 +53,9 @@ jobs:
           category: trivy-config
 
   cargo-deny:
+    # Same rationale as trivy: license/RUSTSEC drift surfaces on the
+    # main push + weekly cron; no need to gate PRs on it.
+    if: github.event_name != 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
