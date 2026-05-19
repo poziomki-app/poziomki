@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -29,7 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +42,7 @@ import com.adamglin.phosphoricons.bold.Bell
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretRight
 import com.adamglin.phosphoricons.bold.ChatTeardropText
+import com.adamglin.phosphoricons.bold.Coffee
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
 import com.adamglin.phosphoricons.bold.SignOut
@@ -49,9 +53,11 @@ import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
@@ -73,6 +79,7 @@ fun ProfileScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
 
     Column(
         modifier =
@@ -143,6 +150,13 @@ fun ProfileScreen(
                                         icon = PhosphorIcons.Bold.ChatTeardropText,
                                         label = "zostaw opinię",
                                         onClick = onOpenFeedback,
+                                        badge = "testy",
+                                    )
+                                    HorizontalDivider(color = Border, thickness = 1.dp)
+                                    SettingsMenuItem(
+                                        icon = PhosphorIcons.Bold.Coffee,
+                                        label = "postaw kawę",
+                                        onClick = { uriHandler.openUri("https://buycoffee.to/poziomki-app") },
                                     )
                                 }
 
@@ -211,6 +225,7 @@ private fun SettingsMenuItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    badge: String? = null,
 ) {
     Row(
         modifier =
@@ -233,8 +248,26 @@ private fun SettingsMenuItem(
             fontWeight = FontWeight.Medium,
             fontSize = 16.sp,
             color = TextPrimary,
-            modifier = Modifier.weight(1f),
         )
+        if (badge != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Primary)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    text = badge,
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    color = Black,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
         Icon(
             imageVector = PhosphorIcons.Bold.CaretRight,
             contentDescription = null,
