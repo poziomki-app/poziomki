@@ -107,7 +107,7 @@ class FeedbackViewModel(
                     _state.value =
                         _state.value.copy(
                             isSubmitting = false,
-                            error = "Nie udało się wysłać opinii. Spróbuj ponownie.",
+                            error = "nie udało się wysłać opinii. spróbuj ponownie.",
                         )
                 }
             }
