@@ -73,6 +73,25 @@ jobs:
           fi
           echo "$ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/android-release.jks"
 
+      - name: Restore google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        # The real Firebase project file is gitignored, so CI needs it from
+        # a secret. Without this, processReleaseGoogleServices fails and
+        # the resulting bundle would have no FCM/Crashlytics wiring even
+        # if it built. Fall back to the .sample stub for branches where
+        # the secret isn't available (PR builds use mobile.yml's stub).
+        run: |
+          if [[ -n "${GOOGLE_SERVICES_JSON_B64}" ]]; then
+            echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > mobile/androidApp/google-services.json
+          elif [[ -f mobile/androidApp/google-services.json.sample ]]; then
+            echo "GOOGLE_SERVICES_JSON_B64 not set; falling back to .sample (release will not wire to real Firebase)" >&2
+            cp mobile/androidApp/google-services.json.sample mobile/androidApp/google-services.json
+          else
+            echo "GOOGLE_SERVICES_JSON_B64 is not configured and no .sample file" >&2
+            exit 1
+          fi
+
       - name: Build signed Android release
         working-directory: mobile
         env:
