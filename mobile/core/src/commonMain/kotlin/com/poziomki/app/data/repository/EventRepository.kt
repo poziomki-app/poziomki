@@ -55,6 +55,10 @@ class EventRepository(
         private const val SAVED_CACHE_KEY = "saved_events"
         private const val MY_EVENTS_CACHE_KEY_PREFIX = "my_events:"
 
+        // Polecane changes slowly and is expensive to compute; the default
+        // 5-min TTL caused users to see the list shuffle every screen visit.
+        private const val RECOMMENDED_STALE_MS = 60L * 60L * 1000L
+
         @Volatile
         private var lastLat: Double? = null
 
@@ -161,7 +165,7 @@ class EventRepository(
                         .selectByKey(RECOMMENDED_CACHE_KEY)
                         .executeAsOneOrNull()
                         ?.cached_at
-                if (cachedAt != null && !CachePolicy.isStale(cachedAt)) {
+                if (cachedAt != null && !CachePolicy.isStale(cachedAt, RECOMMENDED_STALE_MS)) {
                     return@withContext db.eventQueries
                         .selectRecommended()
                         .executeAsList()
