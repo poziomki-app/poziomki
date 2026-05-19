@@ -309,7 +309,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     assert_pool_role(PoolRole::Api).await?;
     let router = build_router_with_state(ctx)
         .layer(sentry::integrations::tower::NewSentryLayer::new_from_top())
-        .layer(sentry::integrations::tower::SentryHttpLayer::new().enable_transaction());
+        .layer(sentry::integrations::tower::SentryHttpLayer::new());
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
         .await
