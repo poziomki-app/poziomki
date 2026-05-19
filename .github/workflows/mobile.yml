@@ -38,7 +38,10 @@ jobs:
       - name: Stub google-services.json for CI
         run: cp androidApp/google-services.json.sample androidApp/google-services.json
 
-      - run: ./gradlew :androidApp:assembleDebug
+      # One gradle invocation: assembleDebug + detekt + ktlintCheck.
+      # Single Kotlin daemon + parallel tasks = ~30s saved vs. running
+      # three separate gradlew commands.
+      - run: ./gradlew :androidApp:assembleDebug detekt ktlintCheck --parallel
 
       # Upload debug APK on PR runs so the trusted pr-apk-comment workflow
       # can surface a download link back on the PR. Fork PRs run this step
@@ -50,26 +53,6 @@ jobs:
           path: mobile/androidApp/build/outputs/apk/debug/*.apk
           retention-days: 14
           if-no-files-found: error
-
-  lint:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-
-    defaults:
-      run:
-        working-directory: mobile
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
-
-      - run: ./gradlew detekt
-      - run: ./gradlew ktlintCheck
 
   dependency-updates:
     # Only runs on the weekly schedule and manual dispatch — pull-request
