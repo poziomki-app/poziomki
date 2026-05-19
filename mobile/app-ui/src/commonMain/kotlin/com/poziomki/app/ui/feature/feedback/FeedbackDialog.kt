@@ -35,10 +35,12 @@ import com.poziomki.app.ui.designsystem.theme.TextSecondary
 fun FeedbackDialog(
     rating: Int,
     message: String,
+    featureRequest: String,
     isSubmitting: Boolean,
     error: String?,
     onRatingChange: (Int) -> Unit,
     onMessageChange: (String) -> Unit,
+    onFeatureRequestChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -77,12 +79,19 @@ fun FeedbackDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Co działa, co nie, co poprawić?",
+                    fontFamily = NunitoFamily,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = message,
                     onValueChange = onMessageChange,
                     placeholder = {
                         Text(
-                            text = "Co działa, co nie, co poprawić?",
+                            text = "Twoja opinia…",
                             fontFamily = NunitoFamily,
                             color = TextMuted,
                         )
@@ -91,6 +100,36 @@ fun FeedbackDialog(
                     maxLines = 6,
                     enabled = !isSubmitting,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Nowe funkcjonalności — co dodać do apki?",
+                    fontFamily = NunitoFamily,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = featureRequest,
+                    onValueChange = onFeatureRequestChange,
+                    placeholder = {
+                        Text(
+                            text = "np. powiadomienia o znajomych w okolicy",
+                            fontFamily = NunitoFamily,
+                            color = TextMuted,
+                        )
+                    },
+                    minLines = 2,
+                    maxLines = 5,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Lub napisz: kontakt@poziomki.app",
+                    fontFamily = NunitoFamily,
+                    fontSize = 12.sp,
+                    color = TextMuted,
                 )
                 if (error != null) {
                     Spacer(modifier = Modifier.height(8.dp))

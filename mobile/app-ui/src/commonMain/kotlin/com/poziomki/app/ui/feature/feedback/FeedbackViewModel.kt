@@ -19,6 +19,7 @@ data class FeedbackState(
     val dialogOpen: Boolean = false,
     val rating: Int = 0,
     val message: String = "",
+    val featureRequest: String = "",
     val isSubmitting: Boolean = false,
     val submitted: Boolean = false,
     val error: String? = null,
@@ -56,6 +57,7 @@ class FeedbackViewModel(
                 dialogOpen = true,
                 rating = 0,
                 message = "",
+                featureRequest = "",
                 submitted = false,
                 error = null,
             )
@@ -73,6 +75,10 @@ class FeedbackViewModel(
         _state.value = _state.value.copy(message = value)
     }
 
+    fun setFeatureRequest(value: String) {
+        _state.value = _state.value.copy(featureRequest = value)
+    }
+
     fun submit(appVersion: String?) {
         val current = _state.value
         if (current.rating !in 1..5 || current.isSubmitting) return
@@ -83,6 +89,7 @@ class FeedbackViewModel(
                     rating = current.rating,
                     message = current.message.trim().takeIf { it.isNotEmpty() },
                     appVersion = appVersion,
+                    featureRequest = current.featureRequest.trim().takeIf { it.isNotEmpty() },
                 )
             when (apiService.submitFeedback(req)) {
                 is ApiResult.Success -> {
