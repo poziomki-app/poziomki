@@ -18,42 +18,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.Text
-import com.poziomki.app.ui.designsystem.theme.Border
-import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
-import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.White
 
 enum class ButtonVariant { PRIMARY, SECONDARY, DESTRUCTIVE }
 
 private val ButtonShape = RoundedCornerShape(28.dp)
 
-private val DefaultGradient =
-    Brush.verticalGradient(listOf(Color(0xFF1A2029), Color(0xFF161B22)))
-
-private val PrimaryGradient =
-    Brush.verticalGradient(listOf(Color(0xFF182028), Color(0xFF141A22)))
-
-private val DestructiveGradient =
-    Brush.verticalGradient(listOf(Color(0xFF2A1215), Color(0xFF1E0D0F)))
+// New CTA palette — replaces the previous dark-gradient-with-cyan-text variants.
+// Primary is a solid off-white pill so primary actions read loudest; secondary
+// is a ghost outline; destructive keeps a soft-red translucent fill.
+private val PrimaryFill = Color(0xFFF2F4F7)
+private val PrimaryText = Color(0xFF0B0F14)
+private val DestructiveFill = Color(0xFFFF4D4F).copy(alpha = 0.15f)
+private val DestructiveText = Color(0xFFFF6B6B)
 
 private fun contentColor(variant: ButtonVariant): Color =
     when (variant) {
-        ButtonVariant.PRIMARY -> Primary
+        ButtonVariant.PRIMARY -> PrimaryText
         ButtonVariant.SECONDARY -> White
-        ButtonVariant.DESTRUCTIVE -> Error
+        ButtonVariant.DESTRUCTIVE -> DestructiveText
     }
 
 private fun backgroundFor(variant: ButtonVariant): Brush =
     when (variant) {
-        ButtonVariant.PRIMARY -> PrimaryGradient
-        ButtonVariant.DESTRUCTIVE -> DestructiveGradient
-        ButtonVariant.SECONDARY -> DefaultGradient
+        ButtonVariant.PRIMARY -> SolidColor(PrimaryFill)
+        ButtonVariant.DESTRUCTIVE -> SolidColor(DestructiveFill)
+        ButtonVariant.SECONDARY -> SolidColor(Color.Transparent)
     }
 
 private fun borderColor(
@@ -61,8 +58,17 @@ private fun borderColor(
     enabled: Boolean,
 ): Color =
     when (variant) {
-        ButtonVariant.DESTRUCTIVE -> if (enabled) Error.copy(alpha = 0.5f) else Error.copy(alpha = 0.15f)
-        else -> if (enabled) Border else Border.copy(alpha = 0.3f)
+        ButtonVariant.PRIMARY -> {
+            Color.Transparent
+        }
+
+        ButtonVariant.DESTRUCTIVE -> {
+            if (enabled) DestructiveText.copy(alpha = 0.45f) else DestructiveText.copy(alpha = 0.15f)
+        }
+
+        ButtonVariant.SECONDARY -> {
+            if (enabled) White.copy(alpha = 0.22f) else White.copy(alpha = 0.08f)
+        }
     }
 
 @Suppress("LongParameterList")
