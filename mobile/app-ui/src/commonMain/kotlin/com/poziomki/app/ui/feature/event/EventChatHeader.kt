@@ -264,7 +264,7 @@ fun EventChatHeader(
                 Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopStart)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
