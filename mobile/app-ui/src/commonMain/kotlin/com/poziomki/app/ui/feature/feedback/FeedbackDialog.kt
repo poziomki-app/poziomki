@@ -53,7 +53,7 @@ fun FeedbackDialog(
         tonalElevation = 0.dp,
         title = {
             Text(
-                text = "Zostaw opinię",
+                text = "zostaw opinię",
                 fontFamily = NunitoFamily,
                 fontWeight = FontWeight.Bold,
             )
@@ -62,7 +62,7 @@ fun FeedbackDialog(
             val scrollState = remember { ScrollState(0) }
             Column(modifier = Modifier.verticalScroll(scrollState)) {
                 Text(
-                    text = "Jak oceniasz aplikację?",
+                    text = "jak oceniasz aplikację?",
                     fontFamily = NunitoFamily,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -84,7 +84,7 @@ fun FeedbackDialog(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Co działa, co nie, co poprawić?",
+                    text = "co działa, co nie, co poprawić?",
                     fontFamily = NunitoFamily,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -95,7 +95,7 @@ fun FeedbackDialog(
                     onValueChange = onMessageChange,
                     placeholder = {
                         Text(
-                            text = "Twoja opinia…",
+                            text = "twoja opinia...",
                             fontFamily = NunitoFamily,
                             color = TextMuted,
                         )
@@ -107,7 +107,7 @@ fun FeedbackDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Nowe funkcjonalności — co dodać do apki?",
+                    text = "nowe funkcjonalności, co dodać do apki?",
                     fontFamily = NunitoFamily,
                     fontSize = 14.sp,
                     color = TextSecondary,
@@ -130,7 +130,7 @@ fun FeedbackDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Lub napisz: kontakt@poziomki.app",
+                    text = "lub napisz: kontakt@poziomki.app",
                     fontFamily = NunitoFamily,
                     fontSize = 12.sp,
                     color = TextMuted,
@@ -152,7 +152,7 @@ fun FeedbackDialog(
                 enabled = rating in 1..5 && !isSubmitting,
             ) {
                 Text(
-                    text = if (isSubmitting) "Wysyłanie…" else "Wyślij",
+                    text = if (isSubmitting) "wysyłanie..." else "wyślij",
                     fontFamily = NunitoFamily,
                     fontWeight = FontWeight.Bold,
                 )
@@ -160,7 +160,7 @@ fun FeedbackDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isSubmitting) {
-                Text("Anuluj", fontFamily = NunitoFamily)
+                Text("anuluj", fontFamily = NunitoFamily)
             }
         },
     )
