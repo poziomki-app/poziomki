@@ -55,14 +55,8 @@ import coil3.compose.AsyncImage
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.bold.GearSix
-import com.adamglin.phosphoricons.fill.CalendarDots
-import com.adamglin.phosphoricons.fill.ChatCircle
-import com.adamglin.phosphoricons.fill.UsersThree
-import com.adamglin.phosphoricons.regular.CalendarDots
-import com.adamglin.phosphoricons.regular.ChatCircle
-import com.adamglin.phosphoricons.regular.UsersThree
+import com.adamglin.phosphoricons.fill.PaperPlaneTilt
 import com.poziomki.app.chat.api.ChatClient
 import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.data.repository.ChatRoomRepository
@@ -104,6 +98,7 @@ import com.poziomki.app.ui.feature.profile.PowiadomieniaScreen
 import com.poziomki.app.ui.feature.profile.PrivacyScreen
 import com.poziomki.app.ui.feature.profile.ProfileEditScreen
 import com.poziomki.app.ui.feature.profile.ProfileViewScreen
+import com.poziomki.app.ui.icons.MingcuteNavIcons
 import com.poziomki.app.ui.perf.ScreenTraceHandle
 import com.poziomki.app.ui.perf.startScreenTrace
 import kotlinx.coroutines.launch
@@ -129,12 +124,12 @@ val LocalImmersive = compositionLocalOf { androidx.compose.runtime.mutableStateO
 
 val bottomNavItems =
     listOf(
-        BottomNavItem("Poznaj", PhosphorIcons.Regular.UsersThree, PhosphorIcons.Fill.UsersThree, Route.Explore),
-        BottomNavItem("Wydarzenia", PhosphorIcons.Regular.CalendarDots, PhosphorIcons.Fill.CalendarDots, Route.Events),
+        BottomNavItem("Poznaj", MingcuteNavIcons.UsersFill, MingcuteNavIcons.UsersFill, Route.Explore),
+        BottomNavItem("Wydarzenia", MingcuteNavIcons.CalendarFill, MingcuteNavIcons.CalendarFill, Route.Events),
         BottomNavItem(
             "Wiadomości",
-            PhosphorIcons.Regular.ChatCircle,
-            PhosphorIcons.Fill.ChatCircle,
+            PhosphorIcons.Fill.PaperPlaneTilt,
+            PhosphorIcons.Fill.PaperPlaneTilt,
             Route.Messages,
         ),
     )
