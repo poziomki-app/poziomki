@@ -1,6 +1,7 @@
 package com.poziomki.app.ui.feature.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,11 +54,9 @@ import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
 import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
-import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
-import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.navigation.LocalNavBarPadding
@@ -250,20 +249,20 @@ private fun SettingsMenuItem(
             color = TextPrimary,
         )
         if (badge != null) {
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Box(
                 modifier =
                     Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Primary)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(1.dp, Border, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
             ) {
                 Text(
                     text = badge,
                     fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    color = Black,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 8.sp,
+                    color = TextMuted,
                 )
             }
         }
