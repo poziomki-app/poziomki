@@ -49,6 +49,10 @@
 -dontwarn com.google.errorprone.annotations.Immutable
 -dontwarn com.google.errorprone.annotations.RestrictedApi
 
+# Crashlytics — preserve file/line info so uploaded mapping symbolicates stack traces
+-keepattributes SourceFile,LineNumberTable
+-keep public class * extends java.lang.Exception
+
 # Repackage classes into unnamed package for smaller DEX (default in AGP 9.1)
 -repackageclasses
 
