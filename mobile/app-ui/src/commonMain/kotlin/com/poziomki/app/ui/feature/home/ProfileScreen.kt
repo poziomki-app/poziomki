@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +52,7 @@ import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
+import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -79,7 +79,7 @@ fun ProfileScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
+    val openExternal = rememberExternalLinkOpener()
 
     Column(
         modifier =
@@ -156,7 +156,7 @@ fun ProfileScreen(
                                     SettingsMenuItem(
                                         icon = PhosphorIcons.Bold.Coffee,
                                         label = "postaw kawę",
-                                        onClick = { uriHandler.openUri("https://buycoffee.to/poziomki-app") },
+                                        onClick = { openExternal("https://buycoffee.to/poziomki-app") },
                                     )
                                 }
 
