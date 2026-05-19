@@ -26,6 +26,7 @@ import com.adamglin.phosphoricons.regular.Star
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 
@@ -43,6 +44,8 @@ fun FeedbackDialog(
 ) {
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
+        containerColor = SurfaceElevated,
+        tonalElevation = 0.dp,
         title = {
             Text(
                 text = "Zostaw opinię",

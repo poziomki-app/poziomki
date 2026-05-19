@@ -30,9 +30,9 @@ import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
-import com.poziomki.app.ui.designsystem.theme.Surface as SurfaceColor
 
 private val REPORT_REASONS =
     listOf(
@@ -61,7 +61,7 @@ fun ReportDialog(
     ) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = SurfaceColor,
+            color = SurfaceElevated,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {

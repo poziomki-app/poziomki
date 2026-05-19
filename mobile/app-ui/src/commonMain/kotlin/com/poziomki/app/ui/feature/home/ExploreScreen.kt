@@ -289,7 +289,7 @@ private fun ExploreTagFilterDialog(
     BasicAlertDialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = SurfaceElevated,
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(
