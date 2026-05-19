@@ -8,8 +8,9 @@ pub use viewer::{
     find_user_for_password_reset, mark_email_verified, profile_owner_user_id,
     profile_program_visibility, push_tokens_for_users, resolve_session, set_anon_context,
     set_password_reset_token, set_viewer_context, user_id_for_pid, user_pid_for_id,
-    user_pids_for_ids, user_review_stubs, with_anon_tx, with_viewer_tx, AuthSessionRow,
-    AuthUserRow, CreatedSessionRow, DbViewer, PasswordResetUserRow, UserPidRow, UserReviewStubRow,
+    user_pids_for_ids, user_review_stubs, users_for_event_tag_match, with_anon_tx, with_viewer_tx,
+    AuthSessionRow, AuthUserRow, CreatedSessionRow, DbViewer, PasswordResetUserRow, UserPidRow,
+    UserReviewStubRow,
 };
 
 use deadpool::managed::Timeouts;
