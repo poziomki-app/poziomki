@@ -1,88 +1,110 @@
 package com.poziomki.app.ui.feature.feedback
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.poziomki.app.ui.designsystem.Text
+import com.poziomki.app.ui.designsystem.components.AppButton
+import com.poziomki.app.ui.designsystem.components.ButtonVariant
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
+import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
+import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
+import org.jetbrains.compose.resources.painterResource
+import poziomki_mobile.app_ui.generated.resources.Res
+import poziomki_mobile.app_ui.generated.resources.strawberry_logo
 
 @Composable
 fun WelcomeDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceElevated,
-        tonalElevation = 0.dp,
-        title = {
-            Text(
-                text = "Witaj w Poziomkach!",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Bold,
-            )
-        },
-        text = {
-            Column {
-                WelcomeParagraph(
-                    "Dzięki, że pomagasz nam testować aplikację. To jeszcze wersja " +
-                        "rozwojowa — niektóre rzeczy mogą działać dziwnie.",
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                WelcomeBullet("Bądź miły — to społeczność studencka, nie aplikacja randkowa.")
-                WelcomeBullet("Nie udostępniaj swoich danych logowania innym.")
-                WelcomeBullet("Zgłaszaj nadużycia (długie przytrzymanie wiadomości lub menu profilu).")
-                WelcomeBullet("Daj nam znać, co działa, a co nie — kliknij „Zostaw opinię”.")
-                Spacer(modifier = Modifier.height(12.dp))
-                WelcomeParagraph(
-                    "Miłej zabawy i dzięki, że jesteś częścią pierwszego testu.",
-                )
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = SurfaceElevated) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                WelcomeHero()
+                WelcomeBody(onDismiss)
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = "Rozumiem",
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        },
-    )
+        }
+    }
 }
 
 @Composable
-private fun WelcomeParagraph(text: String) {
-    Text(
-        text = text,
-        fontFamily = NunitoFamily,
-        fontSize = 14.sp,
-        color = TextSecondary,
-    )
+private fun WelcomeBody(onDismiss: () -> Unit) {
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+        Text(
+            text = "witaj w poziomkach",
+            fontFamily = MontserratFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 22.sp,
+            color = TextPrimary,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "studencka apka eventów. to wciąż wczesna wersja — niektóre rzeczy mogą działać dziwnie.",
+            fontFamily = NunitoFamily,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = TextSecondary,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        WelcomeBullet("bądź miły — to nie aplikacja randkowa.")
+        Spacer(modifier = Modifier.height(6.dp))
+        WelcomeBullet("zgłaszaj nadużycia długim przytrzymaniem wiadomości lub z menu profilu.")
+        Spacer(modifier = Modifier.height(6.dp))
+        WelcomeBullet("daj znać co działa, a co nie — przez „zostaw opinię”.")
+        Spacer(modifier = Modifier.height(24.dp))
+        AppButton(text = "zaczynamy", onClick = onDismiss, variant = ButtonVariant.PRIMARY)
+    }
+}
+
+@Composable
+private fun WelcomeHero() {
+    val heroShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    val heroBrush = Brush.verticalGradient(listOf(Primary.copy(alpha = 0.35f), SurfaceElevated))
+    val heroModifier =
+        Modifier
+            .fillMaxWidth()
+            .height(140.dp)
+            .clip(heroShape)
+            .background(heroBrush)
+    Box(modifier = heroModifier, contentAlignment = Alignment.Center) {
+        Image(
+            painter = painterResource(Res.drawable.strawberry_logo),
+            contentDescription = null,
+            modifier = Modifier.size(96.dp),
+        )
+    }
 }
 
 @Composable
 private fun WelcomeBullet(text: String) {
-    Row {
-        Text(
-            text = "•",
-            fontFamily = NunitoFamily,
-            fontSize = 14.sp,
-            color = TextSecondary,
-        )
+    Row(verticalAlignment = Alignment.Top) {
+        Text(text = "•", fontFamily = NunitoFamily, fontSize = 14.sp, color = Primary)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
             fontFamily = NunitoFamily,
             fontSize = 14.sp,
+            lineHeight = 20.sp,
             color = TextSecondary,
         )
     }
