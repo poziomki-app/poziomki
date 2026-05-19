@@ -303,12 +303,12 @@ private fun EditableAvatar(
             Image(
                 bitmap = bitmap,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().clip(CircleShape),
                 contentScale = ContentScale.Crop,
             )
         } else {
             Box(
-                modifier = Modifier.fillMaxSize().background(Surface),
+                modifier = Modifier.fillMaxSize().clip(CircleShape).background(Surface),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -323,7 +323,6 @@ private fun EditableAvatar(
             modifier =
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(10.dp)
                     .size(26.dp)
                     .clip(CircleShape)
                     .background(Primary)
