@@ -522,18 +522,18 @@ pub async fn send_broadcast(
 }
 
 async fn cleanup_stale_token(fcm_token: &str) {
-    use crate::db::schema::push_subscriptions;
-    use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
 
     let Ok(mut conn) = db::conn().await else {
         return;
     };
-    let _ = diesel::delete(
-        push_subscriptions::table.filter(push_subscriptions::fcm_token.eq(fcm_token)),
-    )
-    .execute(&mut conn)
-    .await;
+    // Route through a SECURITY DEFINER helper — the API role hits RLS
+    // on push_subscriptions and would silently match zero rows from a
+    // plain DELETE. See migration 2026-05-19-160000_delete_push_token.
+    let _ = diesel::sql_query("SELECT app.delete_push_token($1)")
+        .bind::<diesel::sql_types::Text, _>(fcm_token)
+        .execute(&mut conn)
+        .await;
 }
 
 #[cfg(test)]
