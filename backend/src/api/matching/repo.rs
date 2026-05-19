@@ -21,6 +21,12 @@ use crate::db::schema::{
 
 pub(super) struct MatchingRepository;
 
+#[derive(diesel::QueryableByName)]
+struct SystemUserId {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+}
+
 pub(super) struct MatchingProfileContext {
     pub(super) profile: Option<Profile>,
     pub(super) profile_tag_ids: HashSet<Uuid>,
@@ -199,9 +205,21 @@ impl MatchingRepository {
         // is unnecessary here. `viewer_is_stub` is still resolved above
         // because some callers depend on it; matching itself doesn't.
         let _ = viewer_is_stub;
+        // is_system accounts (e.g. the Poziomki author for curated
+        // external events) must never surface in matching. The users
+        // RLS policy is own-row only, so we can't enumerate other
+        // users directly — go through the SECURITY DEFINER helper.
+        let system_user_ids: Vec<i32> = diesel::sql_query("SELECT id FROM app.system_user_ids()")
+            .load::<SystemUserId>(conn)
+            .await?
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+
         profiles::table
             .left_join(user_settings::table.on(user_settings::user_id.eq(profiles::user_id)))
             .filter(profiles::user_id.ne(user_id))
+            .filter(profiles::user_id.ne_all(&system_user_ids))
             .filter(
                 user_settings::privacy_discoverable
                     .eq(true)

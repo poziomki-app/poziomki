@@ -141,6 +141,7 @@ async fn search_profiles(
         LEFT JOIN tags t_agg ON t_agg.id = pt_agg.tag_id
         WHERE
             (COALESCE(us.privacy_discoverable, true) = true OR p.user_id = $4)
+            AND p.user_id NOT IN (SELECT id FROM app.system_user_ids())
             AND NOT EXISTS (
                 SELECT 1 FROM profile_blocks pb
                 JOIN profiles vp ON vp.user_id = $4
