@@ -176,7 +176,7 @@ class ChatViewModel(
             val timeline = awaitTimelineForSend()
             if (timeline == null) {
                 _uiState.update {
-                    it.copy(error = "Conversation is still connecting. Please wait a few seconds.")
+                    it.copy(error = "brak połączenia, spróbuj jeszcze raz")
                 }
                 return@launch
             }
@@ -944,7 +944,7 @@ class ChatViewModel(
     private fun currentDraftRoomId(): String? = activeRoom?.roomId?.takeIf { it.isNotBlank() } ?: boundRoomId
 
     private suspend fun awaitTimelineForSend(
-        attempts: Int = 120,
+        attempts: Int = 6,
         delayMs: Long = 500L,
     ): Timeline? {
         repeat(attempts) { attempt ->
