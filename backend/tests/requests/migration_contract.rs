@@ -436,7 +436,9 @@ async fn events_flow_matches_phase_3_contract() {
             .into_iter()
             .filter_map(|row| row["id"].as_str().map(ToOwned::to_owned))
             .collect::<Vec<_>>();
-        assert!(!matching_event_ids.iter().any(|id| id == &event_id));
+        // Saved/joined events stay in matching results (they used to be hidden,
+        // which made events visibly disappear after a tap).
+        assert!(matching_event_ids.iter().any(|id| id == &event_id));
         assert!(matching_event_ids
             .iter()
             .any(|id| id == &second_music_event_id));
