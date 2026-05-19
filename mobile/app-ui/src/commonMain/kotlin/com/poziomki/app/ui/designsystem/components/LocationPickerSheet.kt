@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -195,47 +198,51 @@ fun LocationPickerSheet(
                         .align(Alignment.TopCenter)
                         .padding(top = topPadding + 8.dp, start = 16.dp, end = 16.dp),
             ) {
-                // Back button
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    color = Background.copy(alpha = 0.85f),
+                // Back button + search on the same row.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = PhosphorIcons.Bold.ArrowLeft,
-                            contentDescription = "Wstecz",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp),
-                        )
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = Background.copy(alpha = 0.85f),
+                    ) {
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = PhosphorIcons.Bold.ArrowLeft,
+                                contentDescription = "Wstecz",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = {
+                            Text("szukaj", color = TextMuted, fontFamily = NunitoFamily)
+                        },
+                        leadingIcon = {
+                            Icon(PhosphorIcons.Bold.MagnifyingGlass, contentDescription = null, tint = TextMuted)
+                        },
+                        colors =
+                            TextFieldDefaults.colors(
+                                focusedContainerColor = Background.copy(alpha = 0.92f),
+                                unfocusedContainerColor = Background.copy(alpha = 0.92f),
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                cursorColor = Primary,
+                            ),
+                        textStyle = TextStyle(fontFamily = NunitoFamily, fontSize = 15.sp),
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-
-                // Search
-                TextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = {
-                        Text("szukaj", color = TextMuted, fontFamily = NunitoFamily)
-                    },
-                    leadingIcon = {
-                        Icon(PhosphorIcons.Bold.MagnifyingGlass, contentDescription = null, tint = TextMuted)
-                    },
-                    colors =
-                        TextFieldDefaults.colors(
-                            focusedContainerColor = Background.copy(alpha = 0.92f),
-                            unfocusedContainerColor = Background.copy(alpha = 0.92f),
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = Primary,
-                        ),
-                    textStyle = TextStyle(fontFamily = NunitoFamily, fontSize = 15.sp),
-                    shape = RoundedCornerShape(14.dp),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                )
 
                 // Results
                 if (results.isNotEmpty()) {

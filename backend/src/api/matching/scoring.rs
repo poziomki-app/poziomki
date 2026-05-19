@@ -61,14 +61,17 @@ pub(super) fn rank_and_take<'a>(
     scored.iter().copied().take(limit).collect()
 }
 
-/// Sort events by score DESC, break ties by `starts_at` ASC, return top `limit`.
+/// Sort events with featured pinned first, then by score DESC, ties by
+/// `starts_at` ASC. Featured events are operator-curated highlights that
+/// must always lead the polecane list regardless of personal affinity.
 pub(super) fn rank_events_and_take<'a>(
     scored: &mut [(f64, &'a Event)],
     limit: usize,
 ) -> Vec<(f64, &'a Event)> {
     scored.sort_by(|a, b| {
-        b.0.partial_cmp(&a.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.1.is_featured
+            .cmp(&a.1.is_featured)
+            .then_with(|| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal))
             .then_with(|| a.1.starts_at.cmp(&b.1.starts_at))
     });
     scored.iter().copied().take(limit).collect()
