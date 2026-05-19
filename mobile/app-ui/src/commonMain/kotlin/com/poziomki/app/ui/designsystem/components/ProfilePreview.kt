@@ -238,13 +238,12 @@ fun ProfilePreview(
             // X on, so we render it here. ProfileViewScreen passes onClose=null
             // and renders its own sticky X outside the scrolling content.
             if (onClose != null) {
-                val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 IconButton(
                     onClick = onClose,
                     modifier =
                         Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = statusBarTop + 8.dp, end = 20.dp)
+                            .padding(top = 8.dp, end = 8.dp)
                             .size(40.dp)
                             .clip(CircleShape)
                             .background(Black.copy(alpha = 0.45f)),
@@ -340,12 +339,8 @@ fun ProfilePreview(
                 bottomContent()
             }
 
-            // Headroom for a sticky bottom-end overlay button (e.g. "Wiadomość"
-            // FAB on ProfileViewScreen) plus the system navigation bar inset,
-            // so the last bit of content can always be scrolled clear of the
-            // overlay. Harmless when no overlay is rendered.
             val navBars = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            Spacer(modifier = Modifier.height(navBars + 96.dp))
+            Spacer(modifier = Modifier.height(navBars + PoziomkiTheme.spacing.lg))
         }
     }
 }
