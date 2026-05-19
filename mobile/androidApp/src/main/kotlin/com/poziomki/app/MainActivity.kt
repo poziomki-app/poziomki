@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.poziomki.app.chat.push.NotificationChatTarget
 import com.poziomki.app.chat.push.NotificationDeepLinkTarget
 import com.poziomki.app.chat.push.NotificationHelper
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 @Suppress("TooGenericExceptionCaught") t: Throwable,
             ) {
                 android.util.Log.e("MainActivity", "screenshotsAllowed observer crashed", t)
+                FirebaseCrashlytics.getInstance().recordException(t)
             }
         }
         lifecycleScope.launch {
@@ -92,6 +94,7 @@ class MainActivity : ComponentActivity() {
                 @Suppress("TooGenericExceptionCaught") t: Throwable,
             ) {
                 android.util.Log.e("MainActivity", "deferred init failed", t)
+                FirebaseCrashlytics.getInstance().recordException(t)
             }
         }
         if (savedInstanceState == null) {

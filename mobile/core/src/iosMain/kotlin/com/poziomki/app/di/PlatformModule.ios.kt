@@ -8,6 +8,8 @@ import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.connectivity.IosConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
 import com.poziomki.app.location.LocationProvider
+import com.poziomki.app.observability.CrashReporter
+import com.poziomki.app.observability.NoopCrashReporter
 import com.poziomki.app.session.IosSecureSessionTokenStore
 import com.poziomki.app.session.SessionTokenStore
 import com.poziomki.app.session.createDataStoreIos
@@ -27,4 +29,9 @@ actual fun platformModule(): Module =
         }
         single<ConnectivityMonitor> { IosConnectivityMonitor() }
         single { LocationProvider() }
+        // iOS-side Firebase Crashlytics auto-catches native crashes via
+        // the linked SPM product; non-fatals from common KMM code would
+        // need Kotlin/Native cinterop for FIRCrashlytics, which we don't
+        // ship yet. Stays a no-op until that's wired.
+        single<CrashReporter> { NoopCrashReporter }
     }

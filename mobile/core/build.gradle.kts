@@ -51,6 +51,7 @@ kotlin {
             implementation(libs.play.services.location)
             implementation(libs.sqldelight.android.driver)
             implementation(libs.firebase.messaging)
+            implementation(libs.firebase.crashlytics)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
