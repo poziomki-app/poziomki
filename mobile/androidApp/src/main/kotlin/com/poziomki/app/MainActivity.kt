@@ -1,7 +1,9 @@
 package com.poziomki.app
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -10,7 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -30,6 +34,10 @@ class MainActivity : ComponentActivity() {
     private val notificationHelper: NotificationHelper by inject()
     private val pushManager: PushManager by inject()
     private val appUpdateMigrator: AppUpdateMigrator by inject()
+
+    // Result intentionally ignored — see ensureNotificationPermission().
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +83,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.Default) { notificationHelper.createChannels() }
+                ensureNotificationPermission()
                 // PushManager observes caches the migrator may wipe — wait for readiness.
                 appUpdateMigrator.ready.await()
                 pushManager.startObserving()
@@ -111,6 +120,20 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         NotificationChatTarget.open(intent?.getStringExtra(NotificationChatTarget.EXTRA_OPEN_CHAT_ROOM_ID))
+    }
+
+    // On API 33+, POST_NOTIFICATIONS defaults to denied — without this prompt,
+    // every notificationManager.notify() silently no-ops and FCM appears "flaky"
+    // because messages arrive but never surface. We only ask once per launch;
+    // if the user has already permanently denied, the system suppresses the
+    // dialog and we leave it to in-app settings to redirect them.
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted =
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        if (granted) return
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun applySecureFlag(secure: Boolean) {
