@@ -78,6 +78,7 @@ import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Overlay
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.Success
 import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
@@ -391,7 +392,12 @@ private fun EventCard(
                             .fillMaxWidth()
                             .padding(
                                 start = PoziomkiTheme.spacing.md,
-                                end = if (coverImage == null) 56.dp else PoziomkiTheme.spacing.md,
+                                end =
+                                    when {
+                                        coverImage != null -> PoziomkiTheme.spacing.md
+                                        event.isAttending -> 96.dp
+                                        else -> 56.dp
+                                    },
                                 top = PoziomkiTheme.spacing.sm,
                                 bottom = PoziomkiTheme.spacing.sm,
                             ),
@@ -520,7 +526,7 @@ private fun AttendingBadge(modifier: Modifier = Modifier) {
             PhosphorIcons.Fill.CheckCircle,
             contentDescription = "Bierzesz udział",
             modifier = Modifier.size(22.dp),
-            tint = Primary,
+            tint = Success,
         )
     }
 }
@@ -732,16 +738,28 @@ private fun EventRowContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = event.title,
-            preserveCase = true,
-            fontFamily = MontserratFamily,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 18.sp,
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = event.title,
+                preserveCase = true,
+                fontFamily = MontserratFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (event.isAttending) {
+                Spacer(modifier = Modifier.width(PoziomkiTheme.spacing.xs))
+                Icon(
+                    PhosphorIcons.Fill.CheckCircle,
+                    contentDescription = "Bierzesz udział",
+                    modifier = Modifier.size(18.dp),
+                    tint = Success,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = formatEventDate(event.startsAt),

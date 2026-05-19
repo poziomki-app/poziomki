@@ -48,6 +48,7 @@ class EventsViewModel(
 
     init {
         observeEvents()
+        observeRecommendedEvents()
         refreshEvents()
         loadRecommendedEvents()
         observeSyncErrors()
@@ -62,15 +63,26 @@ class EventsViewModel(
                         _state.value = _state.value.copy(isLoading = false)
                     }
                 } else {
-                    val byId = events.associateBy { it.id }
-                    val syncedRecommended =
-                        _state.value.recommendedEvents.mapNotNull { byId[it.id] }
                     _state.value =
                         _state.value.copy(
                             allEvents = events,
-                            recommendedEvents = syncedRecommended,
                             isLoading = if (events.isNotEmpty()) false else _state.value.isLoading,
                         )
+                    filterEvents()
+                }
+            }
+        }
+    }
+
+    // Drive the recommended list straight from the DB query rather than
+    // re-projecting through `allEvents` — recommended-only events aren't in
+    // the main list feed, and looking them up by id would silently drop them
+    // (the bug that made joined events vanish).
+    private fun observeRecommendedEvents() {
+        viewModelScope.launch {
+            eventRepository.observeRecommendedEvents().collect { events ->
+                if (!eventsVisuallyEqual(_state.value.recommendedEvents, events)) {
+                    _state.value = _state.value.copy(recommendedEvents = events)
                     filterEvents()
                 }
             }
