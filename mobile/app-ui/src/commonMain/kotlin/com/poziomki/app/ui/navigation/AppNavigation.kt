@@ -114,6 +114,44 @@ data class BottomNavItem(
     val route: Route,
 )
 
+@Composable
+private fun NavBarIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    showTopDot: Boolean,
+    showBottomDot: Boolean,
+) {
+    Box(contentAlignment = Alignment.Center) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(26.dp),
+            tint = tint,
+        )
+        if (showTopDot) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(Primary),
+            )
+        }
+        if (showBottomDot) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)),
+            )
+        }
+    }
+}
+
 val LocalNavBarPadding = compositionLocalOf { 0.dp }
 
 /**
@@ -524,7 +562,7 @@ private fun handleBroadcastDeepLink(
     NotificationDeepLinkTarget.consume(link)
 }
 
-@Suppress("LongMethod", "LongParameterList")
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 fun MainScreen(
     onNavigateToEventDetail: (String) -> Unit,
@@ -550,6 +588,11 @@ fun MainScreen(
     val profileViewModel: ProfileViewModel = koinViewModel()
     val profileState by profileViewModel.state.collectAsState()
     val profilePicture = profileState.profile?.profilePicture
+
+    val chatClient = koinInject<ChatClient>()
+    val chatRooms by chatClient.rooms.collectAsState()
+    val hasUnreadFriendMessages = chatRooms.any { it.isDirect && it.unreadCount > 0 }
+    val hasUnreadEventMessages = chatRooms.any { !it.isDirect && it.unreadCount > 0 }
 
     val feedbackViewModel: FeedbackViewModel = koinViewModel()
     val feedbackState by feedbackViewModel.state.collectAsState()
@@ -682,11 +725,13 @@ fun MainScreen(
                                                 },
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
-                                        Icon(
-                                            if (selected) item.selectedIcon else item.icon,
+                                        val isMessagesTab = item.route is Route.Messages
+                                        NavBarIcon(
+                                            icon = if (selected) item.selectedIcon else item.icon,
                                             contentDescription = item.label,
-                                            modifier = Modifier.size(26.dp),
                                             tint = tint,
+                                            showTopDot = isMessagesTab && hasUnreadFriendMessages,
+                                            showBottomDot = isMessagesTab && hasUnreadEventMessages,
                                         )
                                     }
                                 }
