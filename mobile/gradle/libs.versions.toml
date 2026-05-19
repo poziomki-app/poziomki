@@ -27,8 +27,10 @@ sqldelight = "2.3.2"
 firebaseBom = "33.6.0"
 firebaseMessaging = "24.1.0"
 firebasePerf = "22.0.5"
+firebaseCrashlytics = "20.0.0"
 googleServices = "4.4.2"
 firebasePerfPlugin = "2.0.2"
+firebaseCrashlyticsPlugin = "3.0.7"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
@@ -72,6 +74,7 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 firebase-perf = { module = "com.google.firebase:firebase-perf", version.ref = "firebasePerf" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics", version.ref = "firebaseCrashlytics" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -86,3 +89,4 @@ kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-perf = { id = "com.google.firebase.firebase-perf", version.ref = "firebasePerfPlugin" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }

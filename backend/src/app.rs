@@ -39,6 +39,8 @@ fn resolve_port() -> crate::error::AppResult<u16> {
 
 fn init_tracing_once() -> crate::error::AppResult<()> {
     use std::sync::OnceLock;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    use tracing_subscriber::util::SubscriberInitExt as _;
 
     static TRACING_INIT: OnceLock<()> = OnceLock::new();
     if TRACING_INIT.get().is_some() {
@@ -55,22 +57,25 @@ fn init_tracing_once() -> crate::error::AppResult<()> {
         Err(_) => tracing_subscriber::EnvFilter::new("info"),
     };
 
-    let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production";
-
-    if is_production {
-        tracing_subscriber::fmt()
+    if is_production() {
+        let fmt_layer = tracing_subscriber::fmt::layer()
             .json()
             .flatten_event(true)
-            .with_env_filter(filter)
             .with_target(true)
             .with_current_span(true)
-            .with_span_list(true)
+            .with_span_list(true);
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(fmt_layer)
+            .with(sentry::integrations::tracing::layer())
             .try_init()
             .map_err(|e| crate::error::AppError::Message(format!("logger init: {e}")))?;
     } else {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_target(true)
+        let fmt_layer = tracing_subscriber::fmt::layer().with_target(true);
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(fmt_layer)
+            .with(sentry::integrations::tracing::layer())
             .try_init()
             .map_err(|e| crate::error::AppError::Message(format!("logger init: {e}")))?;
     }
@@ -292,6 +297,7 @@ pub fn build_router_with_state(ctx: AppContext) -> axum::Router {
 
 pub async fn run_api_server() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
+    crate::observability::init_sentry();
     init_tracing_once()?;
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Api)?;
     crate::moderation::init_from_env()
@@ -301,7 +307,9 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
     let cfg = load_runtime_config()?;
     let ctx = build_app_context(PoolRole::Api)?;
     assert_pool_role(PoolRole::Api).await?;
-    let router = build_router_with_state(ctx);
+    let router = build_router_with_state(ctx)
+        .layer(sentry::integrations::tower::NewSentryLayer::new_from_top())
+        .layer(sentry::integrations::tower::SentryHttpLayer::new().enable_transaction());
 
     let listener = tokio::net::TcpListener::bind((cfg.binding.as_str(), cfg.port))
         .await
@@ -322,6 +330,7 @@ pub async fn run_api_server() -> crate::error::AppResult<()> {
 
 pub async fn run_outbox_worker_process() -> crate::error::AppResult<()> {
     let _ = dotenvy::dotenv();
+    crate::observability::init_sentry();
     init_tracing_once()?;
     crate::telemetry::init_metrics_exporter(crate::telemetry::ProcessKind::Worker)?;
     crate::moderation::init_from_env()

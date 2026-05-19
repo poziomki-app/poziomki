@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.perf)
+    alias(libs.plugins.firebase.crashlytics)
     id("poziomki.detekt")
     id("poziomki.ktlint")
     id("poziomki.kotlin-warnings")
@@ -126,5 +127,6 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.perf)
+    implementation(libs.firebase.crashlytics)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
