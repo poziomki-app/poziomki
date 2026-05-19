@@ -111,6 +111,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-noreply-staging@poziomki.app}
       OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Gates /api/v1/dev/* (otp lookup, user wipe). Staging-only.
+      # Leave empty to disable. See backend/src/api/dev.rs and
+      # infra/.env.staging.example. NEVER add this binding to
+      # docker-compose.prod.yml.
       POZIOMKI_DEV_TOKEN: ${POZIOMKI_DEV_TOKEN:-}
       IMGPROXY_HMAC_KEY: ${IMGPROXY_HMAC_KEY}
       IMGPROXY_HMAC_SALT: ${IMGPROXY_HMAC_SALT}
