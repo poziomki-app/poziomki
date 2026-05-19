@@ -616,7 +616,7 @@ fun MainScreen(
                                         if (selected) {
                                             MaterialTheme.colorScheme.onSurface
                                         } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                         }
                                     Column(
                                         modifier =
@@ -694,7 +694,7 @@ fun MainScreen(
                                                 if (profileSelected) {
                                                     MaterialTheme.colorScheme.onSurface
                                                 } else {
-                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                                 },
                                         )
                                     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,6 +54,7 @@ import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.ArrowLeft
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
 import com.adamglin.phosphoricons.bold.Flag
+import com.adamglin.phosphoricons.bold.Info
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.SignOut
 import com.adamglin.phosphoricons.bold.Trash
@@ -121,15 +123,25 @@ fun EventCoverImage(
                         Brush.verticalGradient(
                             colorStops =
                                 arrayOf(
-                                    0f to Color.Black.copy(alpha = 0.3f),
-                                    0.2f to Color.Transparent,
-                                    0.45f to Background.copy(alpha = 0.3f),
-                                    0.65f to Background.copy(alpha = 0.65f),
-                                    0.8f to Background.copy(alpha = 0.85f),
+                                    0f to Color.Black.copy(alpha = 0.45f),
+                                    0.08f to Color.Black.copy(alpha = 0.22f),
+                                    0.18f to Color.Black.copy(alpha = 0.08f),
+                                    0.28f to Background.copy(alpha = 0.2f),
+                                    0.40f to Background.copy(alpha = 0.7f),
+                                    0.50f to Background,
                                     1f to Background,
                                 ),
                         ),
                     ),
+        )
+
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .background(Background),
         )
 
         content()
@@ -155,29 +167,25 @@ fun EventMetaRows(
                 icon = PhosphorIcons.Fill.MapPin,
                 text = formatEventLocation(location),
                 onClick = onLocationClick,
+                preserveCase = true,
             )
         }
 
         if (onInfoClick != null) {
-            val infoShape = RoundedCornerShape(50)
             Surface(
                 onClick = onInfoClick,
-                shape = infoShape,
-                color = Primary.copy(alpha = 0.18f),
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.12f),
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier =
-                        Modifier
-                            .height(32.dp)
-                            .padding(horizontal = 12.dp),
+                    modifier = Modifier.size(32.dp),
                 ) {
-                    Text(
-                        text = "i",
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp,
-                        color = Primary,
+                    Icon(
+                        imageVector = PhosphorIcons.Bold.Info,
+                        contentDescription = "informacje",
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White.copy(alpha = 0.85f),
                     )
                 }
             }
@@ -191,6 +199,7 @@ private fun MetaChip(
     text: String,
     onClick: (() -> Unit)? = null,
     accent: Boolean = false,
+    preserveCase: Boolean = false,
 ) {
     val shape = RoundedCornerShape(50)
     val bgColor = if (accent) Primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.12f)
@@ -198,11 +207,11 @@ private fun MetaChip(
 
     if (onClick != null) {
         Surface(onClick = onClick, shape = shape, color = bgColor) {
-            ChipContent(icon = icon, text = text, tint = contentColor)
+            ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
         }
     } else {
         Surface(shape = shape, color = bgColor) {
-            ChipContent(icon = icon, text = text, tint = contentColor)
+            ChipContent(icon = icon, text = text, tint = contentColor, preserveCase = preserveCase)
         }
     }
 }
@@ -212,6 +221,7 @@ private fun ChipContent(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     tint: Color,
+    preserveCase: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -234,6 +244,7 @@ private fun ChipContent(
             fontSize = 12.sp,
             color = tint,
             maxLines = 1,
+            preserveCase = preserveCase,
         )
     }
 }
