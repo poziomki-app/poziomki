@@ -64,7 +64,6 @@ import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.LocationPickerSheet
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
@@ -669,11 +668,10 @@ fun EventCreateScreen(
 
             Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.xl))
 
-            // Submit
+            // Submit — matches wyloguj (SECONDARY default) for visual consistency.
             AppButton(
                 text = if (isEditMode) "zapisz zmiany" else "utwórz wydarzenie",
                 onClick = { viewModel.saveEvent(onCreated) },
-                variant = ButtonVariant.PRIMARY,
                 enabled =
                     state.title.isNotBlank() &&
                         state.startsAt.isNotBlank() &&
