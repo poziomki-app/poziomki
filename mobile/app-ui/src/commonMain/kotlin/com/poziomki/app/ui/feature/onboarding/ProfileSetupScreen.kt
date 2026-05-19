@@ -5,13 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,11 +41,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
-import com.adamglin.phosphoricons.bold.ArrowUpRight
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.User
 import com.poziomki.app.ui.designsystem.Text
@@ -220,6 +221,7 @@ private fun ProfilePreviewCard(
     onPreviewClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(20.dp)
+    val cardHeight = 104.dp
     val backgroundBrush =
         Brush.linearGradient(
             colors = listOf(Color(0xFF161C26), Color(0xFF080B10)),
@@ -231,60 +233,51 @@ private fun ProfilePreviewCard(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .height(cardHeight)
                 .clip(cardShape)
                 .border(1.dp, Border, cardShape)
                 .background(backgroundBrush)
                 .clickable(onClick = onPreviewClick),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             EditableAvatar(
                 displayAvatarBytes = displayAvatarBytes,
+                size = cardHeight,
                 onClick = onAvatarClick,
             )
+
             Spacer(modifier = Modifier.width(12.dp))
-            CardInfoColumn(
-                name = state.name,
-                program = state.program,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                PhosphorIcons.Bold.ArrowUpRight,
-                contentDescription = null,
+
+            Column(
                 modifier =
                     Modifier
-                        .padding(top = 12.dp, end = 12.dp)
-                        .size(20.dp)
-                        .align(Alignment.Top),
-                tint = TextMuted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun CardInfoColumn(
-    name: String,
-    program: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.padding(vertical = 16.dp)) {
-        Text(
-            text = name.ifBlank { "imi\u0119" },
-            preserveCase = true,
-            fontFamily = MontserratFamily,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 20.sp,
-            color = TextPrimary,
-        )
-        if (program.isNotBlank()) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = program,
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 14.sp,
-                color = TextSecondary,
-            )
+                        .weight(1f)
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = state.name.ifBlank { "imi\u0119" },
+                    preserveCase = true,
+                    fontFamily = MontserratFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 19.sp,
+                    color = TextPrimary,
+                )
+                if (state.program.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = state.program,
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        color = TextSecondary,
+                    )
+                }
+            }
         }
     }
 }
@@ -292,50 +285,49 @@ private fun CardInfoColumn(
 @Composable
 private fun EditableAvatar(
     displayAvatarBytes: ByteArray?,
+    size: Dp,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
             Modifier
-                .size(98.dp)
+                .size(size)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
                 ),
-        contentAlignment = Alignment.TopStart,
     ) {
-        Box(
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp).size(90.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                displayAvatarBytes != null -> {
-                    val bitmap = remember(displayAvatarBytes) { decodeImageBytes(displayAvatarBytes) }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = null,
-                            modifier = Modifier.size(90.dp),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Icon(PhosphorIcons.Bold.User, null, Modifier.size(42.dp), tint = TextMuted)
-                    }
-                }
-
-                else -> {
-                    Icon(PhosphorIcons.Bold.User, null, Modifier.size(42.dp), tint = TextMuted)
-                }
+        val bitmap = displayAvatarBytes?.let { remember(it) { decodeImageBytes(it) } }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Surface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    PhosphorIcons.Bold.User,
+                    contentDescription = null,
+                    modifier = Modifier.size(size * 0.4f),
+                    tint = TextMuted,
+                )
             }
         }
         Box(
             modifier =
                 Modifier
-                    .offset(x = 74.dp, y = 74.dp)
-                    .size(24.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
-                    .background(Primary),
+                    .background(Primary)
+                    .border(2.dp, Black, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(PhosphorIcons.Bold.PencilSimple, null, Modifier.size(14.dp), tint = Black)
