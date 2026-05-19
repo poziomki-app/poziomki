@@ -69,6 +69,7 @@ import com.poziomki.app.ui.designsystem.components.UserAvatar
 import com.poziomki.app.ui.designsystem.components.pointGeoJson
 import com.poziomki.app.ui.designsystem.theme.Background
 import com.poziomki.app.ui.designsystem.theme.Error
+import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
@@ -94,6 +95,7 @@ import org.maplibre.spatialk.geojson.Position
 @Composable
 fun EventCoverImage(
     event: Event,
+    strongOverlay: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -102,7 +104,7 @@ fun EventCoverImage(
             Modifier
                 .fillMaxWidth()
                 .padding(start = 12.dp, end = 12.dp, top = statusBarTop + 8.dp)
-                .aspectRatio(16f / 10f)
+                .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(24.dp)),
     ) {
         val coverImage = event.coverImage
@@ -115,24 +117,33 @@ fun EventCoverImage(
             )
         }
 
+        val gradientStops =
+            if (strongOverlay) {
+                arrayOf(
+                    0f to Color.Black.copy(alpha = 0.2f),
+                    0.12f to Color.Transparent,
+                    0.25f to Background.copy(alpha = 0.18f),
+                    0.38f to Background.copy(alpha = 0.65f),
+                    0.48f to Background,
+                    1f to Background,
+                )
+            } else {
+                arrayOf(
+                    0f to Color.Black.copy(alpha = 0.18f),
+                    0.15f to Color.Transparent,
+                    0.55f to Color.Transparent,
+                    0.72f to Background.copy(alpha = 0.55f),
+                    0.88f to Background,
+                    1f to Background,
+                )
+            }
+        val solidBottomFraction = if (strongOverlay) 0.55f else 0.15f
+
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops =
-                                arrayOf(
-                                    0f to Color.Black.copy(alpha = 0.45f),
-                                    0.08f to Color.Black.copy(alpha = 0.22f),
-                                    0.18f to Color.Black.copy(alpha = 0.08f),
-                                    0.28f to Background.copy(alpha = 0.2f),
-                                    0.40f to Background.copy(alpha = 0.7f),
-                                    0.50f to Background,
-                                    1f to Background,
-                                ),
-                        ),
-                    ),
+                    .background(Brush.verticalGradient(colorStops = gradientStops)),
         )
 
         Box(
@@ -140,7 +151,7 @@ fun EventCoverImage(
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
+                    .fillMaxHeight(solidBottomFraction)
                     .background(Background),
         )
 
@@ -269,7 +280,7 @@ fun EventChatHeader(
     var showLocationDialog by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
 
-    EventCoverImage(event = event) {
+    EventCoverImage(event = event, strongOverlay = true) {
         Row(
             modifier =
                 Modifier
@@ -371,15 +382,28 @@ fun EventChatHeader(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
-                    .padding(horizontal = PoziomkiTheme.spacing.md, vertical = PoziomkiTheme.spacing.sm),
+                    .padding(
+                        start = PoziomkiTheme.spacing.md,
+                        end = PoziomkiTheme.spacing.md,
+                        top = PoziomkiTheme.spacing.sm,
+                        bottom = PoziomkiTheme.spacing.lg,
+                    ),
         ) {
+            val titleFontSize =
+                when {
+                    event.title.length > 40 -> 18.sp
+                    event.title.length > 28 -> 22.sp
+                    else -> 26.sp
+                }
             Text(
                 text = event.title,
                 preserveCase = true,
-                style = MaterialTheme.typography.headlineMedium,
+                fontFamily = MontserratFamily,
+                fontSize = titleFontSize,
+                lineHeight = titleFontSize * 1.15f,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
-                maxLines = 3,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
 
