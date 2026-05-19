@@ -85,6 +85,7 @@ async fn insert_profile(user: &User, name: &str) -> Uuid {
         gradient_end: None,
         created_at: now,
         updated_at: now,
+        is_pre_launch: false,
     };
     diesel::insert_into(profiles::table)
         .values(&new_profile)

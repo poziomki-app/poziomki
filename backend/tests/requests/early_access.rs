@@ -15,11 +15,54 @@
 //! the upstream Cloudflare endpoint (out of scope for this PR).
 
 use axum::http::header::ORIGIN;
+use axum::http::{HeaderName, HeaderValue};
 use axum_test::TestServer;
 use diesel::deserialize::QueryableByName;
-use diesel::sql_types::{Nullable, Text, Timestamptz, VarChar};
+use diesel::sql_types::{Bool, Nullable, Text, Timestamptz, VarChar};
 use serial_test::serial;
 use std::future::Future;
+
+fn auth_header(token: &str) -> (HeaderName, HeaderValue) {
+    let value = HeaderValue::from_str(&format!("Bearer {token}")).unwrap();
+    (HeaderName::from_static("authorization"), value)
+}
+
+async fn fetch_otp(email: &str) -> String {
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+    use poziomki_backend::db::models::otp_codes::OtpCode;
+    use poziomki_backend::db::schema::otp_codes;
+    let mut conn = poziomki_backend::db::conn().await.expect("get DB conn");
+    otp_codes::table
+        .filter(otp_codes::email.eq(email))
+        .first::<OtpCode>(&mut conn)
+        .await
+        .expect("OTP row exists")
+        .code
+}
+
+/// Reads `profiles.is_pre_launch` for the given email via an owner-role
+/// connection — the API pool (`poziomki_api`) can't see other users' rows
+/// under RLS, so this can't go through the normal pool.
+fn read_is_pre_launch(email: &str) -> bool {
+    use diesel::prelude::*;
+    #[derive(QueryableByName)]
+    struct Row {
+        #[diesel(sql_type = Bool)]
+        is_pre_launch: bool,
+    }
+    let url = std::env::var("DATABASE_URL").expect("DATABASE_URL set");
+    let mut conn = diesel::pg::PgConnection::establish(&url).expect("owner conn");
+    diesel::sql_query(
+        "SELECT p.is_pre_launch
+         FROM public.profiles p JOIN public.users u ON u.id = p.user_id
+         WHERE u.email = $1",
+    )
+    .bind::<Text, _>(email)
+    .get_result::<Row>(&mut conn)
+    .expect("profile row")
+    .is_pre_launch
+}
 
 async fn run<F, Fut>(f: F)
 where
@@ -139,6 +182,95 @@ async fn mobile_signup_still_works_without_source() {
         );
         assert!(row.platform_pref.is_none());
         assert!(row.signup_source.is_none());
+    })
+    .await;
+}
+
+/// Full end-to-end flow that the landing page drives the user through:
+///
+///   sign-up (source=`landing_early_access`)
+///   → verify-otp
+///   → POST /profiles with name + program + bio + tagIds
+///   → assert `profile.is_pre_launch` = TRUE  (hidden from mobile)
+///   → POST /profiles/me/finalize-pre-launch
+///   → assert `profile.is_pre_launch` = FALSE (now visible)
+#[tokio::test]
+#[serial]
+async fn early_access_full_flow_to_finalize() {
+    run(|server| async move {
+        let email = "e2e@example.com";
+
+        // 1. landing-page signup
+        let signup = server
+            .post("/api/v1/auth/sign-up/email")
+            .json(&serde_json::json!({
+                "email": email,
+                "name": "E2E",
+                "password": "secret123",
+                "platformPref": "android",
+                "source": "landing_early_access",
+            }))
+            .await;
+        assert_eq!(signup.status_code(), 200);
+
+        // 2. verify OTP → bearer token
+        let otp = fetch_otp(email).await;
+        let verify = server
+            .post("/api/v1/auth/verify-otp")
+            .json(&serde_json::json!({ "email": email, "otp": otp }))
+            .await;
+        assert_eq!(verify.status_code(), 200);
+        let body: serde_json::Value = verify.json();
+        let token = body["data"]["token"].as_str().expect("token").to_owned();
+        let (k, v) = auth_header(&token);
+
+        // 3. create the profile with the full payload — what the
+        //    landing's "potwierdź" click sends in one shot.
+        let create = server
+            .post("/api/v1/profiles")
+            .add_header(k.clone(), v.clone())
+            .json(&serde_json::json!({
+                "name": "Ada",
+                "program": "informatyka",
+                "bio": "hej",
+            }))
+            .await;
+        assert!(
+            matches!(create.status_code().as_u16(), 200 | 201),
+            "profile create should succeed, got {}",
+            create.status_code()
+        );
+
+        // 4. profile must be flagged is_pre_launch = TRUE (invisible
+        //    to mobile reads).
+        assert!(
+            read_is_pre_launch(email),
+            "landing-created profile should start hidden (is_pre_launch=true)"
+        );
+
+        // 5. mobile finishes its own onboarding → finalize endpoint
+        let finalize = server
+            .post("/api/v1/profiles/me/finalize-pre-launch")
+            .add_header(k.clone(), v.clone())
+            .await;
+        assert_eq!(finalize.status_code(), 200);
+        let body: serde_json::Value = finalize.json();
+        assert_eq!(body["data"]["finalized"], serde_json::json!(true));
+
+        // 6. flag flipped → profile now visible to the app
+        assert!(
+            !read_is_pre_launch(email),
+            "after finalize, is_pre_launch should be FALSE"
+        );
+
+        // 7. second finalize is a no-op (idempotent)
+        let again = server
+            .post("/api/v1/profiles/me/finalize-pre-launch")
+            .add_header(k, v)
+            .await;
+        assert_eq!(again.status_code(), 200);
+        let body: serde_json::Value = again.json();
+        assert_eq!(body["data"]["finalized"], serde_json::json!(false));
     })
     .await;
 }

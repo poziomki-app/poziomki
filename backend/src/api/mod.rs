@@ -86,6 +86,10 @@ fn profiles_routes() -> Router<AppContext> {
     // me" flags). Default to no-store to keep that data off shared caches.
     Router::new()
         .route("/me", get(profiles::profile_me))
+        .route(
+            "/me/finalize-pre-launch",
+            post(profiles::profile_finalize_pre_launch),
+        )
         .route("/bookmarked", get(profiles::profiles_bookmarked_handler))
         .route("/", post(profiles::profile_create))
         .route("/{id}", get(profiles::profile_get))
