@@ -142,12 +142,27 @@ jobs:
             dist/android-release/*.txt
             dist/android-release/*.tar.gz
 
+      # Probe for the Play service-account secret so the upload step can be
+      # cleanly skipped (instead of failing the whole release) when CI runs
+      # before the secret has been provisioned. See docs/play-deploy.md.
+      - name: Check Play upload secret
+        id: play_secret
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [[ -n "${PLAY_SERVICE_ACCOUNT_JSON}" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::PLAY_SERVICE_ACCOUNT_JSON not configured; skipping Play upload. See docs/play-deploy.md." >&2
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Auto-publish the signed AAB to Play Console's internal testing
       # track. First-ever upload still has to be done manually via the
       # Console (Google's bootstrap requirement); subsequent tag pushes
-      # ship automatically. Requires PLAY_SERVICE_ACCOUNT_JSON secret
-      # (service account with "Release manager" role on app.poziomki).
+      # ship automatically. See docs/play-deploy.md for setup.
       - name: Upload AAB to Play internal track
+        if: steps.play_secret.outputs.present == 'true'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
