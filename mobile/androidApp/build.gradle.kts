@@ -16,7 +16,7 @@ composeCompiler {
 // Single source of truth for the app version. release-please bumps this line
 // (see .github/.release-please-manifest.json); versionCode is derived so it
 // never drifts out of monotonic order.
-val appVersionName = "0.21.1" // x-release-please-version
+val appVersionName = "0.21.2" // x-release-please-version
 
 fun computeVersionCode(name: String): Int {
     val parts = name.split(".").map { it.toInt() }
@@ -120,6 +120,31 @@ if (
         keyPassword = releaseKeyPassword
     }
     android.buildTypes.getByName("release").signingConfig = android.signingConfigs.getByName("release")
+}
+
+// Refuse to assemble a release with the stub google-services.json. The stub's
+// REPLACE_ME api_key produces an APK that throws IllegalArgumentException on
+// Firebase init at first launch, and Crashlytics can't report it because it
+// depends on the same config. Debug builds keep using the stub freely.
+gradle.taskGraph.whenReady {
+    val buildingRelease =
+        allTasks.any { task ->
+            val n = task.name
+            (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package")) &&
+                n.contains("Release")
+        }
+    if (!buildingRelease) return@whenReady
+    val configFile = file("google-services.json")
+    if (!configFile.exists()) {
+        throw GradleException("google-services.json is missing; release builds require the real Firebase config")
+    }
+    val text = configFile.readText()
+    if (text.contains("REPLACE_ME") || text.contains("your-firebase-project-id")) {
+        throw GradleException(
+            "google-services.json looks like the .sample stub; drop the real Firebase config at " +
+                "mobile/androidApp/google-services.json before building a release",
+        )
+    }
 }
 
 dependencies {

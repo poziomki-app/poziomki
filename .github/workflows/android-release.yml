@@ -76,19 +76,32 @@ jobs:
       - name: Restore google-services.json
         env:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        # The real Firebase project file is gitignored, so CI needs it from
-        # a secret. Without this, processReleaseGoogleServices fails and
-        # the resulting bundle would have no FCM/Crashlytics wiring even
-        # if it built. Fall back to the .sample stub for branches where
-        # the secret isn't available (PR builds use mobile.yml's stub).
+        # Release builds MUST use the real Firebase config. No stub fallback:
+        # a stub builds successfully but ships an invalid API key, so Firebase
+        # init throws on first launch and Crashlytics can't even report the
+        # crash (it depends on the same config). PR builds use mobile.yml's
+        # explicit stub for debug-only assembly.
         run: |
-          if [[ -n "${GOOGLE_SERVICES_JSON_B64}" ]]; then
-            echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > mobile/androidApp/google-services.json
-          elif [[ -f mobile/androidApp/google-services.json.sample ]]; then
-            echo "GOOGLE_SERVICES_JSON_B64 not set; falling back to .sample (release will not wire to real Firebase)" >&2
-            cp mobile/androidApp/google-services.json.sample mobile/androidApp/google-services.json
-          else
-            echo "GOOGLE_SERVICES_JSON_B64 is not configured and no .sample file" >&2
+          if [[ -z "${GOOGLE_SERVICES_JSON_B64}" ]]; then
+            echo "::error::GOOGLE_SERVICES_JSON_B64 secret is not set; refusing to build a release with a stub Firebase config" >&2
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > mobile/androidApp/google-services.json
+          # Guard against an empty/corrupt secret, or someone base64-ing the
+          # .sample file by mistake. Both produce builds that crash on init.
+          if ! jq -e '.client[0].api_key[0].current_key' mobile/androidApp/google-services.json >/dev/null; then
+            echo "::error::google-services.json is missing api_key after decode" >&2
+            exit 1
+          fi
+          api_key="$(jq -r '.client[0].api_key[0].current_key' mobile/androidApp/google-services.json)"
+          project_id="$(jq -r '.project_info.project_id' mobile/androidApp/google-services.json)"
+          package_name="$(jq -r '.client[0].client_info.android_client_info.package_name' mobile/androidApp/google-services.json)"
+          if [[ "$api_key" == "REPLACE_ME" || "$project_id" == "your-firebase-project-id" ]]; then
+            echo "::error::GOOGLE_SERVICES_JSON_B64 decodes to the .sample stub; configure the real Firebase config" >&2
+            exit 1
+          fi
+          if [[ "$package_name" != "app.poziomki" ]]; then
+            echo "::error::google-services.json package_name is '$package_name', expected 'app.poziomki'" >&2
             exit 1
           fi
 
@@ -128,3 +141,17 @@ jobs:
             dist/android-release/*.aab
             dist/android-release/*.txt
             dist/android-release/*.tar.gz
+
+      # Auto-publish the signed AAB to Play Console's internal testing
+      # track. First-ever upload still has to be done manually via the
+      # Console (Google's bootstrap requirement); subsequent tag pushes
+      # ship automatically. Requires PLAY_SERVICE_ACCOUNT_JSON secret
+      # (service account with "Release manager" role on app.poziomki).
+      - name: Upload AAB to Play internal track
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.poziomki
+          releaseFiles: dist/android-release/*.aab
+          track: internal
+          status: completed

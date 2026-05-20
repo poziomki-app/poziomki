@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -381,6 +384,11 @@ internal fun NearbyEventsContent(
         // No background image, no scroll: title + date + location + attendees,
         // tap → full event screen.
         if (selectedEvent != null) {
+            // Immersive mode hides the in-app navbar (LocalNavBarPadding=0),
+            // so fall back to the system navigation-bar inset to keep the
+            // panel above the Android gesture/3-button bar.
+            val systemNavInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val bottomSafe = maxOf(LocalNavBarPadding.current, systemNavInset)
             Row(
                 modifier =
                     Modifier
@@ -389,7 +397,7 @@ internal fun NearbyEventsContent(
                         .background(Background)
                         .clickable { onEventClick(selectedEvent.id) }
                         .padding(horizontal = 16.dp)
-                        .padding(top = 10.dp, bottom = LocalNavBarPadding.current + 20.dp),
+                        .padding(top = 10.dp, bottom = bottomSafe + 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val cover = selectedEvent.coverImage
