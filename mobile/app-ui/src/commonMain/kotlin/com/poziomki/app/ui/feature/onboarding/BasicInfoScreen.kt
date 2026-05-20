@@ -31,8 +31,8 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.ui.designsystem.Text
-import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
+import com.poziomki.app.ui.designsystem.components.OnboardingPrimaryAction
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -59,14 +59,12 @@ fun BasicInfoScreen(
         // dead end than just staying on the form. Hide the affordance.
         showBack = false,
         onBack = onBack,
-        footer = {
-            AppButton(
+        primaryAction =
+            OnboardingPrimaryAction(
                 text = "dalej",
                 onClick = onNext,
                 enabled = state.name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
+            ),
     ) {
         Column(
             modifier =

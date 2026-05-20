@@ -45,9 +45,9 @@ import com.adamglin.phosphoricons.bold.Plus
 import com.adamglin.phosphoricons.bold.X
 import com.poziomki.app.network.Tag
 import com.poziomki.app.ui.designsystem.Text
-import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
+import com.poziomki.app.ui.designsystem.components.OnboardingPrimaryAction
 import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
@@ -64,7 +64,7 @@ fun InterestsScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
+    val searchQuery = state.tagSearchQuery
     var showCategoryPicker by remember { mutableStateOf(false) }
     val selectedCount = state.selectedTagIds.size
     val ready = selectedCount >= 3
@@ -74,7 +74,7 @@ fun InterestsScreen(
             tagName = searchQuery.trim(),
             onCategorySelected = { category ->
                 viewModel.createInterestTag(searchQuery, category.key, category.rootId)
-                searchQuery = ""
+                viewModel.updateTagSearchQuery("")
                 showCategoryPicker = false
             },
             onDismiss = { showCategoryPicker = false },
@@ -86,20 +86,18 @@ fun InterestsScreen(
         totalSteps = 3,
         showBack = true,
         onBack = onBack,
-        footer = {
-            AppButton(
+        primaryAction =
+            OnboardingPrimaryAction(
                 text = "dalej",
                 onClick = onNext,
                 enabled = ready,
                 variant = if (ready) ButtonVariant.PRIMARY else ButtonVariant.SECONDARY,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
+            ),
     ) {
         InterestsContent(
             state = state,
             searchQuery = searchQuery,
-            onSearchQueryChange = { searchQuery = it },
+            onSearchQueryChange = { viewModel.updateTagSearchQuery(it) },
             onToggleTag = { viewModel.toggleTag(it) },
             onCreateTag = { showCategoryPicker = true },
         )
@@ -118,21 +116,29 @@ private fun InterestsContent(
         derivedStateOf { state.availableTags.filter { it.category != "root" } }
     }
 
-    val filteredTags by remember(selectableTags, searchQuery) {
+    // Search results: local seed for instant feedback at <2 chars, plus the
+    // backend-debounced result set for ≥2 chars. Backend results are merged
+    // by id so the local seed always shows immediately while richer matches
+    // arrive after the 300ms debounce.
+    val searchResults by remember(selectableTags, state.tagSearchResults, searchQuery) {
         derivedStateOf {
             if (searchQuery.isBlank()) {
-                selectableTags
+                emptyList()
             } else {
-                selectableTags.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                val local = selectableTags.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                val byId = linkedMapOf<String, Tag>()
+                local.forEach { byId[it.id] = it }
+                state.tagSearchResults.forEach { if (it.id !in byId) byId[it.id] = it }
+                byId.values.toList()
             }
         }
     }
 
-    val groupedTags by remember(filteredTags, searchQuery) {
+    val groupedTags by remember(selectableTags, searchQuery) {
         derivedStateOf {
             if (searchQuery.isBlank()) {
                 INTEREST_CATEGORIES.mapNotNull { category ->
-                    val tags = filteredTags.filter { it.category == category.key }
+                    val tags = selectableTags.filter { it.category == category.key }
                     if (tags.isNotEmpty()) category to tags else null
                 }
             } else {
@@ -168,7 +174,7 @@ private fun InterestsContent(
         Spacer(modifier = Modifier.height(AppTheme.spacing.lg))
 
         if (searchQuery.isNotBlank()) {
-            SearchResults(filteredTags, state.selectedTagIds, searchQuery, onToggleTag, onCreateTag)
+            SearchResults(searchResults, state.selectedTagIds, searchQuery, onToggleTag, onCreateTag)
         } else {
             CategoryList(groupedTags, state.selectedTagIds, onToggleTag)
         }

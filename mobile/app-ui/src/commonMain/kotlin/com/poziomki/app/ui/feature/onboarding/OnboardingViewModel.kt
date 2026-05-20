@@ -12,9 +12,12 @@ import com.poziomki.app.network.Degree
 import com.poziomki.app.network.Tag
 import com.poziomki.app.network.UpdateProfileRequest
 import com.poziomki.app.session.SessionManager
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -27,6 +30,9 @@ data class OnboardingState(
     val bio: String = "",
     val selectedTagIds: Set<String> = emptySet(),
     val availableTags: List<Tag> = emptyList(),
+    val tagSearchQuery: String = "",
+    val tagSearchResults: List<Tag> = emptyList(),
+    val isSearchingTags: Boolean = false,
     val degreeSearchResults: List<Degree> = emptyList(),
     val galleryImages: List<ByteArray> = emptyList(),
     val isLoading: Boolean = false,
@@ -64,11 +70,41 @@ class OnboardingViewModel(
 
     private var allDegrees: List<Degree> = emptyList()
     private var createdProfileId: String? = null
+    private val tagSearchFlow = MutableStateFlow("")
 
     init {
         restoreDraft()
         loadTags()
         loadDegrees()
+        setupTagSearch()
+    }
+
+    @OptIn(FlowPreview::class)
+    private fun setupTagSearch() {
+        viewModelScope.launch {
+            tagSearchFlow
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { query ->
+                    val trimmed = query.trim()
+                    if (trimmed.length < 2) {
+                        updateState(persist = false) {
+                            it.copy(tagSearchResults = emptyList(), isSearchingTags = false)
+                        }
+                        return@collect
+                    }
+                    updateState(persist = false) { it.copy(isSearchingTags = true) }
+                    val results = tagRepository.searchTags("interest", trimmed)
+                    updateState(persist = false) {
+                        it.copy(tagSearchResults = results, isSearchingTags = false)
+                    }
+                }
+        }
+    }
+
+    fun updateTagSearchQuery(query: String) {
+        updateState(persist = false) { it.copy(tagSearchQuery = query) }
+        tagSearchFlow.value = query
     }
 
     private fun restoreDraft() {
