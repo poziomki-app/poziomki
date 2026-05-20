@@ -64,7 +64,11 @@ fun InterestsScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    val searchQuery = state.tagSearchQuery
+    // Keep the text-field value in local Compose state. Routing the value
+    // through the StateFlow round-trip introduced a recomposition lag that
+    // dropped keystrokes when typing fast — the input felt broken. The VM
+    // still gets every change for backend search; we just don't read back.
+    var searchQuery by remember { mutableStateOf("") }
     var showCategoryPicker by remember { mutableStateOf(false) }
     val selectedCount = state.selectedTagIds.size
     val ready = selectedCount >= 3
@@ -74,6 +78,7 @@ fun InterestsScreen(
             tagName = searchQuery.trim(),
             onCategorySelected = { category ->
                 viewModel.createInterestTag(searchQuery, category.key, category.rootId)
+                searchQuery = ""
                 viewModel.updateTagSearchQuery("")
                 showCategoryPicker = false
             },
@@ -97,7 +102,10 @@ fun InterestsScreen(
         InterestsContent(
             state = state,
             searchQuery = searchQuery,
-            onSearchQueryChange = { viewModel.updateTagSearchQuery(it) },
+            onSearchQueryChange = {
+                searchQuery = it
+                viewModel.updateTagSearchQuery(it)
+            },
             onToggleTag = { viewModel.toggleTag(it) },
             onCreateTag = { showCategoryPicker = true },
         )
@@ -343,6 +351,11 @@ private fun SearchBar(
                     value = query,
                     onValueChange = onQueryChange,
                     singleLine = true,
+                    // Without fillMaxWidth the empty text field has zero hit
+                    // area, so taps on the search row land on the placeholder
+                    // Text (or the surrounding padding) instead of focusing
+                    // the input — the bar feels uninteractive.
+                    modifier = Modifier.fillMaxWidth(),
                     textStyle =
                         TextStyle(
                             fontFamily = NunitoFamily,

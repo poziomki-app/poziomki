@@ -30,7 +30,6 @@ data class OnboardingState(
     val bio: String = "",
     val selectedTagIds: Set<String> = emptySet(),
     val availableTags: List<Tag> = emptyList(),
-    val tagSearchQuery: String = "",
     val tagSearchResults: List<Tag> = emptyList(),
     val isSearchingTags: Boolean = false,
     val degreeSearchResults: List<Degree> = emptyList(),
@@ -103,7 +102,6 @@ class OnboardingViewModel(
     }
 
     fun updateTagSearchQuery(query: String) {
-        updateState(persist = false) { it.copy(tagSearchQuery = query) }
         tagSearchFlow.value = query
     }
 
@@ -203,7 +201,16 @@ class OnboardingViewModel(
             updateState { it.copy(error = "One or more photos are too large. Choose smaller images.") }
             return
         }
-        val combined = (_state.value.galleryImages + images).take(6)
+        // Dedupe by byte-content hash so an accidental double-fire from the
+        // activity-result launcher (seen in the field after a recompose) can't
+        // append the same image twice.
+        val seen =
+            _state.value.galleryImages
+                .map { it.contentHashCode() }
+                .toHashSet()
+        val unique = images.filter { seen.add(it.contentHashCode()) }
+        if (unique.isEmpty()) return
+        val combined = (_state.value.galleryImages + unique).take(6)
         updateState { it.copy(galleryImages = combined, error = null) }
     }
 
@@ -216,10 +223,20 @@ class OnboardingViewModel(
     }
 
     fun toggleTag(tagId: String) {
-        val current = _state.value.selectedTagIds
+        val snapshot = _state.value
+        val current = snapshot.selectedTagIds
+        // Backend-only search results aren't part of the local interest seed;
+        // without persisting them into availableTags the chip would vanish from
+        // the category list the moment the user cleared the search box (which
+        // looked like the selection had been lost).
+        val tagToPersist =
+            snapshot.tagSearchResults
+                .firstOrNull { it.id == tagId }
+                ?.takeIf { snapshot.availableTags.none { existing -> existing.id == tagId } }
         updateState {
             it.copy(
                 selectedTagIds = if (tagId in current) current - tagId else current + tagId,
+                availableTags = if (tagToPersist != null) it.availableTags + tagToPersist else it.availableTags,
                 error = null,
             )
         }
