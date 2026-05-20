@@ -128,3 +128,17 @@ jobs:
             dist/android-release/*.aab
             dist/android-release/*.txt
             dist/android-release/*.tar.gz
+
+      # Auto-publish the signed AAB to Play Console's internal testing
+      # track. First-ever upload still has to be done manually via the
+      # Console (Google's bootstrap requirement); subsequent tag pushes
+      # ship automatically. Requires PLAY_SERVICE_ACCOUNT_JSON secret
+      # (service account with "Release manager" role on app.poziomki).
+      - name: Upload AAB to Play internal track
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: app.poziomki
+          releaseFiles: dist/android-release/*.aab
+          track: internal
+          status: completed
