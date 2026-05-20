@@ -149,6 +149,30 @@ cdn.poziomki.app {
 api.poziomki.app {
 	import secure_headers
 	header Referrer-Policy "strict-origin-when-cross-origin"
+
+	# CORS for first-party browser callers (landing at poziomki.app +
+	# www / staging). Mobile + server-to-server clients don't send
+	# Origin, so they're unaffected. Allow-list is exact-match — never
+	# reflect an arbitrary Origin.
+	@cors_origin header_regexp Origin ^https://(www\.|staging\.)?poziomki\.app$
+	header @cors_origin {
+		Access-Control-Allow-Origin {http.request.header.Origin}
+		Access-Control-Allow-Credentials true
+		Vary Origin
+	}
+	@cors_preflight {
+		method OPTIONS
+		header_regexp Origin ^https://(www\.|staging\.)?poziomki\.app$
+	}
+	handle @cors_preflight {
+		header {
+			Access-Control-Allow-Methods "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type, Authorization"
+			Access-Control-Max-Age 86400
+		}
+		respond 204
+	}
+
 	log {
 		output file /var/log/caddy/api-access.log {
 			roll_size 50MiB
