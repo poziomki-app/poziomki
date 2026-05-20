@@ -49,9 +49,8 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.User
 import com.poziomki.app.ui.designsystem.Text
-import com.poziomki.app.ui.designsystem.components.AppButton
-import com.poziomki.app.ui.designsystem.components.ButtonVariant
 import com.poziomki.app.ui.designsystem.components.OnboardingLayout
+import com.poziomki.app.ui.designsystem.components.OnboardingPrimaryAction
 import com.poziomki.app.ui.designsystem.theme.AppTheme
 import com.poziomki.app.ui.designsystem.theme.Black
 import com.poziomki.app.ui.designsystem.theme.Border
@@ -99,25 +98,25 @@ fun ProfileSetupScreen(
         totalSteps = 3,
         showBack = true,
         onBack = onBack,
-        footer = {
-            state.error?.let { error ->
-                Text(
-                    text = error,
-                    fontFamily = NunitoFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = AppTheme.spacing.sm),
-                )
-            }
-            AppButton(
+        primaryAction =
+            OnboardingPrimaryAction(
                 text = "potwierd\u017a",
                 onClick = { viewModel.createProfile(onComplete) },
                 loading = state.isLoading,
-                variant = ButtonVariant.PRIMARY,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
+            ),
+        footerExtras =
+            state.error?.let { error ->
+                {
+                    Text(
+                        text = error,
+                        fontFamily = NunitoFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = AppTheme.spacing.sm),
+                    )
+                }
+            },
     ) {
         ProfileSetupContent(
             state = state,
