@@ -10,7 +10,7 @@
 #     --iters 5000 --concurrency 1 --threads 1
 
 # --- builder: trixie, matches the prod backend/Dockerfile ---
-FROM rust:1.93-trixie AS builder
+FROM rust:1.93-trixie@sha256:ecbe59a8408895edd02d9ef422504b8501dd9fa1526de27a45b73406d734d659 AS builder
 # `cargo build --bin moderation-stress` still compiles the full lib crate,
 # so the bench needs the same native deps as the prod Dockerfile
 # (libpq/libwebp/libssl for diesel, rust-s3, image, etc.).
@@ -23,7 +23,7 @@ COPY backend /app/backend
 RUN cargo build --release --bin moderation-stress
 
 # --- runtime: trixie-slim (glibc 2.41, same family as prod distroless) ---
-FROM debian:trixie-slim
+FROM debian:trixie-slim@sha256:8d7a3dca57e62717b0f10897aca189da5d7acde3cc1ced657bdfd06ef5379576
 COPY --from=builder /app/backend/target/release/moderation-stress \
      /usr/local/bin/moderation-stress
 # Reuse the ops-provisioned model directory (same path prod compose
