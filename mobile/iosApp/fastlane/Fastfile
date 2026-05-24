@@ -34,6 +34,16 @@ platform :ios do
     profile_name = ENV["sigh_#{bundle_id}_appstore_profile-name"] ||
                    "match AppStore #{bundle_id}"
 
+    update_code_signing_settings(
+      path: "iosApp.xcodeproj",
+      use_automatic_signing: false,
+      team_id: ENV["APPLE_TEAM_ID"],
+      bundle_identifier: bundle_id,
+      profile_name: profile_name,
+      code_sign_identity: "Apple Distribution",
+      targets: ["iosApp"]
+    )
+
     build_app(
       project: "iosApp.xcodeproj",
       scheme: "iosApp",
@@ -45,10 +55,6 @@ platform :ios do
       xcargs: {
         "MARKETING_VERSION" => ENV["IOS_MARKETING_VERSION"],
         "CURRENT_PROJECT_VERSION" => ENV["IOS_BUILD_NUMBER"],
-        "CODE_SIGN_STYLE" => "Manual",
-        "CODE_SIGN_IDENTITY" => "Apple Distribution",
-        "DEVELOPMENT_TEAM" => ENV["APPLE_TEAM_ID"],
-        "PROVISIONING_PROFILE_SPECIFIER" => profile_name,
         "TEAM_ID" => "",
         "BUNDLE_ID" => bundle_id
       }.map { |k, v| "#{k}=#{Shellwords.escape(v.to_s)}" }.join(" "),
