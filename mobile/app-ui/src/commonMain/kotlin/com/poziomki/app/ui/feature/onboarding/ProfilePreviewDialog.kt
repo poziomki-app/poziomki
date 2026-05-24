@@ -21,11 +21,7 @@ fun ProfilePreviewDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties =
-            DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         ProfilePreview(
             name = name,
