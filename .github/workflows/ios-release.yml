@@ -53,6 +53,18 @@ jobs:
           echo "VERSION_NAME=$version_name" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
 
+      - name: Restore Android google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        # Gradle's release guard fires for assembleIosArm64ReleaseAppleFrameworkForXcode
+        # too, so the iOS build needs the real Android config in place.
+        run: |
+          if [[ -z "${GOOGLE_SERVICES_JSON_B64}" ]]; then
+            echo "::error::GOOGLE_SERVICES_JSON_B64 secret is not set" >&2
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > mobile/androidApp/google-services.json
+
       - name: Restore iOS GoogleService-Info.plist
         env:
           IOS_GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_B64 }}
