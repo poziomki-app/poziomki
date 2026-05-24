@@ -52,6 +52,7 @@ import com.poziomki.app.ui.designsystem.theme.Primary
 import com.poziomki.app.ui.designsystem.theme.TextMuted
 import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.White
+import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -169,7 +170,7 @@ fun LocationPickerSheet(
                     results = emptyList()
                     scope.launch {
                         val name = geocoding.reverse(position.latitude, position.longitude)
-                        selectedName = name ?: "%.4f, %.4f".format(position.latitude, position.longitude)
+                        selectedName = name ?: "${formatCoord(position.latitude)}, ${formatCoord(position.longitude)}"
                         query = selectedName
                     }
                     ClickResult.Consume
@@ -313,4 +314,12 @@ fun LocationPickerSheet(
             }
         }
     }
+}
+
+private fun formatCoord(v: Double): String {
+    val scaled = (v * 10_000.0).roundToLong()
+    val whole = scaled / 10_000
+    val frac = (if (scaled < 0) -scaled else scaled) % 10_000
+    val sign = if (v < 0 && whole == 0L) "-" else ""
+    return "$sign$whole.${frac.toString().padStart(4, '0')}"
 }

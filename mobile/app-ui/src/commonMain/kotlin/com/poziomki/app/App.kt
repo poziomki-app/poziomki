@@ -21,13 +21,13 @@ import com.poziomki.app.data.sync.SyncEngine
 import com.poziomki.app.session.SessionBootstrapState
 import com.poziomki.app.session.SessionManager
 import com.poziomki.app.ui.cache.AppUpdateMigrator
+import com.poziomki.app.ui.cache.coilImageCacheDir
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.navigation.AppNavigation
 import com.poziomki.app.ui.navigation.Route
 import com.poziomki.app.ui.shared.ImgproxyCacheInterceptor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import okio.Path.Companion.toOkioPath
 import org.koin.compose.koinInject
 import org.koin.mp.KoinPlatform
 
@@ -144,7 +144,7 @@ internal fun buildImageLoaderFactory(imageHttpClient: HttpClient): (PlatformCont
             }.diskCache {
                 DiskCache
                     .Builder()
-                    .directory(context.cacheDir.resolve("coil_images").toOkioPath())
+                    .directory(coilImageCacheDir(context))
                     .maxSizeBytes(COIL_DISK_CACHE_MAX_SIZE_BYTES)
                     .build()
             }.components {
