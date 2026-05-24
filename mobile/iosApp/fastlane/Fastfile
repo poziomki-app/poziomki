@@ -1,3 +1,5 @@
+require "shellwords"
+
 default_platform(:ios)
 
 platform :ios do
@@ -40,15 +42,15 @@ platform :ios do
       output_directory: "build",
       output_name: "Poziomki.ipa",
       export_method: "app-store",
-      xcargs: [
-        "MARKETING_VERSION=#{ENV['IOS_MARKETING_VERSION']}",
-        "CURRENT_PROJECT_VERSION=#{ENV['IOS_BUILD_NUMBER']}",
-        "CODE_SIGN_STYLE=Manual",
-        "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']}",
-        "PROVISIONING_PROFILE_SPECIFIER=#{profile_name}",
-        "TEAM_ID=",
-        "BUNDLE_ID=#{bundle_id}"
-      ].join(" "),
+      xcargs: {
+        "MARKETING_VERSION" => ENV["IOS_MARKETING_VERSION"],
+        "CURRENT_PROJECT_VERSION" => ENV["IOS_BUILD_NUMBER"],
+        "CODE_SIGN_STYLE" => "Manual",
+        "DEVELOPMENT_TEAM" => ENV["APPLE_TEAM_ID"],
+        "PROVISIONING_PROFILE_SPECIFIER" => profile_name,
+        "TEAM_ID" => "",
+        "BUNDLE_ID" => bundle_id
+      }.map { |k, v| "#{k}=#{Shellwords.escape(v.to_s)}" }.join(" "),
       export_options: {
         method: "app-store",
         signingStyle: "manual",
