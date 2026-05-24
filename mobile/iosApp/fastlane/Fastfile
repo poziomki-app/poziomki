@@ -46,6 +46,7 @@ platform :ios do
         "MARKETING_VERSION" => ENV["IOS_MARKETING_VERSION"],
         "CURRENT_PROJECT_VERSION" => ENV["IOS_BUILD_NUMBER"],
         "CODE_SIGN_STYLE" => "Manual",
+        "CODE_SIGN_IDENTITY" => "Apple Distribution",
         "DEVELOPMENT_TEAM" => ENV["APPLE_TEAM_ID"],
         "PROVISIONING_PROFILE_SPECIFIER" => profile_name,
         "TEAM_ID" => "",
