@@ -1,0 +1,104 @@
+name: iOS Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to publish, for example v0.21.4
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: [self-hosted, macOS, arm64]
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate tag matches MARKETING_VERSION
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+        run: |
+          version_name="$(sed -n 's/^MARKETING_VERSION=\(.*\)$/\1/p' mobile/iosApp/Configuration/Config.xcconfig | head -n1)"
+          if [[ -z "$version_name" ]]; then
+            echo "Could not read MARKETING_VERSION" >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${INPUT_TAG_NAME}"
+            if [[ -z "$release_tag" ]]; then
+              release_tag="v${version_name}"
+            fi
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ "$release_tag" != "v${version_name}" ]]; then
+            echo "Release tag ${release_tag} does not match MARKETING_VERSION ${version_name}" >&2
+            exit 1
+          fi
+          echo "VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+
+      - name: Restore iOS GoogleService-Info.plist
+        env:
+          IOS_GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_B64 }}
+        run: |
+          if [[ -z "${IOS_GOOGLE_SERVICE_INFO_PLIST_B64}" ]]; then
+            echo "::error::IOS_GOOGLE_SERVICE_INFO_PLIST_B64 secret is not set" >&2
+            exit 1
+          fi
+          echo "$IOS_GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > mobile/iosApp/iosApp/GoogleService-Info.plist
+          if ! /usr/bin/plutil -lint mobile/iosApp/iosApp/GoogleService-Info.plist >/dev/null; then
+            echo "::error::GoogleService-Info.plist failed plutil lint" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.9"
+          bundler-cache: true
+          working-directory: mobile/iosApp
+
+      - name: Compute TestFlight build number
+        run: |
+          build_number="$(date +%y%m%d%H%M)"
+          echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          echo "Using build number: $build_number"
+
+      - name: Build and upload to TestFlight
+        working-directory: mobile/iosApp
+        env:
+          CI: "true"
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_BUNDLE_ID: app.poziomki.ios
+          IOS_MARKETING_VERSION: ${{ env.VERSION_NAME }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
+          MATCH_GIT_URL: git@github-certs:poziomki-app/certs.git
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_READONLY: "true"
+          FASTLANE_HIDE_CHANGELOG: "true"
+          FASTLANE_SKIP_UPDATE_CHECK: "true"
+        run: bundle exec fastlane beta
