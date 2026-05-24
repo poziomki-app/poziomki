@@ -1,0 +1,6 @@
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+app_identifier([ENV["IOS_BUNDLE_ID"] || "app.poziomki.ios"])
+team_id(ENV["APPLE_TEAM_ID"])
+readonly(ENV["MATCH_READONLY"] == "true")
