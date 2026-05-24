@@ -72,11 +72,13 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.2.9"
-          bundler-cache: true
-          working-directory: mobile/iosApp
+      - name: Install fastlane gems
+        working-directory: mobile/iosApp
+        run: |
+          export PATH="$HOME/.rbenv/shims:$HOME/.rbenv/bin:/opt/homebrew/bin:$PATH"
+          ruby --version
+          bundle config set --local path 'vendor/bundle'
+          bundle install --jobs 4 --retry 3
 
       - name: Compute TestFlight build number
         run: |
@@ -101,4 +103,6 @@ jobs:
           MATCH_READONLY: "true"
           FASTLANE_HIDE_CHANGELOG: "true"
           FASTLANE_SKIP_UPDATE_CHECK: "true"
-        run: bundle exec fastlane beta
+        run: |
+          export PATH="$HOME/.rbenv/shims:$HOME/.rbenv/bin:/opt/homebrew/bin:$PATH"
+          bundle exec fastlane beta
