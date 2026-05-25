@@ -67,7 +67,9 @@ private fun WelcomeBody(onDismiss: () -> Unit) {
             color = TextSecondary,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        WelcomeBullet("bądź miły, to nie aplikacja randkowa.")
+        WelcomeBullet("bądź miły dla innych")
+        Spacer(modifier = Modifier.height(6.dp))
+        WelcomeBullet("to apka eventowa, nie randkowa")
         Spacer(modifier = Modifier.height(6.dp))
         WelcomeBullet("zgłaszaj nadużycia długim przytrzymaniem wiadomości lub z menu profilu.")
         Spacer(modifier = Modifier.height(6.dp))
