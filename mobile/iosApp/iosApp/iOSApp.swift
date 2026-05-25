@@ -16,8 +16,10 @@ struct iOSApp: App {
            let email = env["POZIOMKI_REVIEW_EMAIL"],
            let name = env["POZIOMKI_REVIEW_NAME"],
            let profileId = env["POZIOMKI_REVIEW_PROFILE_ID"] {
+            let skipWelcome = env["POZIOMKI_REVIEW_SKIP_WELCOME"] == "1"
             KoinKt.injectReviewSession(
-                token: token, userId: userId, email: email, name: name, profileId: profileId
+                token: token, userId: userId, email: email, name: name,
+                profileId: profileId, skipWelcome: skipWelcome
             )
         }
     }

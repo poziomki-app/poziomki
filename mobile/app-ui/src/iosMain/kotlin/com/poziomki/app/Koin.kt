@@ -4,6 +4,7 @@ import com.poziomki.app.cache.ImageCacheCleaner
 import com.poziomki.app.cache.NoopImageCacheCleaner
 import com.poziomki.app.di.appModule
 import com.poziomki.app.di.startAppKoin
+import com.poziomki.app.session.AppPreferences
 import com.poziomki.app.session.SessionManager
 import kotlinx.coroutines.runBlocking
 import org.koin.dsl.module
@@ -39,10 +40,14 @@ fun injectReviewSession(
     email: String,
     name: String,
     profileId: String,
+    skipWelcome: Boolean,
 ) {
     val sessionManager = KoinPlatform.getKoin().get<SessionManager>()
     runBlocking {
         sessionManager.saveSession(token = token, userId = userId, email = email, name = name)
         sessionManager.saveProfileId(profileId)
+        if (skipWelcome) {
+            KoinPlatform.getKoin().get<AppPreferences>().setWelcomeSeen(true)
+        }
     }
 }
