@@ -6,7 +6,10 @@ import com.poziomki.app.di.appModule
 import com.poziomki.app.di.startAppKoin
 import org.koin.dsl.module
 
-fun initKoin(versionCode: Int) {
+fun initKoin(
+    versionCode: Int,
+    apiBaseUrl: String,
+) {
     startAppKoin(
         appModules =
             listOf(
@@ -15,6 +18,10 @@ fun initKoin(versionCode: Int) {
                     single<ImageCacheCleaner> { NoopImageCacheCleaner() }
                 },
             ),
-        properties = mapOf("APP_VERSION_CODE" to versionCode),
+        properties =
+            mapOf(
+                "APP_VERSION_CODE" to versionCode,
+                "API_BASE_URL" to apiBaseUrl,
+            ),
     )
 }
