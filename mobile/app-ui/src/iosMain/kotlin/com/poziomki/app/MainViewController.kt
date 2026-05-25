@@ -1,8 +1,10 @@
 package com.poziomki.app
 
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeUIViewController
 import platform.UIKit.UIColor
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Suppress("ktlint:standard:function-naming")
 fun MainViewController() =
     ComposeUIViewController(configure = { opaque = false }) {
