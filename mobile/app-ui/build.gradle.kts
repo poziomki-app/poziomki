@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidKmpLibrary)
@@ -8,6 +10,17 @@ plugins {
     id("poziomki.ktlint")
     id("poziomki.kotlin-warnings")
 }
+
+// See linkerOpts comment below: skiko leaves Skia's hb_* references undefined.
+// Find the already-resolved skiko klib on the iOS target's compile classpath
+// and return the path where its bundled libharfbuzz.a should be extracted.
+// Extraction itself happens via a doFirst hook on the link task so it runs
+// after gradle's metadata sync has materialized the klib file on disk.
+fun extractedHarfbuzzPath(konanTargetName: String): File =
+    layout.buildDirectory
+        .file("skiko-harfbuzz/$konanTargetName/libharfbuzz.a")
+        .get()
+        .asFile
 
 composeCompiler {
     includeTraceMarkers.set(false)
@@ -26,9 +39,32 @@ kotlin {
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { iosTarget ->
+        val konanTargetName = iosTarget.konanTarget.name
+        val hbPath = extractedHarfbuzzPath(konanTargetName)
+        val compileDeps = iosTarget.compilations.getByName("main").compileDependencyFiles
+        val skikoKlib = compileDeps.filter { it.name == "skiko.klib" }
+        val extractTask =
+            tasks.register<Sync>("extractSkikoHarfbuzz${konanTargetName.replaceFirstChar { it.uppercase() }}") {
+                from(zipTree(skikoKlib.singleFile)) {
+                    include("default/targets/$konanTargetName/included/libharfbuzz.a")
+                    eachFile { path = "libharfbuzz.a" }
+                    includeEmptyDirs = false
+                }
+                into(hbPath.parentFile)
+            }
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            // Skiko leaves Skia's hb_* references undefined in its iOS native
+            // libs (libharfbuzz.a ships inside the skiko klib but isn't linked
+            // into the framework). When the iOS app also links
+            // MapLibre.framework — which bundles its own HarfBuzz with an
+            // incompatible hb_script_t ABI — ld binds Skia's hb_* references
+            // to MapLibre's symbols and the app crashes in hb_shape_full on
+            // first text render. Force-loading skiko's libharfbuzz.a here
+            // gives Skia its own HarfBuzz back.
+            linkerOpts("-force_load", hbPath.absolutePath)
+            linkTaskProvider.configure { dependsOn(extractTask) }
         }
     }
 

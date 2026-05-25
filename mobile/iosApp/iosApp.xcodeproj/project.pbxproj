@@ -191,10 +191,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/libharfbuzz-skiko.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :app-ui:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :app-ui:embedAndSignAppleFrameworkForXcode\n# Map Xcode arch+SDK to konan target, then expose skiko's libharfbuzz.a at a\n# stable BUILT_PRODUCTS_DIR location so OTHER_LDFLAGS can force_load it.\n# Without this, MapLibre's bundled HarfBuzz wins symbol resolution and the\n# app crashes in hb_shape_full on first text render.\ncase \"$PLATFORM_NAME-$ARCHS\" in\n  iphoneos-arm64) KONAN_TARGET=ios_arm64; GRADLE_TASK=extractSkikoHarfbuzzIos_arm64 ;;\n  iphonesimulator-arm64) KONAN_TARGET=ios_simulator_arm64; GRADLE_TASK=extractSkikoHarfbuzzIos_simulator_arm64 ;;\n  iphonesimulator-x86_64) KONAN_TARGET=ios_x64; GRADLE_TASK=extractSkikoHarfbuzzIos_x64 ;;\n  *) echo \"warning: unrecognized $PLATFORM_NAME-$ARCHS; skipping HarfBuzz patch\"; exit 0 ;;\nesac\n./gradlew :app-ui:$GRADLE_TASK\nSRC=\"$SRCROOT/../app-ui/build/skiko-harfbuzz/$KONAN_TARGET/libharfbuzz.a\"\nif [ ! -f \"$SRC\" ]; then\n  echo \"error: expected $SRC after gradle extract\"\n  exit 1\nfi\nmkdir -p \"$BUILT_PRODUCTS_DIR\"\ncp \"$SRC\" \"$BUILT_PRODUCTS_DIR/libharfbuzz-skiko.a\"\n";
 		};
 		F1B1A00000000000000000D1 /* Upload Crashlytics dSYMs */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -371,6 +372,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(BUILT_PRODUCTS_DIR)/libharfbuzz-skiko.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "${BUNDLE_ID}${TEAM_ID}";
 				PRODUCT_NAME = "${APP_NAME}";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -397,6 +403,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(BUILT_PRODUCTS_DIR)/libharfbuzz-skiko.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "${BUNDLE_ID}${TEAM_ID}";
 				PRODUCT_NAME = "${APP_NAME}";
