@@ -12,7 +12,12 @@ struct ComposeView: UIViewControllerRepresentable {
 
 struct ContentView: View {
     var body: some View {
-        ComposeView()
-                .ignoresSafeArea()
+        // Black underlay prevents the iOS default white window from peeking
+        // through during Compose navigation transitions (slide animations
+        // briefly expose whatever is behind the moving screens).
+        ZStack {
+            Color.black.ignoresSafeArea()
+            ComposeView().ignoresSafeArea()
+        }
     }
 }

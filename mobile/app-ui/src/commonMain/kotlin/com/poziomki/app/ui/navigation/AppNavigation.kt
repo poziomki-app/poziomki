@@ -297,241 +297,245 @@ fun AppNavigation(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        modifier = Modifier.fillMaxSize(),
-        enterTransition = { forwardSlide() },
-        exitTransition = { forwardSlideExit() },
-        popEnterTransition = { backSlide() },
-        popExitTransition = { backSlideExit() },
-    ) {
-        // Auth graph
-        navigation<Route.AuthGraph>(startDestination = Route.AuthLanding) {
-            composable<Route.AuthLanding> {
-                AuthLandingScreen(
-                    onSignUpWithEmail = { navController.navigate(Route.Register) },
-                    onSignInWithEmail = { navController.navigate(Route.Login()) },
-                )
+    Box(modifier = Modifier.fillMaxSize().background(Background)) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = { forwardSlide() },
+            exitTransition = { forwardSlideExit() },
+            popEnterTransition = { backSlide() },
+            popExitTransition = { backSlideExit() },
+        ) {
+            // Auth graph
+            navigation<Route.AuthGraph>(startDestination = Route.AuthLanding) {
+                composable<Route.AuthLanding> {
+                    AuthLandingScreen(
+                        onSignUpWithEmail = { navController.navigate(Route.Register) },
+                        onSignInWithEmail = { navController.navigate(Route.Login()) },
+                    )
+                }
+                composable<Route.Login> { backStackEntry ->
+                    val login = backStackEntry.toRoute<Route.Login>()
+                    LoginScreen(
+                        onNavigateToRegister = { navController.navigate(Route.Register) },
+                        onLoginSuccess = {
+                            navController.navigate(Route.MainGraph) {
+                                popUpTo(Route.AuthGraph) { inclusive = true }
+                            }
+                        },
+                        onNeedsVerification = { email ->
+                            navController.navigate(Route.Verify(email))
+                        },
+                        onNeedsOnboarding = {
+                            navController.navigate(Route.OnboardingGraph) {
+                                popUpTo(Route.AuthGraph) { inclusive = true }
+                            }
+                        },
+                        onForgotPassword = {
+                            navController.navigate(Route.ForgotPassword())
+                        },
+                        prefillEmail = login.prefillEmail,
+                    )
+                }
+                composable<Route.Register> {
+                    RegisterScreen(
+                        onNavigateToLogin = { navController.popBackStack() },
+                        onRegisterSuccess = { email ->
+                            navController.navigate(Route.Verify(email))
+                        },
+                        onUserExists = { email ->
+                            navController.navigate(Route.Login(prefillEmail = email)) {
+                                popUpTo(Route.Login()) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable<Route.Verify> { backStackEntry ->
+                    val verify = backStackEntry.toRoute<Route.Verify>()
+                    VerifyScreen(
+                        email = verify.email,
+                        onVerifySuccess = {
+                            navController.navigate(Route.OnboardingGraph) {
+                                popUpTo(Route.AuthGraph) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable<Route.ForgotPassword> { entry ->
+                    val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                    val route = entry.toRoute<Route.ForgotPassword>()
+                    ForgotPasswordScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        onSuccess = { email ->
+                            navController.navigate(Route.ForgotPasswordVerify(email))
+                        },
+                        prefillEmail = route.prefillEmail,
+                        viewModel = koinViewModel(viewModelStoreOwner = authEntry),
+                    )
+                }
+                composable<Route.ForgotPasswordVerify> { entry ->
+                    val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                    val route = entry.toRoute<Route.ForgotPasswordVerify>()
+                    val viewModel = koinViewModel<AuthViewModel>(viewModelStoreOwner = authEntry)
+                    VerifyScreen(
+                        email = route.email,
+                        title = "resetowanie has\u0142a",
+                        onSubmit = { email, otp, _ ->
+                            viewModel.forgotPasswordVerify(email, otp) { resetToken ->
+                                navController.navigate(
+                                    Route.ResetPassword(email = route.email, resetToken = resetToken),
+                                )
+                            }
+                        },
+                        onResend = { email -> viewModel.forgotPasswordResend(email) },
+                        viewModel = viewModel,
+                    )
+                }
+                composable<Route.ResetPassword> { entry ->
+                    val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
+                    val route = entry.toRoute<Route.ResetPassword>()
+                    ResetPasswordScreen(
+                        email = route.email,
+                        resetToken = route.resetToken,
+                        onSuccess = {
+                            navController.navigate(Route.MainGraph) {
+                                popUpTo(Route.AuthGraph) { inclusive = true }
+                            }
+                        },
+                        onNeedsOnboarding = {
+                            navController.navigate(Route.OnboardingGraph) {
+                                popUpTo(Route.AuthGraph) { inclusive = true }
+                            }
+                        },
+                        viewModel = koinViewModel(viewModelStoreOwner = authEntry),
+                    )
+                }
             }
-            composable<Route.Login> { backStackEntry ->
-                val login = backStackEntry.toRoute<Route.Login>()
-                LoginScreen(
-                    onNavigateToRegister = { navController.navigate(Route.Register) },
-                    onLoginSuccess = {
-                        navController.navigate(Route.MainGraph) {
-                            popUpTo(Route.AuthGraph) { inclusive = true }
-                        }
-                    },
-                    onNeedsVerification = { email ->
-                        navController.navigate(Route.Verify(email))
-                    },
-                    onNeedsOnboarding = {
-                        navController.navigate(Route.OnboardingGraph) {
-                            popUpTo(Route.AuthGraph) { inclusive = true }
-                        }
-                    },
-                    onForgotPassword = {
-                        navController.navigate(Route.ForgotPassword())
-                    },
-                    prefillEmail = login.prefillEmail,
-                )
-            }
-            composable<Route.Register> {
-                RegisterScreen(
-                    onNavigateToLogin = { navController.popBackStack() },
-                    onRegisterSuccess = { email ->
-                        navController.navigate(Route.Verify(email))
-                    },
-                    onUserExists = { email ->
-                        navController.navigate(Route.Login(prefillEmail = email)) {
-                            popUpTo(Route.Login()) { inclusive = true }
-                        }
-                    },
-                )
-            }
-            composable<Route.Verify> { backStackEntry ->
-                val verify = backStackEntry.toRoute<Route.Verify>()
-                VerifyScreen(
-                    email = verify.email,
-                    onVerifySuccess = {
-                        navController.navigate(Route.OnboardingGraph) {
-                            popUpTo(Route.AuthGraph) { inclusive = true }
-                        }
-                    },
-                )
-            }
-            composable<Route.ForgotPassword> { entry ->
-                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
-                val route = entry.toRoute<Route.ForgotPassword>()
-                ForgotPasswordScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onSuccess = { email ->
-                        navController.navigate(Route.ForgotPasswordVerify(email))
-                    },
-                    prefillEmail = route.prefillEmail,
-                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
-                )
-            }
-            composable<Route.ForgotPasswordVerify> { entry ->
-                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
-                val route = entry.toRoute<Route.ForgotPasswordVerify>()
-                val viewModel = koinViewModel<AuthViewModel>(viewModelStoreOwner = authEntry)
-                VerifyScreen(
-                    email = route.email,
-                    title = "resetowanie has\u0142a",
-                    onSubmit = { email, otp, _ ->
-                        viewModel.forgotPasswordVerify(email, otp) { resetToken ->
-                            navController.navigate(Route.ResetPassword(email = route.email, resetToken = resetToken))
-                        }
-                    },
-                    onResend = { email -> viewModel.forgotPasswordResend(email) },
-                    viewModel = viewModel,
-                )
-            }
-            composable<Route.ResetPassword> { entry ->
-                val authEntry = rememberGraphEntry(entry, navController, Route.AuthGraph)
-                val route = entry.toRoute<Route.ResetPassword>()
-                ResetPasswordScreen(
-                    email = route.email,
-                    resetToken = route.resetToken,
-                    onSuccess = {
-                        navController.navigate(Route.MainGraph) {
-                            popUpTo(Route.AuthGraph) { inclusive = true }
-                        }
-                    },
-                    onNeedsOnboarding = {
-                        navController.navigate(Route.OnboardingGraph) {
-                            popUpTo(Route.AuthGraph) { inclusive = true }
-                        }
-                    },
-                    viewModel = koinViewModel(viewModelStoreOwner = authEntry),
-                )
-            }
-        }
 
-        // Onboarding graph — shared ViewModel across all screens
-        navigation<Route.OnboardingGraph>(startDestination = Route.BasicInfo) {
-            composable<Route.BasicInfo> { entry ->
-                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
-                BasicInfoScreen(
-                    onNext = { navController.navigate(Route.Interests) },
-                    onBack = {
+            // Onboarding graph — shared ViewModel across all screens
+            navigation<Route.OnboardingGraph>(startDestination = Route.BasicInfo) {
+                composable<Route.BasicInfo> { entry ->
+                    val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
+                    BasicInfoScreen(
+                        onNext = { navController.navigate(Route.Interests) },
+                        onBack = {
+                            navController.navigate(Route.AuthGraph) {
+                                popUpTo(Route.OnboardingGraph) { inclusive = true }
+                            }
+                        },
+                        viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
+                    )
+                }
+                composable<Route.Interests> { entry ->
+                    val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
+                    InterestsScreen(
+                        onNext = { navController.navigate(Route.ProfileSetup) },
+                        onBack = { navController.popBackStack() },
+                        viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
+                    )
+                }
+                composable<Route.ProfileSetup> { entry ->
+                    val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
+                    ProfileSetupScreen(
+                        onComplete = {
+                            navController.navigate(Route.MainGraph) {
+                                popUpTo(Route.OnboardingGraph) { inclusive = true }
+                            }
+                        },
+                        onBack = { navController.popBackStack() },
+                        viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
+                    )
+                }
+            }
+
+            // Main graph with bottom navigation
+            composable<Route.MainGraph> {
+                MainScreen(
+                    onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
+                    onNavigateToEventCreate = { navController.navigate(Route.EventCreate) },
+                    onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
+                    onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
+                    onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
+                    onNavigateToPowiadomienia = { navController.navigate(Route.Powiadomienia) },
+                    onNavigateToSaved = { navController.navigate(Route.Saved) },
+                    onNavigateToChat = navigateToChat,
+                    onSignOut = {
                         navController.navigate(Route.AuthGraph) {
-                            popUpTo(Route.OnboardingGraph) { inclusive = true }
+                            popUpTo(Route.MainGraph) { inclusive = true }
                         }
                     },
-                    viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
                 )
             }
-            composable<Route.Interests> { entry ->
-                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
-                InterestsScreen(
-                    onNext = { navController.navigate(Route.ProfileSetup) },
+
+            // Detail screens
+            composable<Route.EventDetail> {
+                EventChatScreen(
                     onBack = { navController.popBackStack() },
-                    viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
+                    onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
+                    onNavigateToEditEvent = { id -> navController.navigate(Route.EventEdit(id)) },
                 )
             }
-            composable<Route.ProfileSetup> { entry ->
-                val parentEntry = rememberGraphEntry(entry, navController, Route.OnboardingGraph)
-                ProfileSetupScreen(
-                    onComplete = {
-                        navController.navigate(Route.MainGraph) {
-                            popUpTo(Route.OnboardingGraph) { inclusive = true }
+            composable<Route.EventCreate> {
+                EventCreateScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { navController.popBackStack() },
+                )
+            }
+            composable<Route.EventEdit> { backStackEntry ->
+                val route = backStackEntry.toRoute<Route.EventEdit>()
+                EventCreateScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { navController.popBackStack() },
+                    eventId = route.id,
+                )
+            }
+            composable<Route.Saved> {
+                SavedScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
+                    onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
+                )
+            }
+            composable<Route.ProfileView> {
+                ProfileViewScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToChat = navigateToDm,
+                )
+            }
+            composable<Route.ProfileEdit> {
+                ProfileEditScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable<Route.Privacy> {
+                PrivacyScreen(
+                    onBack = { navController.popBackStack() },
+                    onPasswordChanged = {},
+                    onAccountDeleted = {
+                        navController.navigate(Route.AuthGraph) {
+                            popUpTo(0) { inclusive = true }
                         }
                     },
-                    onBack = { navController.popBackStack() },
-                    viewModel = koinViewModel(viewModelStoreOwner = parentEntry),
                 )
             }
-        }
-
-        // Main graph with bottom navigation
-        composable<Route.MainGraph> {
-            MainScreen(
-                onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
-                onNavigateToEventCreate = { navController.navigate(Route.EventCreate) },
-                onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
-                onNavigateToProfileEdit = { navController.navigate(Route.ProfileEdit) },
-                onNavigateToPrivacy = { navController.navigate(Route.Privacy) },
-                onNavigateToPowiadomienia = { navController.navigate(Route.Powiadomienia) },
-                onNavigateToSaved = { navController.navigate(Route.Saved) },
-                onNavigateToChat = navigateToChat,
-                onSignOut = {
-                    navController.navigate(Route.AuthGraph) {
-                        popUpTo(Route.MainGraph) { inclusive = true }
-                    }
-                },
-            )
-        }
-
-        // Detail screens
-        composable<Route.EventDetail> {
-            EventChatScreen(
-                onBack = { navController.popBackStack() },
-                onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
-                onNavigateToEditEvent = { id -> navController.navigate(Route.EventEdit(id)) },
-            )
-        }
-        composable<Route.EventCreate> {
-            EventCreateScreen(
-                onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() },
-            )
-        }
-        composable<Route.EventEdit> { backStackEntry ->
-            val route = backStackEntry.toRoute<Route.EventEdit>()
-            EventCreateScreen(
-                onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() },
-                eventId = route.id,
-            )
-        }
-        composable<Route.Saved> {
-            SavedScreen(
-                onBack = { navController.popBackStack() },
-                onNavigateToEventDetail = { id -> navController.navigate(Route.EventDetail(id)) },
-                onNavigateToProfileView = { id -> navController.navigate(Route.ProfileView(id)) },
-            )
-        }
-        composable<Route.ProfileView> {
-            ProfileViewScreen(
-                onBack = { navController.popBackStack() },
-                onNavigateToChat = navigateToDm,
-            )
-        }
-        composable<Route.ProfileEdit> {
-            ProfileEditScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable<Route.Privacy> {
-            PrivacyScreen(
-                onBack = { navController.popBackStack() },
-                onPasswordChanged = {},
-                onAccountDeleted = {
-                    navController.navigate(Route.AuthGraph) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
-            )
-        }
-        composable<Route.Powiadomienia> {
-            PowiadomieniaScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable<Route.Chat> { backStackEntry ->
-            val chat = backStackEntry.toRoute<Route.Chat>()
-            ChatScreen(
-                chatId = chat.id,
-                initialTitle = chat.title,
-                initialDirectUserId = chat.directUserId,
-                initialDirectProfileId = chat.directProfileId,
-                initialAvatarUrl = chat.seedAvatarUrl,
-                onBack = { navController.popBackStack() },
-                onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
-            )
+            composable<Route.Powiadomienia> {
+                PowiadomieniaScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable<Route.Chat> { backStackEntry ->
+                val chat = backStackEntry.toRoute<Route.Chat>()
+                ChatScreen(
+                    chatId = chat.id,
+                    initialTitle = chat.title,
+                    initialDirectUserId = chat.directUserId,
+                    initialDirectProfileId = chat.directProfileId,
+                    initialAvatarUrl = chat.seedAvatarUrl,
+                    onBack = { navController.popBackStack() },
+                    onNavigateToProfile = { id -> navController.navigate(Route.ProfileView(id)) },
+                )
+            }
         }
     }
 }
