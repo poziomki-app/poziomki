@@ -14,8 +14,11 @@ struct iOSApp: App {
         if let token = env["POZIOMKI_REVIEW_TOKEN"],
            let userId = env["POZIOMKI_REVIEW_USER_ID"],
            let email = env["POZIOMKI_REVIEW_EMAIL"],
-           let name = env["POZIOMKI_REVIEW_NAME"] {
-            KoinKt.injectReviewSession(token: token, userId: userId, email: email, name: name)
+           let name = env["POZIOMKI_REVIEW_NAME"],
+           let profileId = env["POZIOMKI_REVIEW_PROFILE_ID"] {
+            KoinKt.injectReviewSession(
+                token: token, userId: userId, email: email, name: name, profileId: profileId
+            )
         }
     }
 

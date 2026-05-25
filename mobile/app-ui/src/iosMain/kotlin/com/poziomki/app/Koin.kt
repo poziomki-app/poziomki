@@ -38,9 +38,11 @@ fun injectReviewSession(
     userId: String,
     email: String,
     name: String,
+    profileId: String,
 ) {
     val sessionManager = KoinPlatform.getKoin().get<SessionManager>()
     runBlocking {
         sessionManager.saveSession(token = token, userId = userId, email = email, name = name)
+        sessionManager.saveProfileId(profileId)
     }
 }
