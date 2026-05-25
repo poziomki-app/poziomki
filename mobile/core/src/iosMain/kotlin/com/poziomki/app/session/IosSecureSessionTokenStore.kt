@@ -20,6 +20,7 @@ import platform.CoreFoundation.CFTypeRefVar
 import platform.CoreFoundation.kCFAllocatorDefault
 import platform.CoreFoundation.kCFBooleanTrue
 import platform.CoreFoundation.kCFStringEncodingUTF8
+import platform.Foundation.NSUserDefaults
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
@@ -37,37 +38,49 @@ import platform.Security.kSecValueData
 
 @OptIn(ExperimentalForeignApi::class)
 class IosSecureSessionTokenStore : SessionTokenStore {
-    override suspend fun getToken(): String? =
-        withBaseQuery(includeAccessible = false) { query ->
-            memScoped {
-                CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
-                CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne)
+    override suspend fun getToken(): String? {
+        val keychain =
+            withBaseQuery(includeAccessible = false) { query ->
+                memScoped {
+                    CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
+                    CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne)
 
-                val result = alloc<CFTypeRefVar>()
-                val status = SecItemCopyMatching(query, result.ptr)
-                if (status != errSecSuccess) {
-                    return@memScoped null
-                }
+                    val result = alloc<CFTypeRefVar>()
+                    val status = SecItemCopyMatching(query, result.ptr)
+                    if (status != errSecSuccess) {
+                        return@memScoped null
+                    }
 
-                val dataRef = result.value?.reinterpret<cnames.structs.__CFData>() ?: return@memScoped null
-                try {
-                    dataRef.toUtf8String()
-                } finally {
-                    CFRelease(dataRef)
+                    val dataRef = result.value?.reinterpret<cnames.structs.__CFData>() ?: return@memScoped null
+                    try {
+                        dataRef.toUtf8String()
+                    } finally {
+                        CFRelease(dataRef)
+                    }
                 }
             }
-        }
+        // Fall back to NSUserDefaults if Keychain is unavailable (typically
+        // the Simulator without code signing, where SecItemAdd silently
+        // fails with errSecMissingEntitlement). The real-device build via
+        // TestFlight has the provisioning profile's keychain access group
+        // and uses the secure path.
+        return keychain ?: NSUserDefaults.standardUserDefaults.stringForKey(FALLBACK_KEY)
+    }
 
     override suspend fun saveToken(token: String) {
         clearToken()
         val data = token.toCFData() ?: return
-        try {
-            withBaseQuery(includeAccessible = true) { query ->
-                CFDictionarySetValue(query, kSecValueData, data)
-                SecItemAdd(query, null)
+        val saved =
+            try {
+                withBaseQuery(includeAccessible = true) { query ->
+                    CFDictionarySetValue(query, kSecValueData, data)
+                    SecItemAdd(query, null) == errSecSuccess
+                }
+            } finally {
+                CFRelease(data)
             }
-        } finally {
-            CFRelease(data)
+        if (saved != true) {
+            NSUserDefaults.standardUserDefaults.setObject(token, FALLBACK_KEY)
         }
     }
 
@@ -75,6 +88,7 @@ class IosSecureSessionTokenStore : SessionTokenStore {
         withBaseQuery(includeAccessible = false) { query ->
             SecItemDelete(query)
         }
+        NSUserDefaults.standardUserDefaults.removeObjectForKey(FALLBACK_KEY)
     }
 
     private inline fun <T> withBaseQuery(
@@ -124,5 +138,6 @@ class IosSecureSessionTokenStore : SessionTokenStore {
     private companion object {
         const val SERVICE = "com.poziomki.app.session"
         const val ACCOUNT = "session_token"
+        const val FALLBACK_KEY = "com.poziomki.app.session.token.fallback"
     }
 }
