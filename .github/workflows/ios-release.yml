@@ -84,12 +84,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Set up Ruby and fastlane
-        uses: ruby/setup-ruby@e5517072e87f198d9533967ae13d97c11b604005 # v1.99.0
-        with:
-          ruby-version: default
-          bundler-cache: true
-          working-directory: mobile/iosApp
+      - name: Install fastlane gems
+        working-directory: mobile/iosApp
+        run: |
+          ruby --version
+          bundle config set --local path vendor/bundle
+          bundle install --jobs 4 --retry 3
 
       - name: Load certs repo deploy key
         uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
