@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: [self-hosted, macOS, arm64]
+    runs-on: macos-15
 
     defaults:
       run:
@@ -84,13 +84,17 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Install fastlane gems
-        working-directory: mobile/iosApp
-        run: |
-          export PATH="$HOME/.rbenv/shims:$HOME/.rbenv/bin:/opt/homebrew/bin:$PATH"
-          ruby --version
-          bundle config set --local path 'vendor/bundle'
-          bundle install --jobs 4 --retry 3
+      - name: Set up Ruby and fastlane
+        uses: ruby/setup-ruby@e5517072e87f198d9533967ae13d97c11b604005 # v1.99.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile/iosApp
+
+      - name: Load certs repo deploy key
+        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.CERTS_SSH_KEY }}
 
       - name: Compute TestFlight build number
         run: |
@@ -110,11 +114,9 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
-          MATCH_GIT_URL: git@github-certs:poziomki-app/certs.git
+          MATCH_GIT_URL: git@github.com:poziomki-app/certs.git
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_READONLY: "true"
           FASTLANE_HIDE_CHANGELOG: "true"
           FASTLANE_SKIP_UPDATE_CHECK: "true"
-        run: |
-          export PATH="$HOME/.rbenv/shims:$HOME/.rbenv/bin:/opt/homebrew/bin:$PATH"
-          bundle exec fastlane beta
+        run: bundle exec fastlane beta
