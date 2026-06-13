@@ -87,7 +87,7 @@ jobs:
       - name: Set up Ruby and fastlane
         uses: ruby/setup-ruby@e5517072e87f198d9533967ae13d97c11b604005 # v1.99.0
         with:
-          ruby-version: "3.3"
+          ruby-version: default
           bundler-cache: true
           working-directory: mobile/iosApp
 
