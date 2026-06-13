@@ -15,6 +15,10 @@ fun initKoin(versionCode: Int) {
                     single<ImageCacheCleaner> { NoopImageCacheCleaner() }
                 },
             ),
-        properties = mapOf("APP_VERSION_CODE" to versionCode),
+        properties =
+            mapOf(
+                "API_BASE_URL" to "https://api.poziomki.app",
+                "APP_VERSION_CODE" to versionCode,
+            ),
     )
 }
