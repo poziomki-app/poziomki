@@ -2,7 +2,10 @@ package com.poziomki.app.ui.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,14 +39,14 @@ import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
 import com.poziomki.app.ui.designsystem.components.PoziomkiTextField
-import com.poziomki.app.ui.designsystem.theme.MontserratFamily
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
 import com.poziomki.app.ui.designsystem.theme.Primary
-import com.poziomki.app.ui.designsystem.theme.TextPrimary
 import com.poziomki.app.ui.designsystem.theme.TextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
+@Suppress("LongMethod")
 @Composable
 fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
@@ -57,6 +60,7 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var acceptedPolicy by remember { mutableStateOf(false) }
     var showPolicy by remember { mutableStateOf(false) }
+    var showRegulamin by remember { mutableStateOf(false) }
     var showPasswordMismatch by remember { mutableStateOf(false) }
 
     Column(
@@ -163,28 +167,45 @@ fun RegisterScreen(
                         checkmarkColor = MaterialTheme.colorScheme.background,
                     ),
             )
-            Text(
-                text = "akceptuję ",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 14.sp,
-                color = TextSecondary,
-            )
-            Text(
-                text = "politykę prywatności",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Primary,
-                modifier = Modifier.clickable { showPolicy = true },
-            )
-            Text(
-                text = " *",
-                fontFamily = NunitoFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.error,
-            )
+            FlowRow(verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = "akceptuję ",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "regulamin",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Primary,
+                    modifier = Modifier.clickable { showRegulamin = true },
+                )
+                Text(
+                    text = " i ",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "politykę prywatności",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Primary,
+                    modifier = Modifier.clickable { showPolicy = true },
+                )
+                Text(
+                    text = " *",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
@@ -225,88 +246,19 @@ fun RegisterScreen(
         }
     }
 
+    if (showRegulamin) {
+        LegalDocumentDialog(
+            title = "regulamin",
+            body = regulaminText,
+            onDismiss = { showRegulamin = false },
+        )
+    }
+
     if (showPolicy) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showPolicy = false },
-            properties =
-                androidx.compose.ui.window
-                    .DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                shape =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.background,
-            ) {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(24.dp),
-                ) {
-                    Text(
-                        text = "polityka prywatności",
-                        fontFamily = MontserratFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        color = TextPrimary,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = privacyPolicyText,
-                        fontFamily = NunitoFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
-                        color = TextSecondary,
-                        lineHeight = 22.sp,
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    AppButton(
-                        text = "zamknij",
-                        onClick = { showPolicy = false },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        }
+        LegalDocumentDialog(
+            title = "polityka prywatności",
+            body = privacyPolicyText,
+            onDismiss = { showPolicy = false },
+        )
     }
 }
-
-private val privacyPolicyText =
-    """
-    Niniejsza Polityka Prywatności określa zasady przetwarzania danych osobowych użytkowników aplikacji Poziomki.
-
-    1. Administrator danych
-    Administratorem danych osobowych jest zespół Poziomki. Kontakt: kontakt@poziomki.app
-
-    2. Zakres zbieranych danych
-    Zbieramy następujące dane: adres e-mail, imię, zdjęcia profilowe, zainteresowania oraz dane dotyczące uczestnictwa w wydarzeniach.
-
-    3. Cel przetwarzania
-    Dane przetwarzamy w celu: świadczenia usług aplikacji, dopasowywania rekomendacji wydarzeń i profili, komunikacji między użytkownikami oraz zapewnienia bezpieczeństwa.
-
-    4. Udostępnianie danych
-    Dane osobowe nie są sprzedawane ani udostępniane podmiotom trzecim w celach marketingowych. Dane mogą być udostępniane wyłącznie na żądanie organów uprawnionych na podstawie przepisów prawa.
-
-    5. Przechowywanie danych
-    Dane przechowywane są na serwerach zlokalizowanych w Unii Europejskiej. Dane są przechowywane przez okres korzystania z aplikacji oraz do 30 dni po usunięciu konta.
-
-    6. Prawa użytkownika
-    Każdy użytkownik ma prawo do: dostępu do swoich danych, ich sprostowania, usunięcia, ograniczenia przetwarzania, przenoszenia danych oraz wniesienia sprzeciwu. Eksport i usunięcie danych dostępne są w ustawieniach aplikacji.
-
-    7. Pliki cookies i analityka
-    Aplikacja nie wykorzystuje plików cookies. Zbieramy anonimowe dane analityczne w celu poprawy jakości usług.
-
-    8. Zmiany polityki
-    O istotnych zmianach w polityce prywatności użytkownicy zostaną poinformowani poprzez powiadomienie w aplikacji.
-
-    9. Kontakt
-    Pytania dotyczące prywatności prosimy kierować na adres: kontakt@poziomki.app
-
-    Data ostatniej aktualizacji: marzec 2026
-    """.trimIndent()
