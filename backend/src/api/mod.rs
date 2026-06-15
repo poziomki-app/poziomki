@@ -101,6 +101,7 @@ fn profiles_routes() -> Router<AppContext> {
             "/{id}/block",
             post(profiles::profile_block_handler).delete(profiles::profile_unblock_handler),
         )
+        .route("/{id}/report", post(profiles::profile_report_handler))
         .layer(cache_layer("no-store"))
 }
 

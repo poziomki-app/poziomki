@@ -107,6 +107,22 @@ class ProfileViewViewModel(
         }
     }
 
+    /** Block the viewed user. Backend removes their content from the feed and
+     *  notifies the developer; on success the caller navigates away. */
+    fun blockUser(onBlocked: () -> Unit) {
+        viewModelScope.launch {
+            apiService.blockProfile(profileId)
+            onBlocked()
+        }
+    }
+
+    /** Report the viewed user for objectionable content. */
+    fun reportUser(reason: String) {
+        viewModelScope.launch {
+            apiService.reportProfile(profileId, reason)
+        }
+    }
+
     fun toggleBookmark() {
         if (bookmarkInFlight) return
         bookmarkInFlight = true
