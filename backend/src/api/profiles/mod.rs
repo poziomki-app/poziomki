@@ -6,6 +6,8 @@ mod profiles_bookmarks;
 mod profiles_http;
 #[path = "repo.rs"]
 mod profiles_repo;
+#[path = "report.rs"]
+mod profiles_report;
 #[path = "tags_repo.rs"]
 mod profiles_tags_repo;
 #[path = "tags_service.rs"]
@@ -290,6 +292,54 @@ pub(super) async fn profile_block_handler(
                 profiles_blocks::profile_block(conn, &headers_clone, my_profile.id, target_uuid)
                     .await
                     .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+            Ok(Some(response))
+        }
+        .scope_boxed()
+    })
+    .await?;
+
+    Ok(outcome.unwrap_or_else(|| not_found_profile(&headers, "me")))
+}
+
+#[derive(serde::Deserialize)]
+pub(super) struct ReportProfileRequest {
+    pub reason: String,
+    pub description: Option<String>,
+}
+
+pub(super) async fn profile_report_handler(
+    State(_ctx): State<AppContext>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<ReportProfileRequest>,
+) -> Result<Response> {
+    let (_session, user) = auth_or_respond!(headers);
+    let viewer = db::DbViewer {
+        user_id: user.id,
+        is_review_stub: user.is_review_stub,
+    };
+    let user_id = user.id;
+    let target_uuid = super::parse_uuid(&id, "profile")?;
+    let headers_clone = headers.clone();
+
+    let outcome = db::with_viewer_tx(viewer, move |conn| {
+        async move {
+            let Some(my_profile) = profiles_repo::load_profile_by_user_id(conn, user_id)
+                .await
+                .map_err(|_| diesel::result::Error::RollbackTransaction)?
+            else {
+                return Ok::<Option<Response>, diesel::result::Error>(None);
+            };
+            let response = profiles_report::profile_report(
+                conn,
+                &headers_clone,
+                my_profile.id,
+                target_uuid,
+                body.reason,
+                body.description,
+            )
+            .await
+            .map_err(|_| diesel::result::Error::RollbackTransaction)?;
             Ok(Some(response))
         }
         .scope_boxed()

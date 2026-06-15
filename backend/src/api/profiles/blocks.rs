@@ -9,7 +9,8 @@ use uuid::Uuid;
 use crate::api::state::{DataResponse, SuccessResponse};
 use crate::api::{error_response, ErrorSpec};
 use crate::db::models::profile_blocks::ProfileBlock;
-use crate::db::schema::{profile_blocks, profiles};
+use crate::db::models::reports::NewReport;
+use crate::db::schema::{profile_blocks, profiles, reports};
 
 pub(in crate::api) async fn profile_block(
     conn: &mut AsyncPgConnection,
@@ -49,7 +50,7 @@ pub(in crate::api) async fn profile_block(
     }
 
     let now = Utc::now();
-    diesel::insert_into(profile_blocks::table)
+    let inserted = diesel::insert_into(profile_blocks::table)
         .values(&ProfileBlock {
             blocker_id: my_profile_id,
             blocked_id: target_id,
@@ -60,10 +61,50 @@ pub(in crate::api) async fn profile_block(
         .execute(conn)
         .await?;
 
+    // Apple guideline 1.2: blocking notifies the developer of the offending
+    // user. Record a moderation report (deduped by the unique target index)
+    // and fire a best-effort dev push. Only on a fresh block, to avoid spam.
+    if inserted > 0 {
+        let report = NewReport {
+            reporter_id: my_profile_id,
+            target_type: "profile".to_string(),
+            target_id,
+            reason: "block".to_string(),
+            description: None,
+        };
+        if let Err(err) = diesel::insert_into(reports::table)
+            .values(&report)
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .await
+        {
+            tracing::warn!(%target_id, error = %err, "failed to record block report");
+        }
+        tokio::spawn(notify_block_dev(my_profile_id, target_id));
+    }
+
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
     })
     .into_response())
+}
+
+/// Best-effort developer notification when a user blocks another user.
+/// Posts to an ntfy topic; failures are swallowed so blocking never breaks.
+async fn notify_block_dev(blocker: Uuid, target: Uuid) {
+    let url = std::env::var("NTFY_DEV_URL")
+        .unwrap_or_else(|_| "https://ntfy.poziomki.app/poziomki-dev".to_string());
+    let body = format!("block: {blocker} -> {target}");
+    let result = reqwest::Client::new()
+        .post(&url)
+        .header("Title", "Poziomki: użytkownik zablokowany")
+        .header("Tags", "no_entry")
+        .body(body)
+        .send()
+        .await;
+    if let Err(err) = result {
+        tracing::warn!(error = %err, "failed to send block dev notification");
+    }
 }
 
 pub(in crate::api) async fn profile_unblock(
