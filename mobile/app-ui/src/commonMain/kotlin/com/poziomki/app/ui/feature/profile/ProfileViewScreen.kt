@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,16 +32,24 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.bold.BookmarkSimple
+import com.adamglin.phosphoricons.bold.DotsThreeVertical
+import com.adamglin.phosphoricons.bold.Flag
+import com.adamglin.phosphoricons.bold.Prohibit
 import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.fill.BookmarkSimple
 import com.adamglin.phosphoricons.fill.PaperPlaneRight
 import com.poziomki.app.ui.designsystem.Text
+import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.ProfileImage
 import com.poziomki.app.ui.designsystem.components.ProfilePreview
+import com.poziomki.app.ui.designsystem.components.ReportDialog
 import com.poziomki.app.ui.designsystem.theme.Background
+import com.poziomki.app.ui.designsystem.theme.Error
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.Primary
+import com.poziomki.app.ui.designsystem.theme.SurfaceElevated
 import com.poziomki.app.ui.designsystem.theme.White
+import com.poziomki.app.ui.feature.chat.ActionMenuItem
 import com.poziomki.app.ui.shared.isImageUrl
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
@@ -52,6 +62,9 @@ fun ProfileViewScreen(
     viewModel: ProfileViewViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var showMenu by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showBlockConfirm by remember { mutableStateOf(false) }
 
     when {
         state.profile != null -> {
@@ -118,6 +131,41 @@ fun ProfileViewScreen(
                                                 modifier = Modifier.size(22.dp),
                                             )
                                         }
+                                        Box {
+                                            IconButton(onClick = { showMenu = true }) {
+                                                Icon(
+                                                    imageVector = PhosphorIcons.Bold.DotsThreeVertical,
+                                                    contentDescription = "Więcej",
+                                                    tint = White,
+                                                    modifier = Modifier.size(22.dp),
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showMenu,
+                                                onDismissRequest = { showMenu = false },
+                                                shape = RoundedCornerShape(16.dp),
+                                                containerColor = SurfaceElevated,
+                                            ) {
+                                                ActionMenuItem(
+                                                    icon = PhosphorIcons.Bold.Flag,
+                                                    label = "Zgłoś",
+                                                    onClick = {
+                                                        showMenu = false
+                                                        showReportDialog = true
+                                                    },
+                                                )
+                                                ActionMenuItem(
+                                                    icon = PhosphorIcons.Bold.Prohibit,
+                                                    label = "Zablokuj",
+                                                    onClick = {
+                                                        showMenu = false
+                                                        showBlockConfirm = true
+                                                    },
+                                                    iconTint = Error,
+                                                    labelColor = Error,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             } else {
@@ -144,6 +192,30 @@ fun ProfileViewScreen(
                             contentDescription = "Zamknij",
                             tint = White,
                             modifier = Modifier.size(24.dp),
+                        )
+                    }
+
+                    if (showReportDialog) {
+                        ReportDialog(
+                            onConfirm = { reason, _ ->
+                                showReportDialog = false
+                                viewModel.reportUser(reason)
+                            },
+                            onDismiss = { showReportDialog = false },
+                        )
+                    }
+
+                    if (showBlockConfirm) {
+                        ConfirmDialog(
+                            title = "zablokuj użytkownika",
+                            message = "nie będziesz już widzieć tej osoby ani jej treści. zgłosimy ją do moderacji.",
+                            confirmText = "zablokuj",
+                            isDestructive = true,
+                            onConfirm = {
+                                showBlockConfirm = false
+                                viewModel.blockUser(onBlocked = onBack)
+                            },
+                            onDismiss = { showBlockConfirm = false },
                         )
                     }
                 }
