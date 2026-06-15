@@ -16,7 +16,7 @@
 		F1B1A00000000000000000A2 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1A00000000000000000B2 /* FirebaseCrashlytics */; };
 		F1B1A00000000000000000A3 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = F1B1A00000000000000000B3 /* FirebasePerformance */; };
 		F1B1A00000000000000000A4 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1B1A00000000000000000C1 /* GoogleService-Info.plist */; };
-		F1B1A00000000000000000D2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F1B1A00000000000000000D1 /* PrivacyInfo.xcprivacy */; };
+		F1B1A00000000000000000D2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F1B1A00000000000000000D3 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,7 +28,7 @@
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		F1B1A00000000000000000C1 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		F1B1A00000000000000000D1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F1B1A00000000000000000D3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,7 +86,7 @@
 				7555FF82242A565900829871 /* ContentView.swift */,
 				7555FF8C242A565B00829871 /* Info.plist */,
 				F1B1A00000000000000000C1 /* GoogleService-Info.plist */,
-				F1B1A00000000000000000D1 /* PrivacyInfo.xcprivacy */,
+				F1B1A00000000000000000D3 /* PrivacyInfo.xcprivacy */,
 				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
 			);
