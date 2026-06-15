@@ -39,7 +39,6 @@ import com.adamglin.phosphoricons.bold.Bell
 import com.adamglin.phosphoricons.bold.BookmarkSimple
 import com.adamglin.phosphoricons.bold.CaretRight
 import com.adamglin.phosphoricons.bold.ChatTeardropText
-import com.adamglin.phosphoricons.bold.Coffee
 import com.adamglin.phosphoricons.bold.PencilSimple
 import com.adamglin.phosphoricons.bold.Shield
 import com.adamglin.phosphoricons.bold.SignOut
@@ -50,7 +49,6 @@ import com.poziomki.app.ui.designsystem.components.EmptyView
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
-import com.poziomki.app.ui.designsystem.components.rememberExternalLinkOpener
 import com.poziomki.app.ui.designsystem.theme.Border
 import com.poziomki.app.ui.designsystem.theme.NunitoFamily
 import com.poziomki.app.ui.designsystem.theme.PoziomkiTheme
@@ -75,7 +73,6 @@ fun ProfileScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
-    val openExternal = rememberExternalLinkOpener()
 
     Column(
         modifier =
@@ -147,12 +144,6 @@ fun ProfileScreen(
                                         label = "zostaw opinię",
                                         onClick = onOpenFeedback,
                                         badge = "testy",
-                                    )
-                                    HorizontalDivider(color = Border, thickness = 1.dp)
-                                    SettingsMenuItem(
-                                        icon = PhosphorIcons.Bold.Coffee,
-                                        label = "postaw kawę",
-                                        onClick = { openExternal("https://buycoffee.to/poziomki-app") },
                                     )
                                 }
 
