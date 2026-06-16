@@ -102,6 +102,16 @@ class ApiService(
 
     suspend fun unblockProfile(id: String): ApiResult<SuccessResponse> = client.delete("/api/v1/profiles/$id/block")
 
+    suspend fun reportProfile(
+        id: String,
+        reason: String,
+        description: String? = null,
+    ): ApiResult<SuccessResponse> =
+        client.post(
+            "/api/v1/profiles/$id/report",
+            ReportConversationRequest(reason = reason, description = description),
+        )
+
     suspend fun createProfile(request: CreateProfileRequest): ApiResult<Profile> = client.post("/api/v1/profiles", request)
 
     suspend fun updateProfile(

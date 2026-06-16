@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -45,6 +51,7 @@ import poziomki_mobile.app_ui.generated.resources.login_background
  * Hero photo + tagline up top, then three entry points: continue with
  * Google (placeholder), sign up with email, sign in with email.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Suppress("LongMethod")
 @Composable
 fun AuthLandingScreen(
@@ -52,6 +59,8 @@ fun AuthLandingScreen(
     onSignInWithEmail: () -> Unit,
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
+    var showRegulamin by remember { mutableStateOf(false) }
+    var showPolicy by remember { mutableStateOf(false) }
 
     Box(
         modifier =
@@ -148,9 +157,59 @@ fun AuthLandingScreen(
                     Modifier
                         .fillMaxWidth()
                         .clickable { onSignInWithEmail() }
-                        .padding(bottom = PoziomkiTheme.spacing.xl),
+                        .padding(bottom = PoziomkiTheme.spacing.lg),
                 textAlign = TextAlign.Center,
             )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "kontynuując, akceptujesz ",
+                    fontFamily = NunitoFamily,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "regulamin",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    color = Primary,
+                    modifier = Modifier.clickable { showRegulamin = true },
+                )
+                Text(
+                    text = " i ",
+                    fontFamily = NunitoFamily,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "politykę prywatności",
+                    fontFamily = NunitoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    color = Primary,
+                    modifier = Modifier.clickable { showPolicy = true },
+                )
+            }
         }
+    }
+
+    if (showRegulamin) {
+        LegalDocumentDialog(
+            title = "regulamin",
+            body = regulaminText,
+            onDismiss = { showRegulamin = false },
+        )
+    }
+
+    if (showPolicy) {
+        LegalDocumentDialog(
+            title = "polityka prywatności",
+            body = privacyPolicyText,
+            onDismiss = { showPolicy = false },
+        )
     }
 }
