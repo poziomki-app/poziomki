@@ -1,14 +1,6 @@
 package com.poziomki.app.chat.ws
 
-import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.client.plugins.websocket.webSocket
-import io.ktor.http.URLProtocol
-import io.ktor.websocket.Frame
-import io.ktor.websocket.close
-import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +18,7 @@ import kotlinx.serialization.encodeToString
 class WsConnection(
     private val baseUrl: String,
     private val tokenProvider: suspend () -> String?,
-    engine: HttpClientEngine,
+    private val engine: HttpClientEngine,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _incoming = MutableSharedFlow<WsServerMessage>(extraBufferCapacity = 64)
@@ -40,15 +32,6 @@ class WsConnection(
 
     private var connectionJob: Job? = null
     private var heartbeatJob: Job? = null
-
-    private val wsClient =
-        HttpClient(engine) {
-            install(WebSockets)
-            defaultRequest {
-                headers.append("Origin", baseUrl.trimEnd('/'))
-            }
-        }
-
     private var sendChannel: (suspend (String) -> Unit)? = null
 
     suspend fun send(msg: WsClientMessage): Boolean {
@@ -101,92 +84,92 @@ class WsConnection(
 
     private suspend fun connectOnce() {
         val (host, port, useTls) = parseBaseUrl(baseUrl)
+        val transport = WsTransport(engine)
+        transport.connect(host = host, port = port, useTls = useTls, path = "/api/v1/chat/ws")
 
-        wsClient.webSocket(
-            host = host,
-            port = port,
-            path = "/api/v1/chat/ws",
-            request = {
-                url.protocol = if (useTls) URLProtocol.WSS else URLProtocol.WS
-            },
-        ) {
-            // Authenticate
+        val pongReceived = MutableStateFlow(true)
+        try {
             val token = checkNotNull(tokenProvider()) { "No auth token" }
-            val authMsg = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Auth(token))
-            send(Frame.Text(authMsg))
+            transport.send(wsJson.encodeToString<WsClientMessage>(WsClientMessage.Auth(token)))
+            authenticate(transport)
+            _isConnected.value = true
+            sendChannel = { outgoing -> transport.send(outgoing) }
+            heartbeatJob = scope.launch { heartbeatLoop(transport, pongReceived) }
+            // `receive()` throws when the socket closes, which bubbles up to the
+            // reconnect loop in connect().
+            readLoop(transport, pongReceived)
+        } finally {
+            heartbeatJob?.cancel()
+            _isConnected.value = false
+            sendChannel = null
+            transport.close()
+        }
+    }
 
-            // Wait for auth response
-            val authFrame = incoming.receive()
-            check(authFrame is Frame.Text) { "Expected text auth response" }
-            val authResponse = wsJson.decodeFromString<WsServerMessage>(authFrame.readText())
-            when (authResponse) {
+    /** Reads frames until the auth response. Throws on auth failure. */
+    private suspend fun authenticate(transport: WsTransport) {
+        while (true) {
+            val msg = decodeFrame(transport.receive()) ?: continue
+            when (msg) {
                 is WsServerMessage.AuthOk -> {
-                    _userId.value = authResponse.userId
-                    _isConnected.value = true
-                    sendChannel = { text -> send(Frame.Text(text)) }
+                    _userId.value = msg.userId
+                    return
                 }
 
                 is WsServerMessage.AuthError -> {
-                    error("Auth failed: ${authResponse.message}")
+                    error("Auth failed: ${msg.message}")
                 }
 
                 else -> {
-                    error("Unexpected auth response: $authResponse")
+                    error("Unexpected auth response: $msg")
                 }
             }
+        }
+    }
 
-            // Start heartbeat only after successful auth
-            val pongReceived = MutableStateFlow(true)
-            heartbeatJob =
-                launch {
-                    while (isActive) {
-                        delay(30_000L)
-                        pongReceived.value = false
-                        try {
-                            val pingText = wsJson.encodeToString<WsClientMessage>(WsClientMessage.Ping)
-                            send(Frame.Text(pingText))
-                        } catch (_: Exception) {
-                            break
-                        }
-                        delay(10_000L)
-                        if (!pongReceived.value) {
-                            // pong timeout, reconnecting
-                            close()
-                            break
-                        }
-                    }
-                }
+    /** Steady-state frame loop. Throws when the socket closes. */
+    private suspend fun readLoop(
+        transport: WsTransport,
+        pongReceived: MutableStateFlow<Boolean>,
+    ) {
+        while (true) {
+            val msg = decodeFrame(transport.receive()) ?: continue
+            if (msg is WsServerMessage.Pong) {
+                pongReceived.value = true
+            } else {
+                _incoming.emit(msg)
+            }
+        }
+    }
 
-            // Read loop
+    private fun decodeFrame(text: String): WsServerMessage? =
+        try {
+            wsJson.decodeFromString<WsServerMessage>(text)
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") _: Exception,
+        ) {
+            null
+        }
+
+    private suspend fun heartbeatLoop(
+        transport: WsTransport,
+        pongReceived: MutableStateFlow<Boolean>,
+    ) {
+        while (true) {
+            delay(30_000L)
+            pongReceived.value = false
             try {
-                for (frame in this.incoming) {
-                    when (frame) {
-                        is Frame.Text -> {
-                            try {
-                                val msg = wsJson.decodeFromString<WsServerMessage>(frame.readText())
-                                if (msg is WsServerMessage.Pong) {
-                                    pongReceived.value = true
-                                } else {
-                                    _incoming.emit(msg)
-                                }
-                            } catch (_: Exception) {
-                                // Skip malformed frames
-                            }
-                        }
-
-                        is Frame.Close -> {
-                            break
-                        }
-
-                        is Frame.Binary -> {}
-
-                        else -> {}
-                    }
-                }
-            } finally {
-                heartbeatJob?.cancel()
-                _isConnected.value = false
-                sendChannel = null
+                transport.send(wsJson.encodeToString<WsClientMessage>(WsClientMessage.Ping))
+            } catch (
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") _: Exception,
+            ) {
+                break
+            }
+            delay(10_000L)
+            if (!pongReceived.value) {
+                // Pong timeout — drop the socket so the read loop unblocks and reconnects.
+                transport.close()
+                break
             }
         }
     }
