@@ -3,7 +3,7 @@ package com.poziomki.app.di
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.native.NativeSqliteDriver
 import com.poziomki.app.chat.api.ChatClient
-import com.poziomki.app.chat.api.NoopChatClient
+import com.poziomki.app.chat.ws.WsChatClient
 import com.poziomki.app.connectivity.ConnectivityMonitor
 import com.poziomki.app.connectivity.IosConnectivityMonitor
 import com.poziomki.app.db.PoziomkiDatabase
@@ -23,7 +23,7 @@ actual fun platformModule(): Module =
         single<HttpClientEngine> { Darwin.create() }
         single { createDataStoreIos() }
         single<SessionTokenStore> { IosSecureSessionTokenStore() }
-        single<ChatClient> { NoopChatClient() }
+        single<ChatClient> { WsChatClient(get(), get(), get(), get(), get()) }
         single<SqlDriver> {
             NativeSqliteDriver(PoziomkiDatabase.Schema, "poziomki.db")
         }
