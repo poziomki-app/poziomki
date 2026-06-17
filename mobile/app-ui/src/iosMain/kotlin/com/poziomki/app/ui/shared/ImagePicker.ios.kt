@@ -30,6 +30,10 @@ import platform.UIKit.UIImagePickerControllerDelegateProtocol
 import platform.UIKit.UIImagePickerControllerOriginalImage
 import platform.UIKit.UIImagePickerControllerSourceType
 import platform.UIKit.UINavigationControllerDelegateProtocol
+import platform.UIKit.UISceneActivationStateForegroundActive
+import platform.UIKit.UIViewController
+import platform.UIKit.UIWindow
+import platform.UIKit.UIWindowScene
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
@@ -183,7 +187,20 @@ private fun presentCamera(coordinator: CameraCoordinator) {
 
 // --- Helpers ---
 
-private fun rootViewController() = UIApplication.sharedApplication.keyWindow?.rootViewController
+private fun rootViewController(): UIViewController? {
+    val app = UIApplication.sharedApplication
+    // keyWindow is deprecated and returns nil on iPad / multi-scene apps, which
+    // silently dropped the picker presentation. Resolve via the active window scene.
+    val scenes = app.connectedScenes.mapNotNull { it as? UIWindowScene }
+    val scene =
+        scenes.firstOrNull { it.activationState == UISceneActivationStateForegroundActive }
+            ?: scenes.firstOrNull()
+    val window =
+        scene?.keyWindow
+            ?: scene?.windows?.mapNotNull { it as? UIWindow }?.firstOrNull()
+            ?: app.keyWindow
+    return window?.rootViewController
+}
 
 private fun encodeFromData(data: NSData): ByteArray? = UIImage(data = data)?.let(::encodeImage)
 
