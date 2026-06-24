@@ -89,27 +89,43 @@ jobs:
              ./infra/scripts/deploy.sh prod '$IMAGE@$DIGEST'"
 
       - name: Health check
+        # Recreate window can stretch past 60s under caddy reload + R8
+        # warm-up. Old loop (30 × 2s = 60s) tripped on the transient 403
+        # window every time, marking otherwise-successful deploys red.
+        # 5 min total with a small initial sleep is enough headroom.
         run: |
-          for i in $(seq 1 30); do
-            if curl -fsS https://api.poziomki.app/health; then exit 0; fi
-            sleep 2
+          sleep 8
+          attempts=90
+          for i in $(seq 1 $attempts); do
+            if curl -fsS --max-time 5 https://api.poziomki.app/health; then
+              echo
+              echo "Health OK after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 3
           done
+          echo "Health check failed after $((attempts*3))s"
           exit 1
 
       - name: Rollback on failure
         if: failure()
-        # Guarded: .env.prev only exists once deploy.sh has snapshotted
-        # it. Failing earlier (cosign, digest resolve, SSH) would
-        # otherwise hide the real error behind a `mv: no such file`.
+        # Best-effort: never let rollback exit non-zero — the deploy has
+        # already failed and the workflow status is what the user sees.
+        # If .env.prev points at an image that's no longer pullable (rare
+        # but happens after secret rotations), do not compound the error.
         # StrictHostKeyChecking=accept-new also set here so rollback
         # cannot block on an interactive host key prompt if this is the
         # first SSH contact from the runner.
         run: |
-          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" \
-            "cd ~/poziomki-rs/infra && \
-             if [ ! -f .env.prev ]; then \
-               echo 'rollback: no .env.prev — nothing to restore'; exit 0; \
-             fi; \
-             set -e; mv .env.prev .env && \
-             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker && \
-             docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build"
+          ssh -o StrictHostKeyChecking=accept-new "ubuntu@${VPS_HOST}" bash <<'REMOTE' || true
+          cd ~/poziomki-rs/infra
+          if [ ! -f .env.prev ]; then
+            echo "rollback: no .env.prev — nothing to restore"
+            exit 0
+          fi
+          mv .env.prev .env
+          docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml pull api worker || \
+            echo "rollback: pull failed (image may be gone) — leaving current container in place"
+          docker compose -p poziomki-rs --env-file .env -f docker-compose.prod.yml up -d --no-build || \
+            echo "rollback: compose up failed — manual intervention needed"
+          REMOTE
