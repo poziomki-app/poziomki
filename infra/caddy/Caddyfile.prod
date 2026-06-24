@@ -48,9 +48,9 @@
 	}
 }
 
-poziomki.app, www.poziomki.app {
+poziomki.app, www.poziomki.app, mobile.poziomki.app {
 	import secure_headers
-	encode zstd br gzip
+	encode zstd gzip
 	# Landing URLs are public; ship the full referrer so we can see *which* page on
 	# GitHub/Mastodon/etc. linked here. Other vhosts keep the strict default.
 	header Referrer-Policy "no-referrer-when-downgrade"
@@ -149,6 +149,30 @@ cdn.poziomki.app {
 api.poziomki.app {
 	import secure_headers
 	header Referrer-Policy "strict-origin-when-cross-origin"
+
+	# CORS for first-party browser callers (landing at poziomki.app +
+	# www / staging). Mobile + server-to-server clients don't send
+	# Origin, so they're unaffected. Allow-list is exact-match — never
+	# reflect an arbitrary Origin.
+	@cors_origin header_regexp Origin ^https://(www\.|staging\.)?poziomki\.app$
+	header @cors_origin {
+		Access-Control-Allow-Origin {http.request.header.Origin}
+		Access-Control-Allow-Credentials true
+		Vary Origin
+	}
+	@cors_preflight {
+		method OPTIONS
+		header_regexp Origin ^https://(www\.|staging\.)?poziomki\.app$
+	}
+	handle @cors_preflight {
+		header {
+			Access-Control-Allow-Methods "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type, Authorization"
+			Access-Control-Max-Age 86400
+		}
+		respond 204
+	}
+
 	log {
 		output file /var/log/caddy/api-access.log {
 			roll_size 50MiB
@@ -229,3 +253,27 @@ max_age: 31557600
 # file, which would pull prod's own (stale) Caddyfile.staging copy.
 import /home/ubuntu/poziomki-rs-staging/infra/caddy/Caddyfile.staging
 
+
+lm.poziomki.app {
+	# Tailnet-only: served on the public IP so Let's Encrypt HTTP-01 works,
+	# but Caddy rejects any source IP outside the tailscale CGNAT range
+	# (100.64.0.0/10). Listmonk's app.root_url stays as lm.poziomki.app so
+	# unsubscribe / archive links in outbound mail keep working.
+
+	tls {
+		protocols tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "frame-ancestors 'self'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-site"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:9500
+}
