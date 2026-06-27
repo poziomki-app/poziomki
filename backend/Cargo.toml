@@ -50,12 +50,12 @@ tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
-chrono = { version = "=0.4.44", default-features = false, features = ["clock", "serde"] }
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "serde"] }
 validator = { version = "=0.20.0", features = ["derive"] }
-uuid = { version = "=1.23.1", features = ["v4", "serde"] }
+uuid = { version = "=1.23.4", features = ["v4", "serde"] }
 hmac = { version = "0.13" }
 sha2 = { version = "0.11" }
-reqwest = { version = "=0.13.3", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rust-s3 = { version = "=0.37.2", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 url = { version = "=2.5.8" }
 
@@ -71,7 +71,7 @@ thumbhash = "=0.1.0"
 base64 = "=0.22.1"
 tower-http = { version = "=0.6.10", features = ["limit", "set-header", "trace"] }
 argon2 = { version = "=0.5.3", features = ["rand"] }
-jsonwebtoken = { version = "=10.3.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "=10.4.0", features = ["rust_crypto"] }
 dotenvy = "=0.15.7"
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
 diesel-async = { version = "0.8", features = ["postgres", "deadpool"] }
@@ -82,7 +82,7 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 ort = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "download-binaries", "tls-rustls", "ndarray"] }
 tokenizers = { version = "=0.23.1", default-features = false, features = ["onig"] }
 ndarray = "0.17"
-sentry = { version = "=0.48.2", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing", "tower", "tower-http"] }
+sentry = { version = "=0.48.3", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing", "tower", "tower-http"] }
 
 [[bin]]
 name = "poziomki_backend-cli"
@@ -98,9 +98,9 @@ name = "moderation-stress"
 path = "src/bin/moderation_stress.rs"
 
 [dev-dependencies]
-serial_test = { version = "=3.4.0" }
+serial_test = { version = "=3.5.0" }
 axum-test = { version = "=20.0.0" }
-sentry = { version = "=0.48.2", default-features = false, features = ["test"] }
+sentry = { version = "=0.48.3", default-features = false, features = ["test"] }
 
 [profile.release]
 lto = "fat"
