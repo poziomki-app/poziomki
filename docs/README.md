@@ -10,7 +10,11 @@
   </picture>
 </p>
 
+
 <sub><b>pl</b> · <a href="./README.en.md">en</a></sub>
+
+aplikacja społecznościowa dla studentów, łącząca według wspólnych zainteresowań i zachęcająca do spędzania więcej czasu razem za pomocą lokalnych wydarzeń
+
 
 <p align="center">
   <a href="https://apps.apple.com/pl/app/poziomki-poznajmy-si%C4%99/id6769086499?l=pl">
@@ -20,8 +24,6 @@
     <img src="./assets/googleplay-badge-pl.png" alt="Pobierz z Google Play" height="55">
   </a>
 </p>
-
-aplikacja społecznościowa dla studentów, łącząca według wspólnych zainteresowań i zachęcająca do spędzania więcej czasu razem za pomocą lokalnych wydarzeń
 
 ## rozwój
 
