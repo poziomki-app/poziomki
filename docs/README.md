@@ -12,6 +12,15 @@
 
 <sub><b>pl</b> · <a href="./README.en.md">en</a></sub>
 
+<p align="center">
+  <a href="https://apps.apple.com/pl/app/poziomki-poznajmy-si%C4%99/id6769086499?l=pl">
+    <img src="https://img.shields.io/badge/App%20Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white" alt="Pobierz z App Store">
+  </a>
+  <a href="https://play.google.com/store/apps/details?id=app.poziomki">
+    <img src="https://img.shields.io/badge/Google%20Play-414141?style=for-the-badge&logo=google-play&logoColor=white" alt="Pobierz z Google Play">
+  </a>
+</p>
+
 aplikacja społecznościowa dla studentów, łącząca według wspólnych zainteresowań i zachęcająca do spędzania więcej czasu razem za pomocą lokalnych wydarzeń
 
 ## rozwój
