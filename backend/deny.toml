@@ -9,12 +9,6 @@ ignore = [
     # exists; re-evaluate when RustCrypto/RSA lands constant-time fixes
     # or when lettre drops the rsa dependency.
     "RUSTSEC-2023-0071",
-    # RUSTSEC-2026-0097: rand 0.8 is unsound when a custom logger calls
-    # `rand::rng()`. We do not install a custom logger that calls into rand,
-    # and the dependency is only transitively pulled in by lettre → rsa →
-    # num-bigint-dig for email crypto. Re-evaluate when lettre ships an
-    # update that no longer depends on rand 0.8.
-    "RUSTSEC-2026-0097",
     # RUSTSEC-2024-0436: paste 1.0.15 is archived / unmaintained. Pulled in
     # transitively by tokenizers via macro_rules_attribute — a proc-macro
     # helper used at build time only, no runtime code path. No CVE, no
@@ -29,6 +23,22 @@ ignore = [
     # affected code path is not compiled. Drop this ignore when we bump
     # diesel-async to >=0.9.
     "RUSTSEC-2026-0138",
+    # RUSTSEC-2026-0173: proc-macro-error2 is unmaintained (no CVE), pulled
+    # in transitively by validator_derive (build-time proc-macro only, no
+    # runtime code path). No safe upgrade exists upstream; validator 0.20.0
+    # is already the latest release. Re-evaluate when validator migrates
+    # off proc-macro-error2.
+    "RUSTSEC-2026-0173",
+    # RUSTSEC-2026-0194 / RUSTSEC-2026-0195: quick-xml < 0.41 is vulnerable
+    # to CPU/memory DoS when parsing untrusted XML with many attributes or
+    # namespace declarations on a single tag. Pulled in transitively via
+    # rust-s3 -> aws-creds, which hard-pins `quick-xml = "^0.38"`; rust-s3
+    # 0.37.2 is the latest release and cannot be bumped past this pin. We
+    # only parse XML responses from our own trusted S3-compatible storage
+    # backend, not attacker-controlled input. Re-evaluate when rust-s3
+    # ships a release that allows quick-xml >=0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
 
 [licenses]
