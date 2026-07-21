@@ -10,10 +10,10 @@
 
 <p align="center">
   <a href="https://apps.apple.com/pl/app/poziomki-poznajmy-si%C4%99/id6769086499?l=pl">
-    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" height="55">
+    <img src="./assets/appstore-badge-en.png" alt="Download on the App Store" height="55">
   </a>
   <a href="https://play.google.com/store/apps/details?id=app.poziomki">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="72">
+    <img src="./assets/googleplay-badge-en.png" alt="Get it on Google Play" height="55">
   </a>
 </p>
 
