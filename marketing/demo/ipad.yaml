@@ -11,7 +11,6 @@ appId: app.poziomki.ios
 - tapOn:
     point: "50%,28%"
 - inputText: "ShowcaseLocal2026!"
-- hideKeyboard
 - takeScreenshot: "${OUTPUT}/tablet-login-filled"
 - tapOn: "zaloguj się"
 - extendedWaitUntil:
