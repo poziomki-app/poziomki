@@ -10,6 +10,11 @@ on:
         description: Release tag to publish, for example v0.21.4
         required: false
         type: string
+      marketing:
+        description: Read store metadata without building or publishing an app
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,6 +25,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ !inputs.marketing }}
     runs-on: macos-26
 
     defaults:
@@ -120,3 +126,21 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: "true"
           FASTLANE_SKIP_UPDATE_CHECK: "true"
         run: bundle exec fastlane beta
+
+  marketing:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.marketing }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Back up App Store metadata
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
+        run: STORE_OUTPUT_DIR="$HOME/.cache/poziomki-store" node scripts/apple-marketing.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: apple-marketing-backup
+          path: ~/.cache/poziomki-store
+          retention-days: 7

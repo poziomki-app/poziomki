@@ -39,6 +39,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.poziomki.app.ui.designsystem.Text
+import com.poziomki.app.ui.designsystem.components.FundingNotice
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.PoziomkiLogo
 import com.poziomki.app.ui.designsystem.components.PoziomkiPasswordField
@@ -185,5 +186,8 @@ fun LoginScreen(
                     .padding(vertical = PoziomkiTheme.spacing.sm),
             textAlign = TextAlign.Center,
         )
+
+        Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+        FundingNotice()
     }
 }
