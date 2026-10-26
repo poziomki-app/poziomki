@@ -3,9 +3,15 @@ name: marketing-showcase-ios
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      app_run:
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   screenshots:
@@ -26,8 +32,20 @@ jobs:
           echo "CARGO_HOME=$root/cargo" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_DIR=$root/target" >> "$GITHUB_ENV"
           echo "RUSTUP_HOME=$root/rustup" >> "$GITHUB_ENV"
+          echo "KONAN_DATA_DIR=$root/konan" >> "$GITHUB_ENV"
+          echo "CARGO_PROFILE_DEV_DEBUG=0" >> "$GITHUB_ENV"
           echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g" >> "$root/gradle/gradle.properties"
           echo "org.gradle.workers.max=2" >> "$root/gradle/gradle.properties"
+      - name: Restore build cache
+        id: cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ~/.cache/poziomki-showcase/gradle/caches
+            ~/.cache/poziomki-showcase/gradle/wrapper
+            ~/.cache/poziomki-showcase/konan
+            ~/.cache/poziomki-showcase/target
+          key: ${{ runner.os }}-showcase-v1-${{ hashFiles('**/gradle/libs.versions.toml', '**/Cargo.lock') }}
       - name: Install local demo tools
         run: |
           brew install postgresql@17
@@ -72,13 +90,37 @@ jobs:
           p=Path('mobile/iosApp/iosApp/Info.plist')
           data=plistlib.loads(p.read_bytes())
           data['NSAppTransportSecurity']={'NSAllowsArbitraryLoads':True}
+          data.pop('UIRequiredDeviceCapabilities',None)
           p.write_bytes(plistlib.dumps(data))
           p=Path('mobile/iosApp/iosApp/GoogleService-Info.plist')
           p.write_bytes(plistlib.dumps({'BUNDLE_ID':'app.poziomki.ios','PROJECT_ID':'showcase-local'}))
+          import re
+          p=Path('mobile/iosApp/iosApp.xcodeproj/project.pbxproj')
+          s=p.read_text()
+          s=re.sub(r'(F1B1A00000000000000000D1 /\* Upload Crashlytics dSYMs \*/ = \{.*?shellScript = )".*?";',lambda m:m[1]+'"echo showcase simulator build\\n";',s,flags=re.S)
+          p.write_text(s)
           PY
+      - name: Compile simulator framework
+        if: inputs.app_run == ''
+        working-directory: mobile
+        run: ./gradlew :app-ui:linkDebugFrameworkIosSimulatorArm64 --no-daemon --max-workers=2 --console=plain
       - name: Build simulator app
+        if: inputs.app_run == ''
         run: |
-          xcodebuild -project mobile/iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath "$SHOWCASE_DIR/DerivedData" CODE_SIGNING_ALLOWED=NO ENABLE_USER_SCRIPT_SANDBOXING=NO build > "$SHOWCASE_DIR/xcode.log" 2>&1 || { tail -100 "$SHOWCASE_DIR/xcode.log"; exit 1; }
+          xcodebuild -project mobile/iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath "$SHOWCASE_DIR/DerivedData" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO ENABLE_USER_SCRIPT_SANDBOXING=NO build > "$SHOWCASE_DIR/xcode.log" 2>&1 || { tail -100 "$SHOWCASE_DIR/xcode.log"; exit 1; }
+      - name: Save simulator app
+        if: inputs.app_run == ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-ios-simulator-app
+          path: ~/.cache/poziomki-showcase/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app
+          retention-days: 1
+      - name: Reuse simulator app
+        if: inputs.app_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_RUN: ${{ inputs.app_run }}
+        run: gh run download "$APP_RUN" -n native-ios-simulator-app -D "$SHOWCASE_DIR/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app"
       - name: Capture iPhone and iPad
         run: |
           runtime=$(xcrun simctl list runtimes available -j | jq -r '[.runtimes[] | select(.isAvailable and (.name | startswith("iOS")))][-1].identifier')
@@ -112,6 +154,16 @@ jobs:
             ~/.cache/poziomki-showcase/xcode.log
             ~/.cache/poziomki-showcase/api.log
           retention-days: 7
+      - name: Save build cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ~/.cache/poziomki-showcase/gradle/caches
+            ~/.cache/poziomki-showcase/gradle/wrapper
+            ~/.cache/poziomki-showcase/konan
+            ~/.cache/poziomki-showcase/target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Stop local services
         if: always()
         run: |

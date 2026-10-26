@@ -20,6 +20,10 @@ on:
         required: false
         default: false
         type: boolean
+      showcase_app_run:
+        description: Optional previous showcase run containing a simulator app
+        required: false
+        type: string
       marketing_upload:
         description: Upload metadata and screenshots to a draft version, without submitting for review
         required: false
@@ -175,4 +179,9 @@ jobs:
 
   showcase:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.showcase }}
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/marketing-showcase-ios.yml
+    with:
+      app_run: ${{ inputs.showcase_app_run }}

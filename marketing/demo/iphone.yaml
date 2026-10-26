@@ -4,12 +4,17 @@ appId: app.poziomki.ios
     clearState: true
     permissions:
       all: allow
+- tapOn: "zaloguj się"
 - tapOn: "email"
 - inputText: "ola@example.com"
 - tapOn: "hasło"
 - inputText: "ShowcaseLocal2026!"
 - hideKeyboard
 - tapOn: "zaloguj się"
+- extendedWaitUntil:
+    visible: "zaczynamy"
+    timeout: 60000
+- tapOn: "zaczynamy"
 - extendedWaitUntil:
     visible: "poznaj"
     timeout: 60000
