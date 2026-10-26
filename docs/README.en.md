@@ -25,6 +25,8 @@ this project is available under AGPLv3 license
 
 ## funding
 
+The poziomki app was developed within the Uczelnie Przyszłości project at the University of Warsaw, co-financed by the European Union.
+
 <p align="left">
-  <img src="./assets/funding.png" />
+  <img src="./assets/funding.png" alt="European Funds for Social Development, Republic of Poland, European Union, NCBR" />
 </p>

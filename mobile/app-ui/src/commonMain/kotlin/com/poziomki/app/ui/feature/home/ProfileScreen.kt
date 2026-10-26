@@ -46,6 +46,7 @@ import com.poziomki.app.ui.designsystem.Text
 import com.poziomki.app.ui.designsystem.components.AppButton
 import com.poziomki.app.ui.designsystem.components.ConfirmDialog
 import com.poziomki.app.ui.designsystem.components.EmptyView
+import com.poziomki.app.ui.designsystem.components.FundingNotice
 import com.poziomki.app.ui.designsystem.components.LoadingView
 import com.poziomki.app.ui.designsystem.components.ProfileCard
 import com.poziomki.app.ui.designsystem.components.ScreenHeader
@@ -161,6 +162,9 @@ fun ProfileScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
+
+                                Spacer(modifier = Modifier.height(PoziomkiTheme.spacing.lg))
+                                FundingNotice()
 
                                 Spacer(modifier = Modifier.height(LocalNavBarPadding.current))
                             }

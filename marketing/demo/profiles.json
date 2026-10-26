@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Ola",
+    "program": "Psychologia",
+    "photo": "coffee",
+    "bio": "Czytam w tramwaju i piekę cynamonki, kiedy pada. Chętnie na rower nad Wisłę albo herbatę po zajęciach.",
+    "tags": [
+      "rower",
+      "spacery",
+      "herbata",
+      "fotografia"
+    ]
+  },
+  {
+    "name": "Maja",
+    "program": "Kulturoznawstwo",
+    "photo": "autumn",
+    "bio": "Jesieniara przez cały rok. Małe kina, księgarnie z drugiej ręki i spacery, które kończą się na herbacie.",
+    "tags": [
+      "książki",
+      "kino",
+      "herbata",
+      "spacery"
+    ]
+  },
+  {
+    "name": "Kuba",
+    "program": "Informatyka",
+    "photo": "camera",
+    "bio": "Mam aparat na kliszę i zwykle zapominam, co na niej jest. Szukam kogoś na fotospacery po Warszawie.",
+    "tags": [
+      "fotografia",
+      "spacery",
+      "muzyka",
+      "kawa"
+    ]
+  },
+  {
+    "name": "Lena",
+    "program": "Architektura",
+    "photo": "reading",
+    "bio": "Lubię siedzieć z książką w kawiarni, bez planu na resztę dnia. Czasem szkicuję ludzi przy sąsiednim stoliku.",
+    "tags": [
+      "książki",
+      "sztuka",
+      "kawa",
+      "spacery"
+    ]
+  },
+  {
+    "name": "Tomek",
+    "program": "Ekonomia",
+    "photo": "skate",
+    "bio": "Wieczorami deska pod domem, w weekendy pociąg gdziekolwiek. Chętnie poznam ludzi na wspólne wypady.",
+    "tags": [
+      "deskorolka",
+      "rower",
+      "muzyka",
+      "spacery"
+    ]
+  },
+  {
+    "name": "Zuzia",
+    "program": "Filologia angielska",
+    "photo": "sea",
+    "bio": "Bałtyk najbardziej lubię poza sezonem. Wiatr, termos i długi spacer. W Warszawie szukam osób na kino i małe wyjścia.",
+    "tags": [
+      "Bałtyk",
+      "spacery",
+      "kino",
+      "fotografia"
+    ]
+  },
+  {
+    "name": "Antek",
+    "program": "Geografia",
+    "photo": "beach-walk",
+    "bio": "Sprawdzam najtańsze pociągi nad morze. Mogę godzinami iść plażą, nawet w listopadzie.",
+    "tags": [
+      "Bałtyk",
+      "podróże",
+      "spacery",
+      "rower"
+    ]
+  },
+  {
+    "name": "Natalia",
+    "program": "Biologia",
+    "photo": "park-book",
+    "bio": "Po zajęciach chcę chwilę ciszy: park, książka, coś ciepłego w kubku. Szukam towarzystwa na takie spokojne popołudnia.",
+    "tags": [
+      "książki",
+      "herbata",
+      "natura",
+      "spacery"
+    ]
+  },
+  {
+    "name": "Michał",
+    "program": "Matematyka",
+    "photo": "running",
+    "bio": "Biegam powoli i bez tabelki z wynikami. Jeśli chcesz pogadać podczas rundy nad rzeką, napisz.",
+    "tags": [
+      "bieganie",
+      "rower",
+      "spacery",
+      "muzyka"
+    ]
+  },
+  {
+    "name": "Ada",
+    "program": "Socjologia",
+    "photo": "bike",
+    "bio": "Po Warszawie wszędzie rowerem. Lubię skręcić w ulicę, której jeszcze nie znam. Chętnie z kimś, kto nie chce się ścigać.",
+    "tags": [
+      "rower",
+      "fotografia",
+      "spacery",
+      "kawa"
+    ]
+  },
+  {
+    "name": "Filip",
+    "program": "Dziennikarstwo",
+    "photo": "film",
+    "bio": "Fotografuję koncerty i znajomych, którzy już mają mnie dość. Przydałaby się nowa ekipa na wystawy i planszówki.",
+    "tags": [
+      "fotografia",
+      "muzyka",
+      "sztuka",
+      "planszówki"
+    ]
+  },
+  {
+    "name": "Hania",
+    "program": "Zarządzanie",
+    "photo": "slow-day",
+    "bio": "Najbardziej lubię wieczory bez pośpiechu. Herbata, rozmowa, czasem Catan. Mogę przynieść coś upieczonego.",
+    "tags": [
+      "herbata",
+      "książki",
+      "planszówki",
+      "spacery"
+    ]
+  }
+]

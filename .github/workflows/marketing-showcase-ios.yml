@@ -1,0 +1,207 @@
+name: marketing-showcase-ios
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      app_run:
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  screenshots:
+    runs-on: macos-26
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Set cache paths
+        run: |
+          root="$HOME/.cache/poziomki-showcase"
+          mkdir -p "$root/gradle" "$root/ios-screens"
+          {
+            echo "SHOWCASE_DIR=$root"
+            echo "GRADLE_USER_HOME=$root/gradle"
+            echo "CARGO_HOME=$root/cargo"
+            echo "CARGO_TARGET_DIR=$root/target"
+            echo "RUSTUP_HOME=$root/rustup"
+            echo "KONAN_DATA_DIR=$root/konan"
+            echo "CARGO_PROFILE_DEV_DEBUG=0"
+          } >> "$GITHUB_ENV"
+          {
+            echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g"
+            echo "org.gradle.workers.max=2"
+          } >> "$root/gradle/gradle.properties"
+      - name: Restore build cache
+        id: cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ~/.cache/poziomki-showcase/gradle/caches
+            ~/.cache/poziomki-showcase/gradle/wrapper
+            ~/.cache/poziomki-showcase/konan
+            ~/.cache/poziomki-showcase/target
+          key: ${{ runner.os }}-showcase-v1-${{ hashFiles('**/gradle/libs.versions.toml', '**/Cargo.lock') }}
+      - name: Install local demo tools
+        run: |
+          brew install postgresql@17
+          echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
+          echo "PG_CONFIG=$(brew --prefix postgresql@17)/bin/pg_config" >> "$GITHUB_ENV"
+          rustup toolchain install stable --profile minimal
+          curl -fsSL https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.0/maestro.zip -o "$SHOWCASE_DIR/maestro.zip"
+          unzip -q "$SHOWCASE_DIR/maestro.zip" -d "$SHOWCASE_DIR/tools"
+          echo "$SHOWCASE_DIR/tools/maestro/bin" >> "$GITHUB_PATH"
+      - name: Prepare isolated database
+        run: |
+          initdb -D "$SHOWCASE_DIR/pg" -U showcase -A trust
+          pg_ctl -D "$SHOWCASE_DIR/pg" -l "$SHOWCASE_DIR/postgres.log" -o "-h 127.0.0.1 -p 55435" start
+          createdb -h 127.0.0.1 -p 55435 -U showcase poziomki_showcase
+          psql -h 127.0.0.1 -p 55435 -U showcase -d poziomki_showcase -c "CREATE ROLE poziomki_api; CREATE ROLE poziomki_worker;"
+      - name: Start local demo API
+        env:
+          DATABASE_URL: postgres://showcase@127.0.0.1:55435/poziomki_showcase
+          JWT_SECRET: showcase-local-demo-signing-key-no-production-use
+          SERVER_BINDING: 127.0.0.1
+          PORT: 5157
+          METRICS_PORT: 5158
+          RUST_LOG: warn
+        run: |
+          cargo build --manifest-path backend/Cargo.toml --bin poziomki_backend-cli --jobs 2
+          "$CARGO_TARGET_DIR/debug/poziomki_backend-cli" > "$SHOWCASE_DIR/api.log" 2>&1 &
+          node marketing/demo/proxy.mjs > "$SHOWCASE_DIR/proxy.log" 2>&1 &
+          for _ in {1..40}; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5155/api/v1/health || true)
+            if [[ "$status" != 000 && "$status" != 502 ]]; then break; fi
+            sleep 1
+          done
+          node marketing/demo/seed.mjs
+      - name: Prepare simulator-only app configuration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib
+          p=Path('mobile/app-ui/src/iosMain/kotlin/com/poziomki/app/Koin.kt')
+          p.write_text(p.read_text().replace('https://api.poziomki.app','http://127.0.0.1:5155'))
+          p=Path('mobile/iosApp/iosApp/iOSApp.swift')
+          p.write_text(p.read_text().replace('FirebaseApp.configure()','FirebaseConfiguration.shared.setLoggerLevel(.error)'))
+          p=Path('mobile/iosApp/iosApp/Info.plist')
+          data=plistlib.loads(p.read_bytes())
+          data['NSAppTransportSecurity']={'NSAllowsArbitraryLoads':True}
+          data.pop('UIRequiredDeviceCapabilities',None)
+          p.write_bytes(plistlib.dumps(data))
+          p=Path('mobile/iosApp/iosApp/GoogleService-Info.plist')
+          p.write_bytes(plistlib.dumps({'BUNDLE_ID':'app.poziomki.ios','PROJECT_ID':'showcase-local'}))
+          import re
+          p=Path('mobile/iosApp/iosApp.xcodeproj/project.pbxproj')
+          s=p.read_text()
+          s=re.sub(r'(F1B1A00000000000000000D1 /\* Upload Crashlytics dSYMs \*/ = \{.*?shellScript = )".*?";',lambda m:m[1]+'"echo showcase simulator build\\n";',s,flags=re.S)
+          p.write_text(s)
+          PY
+      - name: Compile simulator framework
+        if: inputs.app_run == ''
+        working-directory: mobile
+        run: ./gradlew :app-ui:linkDebugFrameworkIosSimulatorArm64 --no-daemon --max-workers=2 --console=plain
+      - name: Build simulator app
+        if: inputs.app_run == ''
+        run: |
+          xcodebuild -project mobile/iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath "$SHOWCASE_DIR/DerivedData" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO ENABLE_USER_SCRIPT_SANDBOXING=NO build > "$SHOWCASE_DIR/xcode.log" 2>&1 || { tail -100 "$SHOWCASE_DIR/xcode.log"; exit 1; }
+      - name: Save simulator app
+        if: inputs.app_run == ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-ios-simulator-app
+          path: ~/.cache/poziomki-showcase/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app
+          retention-days: 1
+      - name: Reuse simulator app
+        if: inputs.app_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_RUN: ${{ inputs.app_run }}
+        run: gh run download "$APP_RUN" -n native-ios-simulator-app -D "$SHOWCASE_DIR/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app"
+      - name: Capture iPhone and iPad
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 300000
+          MAESTRO_CLI_NO_ANALYTICS: "true"
+        run: |
+          runtime=$(xcrun simctl list runtimes available -j | jq -r '[.runtimes[] | select(.isAvailable and (.name | startswith("iOS")))][-1].identifier')
+          phone=$(xcrun simctl create ShowcasePhone com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max "$runtime")
+          app="$SHOWCASE_DIR/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app"
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+          group = 'SHOWCASE00.app.poziomki.ios'
+          entitlements = {
+              'application-identifier': group,
+              'com.apple.developer.team-identifier': 'SHOWCASE00',
+              'keychain-access-groups': [group],
+          }
+          with (Path(os.environ['SHOWCASE_DIR']) / 'simulator.entitlements').open('wb') as stream:
+              plistlib.dump(entitlements, stream)
+          PY
+          codesign --force --deep --sign - --entitlements "$SHOWCASE_DIR/simulator.entitlements" "$app"
+          codesign --verify --deep --strict "$app"
+          codesign -d --entitlements :- "$app"
+          xcrun simctl boot "$phone"
+          xcrun simctl bootstatus "$phone" -b
+          xcrun simctl install "$phone" "$app"
+          xcrun simctl status_bar "$phone" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
+          xcrun simctl location "$phone" set 52.2297,21.0122
+          maestro --udid "$phone" test --test-output-dir "$SHOWCASE_DIR/maestro-phone" marketing/demo/iphone.yaml
+          for name in 01 02 03 04; do
+            capture=$(find "$SHOWCASE_DIR/maestro-phone" -type f -name "$name.png" -print -quit)
+            test -n "$capture"
+            cp "$capture" "$SHOWCASE_DIR/ios-screens/$name.png"
+          done
+          xcrun simctl shutdown "$phone"
+          tabletType=$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith("iPad Pro (12.9-inch)"))][-1].identifier')
+          tablet=$(xcrun simctl create ShowcaseTablet "$tabletType" "$runtime")
+          xcrun simctl boot "$tablet"
+          xcrun simctl bootstatus "$tablet" -b
+          xcrun simctl install "$tablet" "$app"
+          xcrun simctl status_bar "$tablet" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
+          xcrun simctl location "$tablet" set 52.2297,21.0122
+          maestro --udid "$tablet" test --test-output-dir "$SHOWCASE_DIR/maestro-tablet" marketing/demo/ipad.yaml
+          for name in tablet-01 tablet-02; do
+            capture=$(find "$SHOWCASE_DIR/maestro-tablet" -type f -name "$name.png" -print -quit)
+            test -n "$capture"
+            cp "$capture" "$SHOWCASE_DIR/ios-screens/$name.png"
+          done
+          xcrun simctl shutdown "$tablet"
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-ios-showcase
+          path: |
+            ~/.cache/poziomki-showcase/ios-screens/
+            ~/.cache/poziomki-showcase/maestro-phone/
+            ~/.cache/poziomki-showcase/maestro-tablet/
+            ~/.cache/poziomki-showcase/xcode.log
+            ~/.cache/poziomki-showcase/api.log
+          retention-days: 7
+      - name: Save build cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ~/.cache/poziomki-showcase/gradle/caches
+            ~/.cache/poziomki-showcase/gradle/wrapper
+            ~/.cache/poziomki-showcase/konan
+            ~/.cache/poziomki-showcase/target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Stop local services
+        if: always()
+        run: |
+          xcrun simctl shutdown all || true
+          pkill -f poziomki_backend-cli || true
+          pkill -f marketing/demo/proxy.mjs || true
+          pg_ctl -D "$SHOWCASE_DIR/pg" stop -m fast || true
