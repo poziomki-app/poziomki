@@ -1,0 +1,98 @@
+[
+  {
+    "key": "bike",
+    "id": 7243322,
+    "author": "Blue Bird",
+    "url": "https://www.pexels.com/photo/a-smiling-woman-riding-a-bicycle-in-the-city-7243322/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/7243322/pexels-photo-7243322.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "sea",
+    "id": 18372849,
+    "author": "Seljan Salimova",
+    "url": "https://www.pexels.com/photo/woman-in-a-loose-sweater-on-a-windy-cloudy-day-by-the-sea-18372849/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/18372849/pexels-photo-18372849.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "autumn",
+    "id": 19339068,
+    "author": "mustafa işler",
+    "url": "https://www.pexels.com/photo/young-woman-sitting-outside-and-holding-a-book-19339068/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/19339068/pexels-photo-19339068.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "coffee",
+    "id": 10135113,
+    "author": "Natalya Velichenko",
+    "url": "https://www.pexels.com/photo/woman-holding-coffee-outdoors-10135113/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/10135113/pexels-photo-10135113.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "camera",
+    "id": 8114408,
+    "author": "Annushka Ahuja",
+    "url": "https://www.pexels.com/photo/man-using-a-slr-camera-8114408/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/8114408/pexels-photo-8114408.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "beach-walk",
+    "id": 15315080,
+    "author": "Efrem Efre",
+    "url": "https://www.pexels.com/photo/person-walking-on-beach-15315080/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/15315080/pexels-photo-15315080.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "reading",
+    "id": 33870290,
+    "author": "Philip Justin Mamelic",
+    "url": "https://www.pexels.com/photo/young-woman-reading-by-a-window-in-cafe-33870290/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/33870290/pexels-photo-33870290.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "park-book",
+    "id": 6001622,
+    "author": "Sam Lion",
+    "url": "https://www.pexels.com/photo/attentive-young-female-reading-textbook-in-autumn-park-6001622/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/6001622/pexels-photo-6001622.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "slow-day",
+    "id": 3769732,
+    "author": "Andrea Piacquadio",
+    "url": "https://www.pexels.com/photo/young-woman-with-book-in-autumn-park-3769732/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/3769732/pexels-photo-3769732.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "running",
+    "id": 5437597,
+    "author": "RUN 4 FFWPU",
+    "url": "https://www.pexels.com/photo/active-man-in-headphones-running-in-crowded-park-5437597/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/5437597/pexels-photo-5437597.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "film",
+    "id": 7205936,
+    "author": "Tima Miroshnichenko",
+    "url": "https://www.pexels.com/photo/fashion-person-creative-camera-7205936/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/7205936/pexels-photo-7205936.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  },
+  {
+    "key": "skate",
+    "id": 2698761,
+    "author": "Vova Kras",
+    "url": "https://www.pexels.com/photo/young-man-on-a-skateboard-2698761/",
+    "license": "https://www.pexels.com/license/",
+    "image": "https://images.pexels.com/photos/2698761/pexels-photo-2698761.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  }
+]

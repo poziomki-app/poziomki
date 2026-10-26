@@ -1,0 +1,41 @@
+appId: app.poziomki.ios
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- tapOn: "email"
+- inputText: "ola@example.com"
+- tapOn: "hasło"
+- inputText: "ShowcaseLocal2026!"
+- hideKeyboard
+- tapOn: "zaloguj się"
+- extendedWaitUntil:
+    visible: "poznaj"
+    timeout: 60000
+- waitForAnimationToEnd
+- takeScreenshot: "${OUTPUT}/01"
+- scrollUntilVisible:
+    element:
+      text: "Zuzia"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Zuzia"
+- assertVisible: "bio"
+- waitForAnimationToEnd
+- takeScreenshot: "${OUTPUT}/02"
+- stopApp
+- launchApp:
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "poznaj"
+    timeout: 60000
+- tapOn: "Wydarzenia"
+- assertVisible: "wydarzenia"
+- waitForAnimationToEnd
+- takeScreenshot: "${OUTPUT}/04"
+- tapOn: "w pobliżu"
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: "${OUTPUT}/03"
