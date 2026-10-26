@@ -6,7 +6,7 @@
 @font-face{font-family:Heading;src:url('/fonts/montserrat_extrabold.ttf');font-weight:800}
 @font-face{font-family:Body;src:url('/fonts/nunito_regular.ttf')}
 *{box-sizing:border-box}html,body{margin:0;background:#090e10;color:#f0f6fc}
-body{width:1080px;height:2400px;overflow:hidden;font-family:Body,sans-serif;position:relative}
+body{width:1080px;height:2160px;overflow:hidden;font-family:Body,sans-serif;position:relative}
 .brand{position:absolute;left:66px;top:46px;display:flex;align-items:center;font:800 38px/1 Heading,sans-serif;letter-spacing:-1.4px}.brand img{width:32px;height:36px;object-fit:contain;margin:0 1px}
 .sequence{position:absolute;right:66px;top:55px;color:#90a5aa;font-size:21px;letter-spacing:3px}
 header{position:absolute;left:66px;right:66px;top:126px;z-index:2}
@@ -16,6 +16,7 @@ h1{font:800 89px/1.04 Heading,sans-serif;letter-spacing:-3.8px;margin:0;color:#f
 .orbit:after{content:"";position:absolute;inset:92px;border:1px solid #13262d;border-radius:50%}
 .phone{position:absolute;left:132px;top:430px;width:816px;aspect-ratio:1080/2400;background:#000;border:5px solid #36484f;border-radius:60px;overflow:hidden;z-index:1}
 .phone img{display:block;width:100%;height:100%;object-fit:contain;background:#000}
+.android-phone .phone{left:192px;width:696px}
 .label{display:none}
 .funding{position:absolute;bottom:0;left:0;right:0;height:151px;background:#fff;z-index:3;color:#242424;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:12px 38px}
 .funding p{font-size:14px;line-height:1.3;margin:0;text-align:center}.funding img{width:94%;height:auto;display:block}
@@ -47,6 +48,7 @@ const scenes=[
 ];
 const q=new URLSearchParams(location.search),index=Number(q.get('scene')||0),platform=q.get('platform')||'android',kind=q.get('kind')||'phone';
 const scene=scenes[index];document.querySelector('h1').innerHTML=scene[0];document.querySelector('.subtitle').textContent=scene[1];document.querySelector('.label').textContent=scene[2];document.querySelector('.sequence').textContent=String(index+1).padStart(2,'0')+' / 06';
+if(platform==='android'&&kind==='phone')document.body.classList.add('android-phone');
 document.querySelector('#screen').src='/source/'+platform+'/'+String(index+1).padStart(2,'0')+'.png';
 if(platform==='ios'){
  const ios=[

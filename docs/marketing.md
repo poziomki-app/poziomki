@@ -15,7 +15,12 @@ Wymagane są Node.js 22 lub nowszy oraz `agent-browser` z działającą przeglą
 ```sh
 node marketing/render-showcase.mjs all
 node scripts/google-marketing.mjs validate
+node marketing/build-review.mjs /sciezka/absolutna/poziomki-materialy-marketingowe.html
 ```
+
+Galeria HTML zawiera wszystkie 17 plansz, osadzone fonty i obrazy, pola opisów oraz instrukcję przesyłania. Działa bez internetu, umożliwia powiększanie i pobieranie pojedynczych PNG.
+
+Plansze telefonów Google Play mają 1080 × 2160 px, zgodnie z limitem proporcji 2:1. Walidator sprawdza również 24-bitowy RGB bez kanału alfa.
 
 Renderer uruchamia serwer wyłącznie na loopback, eksportuje PNG bez kanału alfa i zamyka własną sesję przeglądarki. Zaktualizuj pliki w `source/` przed eksportem nowej wersji interfejsu.
 

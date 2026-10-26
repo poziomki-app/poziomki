@@ -35,8 +35,12 @@ if (mode !== 'snapshot') {
       const width = bytes.readUInt32BE(16);
       const height = bytes.readUInt32BE(20);
       if (kind === 'featureGraphic' ? width !== 1024 || height !== 500 :
-        Math.min(width, height) < 320 || Math.max(width, height) > 3840) {
+        Math.min(width, height) < 320 || Math.max(width, height) > 3840 ||
+        Math.max(width, height) > 2 * Math.min(width, height)) {
         throw new Error(`Invalid dimensions: ${kind}/${file} (${width}x${height}).`);
+      }
+      if (bytes[24] !== 8 || bytes[25] !== 2) {
+        throw new Error(`Expected a 24-bit RGB PNG without alpha: ${kind}/${file}.`);
       }
       images[kind].push({ file, bytes, width, height, sha256: createHash('sha256').update(bytes).digest('hex') });
     }

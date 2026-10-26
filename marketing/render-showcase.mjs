@@ -33,7 +33,7 @@ async function render(platform,index,width,height,kind,target){
 try{
  if(selected==='all'||selected==='google'||selected==='preview'){
   const count=selected==='preview'?1:6;
-  for(let i=0;i<count;i++)await render('android',i,1080,2400,'phone',join(directory,'google/pl-PL/images/phoneScreenshots',`${String(i+1).padStart(2,'0')}.png`));
+  for(let i=0;i<count;i++)await render('android',i,1080,2160,'phone',join(directory,'google/pl-PL/images/phoneScreenshots',`${String(i+1).padStart(2,'0')}.png`));
   await render('android',0,1024,500,'feature',join(directory,'google/pl-PL/images/featureGraphic/01.png'));
   if(selected!=='preview'){
    for(const kind of ['sevenInchScreenshots','tenInchScreenshots']){
