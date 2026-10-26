@@ -5,11 +5,14 @@ appId: app.poziomki.ios
     permissions:
       all: allow
 - tapOn: "zaloguj się"
-- tapOn: "email"
+- tapOn:
+    point: "50%,19%"
 - inputText: "ola@example.com"
-- tapOn: "hasło"
+- tapOn:
+    point: "50%,28%"
 - inputText: "ShowcaseLocal2026!"
 - hideKeyboard
+- takeScreenshot: "${OUTPUT}/tablet-login-filled"
 - tapOn: "zaloguj się"
 - extendedWaitUntil:
     visible: "zaczynamy"
