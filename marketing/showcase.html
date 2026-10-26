@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<title>poziomki, materiały sklepowe</title>
+<style>
+@font-face{font-family:Heading;src:url('/fonts/montserrat_extrabold.ttf');font-weight:800}
+@font-face{font-family:Body;src:url('/fonts/nunito_regular.ttf')}
+*{box-sizing:border-box}html,body{margin:0;background:#090e10;color:#f0f6fc}
+body{width:1080px;height:2400px;overflow:hidden;font-family:Body,sans-serif;position:relative}
+.brand{position:absolute;left:66px;top:46px;display:flex;align-items:center;font:800 38px/1 Heading,sans-serif;letter-spacing:-1.4px}.brand img{width:32px;height:36px;object-fit:contain;margin:0 1px}
+.sequence{position:absolute;right:66px;top:55px;color:#90a5aa;font-size:21px;letter-spacing:3px}
+header{position:absolute;left:66px;right:66px;top:126px;z-index:2}
+h1{font:800 89px/1.04 Heading,sans-serif;letter-spacing:-3.8px;margin:0;color:#f0f6fc}h1 span{color:#22d3ee}
+.subtitle{font-size:30px;line-height:1.4;margin:23px 0 0;color:#bdcbd0;max-width:890px}
+.orbit{position:absolute;width:1640px;height:1640px;border:2px solid #153139;border-radius:50%;left:-282px;top:665px}
+.orbit:after{content:"";position:absolute;inset:92px;border:1px solid #13262d;border-radius:50%}
+.phone{position:absolute;left:132px;top:430px;width:816px;aspect-ratio:1080/2400;background:#000;border:5px solid #36484f;border-radius:60px;overflow:hidden;z-index:1}
+.phone img{display:block;width:100%;height:100%;object-fit:contain;background:#000}
+.label{display:none}
+.funding{position:absolute;bottom:0;left:0;right:0;height:151px;background:#fff;z-index:3;color:#242424;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:12px 38px}
+.funding p{font-size:14px;line-height:1.3;margin:0;text-align:center}.funding img{width:94%;height:auto;display:block}
+.feature header{left:42px;top:100px;width:530px}.feature h1{font-size:57px;letter-spacing:-2px}.feature .subtitle{font-size:19px;line-height:1.35;margin-top:18px;max-width:480px}
+.feature .brand{left:42px;top:31px;font-size:33px}.feature .brand img{width:29px;height:31px}
+.feature .phone{top:26px;left:650px;width:155px;border-width:2px;border-radius:19px;transform:rotate(-4deg)}
+.feature .phone.second{left:820px;top:30px;transform:rotate(4deg)}
+.feature .funding{height:107px;padding:9px 32px;gap:4px}.feature .funding p{font-size:10px}.feature .funding img{width:87%}
+.feature .sequence,.feature .label,.feature .orbit{display:none}
+.tablet .phone{width:1040px;left:120px;top:430px;aspect-ratio:1600/2560;border-radius:50px}
+.tablet header{top:130px}.tablet h1{font-size:86px}.tablet .subtitle{font-size:30px;max-width:1100px}.tablet .funding{height:170px}
+.tablet .label{display:none}
+</style>
+<div class="brand"><span>p</span><img src="/assets/logo.svg" alt=""><span>ziomki</span></div>
+<div class="sequence"></div>
+<header><h1></h1><p class="subtitle"></p></header>
+<div class="label"></div>
+<div class="orbit"></div>
+<div class="phone"><img id="screen" src="/source/android/01.png" alt="Ekran aplikacji poziomki"></div>
+<footer class="funding"><p>Projekt „Uczelnie Przyszłości” na UW, dofinansowany ze środków Unii Europejskiej.</p><img src="/assets/funding.png" alt="Fundusze Europejskie dla Rozwoju Społecznego, Rzeczpospolita Polska, Unia Europejska, NCBR"></footer>
+<script>
+const scenes=[
+ ['twoi ludzie.<br><span>na twojej fali.</span>','Poznawaj studentów, z którymi łączą Cię zainteresowania.','znajdź swoich'],
+ ['masz ochotę<br><span>coś zrobić?</span>','Planszówki, koncert, wspólne wyjście. Znajdź swój plan.','wydarzenia'],
+ ['najpierw hej.<br><span>potem kawa.</span>','Napisz, poznaj się i umów na spotkanie.','rozmowy'],
+ ['to samo kino.<br><span>ta sama zajawka.</span>','Zobacz, co Was łączy. Reszta zaczyna się od rozmowy.','zainteresowania'],
+ ['blisko ciebie.<br><span>po zajęciach.</span>','Odkrywaj wydarzenia na mapie i dołącz do ekipy.','w pobliżu'],
+ ['wspólny plan.<br><span>jedna rozmowa.</span>','Ustalcie szczegóły w czacie wydarzenia. Do zobaczenia!','wspólne plany'],
+];
+const q=new URLSearchParams(location.search),index=Number(q.get('scene')||0),platform=q.get('platform')||'android',kind=q.get('kind')||'phone';
+const scene=scenes[index];document.querySelector('h1').innerHTML=scene[0];document.querySelector('.subtitle').textContent=scene[1];document.querySelector('.label').textContent=scene[2];document.querySelector('.sequence').textContent=String(index+1).padStart(2,'0')+' / 06';
+document.querySelector('#screen').src='/source/'+platform+'/'+String(index+1).padStart(2,'0')+'.png';
+if(platform==='ios'){
+ const ios=[
+  ['twoi ludzie.<br><span>na twojej fali.</span>','Poznawaj studentów, z którymi łączą Cię zainteresowania.'],
+  ['to samo kino.<br><span>ta sama zajawka.</span>','Zobacz, co Was łączy. Reszta zaczyna się od rozmowy.'],
+  ['blisko ciebie.<br><span>po zajęciach.</span>','Odkrywaj wydarzenia na mapie i dołącz do ekipy.'],
+  ['poznajmy się.<br><span>na poziomkach.</span>','Studencka apka do wspólnych wyjść. Bez opłat i reklam.'],
+ ];
+ document.querySelector('h1').innerHTML=ios[index][0];document.querySelector('.subtitle').textContent=ios[index][1];
+ document.querySelector('.sequence').textContent=String(index+1).padStart(2,'0')+' / 04';document.querySelector('.label').textContent='poznaj • spotkaj • pogadaj';
+ if(kind==='phone'){
+  document.body.style.zoom=1284/1080;document.body.style.height=2778/(1284/1080)+'px';
+  document.querySelector('.phone').style.aspectRatio='1284/2778';document.querySelector('.phone').style.top='410px';
+ }
+}
+if(kind==='feature'){
+ document.body.classList.add('feature');document.body.style.width='1024px';document.body.style.height='500px';
+ document.querySelector('h1').innerHTML='twoi ludzie.<br>wasze plany.<br><span>więcej offline.</span>';
+ document.querySelector('.subtitle').textContent='Studencka apka do poznawania ludzi i wspólnych wyjść. Bez opłat i reklam.';
+ const second=document.querySelector('.phone').cloneNode(true);second.classList.add('second');second.querySelector('img').src='/source/android/02.png';document.body.append(second);
+}else if(kind==='tablet'){
+ document.body.classList.add('tablet');document.body.style.width='1280px';document.body.style.height='2048px';
+ document.querySelector('#screen').src='/source/'+platform+'/tablet-'+String(index+1).padStart(2,'0')+'.png';
+ document.querySelector('.sequence').textContent=String(index+1).padStart(2,'0')+' / 02';
+ document.querySelector('.phone').style.width='880px';document.querySelector('.phone').style.left='200px';document.querySelector('.phone').style.top='430px';
+ if(platform==='ios'){
+  document.body.style.zoom=1.6;document.body.style.height=2732/1.6+'px';
+  document.querySelector('.phone').style.width='800px';document.querySelector('.phone').style.left='240px';document.querySelector('.phone').style.aspectRatio='2048/2732';
+ }
+}
+</script>
+</html>

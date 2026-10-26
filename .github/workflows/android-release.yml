@@ -10,6 +10,11 @@ on:
         description: Release tag to publish, for example v0.18.1
         required: false
         type: string
+      marketing:
+        description: Update store listing and graphics without building or uploading an app
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,6 +25,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ !inputs.marketing }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     permissions:
@@ -170,3 +176,20 @@ jobs:
           releaseFiles: dist/android-release/*.aab
           track: alpha
           status: completed
+
+  marketing:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.marketing }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Validate and upload store listing
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: STORE_OUTPUT_DIR="$HOME/.cache/poziomki-store" node scripts/google-marketing.mjs upload
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: google-marketing-backup
+          path: ~/.cache/poziomki-store
+          retention-days: 7

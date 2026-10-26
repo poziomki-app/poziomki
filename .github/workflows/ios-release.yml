@@ -15,6 +15,15 @@ on:
         required: false
         default: false
         type: boolean
+      marketing_upload:
+        description: Upload metadata and screenshots to a draft version, without submitting for review
+        required: false
+        default: false
+        type: boolean
+      app_store_version:
+        description: Draft App Store version for metadata upload, for example 0.22.7
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -130,7 +139,7 @@ jobs:
   marketing:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.marketing }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Back up App Store metadata
@@ -139,6 +148,20 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
         run: STORE_OUTPUT_DIR="$HOME/.cache/poziomki-store" node scripts/apple-marketing.mjs
+      - name: Upload metadata to draft version
+        if: inputs.marketing_upload
+        working-directory: mobile/iosApp
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
+          APP_STORE_VERSION: ${{ inputs.app_store_version }}
+        run: |
+          export GEM_HOME="$HOME/.cache/poziomki-fastlane/gems"
+          export GEM_PATH="$GEM_HOME"
+          export PATH="$GEM_HOME/bin:$PATH"
+          gem install fastlane --no-document
+          fastlane ios store_metadata
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apple-marketing-backup

@@ -49,7 +49,9 @@ projekt udostępniany jest na warunkach licencji AGPLv3
 
 ## finansowanie
 
+Aplikacja poziomki powstała w ramach projektu „Uczelnie Przyszłości” na Uniwersytecie Warszawskim, dofinansowanego ze środków Unii Europejskiej.
+
 <p align="left">
-  <img src="./assets/funding.png" />
+  <img src="./assets/funding.png" alt="Fundusze Europejskie dla Rozwoju Społecznego, Rzeczpospolita Polska, Unia Europejska, NCBR" />
 </p>
 

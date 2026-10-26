@@ -3,6 +3,31 @@ require "shellwords"
 default_platform(:ios)
 
 platform :ios do
+  desc "Upload store metadata and screenshots to an unreleased version"
+  lane :store_metadata do
+    version = ENV.fetch("APP_STORE_VERSION")
+    UI.user_error!("APP_STORE_VERSION must be major.minor.patch") unless version.match?(/\A\d+\.\d+\.\d+\z/)
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_P8"),
+      is_key_content_base64: true,
+      in_house: false
+    )
+    upload_to_app_store(
+      api_key: api_key,
+      app_version: version,
+      metadata_path: File.expand_path("../../../marketing/apple/metadata", __dir__),
+      screenshots_path: File.expand_path("../../../marketing/apple/screenshots", __dir__),
+      skip_binary_upload: true,
+      overwrite_screenshots: true,
+      submit_for_review: false,
+      automatic_release: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+
   desc "Sync signing assets from match (read-only in CI)"
   lane :signing do
     setup_ci if ENV["CI"]
