@@ -2,13 +2,14 @@ name: marketing-showcase-ios
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   screenshots:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0

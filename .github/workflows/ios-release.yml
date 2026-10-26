@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      showcase:
+        description: Capture simulator screenshots with fictional profiles, without publishing
+        required: false
+        default: false
+        type: boolean
       marketing_upload:
         description: Upload metadata and screenshots to a draft version, without submitting for review
         required: false
@@ -34,7 +39,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ !inputs.marketing }}
+    if: ${{ !inputs.marketing && !inputs.showcase }}
     runs-on: macos-26
 
     defaults:
@@ -167,3 +172,7 @@ jobs:
           name: apple-marketing-backup
           path: ~/.cache/poziomki-store
           retention-days: 7
+
+  showcase:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.showcase }}
+    uses: ./.github/workflows/marketing-showcase-ios.yml
