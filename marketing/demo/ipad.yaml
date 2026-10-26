@@ -11,7 +11,7 @@ appId: app.poziomki.ios
 - tapOn:
     point: "50%,28%"
 - inputText: "ShowcaseLocal2026!"
-- takeScreenshot: "${OUTPUT}/tablet-login-filled"
+- takeScreenshot: tablet-login-filled
 - tapOn: "zaloguj się"
 - extendedWaitUntil:
     visible: "zaczynamy"
@@ -21,8 +21,8 @@ appId: app.poziomki.ios
     visible: "poznaj"
     timeout: 60000
 - waitForAnimationToEnd
-- takeScreenshot: "${OUTPUT}/tablet-01"
+- takeScreenshot: tablet-01
 - tapOn: "Wydarzenia"
 - assertVisible: "wydarzenia"
 - waitForAnimationToEnd
-- takeScreenshot: "${OUTPUT}/tablet-02"
+- takeScreenshot: tablet-02

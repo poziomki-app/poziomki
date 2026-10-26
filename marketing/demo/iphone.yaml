@@ -11,7 +11,7 @@ appId: app.poziomki.ios
 - tapOn:
     point: "50%,41%"
 - inputText: "ShowcaseLocal2026!"
-- takeScreenshot: "${OUTPUT}/login-filled"
+- takeScreenshot: login-filled
 - tapOn: "zaloguj się"
 - extendedWaitUntil:
     visible: "zaczynamy"
@@ -21,7 +21,7 @@ appId: app.poziomki.ios
     visible: "poznaj"
     timeout: 60000
 - waitForAnimationToEnd
-- takeScreenshot: "${OUTPUT}/01"
+- takeScreenshot: "01"
 - scrollUntilVisible:
     element:
       text: "Zuzia"
@@ -30,7 +30,7 @@ appId: app.poziomki.ios
 - tapOn: "Zuzia"
 - assertVisible: "bio"
 - waitForAnimationToEnd
-- takeScreenshot: "${OUTPUT}/02"
+- takeScreenshot: "02"
 - stopApp
 - launchApp:
     permissions:
@@ -41,8 +41,8 @@ appId: app.poziomki.ios
 - tapOn: "Wydarzenia"
 - assertVisible: "wydarzenia"
 - waitForAnimationToEnd
-- takeScreenshot: "${OUTPUT}/04"
+- takeScreenshot: "04"
 - tapOn: "w pobliżu"
 - waitForAnimationToEnd:
     timeout: 8000
-- takeScreenshot: "${OUTPUT}/03"
+- takeScreenshot: "03"

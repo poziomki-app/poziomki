@@ -136,7 +136,12 @@ jobs:
           xcrun simctl install "$phone" "$app"
           xcrun simctl status_bar "$phone" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
           xcrun simctl location "$phone" set 52.2297,21.0122
-          maestro --udid "$phone" test -e OUTPUT="$SHOWCASE_DIR/ios-screens" --test-output-dir "$SHOWCASE_DIR/maestro-phone" marketing/demo/iphone.yaml
+          maestro --udid "$phone" test --test-output-dir "$SHOWCASE_DIR/maestro-phone" marketing/demo/iphone.yaml
+          for name in 01 02 03 04; do
+            capture=$(find "$SHOWCASE_DIR/maestro-phone" -type f -name "$name.png" -print -quit)
+            test -n "$capture"
+            cp "$capture" "$SHOWCASE_DIR/ios-screens/$name.png"
+          done
           xcrun simctl shutdown "$phone"
           tabletType=$(xcrun simctl list devicetypes -j | jq -r '[.devicetypes[] | select(.name | startswith("iPad Pro (12.9-inch)"))][-1].identifier')
           tablet=$(xcrun simctl create ShowcaseTablet "$tabletType" "$runtime")
@@ -145,7 +150,12 @@ jobs:
           xcrun simctl install "$tablet" "$app"
           xcrun simctl status_bar "$tablet" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
           xcrun simctl location "$tablet" set 52.2297,21.0122
-          maestro --udid "$tablet" test -e OUTPUT="$SHOWCASE_DIR/ios-screens" --test-output-dir "$SHOWCASE_DIR/maestro-tablet" marketing/demo/ipad.yaml
+          maestro --udid "$tablet" test --test-output-dir "$SHOWCASE_DIR/maestro-tablet" marketing/demo/ipad.yaml
+          for name in tablet-01 tablet-02; do
+            capture=$(find "$SHOWCASE_DIR/maestro-tablet" -type f -name "$name.png" -print -quit)
+            test -n "$capture"
+            cp "$capture" "$SHOWCASE_DIR/ios-screens/$name.png"
+          done
           xcrun simctl shutdown "$tablet"
       - name: Upload screenshots and logs
         if: always()
