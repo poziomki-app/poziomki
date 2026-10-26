@@ -18,19 +18,18 @@ import org.jetbrains.compose.resources.painterResource
 import poziomki_mobile.app_ui.generated.resources.Res
 import poziomki_mobile.app_ui.generated.resources.funding_ue
 
+private const val FUNDING_INTRO = "Aplikacja poziomki powstała w ramach projektu „Uczelnie Przyszłości” "
+private const val FUNDING_UNIVERSITY = "na Uniwersytecie Warszawskim, dofinansowanego ze środków Unii Europejskiej."
+private const val FUNDING_TEXT = FUNDING_INTRO + FUNDING_UNIVERSITY
+private const val FUNDING_INSTITUTIONS = "Fundusze Europejskie, Rzeczpospolita Polska, Unia Europejska, "
+private const val FUNDING_DESCRIPTION = FUNDING_INSTITUTIONS + "Uczelnie Przyszłości, NCBR."
+
 @Composable
 fun FundingNotice(modifier: Modifier = Modifier) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(16.dp),
-    ) {
+    val fundingModifier = modifier.fillMaxWidth().background(Color.White).padding(16.dp)
+    Column(modifier = fundingModifier) {
         Text(
-            text =
-                "Aplikacja poziomki powstała w ramach projektu „Uczelnie Przyszłości” " +
-                    "na Uniwersytecie Warszawskim, dofinansowanego ze środków Unii Europejskiej.",
+            text = FUNDING_TEXT,
             preserveCase = true,
             fontFamily = NunitoFamily,
             fontSize = 12.sp,
@@ -40,9 +39,7 @@ fun FundingNotice(modifier: Modifier = Modifier) {
         )
         Image(
             painter = painterResource(Res.drawable.funding_ue),
-            contentDescription =
-                "Fundusze Europejskie dla Rozwoju Społecznego. Rzeczpospolita Polska. " +
-                    "Dofinansowane przez Unię Europejską. Narodowe Centrum Badań i Rozwoju.",
+            contentDescription = FUNDING_DESCRIPTION,
             contentScale = ContentScale.FillWidth,
             modifier = Modifier.fillMaxWidth(),
         )

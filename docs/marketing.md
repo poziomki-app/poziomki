@@ -6,7 +6,7 @@ Android: rzeczywiste przechwycenia lokalnego buildu 0.22.5 z aktualnego kodu ora
 
 iPhone i iPad: oryginalne zrzuty pobrane 26.10.2026 r. z publicznego listingu App Store wersji 0.22.6. Nie zastępujemy ich Androidem stylizowanym na iOS. Letterboxing iPada odzwierciedla natywny materiał źródłowy.
 
-Logotypy FERS, RP, UE i NCBR pochodzą z formularza raportu UW. Pasek pozostaje na białym tle, bez zmiany proporcji i treści znaków.
+Logotypy FE, RP, UE i Uczelni Przyszłości pochodzą z oryginalnego pliku `docs/assets/funding.png` (5500 × 710 px). Logo NCBR pochodzi z oficjalnego pliku wektorowego, wskazanego w `marketing/assets/FUNDING-SOURCES.txt`. Złożenie znajduje się w `docs/assets/funding-ue-up-ncbr.svg`. Pasek pozostaje na białym tle, bez zmiany proporcji i kolorów znaków.
 
 ## Ponowne generowanie
 

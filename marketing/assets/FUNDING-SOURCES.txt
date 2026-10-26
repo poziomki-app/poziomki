@@ -1,0 +1,6 @@
+funding-ue-up-ncbr.svg
+FE, RP, UE, Uczelnie Przyszłości: poziomki-app/poziomki, docs/assets/funding.png, oryginał 5500 x 710 px.
+NCBR: oficjalny plik wektorowy PL, pierwsza strona PDF:
+https://www.gov.pl/web/ncbr/logotypy
+https://www.gov.pl/attachment/d151a57c-c1f2-4849-9a89-f747a9cd86c8
+Znaki zachowują oryginalne proporcje i kolory.
