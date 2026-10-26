@@ -1,22 +1,22 @@
-poziomki to bezpłatna aplikacja społecznościowa dla studentów. Poznawaj osoby o podobnych zainteresowaniach, znajduj wydarzenia i umawiaj się na wspólne aktywności poza ekranem.
+Rejestracja nowych kont jest obecnie zamknięta. Planujemy powrót poziomek w 2027 roku.
 
-OD ZAINTERESOWAŃ DO SPOTKANIA
-Uzupełnij profil i wybierz swoje zainteresowania. Odkrywaj osoby, z którymi łączą Cię pasje, kierunek studiów lub pomysły na wolny czas.
+Poznaj ciekawe osoby i spędzaj więcej czasu offline. Poziomki to aplikacja dla studentów, którzy mają ochotę coś zrobić razem: wyjść na rower, dołączyć do wydarzenia albo pogadać po zajęciach.
 
-WYDARZENIA I WSPÓLNE AKTYWNOŚCI
-Znajdź spotkanie w okolicy albo zorganizuj własne: planszówki, spacer, wspólną naukę czy wyjście na kawę. Dołącz do wydarzenia i poznaj osoby, które też chcą wziąć w nim udział.
+ZNAJDŹ WSPÓLNY TEMAT
+Dodaj swoje zainteresowania i poznaj osoby, z którymi coś Cię łączy. Napisz w aplikacji i umówcie się na spotkanie, bez wymiany numerów telefonu.
 
-ROZMOWY BEZ POŚREDNIKÓW
-Korzystaj z czatów indywidualnych i rozmów wydarzeń, żeby ustalić szczegóły i przejść od wiadomości do spotkania.
+WYJDŹ DO LUDZI
+Przeglądaj wydarzenia w okolicy, dołącz do spotkania albo zaproponuj własne. Mapa pomoże Ci znaleźć pomysł na wolne popołudnie.
 
-PRYWATNOŚĆ I MODERACJA
-Zarządzaj widocznością profilu i ustawieniami prywatności. Mechanizmy zgłaszania, blokowania i moderacji pomagają dbać o społeczność.
+DOGADAJCIE SZCZEGÓŁY
+Każde wydarzenie ma czat grupowy. Ustalcie, gdzie się zbieracie, o której ruszacie i co warto zabrać.
 
-BEZ OPŁAT I REKLAM
-Aplikacja jest darmowa, bez reklam i mikropłatności. Kod jest otwarty i dostępny na licencji AGPLv3. Możesz sprawdzić, jak działa, lub dołączyć do jej tworzenia:
-https://github.com/poziomki-app/poziomki
+TY DECYDUJESZ
+W ustawieniach wybierzesz widoczność swojego profilu. Możesz blokować i zgłaszać użytkowników.
 
-Więcej informacji: https://poziomki.app
+Poziomki są bezpłatne, bez reklam i mikropłatności. Poznawaj ludzi także poza swoim kierunkiem i grupą zajęciową.
 
-DOFINANSOWANIE
+Informacje o projekcie: https://poziomki.app
+Kod aplikacji: https://github.com/poziomki-app/poziomki
+
 Aplikacja poziomki powstała w ramach projektu „Uczelnie Przyszłości” na Uniwersytecie Warszawskim, dofinansowanego ze środków Unii Europejskiej w programie Fundusze Europejskie dla Rozwoju Społecznego.
