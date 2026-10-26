@@ -78,7 +78,7 @@ jobs:
           "$CARGO_TARGET_DIR/debug/poziomki_backend-cli" > "$SHOWCASE_DIR/api.log" 2>&1 &
           node marketing/demo/proxy.mjs > "$SHOWCASE_DIR/proxy.log" 2>&1 &
           for _ in {1..40}; do
-            status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5155/api/v1/health)
+            status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5155/api/v1/health || true)
             if [[ "$status" != 000 && "$status" != 502 ]]; then break; fi
             sleep 1
           done
