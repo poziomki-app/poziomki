@@ -134,6 +134,22 @@ jobs:
           runtime=$(xcrun simctl list runtimes available -j | jq -r '[.runtimes[] | select(.isAvailable and (.name | startswith("iOS")))][-1].identifier')
           phone=$(xcrun simctl create ShowcasePhone com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max "$runtime")
           app="$SHOWCASE_DIR/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app"
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+          group = 'SHOWCASE00.app.poziomki.ios'
+          entitlements = {
+              'application-identifier': group,
+              'com.apple.developer.team-identifier': 'SHOWCASE00',
+              'keychain-access-groups': [group],
+          }
+          with (Path(os.environ['SHOWCASE_DIR']) / 'simulator.entitlements').open('wb') as stream:
+              plistlib.dump(entitlements, stream)
+          PY
+          codesign --force --deep --sign - --entitlements "$SHOWCASE_DIR/simulator.entitlements" "$app"
+          codesign --verify --deep --strict "$app"
+          codesign -d --entitlements :- "$app"
           xcrun simctl boot "$phone"
           xcrun simctl bootstatus "$phone" -b
           xcrun simctl install "$phone" "$app"
