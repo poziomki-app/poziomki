@@ -1,8 +1,16 @@
 import { createPrivateKey, sign } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const directory = process.env.STORE_OUTPUT_DIR;
+const mode = process.argv[2] || 'snapshot';
+if (!['snapshot', 'promotional'].includes(mode)) throw new Error('Use snapshot or promotional.');
+const promotionalText = mode === 'promotional'
+  ? (await readFile('marketing/apple/metadata/pl-PL/promotional_text.txt', 'utf8')).trim()
+  : undefined;
+if (mode === 'promotional' && (!promotionalText || [...promotionalText].length > 170)) {
+  throw new Error('Promotional text must contain 1 to 170 characters.');
+}
 if (!directory) throw new Error('Set STORE_OUTPUT_DIR to a private backup directory.');
 const required = ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_KEY_P8'];
 for (const name of required) {
@@ -20,10 +28,14 @@ const key = createPrivateKey(Buffer.from(process.env.ASC_KEY_P8, 'base64').toStr
 const signature = sign('sha256', Buffer.from(unsigned), { key, dsaEncoding: 'ieee-p1363' });
 const token = `${unsigned}.${signature.toString('base64url')}`;
 const origin = 'https://api.appstoreconnect.apple.com';
-async function get(path) {
+async function get(path, method = 'GET', body) {
   const url = new URL(path, origin);
   if (url.origin !== origin) throw new Error('Unexpected API origin.');
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   const data = await response.json();
   if (!response.ok) throw new Error(`Apple API ${response.status}: ${JSON.stringify(data.errors)}`);
   return data;
@@ -41,6 +53,26 @@ await save('apple-versions.json', versions);
 console.log('Apple versions:', versions.data.map(({ id, attributes: a }) => ({
   id, version: a.versionString, state: a.appStoreState,
 })));
+if (mode === 'promotional') {
+  const live = versions.data.filter(({ attributes: a }) =>
+    ['READY_FOR_SALE', 'READY_FOR_DISTRIBUTION'].includes(a.appStoreState));
+  if (live.length !== 1) throw new Error('Expected exactly one live iOS version.');
+  const localizations = await get(`/v1/appStoreVersions/${live[0].id}/appStoreVersionLocalizations?limit=50`);
+  await save('apple-live-localizations-before.json', localizations);
+  const polish = localizations.data.filter(({ attributes: a }) => ['pl', 'pl-PL'].includes(a.locale));
+  if (polish.length !== 1) throw new Error('Expected exactly one Polish localization.');
+  const id = polish[0].id;
+  await get(`/v1/appStoreVersionLocalizations/${id}`, 'PATCH', {
+    data: { type: 'appStoreVersionLocalizations', id, attributes: { promotionalText } },
+  });
+  const after = await get(`/v1/appStoreVersionLocalizations/${id}`);
+  if (after.data.attributes.promotionalText !== promotionalText) throw new Error('Promotional text verification failed.');
+  await save('apple-live-promotional-result.json', {
+    version: live[0].attributes.versionString, updatedAt: new Date().toISOString(), localization: after.data,
+  });
+  console.log('Updated and verified Polish promotional text on the live iOS version.');
+  process.exit(0);
+}
 for (const version of versions.data.slice(0, 4)) {
   const localizations = await get(`/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations?limit=50`);
   await save(`apple-${version.id}-localizations.json`, localizations);

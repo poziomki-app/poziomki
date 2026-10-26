@@ -29,6 +29,11 @@ on:
         required: false
         default: false
         type: boolean
+      marketing_promotional:
+        description: Update only Polish promotional text on the live App Store version
+        required: false
+        default: false
+        type: boolean
       app_store_version:
         description: Draft App Store version for metadata upload, for example 0.22.7
         required: false
@@ -157,6 +162,13 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
         run: STORE_OUTPUT_DIR="$HOME/.cache/poziomki-store" node scripts/apple-marketing.mjs
+      - name: Update live promotional text
+        if: inputs.marketing_promotional
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_B64 }}
+        run: STORE_OUTPUT_DIR="$HOME/.cache/poziomki-store" node scripts/apple-marketing.mjs promotional
       - name: Upload metadata to draft version
         if: inputs.marketing_upload
         working-directory: mobile/iosApp
@@ -172,6 +184,7 @@ jobs:
           gem install fastlane --no-document
           fastlane ios store_metadata
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: apple-marketing-backup
           path: ~/.cache/poziomki-store
