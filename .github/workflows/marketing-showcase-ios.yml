@@ -127,6 +127,9 @@ jobs:
           APP_RUN: ${{ inputs.app_run }}
         run: gh run download "$APP_RUN" -n native-ios-simulator-app -D "$SHOWCASE_DIR/DerivedData/Build/Products/Debug-iphonesimulator/Poziomki.app"
       - name: Capture iPhone and iPad
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 300000
+          MAESTRO_CLI_NO_ANALYTICS: "true"
         run: |
           runtime=$(xcrun simctl list runtimes available -j | jq -r '[.runtimes[] | select(.isAvailable and (.name | startswith("iOS")))][-1].identifier')
           phone=$(xcrun simctl create ShowcasePhone com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max "$runtime")
