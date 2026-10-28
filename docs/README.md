@@ -3,11 +3,8 @@
 📢 Badanie potrzeb studentów – [ankieta](https://forms.gle/SMS22hXuUNb1k5tL6)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/dark-mode.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./assets/light-mode.svg">
-    <img alt="poziomki" src="./assets/light-mode.svg" width="500">
-  </picture>
+  <a href="./assets/light-mode.svg#gh-light-mode-only"><img alt="poziomki" src="./assets/light-mode.svg" width="500"></a>
+<a href="./assets/dark-mode.svg#gh-dark-mode-only"><img alt="poziomki" src="./assets/dark-mode.svg" width="500"></a>
 </p>
 
 
